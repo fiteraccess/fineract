@@ -24,7 +24,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.cache.CacheApiConstants;
 import org.apache.fineract.infrastructure.cache.CacheEnumerations;
@@ -32,6 +31,7 @@ import org.apache.fineract.infrastructure.cache.data.CacheData;
 import org.apache.fineract.infrastructure.cache.domain.CacheType;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -45,7 +45,6 @@ import org.springframework.stereotype.Component;
  * database on startup and allow user to switch implementation through UI/API
  */
 @Component(value = "runtimeDelegatingCacheManager")
-@RequiredArgsConstructor
 @Slf4j
 public class RuntimeDelegatingCacheManager implements CacheManager, InitializingBean {
 
@@ -53,7 +52,17 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
     private final CacheManager ehCacheManager;
     @Qualifier("defaultCacheManager")
     private final CacheManager defaultCacheManager;
+    @Qualifier("redisCacheManager")
+    private final CacheManager redisCacheManager;
     private CacheManager currentCacheManager;
+
+    public RuntimeDelegatingCacheManager(@Qualifier("ehCacheManager") CacheManager ehCacheManager,
+            @Qualifier("defaultCacheManager") CacheManager defaultCacheManager,
+            @Qualifier("redisCacheManager") @Autowired(required = false) CacheManager redisCacheManager) {
+        this.ehCacheManager = ehCacheManager;
+        this.defaultCacheManager = defaultCacheManager;
+        this.redisCacheManager = redisCacheManager;
+    }
 
     @Override
     public void afterPropertiesSet() throws Exception {
@@ -74,21 +83,24 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
 
         final boolean noCacheEnabled = currentCacheManager == defaultCacheManager;
         final boolean ehCacheEnabled = currentCacheManager == ehCacheManager;
+        final boolean redisCacheEnabled = currentCacheManager == redisCacheManager;
 
         final EnumOptionData noCacheType = CacheEnumerations.cacheType(CacheType.NO_CACHE);
         final EnumOptionData singleNodeCacheType = CacheEnumerations.cacheType(CacheType.SINGLE_NODE);
+        final EnumOptionData multiNodeCacheType = CacheEnumerations.cacheType(CacheType.MULTI_NODE);
 
         final CacheData noCache = CacheData.builder().cacheType(noCacheType).enabled(noCacheEnabled).build();
         final CacheData singleNodeCache = CacheData.builder().cacheType(singleNodeCacheType).enabled(ehCacheEnabled).build();
+        final CacheData multiNodeCache = CacheData.builder().cacheType(multiNodeCacheType).enabled(redisCacheEnabled).build();
 
-        return Arrays.asList(noCache, singleNodeCache);
+        return Arrays.asList(noCache, singleNodeCache, multiNodeCache);
     }
 
-    public Map<String, Object> switchToCache(final boolean ehcacheEnabled, final CacheType toCacheType) {
+    public Map<String, Object> switchToCache(final boolean cacheEnabled, final CacheType toCacheType) {
 
         final Map<String, Object> changes = new HashMap<>();
 
-        final boolean noCacheEnabled = !ehcacheEnabled;
+        final boolean noCacheEnabled = !cacheEnabled;
 
         switch (toCacheType) {
             case INVALID -> {
@@ -101,7 +113,7 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
                 currentCacheManager = defaultCacheManager;
             }
             case SINGLE_NODE -> {
-                if (!ehcacheEnabled) {
+                if (!cacheEnabled || currentCacheManager != ehCacheManager) {
                     changes.put(CacheApiConstants.CACHE_TYPE_PARAMETER, toCacheType.getValue());
                     clearEhCache();
                 }
@@ -111,7 +123,22 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
                     log.error("No caches configured for activated CacheManager {}", currentCacheManager);
                 }
             }
-            case MULTI_NODE -> throw new UnsupportedOperationException("Multi node cache is not supported");
+            case MULTI_NODE -> {
+                if (redisCacheManager == null) {
+                    throw new UnsupportedOperationException(
+                            "Redis cache is not configured. Enable fineract.redis.enabled=true");
+                }
+
+                if (currentCacheManager != redisCacheManager) {
+                    changes.put(CacheApiConstants.CACHE_TYPE_PARAMETER, toCacheType.getValue());
+                    clearRedisCache();
+                }
+                currentCacheManager = redisCacheManager;
+
+                if (currentCacheManager.getCacheNames().isEmpty()) {
+                    log.error("No caches configured for activated CacheManager {}", currentCacheManager);
+                }
+            }
         }
 
         return changes;
@@ -127,6 +154,25 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
                 }
             } catch (NullPointerException npe) {
                 log.warn("NullPointerException occurred", npe);
+            }
+        }
+    }
+
+    @SuppressFBWarnings(value = "DCN_NULLPOINTER_EXCEPTION", justification = "TODO: fix this!")
+    private void clearRedisCache() {
+        if (redisCacheManager == null) {
+            return;
+        }
+
+        Collection<String> cacheNames = redisCacheManager.getCacheNames();
+        for (String cacheName : cacheNames) {
+            try {
+                Cache cache = redisCacheManager.getCache(cacheName);
+                if (cache != null) {
+                    cache.clear();
+                }
+            } catch (Exception e) {
+                log.warn("Error clearing Redis cache: {}", cacheName, e);
             }
         }
     }

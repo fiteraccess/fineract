@@ -89,6 +89,8 @@ public class FineractProperties {
 
     private FineractCache cache;
 
+    private FineractRedisProperties redis;
+
     private RetryProperties retry;
 
     @Getter
@@ -670,6 +672,22 @@ public class FineractProperties {
 
         private Duration ttl;
         private Integer maximumEntries;
+    }
+
+    @Getter
+    @Setter
+    public static class FineractRedisProperties {
+        private Boolean enabled;
+        private String host;
+        private Integer port;
+        private String password;
+        private Integer database;
+        private Long timeout;
+        private Integer maxActive;
+        private Integer maxIdle;
+        private Integer minIdle;
+        private Long maxWait;
+        private String keyPrefix;
     }
 
     @Setter

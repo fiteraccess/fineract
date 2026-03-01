@@ -140,11 +140,21 @@ public class TenantAwareBasicAuthenticationFilter extends BasicAuthenticationFil
                     if (!FIRST_REQUEST_PROCESSED) {
                         final String baseUrl = request.getRequestURL().toString().replace(request.getPathInfo(), "/");
                         System.setProperty("baseUrl", baseUrl);
-
                         final boolean ehcacheEnabled = configurationDomainService.isEhcacheEnabled();
-                        if (ehcacheEnabled) {
-                            cacheWritePlatformService.switchToCache(CacheType.SINGLE_NODE);
-                        } else {
+                        final boolean redisCacheEnabled = configurationDomainService.isRedisCacheEnabled();
+
+                        try {
+                            if (ehcacheEnabled) {
+                                cacheWritePlatformService.switchToCache(CacheType.SINGLE_NODE);
+                            } else if (redisCacheEnabled) {
+                                // Clear all Redis caches to avoid deserialization issues from stale data
+                                log.info("Switching to Redis cache and clearing all existing cache entries...");
+                                cacheWritePlatformService.switchToCache(CacheType.MULTI_NODE);
+                            } else {
+                                cacheWritePlatformService.switchToCache(CacheType.NO_CACHE);
+                            }
+                        } catch (Exception e) {
+                            log.error("Error during cache initialization, falling back to NO_CACHE", e);
                             cacheWritePlatformService.switchToCache(CacheType.NO_CACHE);
                         }
                         TenantAwareBasicAuthenticationFilter.FIRST_REQUEST_PROCESSED = true;

@@ -41,6 +41,7 @@ import org.reflections.scanners.Scanners;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.jcache.JCacheCacheManager;
 import org.springframework.cache.support.NoOpCacheManager;
@@ -56,7 +57,7 @@ public class CacheConfig {
     private FineractProperties fineractProperties;
 
     @Bean
-    public TransactionBoundCacheManager defaultCacheManager(JCacheCacheManager ehCacheManager) {
+    public TransactionBoundCacheManager defaultCacheManager(@Qualifier("ehCacheManager") org.springframework.cache.CacheManager ehCacheManager) {
         SpecifiedCacheSupportingCacheManager cacheManager = new SpecifiedCacheSupportingCacheManager();
         cacheManager.setNoOpCacheManager(new NoOpCacheManager());
         cacheManager.setDelegateCacheManager(ehCacheManager);
@@ -80,7 +81,7 @@ public class CacheConfig {
         javax.cache.configuration.Configuration<Object, Object> defaultTemplate = generateCacheConfiguration(defaultMaxEntries,
                 defaultTimeToLive);
         // Scan all packages (entire classpath)
-        Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath())
+        Reflections reflections = new Reflections(new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath()).forPackage("org.apache.fineract")
                 .addScanners(Scanners.MethodsAnnotated, Scanners.TypesAnnotated));
         // Find all methods annotated with @Cacheable
         Set<Method> annotatedMethods = reflections.getMethodsAnnotatedWith(Cacheable.class);

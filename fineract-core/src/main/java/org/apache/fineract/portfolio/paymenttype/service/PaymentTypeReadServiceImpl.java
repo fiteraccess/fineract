@@ -49,6 +49,7 @@ public class PaymentTypeReadServiceImpl implements PaymentTypeReadService {
     }
 
     @Override
+    @Cacheable(value = "paymentTypeById", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('_').concat('payment_type_').concat(#paymentTypeId)")
     public PaymentTypeData retrieveOne(Long paymentTypeId) {
         final var paymentType = repository.findById(paymentTypeId).orElseThrow(() -> new PaymentTypeNotFoundException(paymentTypeId));
 

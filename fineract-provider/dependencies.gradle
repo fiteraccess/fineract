@@ -95,6 +95,7 @@ dependencies {
             'com.squareup.okhttp3:okhttp-urlconnection',
 
             'org.apache.commons:commons-lang3',
+            'org.apache.commons:commons-pool2',
             'commons-io:commons-io',
             'org.apache.poi:poi',
             'org.apache.poi:poi-ooxml',
@@ -174,6 +175,9 @@ dependencies {
     implementation ('org.ehcache:ehcache') {
         exclude group: 'com.sun.activation'
     }
+
+    implementation('org.springframework.boot:spring-boot-starter-data-redis')
+    implementation('org.apache.commons:commons-pool2')
 
     implementation('org.owasp.esapi:esapi') {
         exclude group: 'org.slf4j'
