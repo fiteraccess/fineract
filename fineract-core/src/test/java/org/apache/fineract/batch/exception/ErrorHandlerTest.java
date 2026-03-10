@@ -20,11 +20,13 @@ package org.apache.fineract.batch.exception;
 
 import static org.springframework.core.ResolvableType.forClassWithGenerics;
 
+import jakarta.persistence.RollbackException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import java.util.InputMismatchException;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import org.apache.fineract.commands.exception.CommandResultPersistenceException;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exceptionmapper.DefaultExceptionMapper;
 import org.apache.fineract.infrastructure.core.exceptionmapper.FineractExceptionMapper;
@@ -36,6 +38,10 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationContext;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.TransactionSystemException;
 
 @ExtendWith(MockitoExtension.class)
 class ErrorHandlerTest {
@@ -133,6 +139,64 @@ class ErrorHandlerTest {
         Assertions.assertEquals(406, errorInfo.getStatusCode());
         Mockito.verifyNoInteractions(exceptionMapper);
         Mockito.verifyNoMoreInteractions(defaultExceptionMapper);
+    }
+
+    @Test
+    public void testGetMappableUnwrapsWrappedConcurrencyFailureException() {
+        // given
+        ObjectOptimisticLockingFailureException optimisticLock = new ObjectOptimisticLockingFailureException("SavingsAccount", 1L);
+        CommandResultPersistenceException wrapped = new CommandResultPersistenceException(
+                "Failed to persist command result after multiple retries", optimisticLock);
+
+        // when
+        RuntimeException mappable = ErrorHandler.getMappable(wrapped);
+
+        // then
+        Assertions.assertSame(optimisticLock, mappable);
+    }
+
+    @Test
+    public void testGetMappablePrefersWrappedOptimisticLockOverDataIntegrityMapping() {
+        // given
+        jakarta.persistence.OptimisticLockException optimisticLock = new jakarta.persistence.OptimisticLockException(
+                "Optimistic lock failure");
+        DataIntegrityViolationException wrapped = new DataIntegrityViolationException("Wrapped optimistic lock failure", optimisticLock);
+
+        // when
+        RuntimeException mappable = ErrorHandler.getMappable(wrapped);
+
+        // then
+        Assertions.assertSame(optimisticLock, mappable);
+    }
+
+    @Test
+    public void testGetMappableMapsRollbackOnlyRollbackExceptionToConcurrencyFailure() {
+        // given
+        RollbackException rollbackException = new RollbackException(
+                "Transaction \"rolled back\" because transaction was set to RollbackOnly.");
+
+        // when
+        RuntimeException mappable = ErrorHandler.getMappable(rollbackException);
+
+        // then
+        Assertions.assertInstanceOf(ConcurrencyFailureException.class, mappable);
+        Assertions.assertSame(rollbackException, mappable.getCause());
+    }
+
+    @Test
+    public void testGetMappableMapsWrappedRollbackOnlyRollbackExceptionToConcurrencyFailure() {
+        // given
+        RollbackException rollbackException = new RollbackException(
+                "Transaction \"rolled back\" because transaction was set to RollbackOnly.");
+        TransactionSystemException wrapped = new TransactionSystemException("Could not commit JPA transaction", rollbackException);
+
+        // when
+        RuntimeException mappable = ErrorHandler.getMappable(wrapped);
+
+        // then
+        Assertions.assertInstanceOf(ConcurrencyFailureException.class, mappable);
+        Assertions.assertEquals("Could not commit JPA transaction", mappable.getMessage());
+        Assertions.assertSame(rollbackException, mappable.getCause());
     }
 
 }

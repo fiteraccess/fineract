@@ -1258,6 +1258,13 @@ public class RecurringDepositAccount extends SavingsAccount {
         this.chart.getId();
     }
 
+    @Override
+    public void loadLazyCollectionsLightweight() {
+        this.depositScheduleInstallments.size();
+        super.loadLazyCollectionsLightweight();
+        this.chart.getId();
+    }
+
     public BigDecimal getDepositAmount() {
         return this.accountTermAndPreClosure.depositAmount();
     }

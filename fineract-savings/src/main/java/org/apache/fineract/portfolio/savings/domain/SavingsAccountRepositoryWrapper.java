@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.domain;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundExc
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,7 @@ public class SavingsAccountRepositoryWrapper {
 
     private final SavingsAccountRepository repository;
     private final SavingsAccountTransactionRepository savingsAccountTransactionRepository;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public SavingsAccount findOneWithNotFoundDetection(final Long savingsId) {
@@ -79,6 +82,33 @@ public class SavingsAccountRepositoryWrapper {
             throw new SavingsAccountNotFoundException(savingsId);
         }
         account.loadLazyCollections();
+        return account;
+    }
+
+    /**
+     * Lightweight loading path: loads account metadata and summary WITHOUT loading the full transaction history. Use
+     * this for operations that only need account state (e.g., balance inquiries, status checks) and don't need to
+     * iterate over transactions.
+     */
+    @Transactional(readOnly = true)
+    public SavingsAccount findOneWithNotFoundDetectionLightweight(final Long savingsId) {
+        final SavingsAccount account = this.repository.findById(savingsId)
+                .orElseThrow(() -> new SavingsAccountNotFoundException(savingsId));
+        account.loadLazyCollectionsLightweight();
+        return account;
+    }
+
+    /**
+     * Lightweight loading path for deposit accounts: loads account metadata and summary WITHOUT loading the full
+     * transaction history.
+     */
+    @Transactional(readOnly = true)
+    public SavingsAccount findOneWithNotFoundDetectionLightweight(final Long savingsId, final DepositAccountType depositAccountType) {
+        final SavingsAccount account = this.repository.findByIdAndDepositAccountType(savingsId, depositAccountType.getValue());
+        if (account == null) {
+            throw new SavingsAccountNotFoundException(savingsId);
+        }
+        account.loadLazyCollectionsLightweight();
         return account;
     }
 
@@ -180,5 +210,67 @@ public class SavingsAccountRepositoryWrapper {
 
     public List<Long> findLoanIdsByStatusId(Integer status) {
         return null;
+    }
+
+    /**
+     * O(1) direct update of summary fields and sub_status via JPQL UPDATE, bypassing Hibernate's CascadeType.ALL
+     * cascade on the transactions collection. After the update, the account entity is detached from the persistence
+     * context to prevent Hibernate from re-flushing it at transaction commit (which would trigger the O(N) cascade).
+     *
+     * @param account
+     *            the managed SavingsAccount entity whose summary has been updated in memory
+     */
+    @Transactional
+    public void updateSummaryDirectAndDetach(final SavingsAccount account) {
+        updateSummaryDirectInternal(account);
+        // Detach the entity so Hibernate doesn't try to cascade to the transactions collection at commit
+        entityManager.detach(account);
+    }
+
+    /**
+     * O(1) direct update of summary fields and sub_status via JPQL UPDATE, bypassing Hibernate's CascadeType.ALL
+     * cascade on the transactions collection. Unlike {@link #updateSummaryDirectAndDetach}, this method does NOT detach
+     * the account entity. Use this when the caller already manages flush suppression (e.g., FlushModeType.COMMIT) and
+     * does not need the detach — which itself is O(N) because it cascades through CascadeType.ALL on the transactions
+     * collection, forcing Hibernate to initialize the lazy proxy.
+     *
+     * @param account
+     *            the managed SavingsAccount entity whose summary has been updated in memory
+     */
+    @Transactional
+    public void updateSummaryDirect(final SavingsAccount account) {
+        updateSummaryDirectInternal(account);
+    }
+
+    private void updateSummaryDirectInternal(final SavingsAccount account) {
+        final SavingsAccountSummary s = account.getSummary();
+        final int updated = this.repository.updateSummaryDirect(account.getId(), s.getTotalDeposits(), s.getTotalWithdrawals(),
+                s.getTotalInterestPosted(), s.getTotalWithdrawalFees(), s.getTotalFeeCharge(), s.getTotalPenaltyCharge(),
+                s.getTotalAnnualFees(), s.getAccountBalance(), s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
+                s.getTotalInterestEarned(), s.getLastInterestCalculationDate(), s.getInterestPostedTillDate(), account.getSubStatus(),
+                account.getVersion());
+        if (updated == 0) {
+            throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), account.getId());
+        }
+    }
+
+    /**
+     * O(1) direct update of summary fields and sub_status via JPQL UPDATE, accepting pre-computed values directly
+     * instead of reading from the entity. This avoids dirtying the entity's summary, preventing JPA from flushing
+     * changes through CascadeType.ALL on the transactions collection.
+     */
+    @Transactional
+    public void updateSummaryDirectFromValues(final Long accountId, final BigDecimal totalDeposits, final BigDecimal totalWithdrawals,
+            final BigDecimal totalInterestPosted, final BigDecimal totalWithdrawalFees, final BigDecimal totalFeeCharge,
+            final BigDecimal totalPenaltyCharge, final BigDecimal totalAnnualFees, final BigDecimal accountBalance,
+            final BigDecimal totalOverdraftInterestDerived, final BigDecimal totalWithholdTax, final BigDecimal totalInterestEarned,
+            final LocalDate lastInterestCalculationDate, final LocalDate interestPostedTillDate, final Integer subStatus,
+            final int version) {
+        final int updated = this.repository.updateSummaryDirect(accountId, totalDeposits, totalWithdrawals, totalInterestPosted,
+                totalWithdrawalFees, totalFeeCharge, totalPenaltyCharge, totalAnnualFees, accountBalance, totalOverdraftInterestDerived,
+                totalWithholdTax, totalInterestEarned, lastInterestCalculationDate, interestPostedTillDate, subStatus, version);
+        if (updated == 0) {
+            throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), accountId);
+        }
     }
 }

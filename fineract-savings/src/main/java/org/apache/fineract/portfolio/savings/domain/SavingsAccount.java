@@ -2001,7 +2001,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.product.isCashBasedAccountingEnabled();
     }
 
-    private Boolean isAccrualBasedAccountingEnabledOnSavingsProduct() {
+    public Boolean isAccrualBasedAccountingEnabledOnSavingsProduct() {
         return this.product.isAccrualBasedAccountingEnabled();
     }
 
@@ -3460,6 +3460,11 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         SavingsAccountTransaction withholdTransaction = findTransactionFor(interestPostingUpToDate, withholdTransactions);
         final BigDecimal totalInterestPosted = this.savingsAccountTransactionSummaryWrapper.calculateTotalInterestPosted(this.currency,
                 this.transactions);
+        // totalInterestPosted can be null when getAmountDefaultedToNullIfZero() returns null for zero interest;
+        // guard against NPE in createWithHoldTransaction / updateWithHoldTransaction
+        if (totalInterestPosted == null) {
+            return recalucateDailyBalance;
+        }
         if (withholdTransaction == null && this.withHoldTax()) {
             boolean isWithholdTaxAdded = createWithHoldTransaction(totalInterestPosted, interestPostingUpToDate, backdatedTxnsAllowedTill);
             recalucateDailyBalance = recalucateDailyBalance || isWithholdTaxAdded;
@@ -3491,6 +3496,17 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.sub_status = SavingsAccountSubStatusEnum.DORMANT.getValue();
     }
 
+    /**
+     * Resets the sub_status to NONE if the account is currently INACTIVE or DORMANT. Called when a new transaction is
+     * made on the account, which reactivates it from inactive/dormant state.
+     */
+    public void resetSubStatusOnTransaction() {
+        if (this.sub_status.equals(SavingsAccountSubStatusEnum.INACTIVE.getValue())
+                || this.sub_status.equals(SavingsAccountSubStatusEnum.DORMANT.getValue())) {
+            this.sub_status = SavingsAccountSubStatusEnum.NONE.getValue();
+        }
+    }
+
     public void escheat(AppUser appUser) {
         this.status = SavingsAccountStatusType.CLOSED.getValue();
         this.sub_status = SavingsAccountSubStatusEnum.ESCHEAT.getValue();
@@ -3509,6 +3525,19 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public void loadLazyCollections() {
         transactions.size();
+        charges.size();
+        savingsOfficerHistory.size();
+        if (group != null) {
+            Office dummyOffice = group.getOffice();
+        } // Ensure lazy loading of group if set
+    }
+
+    /**
+     * Lightweight loading path that loads account metadata (charges, officer history, group) WITHOUT loading the full
+     * transaction history. This enables O(1) account loading for operations that don't need transaction history, such
+     * as balance inquiries and account status checks.
+     */
+    public void loadLazyCollectionsLightweight() {
         charges.size();
         savingsOfficerHistory.size();
         if (group != null) {

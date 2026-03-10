@@ -243,6 +243,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         boolean isRegularTransaction = false;
         if (amountForDeposit.isGreaterThanZero()) {
             boolean isAccountTransfer = false;
+            // Use legacy (non-optimized) path for activation deposit: isRegularTransaction=false
+            // ensures the optimized path is skipped, so the deposit is added to the JPA transactions
+            // collection — required because processAccountUponActivation() pays charges using that collection.
             this.savingsAccountDomainService.handleDeposit(account, fmt, account.getActivationDate(), amountForDeposit.getAmount(), null,
                     isAccountTransfer, isRegularTransaction, false);
 
@@ -275,15 +278,30 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
+    @Retry(name = "savingsDeposit", fallbackMethod = "fallbackDeposit")
     public CommandProcessingResult deposit(final Long savingsId, final JsonCommand command) {
+        final long perfStart = System.nanoTime();
+        long perfLap = perfStart;
+
         this.context.authenticatedUser();
 
         this.savingsAccountTransactionDataValidator.validate(command);
         boolean isGsim = false;
 
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
+        final LocalDate transactionDateForLoading = command.localDateValueOfParameterNamed("transactionDate");
+        final boolean isSameDay = transactionDateForLoading == null
+                || !DateUtils.isBefore(transactionDateForLoading, DateUtils.getBusinessLocalDate());
 
-        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
+        // Use lightweight loading for same-day transactions even when pivot config is enabled.
+        // Only load post-pivot transactions for actually-backdated transactions.
+        final SavingsAccount account = (backdatedTxnsAllowedTill && !isSameDay)
+                ? this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill)
+                : this.savingAccountAssembler.assembleFromLightweight(savingsId);
+
+        long now = System.nanoTime();
+        log.warn("PERF deposit savingsId={} step=loadAccount elapsed={}ms", savingsId, (now - perfLap) / 1_000_000.0);
+        perfLap = now;
 
         if (account.getGsim() != null) {
             isGsim = true;
@@ -301,10 +319,19 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final Map<String, Object> changes = new LinkedHashMap<>();
         final PaymentDetail paymentDetail = this.paymentDetailWritePlatformService.createAndPersistPaymentDetail(command, changes);
+
+        now = System.nanoTime();
+        log.warn("PERF deposit savingsId={} step=preparePayment elapsed={}ms", savingsId, (now - perfLap) / 1_000_000.0);
+        perfLap = now;
+
         boolean isAccountTransfer = false;
         boolean isRegularTransaction = true;
         final SavingsAccountTransaction deposit = this.savingsAccountDomainService.handleDeposit(account, fmt, transactionDate,
                 transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
+
+        now = System.nanoTime();
+        log.warn("PERF deposit savingsId={} step=handleDeposit elapsed={}ms", savingsId, (now - perfLap) / 1_000_000.0);
+        perfLap = now;
 
         if (isGsim && (deposit.getId() != null)) {
 
@@ -328,6 +355,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             this.noteRepository.save(note);
         }
 
+        now = System.nanoTime();
+        log.warn("PERF deposit savingsId={} step=TOTAL elapsed={}ms", savingsId, (now - perfStart) / 1_000_000.0);
+
         return new CommandProcessingResultBuilder() //
                 .withEntityId(deposit.getId()) //
                 .withOfficeId(account.officeId()) //
@@ -345,6 +375,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
+    @Retry(name = "savingsWithdrawal", fallbackMethod = "fallbackWithdrawal")
     public CommandProcessingResult withdrawal(final Long savingsId, final JsonCommand command) {
 
         this.savingsAccountTransactionDataValidator.validate(command);
@@ -361,8 +392,13 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final PaymentDetail paymentDetail = this.paymentDetailWritePlatformService.createAndPersistPaymentDetail(command, changes);
 
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
+        final boolean isSameDay = transactionDate == null || !DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate());
 
-        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
+        // Use lightweight loading for same-day transactions even when pivot config is enabled.
+        // Only load post-pivot transactions for actually-backdated transactions.
+        final SavingsAccount account = (backdatedTxnsAllowedTill && !isSameDay)
+                ? this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill)
+                : this.savingAccountAssembler.assembleFromLightweight(savingsId);
 
         if (account.getGsim() != null) {
             isGsim = true;
@@ -1393,6 +1429,18 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         // NOTE: allow caller to catch the exceptions
         // NOTE: wrap throwable only if really necessary
         throw errorHandler.getMappable(t, null, null, "savings.postinterest");
+    }
+
+    @SuppressWarnings("unused")
+    public CommandProcessingResult fallbackDeposit(Long savingsId, JsonCommand command, Throwable t) {
+        // NOTE: allow caller to catch the exceptions after retry exhaustion
+        throw errorHandler.getMappable(t, null, null, "savings.deposit");
+    }
+
+    @SuppressWarnings("unused")
+    public CommandProcessingResult fallbackWithdrawal(Long savingsId, JsonCommand command, Throwable t) {
+        // NOTE: allow caller to catch the exceptions after retry exhaustion
+        throw errorHandler.getMappable(t, null, null, "savings.withdrawal");
     }
 
     @Transactional

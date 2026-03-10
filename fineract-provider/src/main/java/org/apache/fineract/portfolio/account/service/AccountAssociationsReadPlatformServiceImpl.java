@@ -102,13 +102,13 @@ public class AccountAssociationsReadPlatformServiceImpl implements AccountAssoci
             // Direct conversion using Number handles both Short and Integer safely
             final Integer typeValue = ((Number) statusMap.get("type")).intValue();
             final AccountAssociationType associationType = AccountAssociationType.fromInt(typeValue);
-            if (!associationType.isLinkedAccountAssociation() && (Boolean) statusMap.get("active")) {
+            if (!associationType.isLinkedAccountAssociation() && ((Number) statusMap.get("active")).intValue() == 1) {
                 hasActiveAccount = true;
                 break;
             }
 
             if (statusMap.get("loanStatus") != null) {
-                final LoanStatus loanStatus = LoanStatus.fromInt((Integer) statusMap.get("loanStatus"));
+                final LoanStatus loanStatus = LoanStatus.fromInt(((Number) statusMap.get("loanStatus")).intValue());
                 if (loanStatus.isActiveOrAwaitingApprovalOrDisbursal() || loanStatus.isUnderTransfer()) {
                     hasActiveAccount = true;
                     break;
@@ -116,7 +116,8 @@ public class AccountAssociationsReadPlatformServiceImpl implements AccountAssoci
             }
 
             if (statusMap.get("savingsStatus") != null) {
-                final SavingsAccountStatusType saveStatus = SavingsAccountStatusType.fromInt((Integer) statusMap.get("savingsStatus"));
+                final SavingsAccountStatusType saveStatus = SavingsAccountStatusType
+                        .fromInt(((Number) statusMap.get("savingsStatus")).intValue());
                 if (saveStatus.isActiveOrAwaitingApprovalOrDisbursal() || saveStatus.isUnderTransfer()) {
                     hasActiveAccount = true;
                     break;

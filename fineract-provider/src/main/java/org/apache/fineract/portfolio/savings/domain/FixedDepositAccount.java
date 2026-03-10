@@ -870,6 +870,12 @@ public class FixedDepositAccount extends SavingsAccount {
         this.chart.getId();
     }
 
+    @Override
+    public void loadLazyCollectionsLightweight() {
+        super.loadLazyCollectionsLightweight();
+        this.chart.getId();
+    }
+
     public BigDecimal getDepositAmount() {
         return this.accountTermAndPreClosure.depositAmount();
     }

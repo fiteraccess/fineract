@@ -22,6 +22,7 @@ import static org.springframework.core.ResolvableType.forClassWithGenerics;
 
 import com.google.gson.Gson;
 import jakarta.persistence.PersistenceException;
+import jakarta.persistence.RollbackException;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
@@ -48,6 +49,7 @@ import org.eclipse.persistence.exceptions.OptimisticLockException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.NestedRuntimeException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.NonTransientDataAccessException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.lang.Nullable;
@@ -169,6 +171,10 @@ public final class ErrorHandler {
         if ((cause = PessimisticLockingFailureCode.match(t)) != null) {
             return new PessimisticLockingFailureException(msg, cause); // deadlock
         }
+        RuntimeException concurrencyException = getConcurrencyException(t);
+        if (concurrencyException != null) {
+            return concurrencyException;
+        }
         if (t instanceof NestedRuntimeException nre) {
             cause = nre.getMostSpecificCause();
             msg = defaultMsg == null ? cause.getMessage() : defaultMsg;
@@ -211,6 +217,30 @@ public final class ErrorHandler {
         } else {
             return Set.of(array);
         }
+    }
+
+    @Nullable
+    private static RuntimeException getConcurrencyException(@NotNull Throwable throwable) {
+        RollbackException rollbackException = null;
+        for (Throwable cause : ExceptionUtils.getThrowableList(throwable)) {
+            if (cause instanceof jakarta.persistence.OptimisticLockException || cause instanceof OptimisticLockException
+                    || cause instanceof ConcurrencyFailureException) {
+                return (RuntimeException) cause;
+            }
+            if (rollbackException == null && cause instanceof RollbackException re && isRollbackOnlyException(re)) {
+                rollbackException = re;
+            }
+        }
+        if (rollbackException != null) {
+            String message = throwable.getMessage() == null ? rollbackException.getMessage() : throwable.getMessage();
+            return new ConcurrencyFailureException(message, rollbackException);
+        }
+        return null;
+    }
+
+    private static boolean isRollbackOnlyException(RollbackException rollbackException) {
+        return rollbackException.getCause() == null
+                && "Transaction \"rolled back\" because transaction was set to RollbackOnly.".equals(rollbackException.getMessage());
     }
 
     public static Throwable findMostSpecificException(Exception exception) {
