@@ -53,6 +53,7 @@ import org.springframework.util.CollectionUtils;
 public class AccountTransfersReadPlatformServiceImpl implements AccountTransfersReadPlatformService {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final String DEFAULT_ORDER_BY = " order by att.id DESC";
     private final JdbcTemplate jdbcTemplate;
     private final ClientReadPlatformService clientReadPlatformService;
     private final OfficeReadPlatformService officeReadPlatformService;
@@ -214,12 +215,17 @@ public class AccountTransfersReadPlatformServiceImpl implements AccountTransfers
                 sqlBuilder.append(' ').append(searchParameters.getSortOrder());
                 this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
             }
+        } else {
+            sqlBuilder.append(DEFAULT_ORDER_BY);
         }
 
-        if (searchParameters.hasLimit()) {
-            sqlBuilder.append(" limit ").append(searchParameters.getLimit());
+        final Integer limit = searchParameters.getLimit();
+        if (limit != null) {
+            sqlBuilder.append(' ');
             if (searchParameters.hasOffset()) {
-                sqlBuilder.append(" offset ").append(searchParameters.getOffset());
+                sqlBuilder.append(sqlGenerator.limit(limit, searchParameters.getOffset()));
+            } else {
+                sqlBuilder.append(sqlGenerator.limit(limit));
             }
         }
 

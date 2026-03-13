@@ -679,7 +679,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
                 AccountTransferType.CHARGE_PAYMENT.getValue(), null, null, externalId, null, null, fromSavingsAccount, isRegularTransaction,
                 isExceptionForBalanceCheck);
         Long transferTransactionId = this.accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
-        AccountTransferDetails transferDetails = this.accountTransferDetailRepository.findById(transferTransactionId)
+        AccountTransferDetails transferDetails = this.accountTransferDetailRepository
+                .findByIdWithAccountTransferTransactions(transferTransactionId)
                 .orElseThrow(() -> new AccountTransferNotFoundException(transferTransactionId));
         LoanTransaction loanTransaction = transferDetails.getAccountTransferTransactions().get(0).getToLoanTransaction();
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));

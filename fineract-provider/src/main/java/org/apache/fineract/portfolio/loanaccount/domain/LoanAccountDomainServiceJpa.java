@@ -559,6 +559,24 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
 
     @Override
     public void reverseTransfer(final LoanTransaction loanTransaction) {
+        validateTransferReversal(loanTransaction);
+        loanTransaction.reverse();
+        loanAccountService.saveLoanTransactionWithDataIntegrityViolationChecks(loanTransaction);
+    }
+
+    @Override
+    public void reverseTransfers(final Collection<LoanTransaction> loanTransactions) {
+        if (loanTransactions == null || loanTransactions.isEmpty()) {
+            return;
+        }
+        for (final LoanTransaction loanTransaction : loanTransactions) {
+            validateTransferReversal(loanTransaction);
+            loanTransaction.reverse();
+        }
+        loanTransactionRepository.saveAll(loanTransactions);
+    }
+
+    private void validateTransferReversal(final LoanTransaction loanTransaction) {
         if (loanTransaction.getLoan().isChargedOff()
                 && DateUtils.isBefore(loanTransaction.getTransactionDate(), loanTransaction.getLoan().getChargedOffOnDate())) {
             throw new GeneralPlatformDomainRuleException("error.msg.transaction.date.cannot.be.earlier.than.charge.off.date",
@@ -567,8 +585,6 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
                     loanTransaction.getId());
         }
         loanChargeValidator.validateRepaymentTypeTransactionNotBeforeAChargeRefund(loanTransaction.getLoan(), loanTransaction, "reversed");
-        loanTransaction.reverse();
-        loanAccountService.saveLoanTransactionWithDataIntegrityViolationChecks(loanTransaction);
     }
 
     @Override

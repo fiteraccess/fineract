@@ -23,6 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
@@ -40,6 +43,8 @@ public class ExecuteOverdueAndCurrentStandingInstructionsTest {
     public void setUp() {
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "Africa/Kampala", null));
         ThreadLocalContextUtil.setActionContext(ActionContext.DEFAULT);
+        ThreadLocalContextUtil.setBusinessDates(
+                new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, currentDate, BusinessDateType.COB_DATE, currentDate)));
     }
 
     @AfterEach
@@ -49,14 +54,14 @@ public class ExecuteOverdueAndCurrentStandingInstructionsTest {
 
     @Test
     public void testAcceptPreviousDateAsDue() {
-        ExecuteStandingInstructionsTasklet tasklet = new ExecuteStandingInstructionsTasklet(null, null, null, null);
+        ExecuteStandingInstructionsTasklet tasklet = new ExecuteStandingInstructionsTasklet(null, null, null, null, null);
         boolean isDueForTransfer = tasklet.isDueForTransfer(new StandingInstructionDuesData(previousDate, BigDecimal.ONE));
         assertThat(isDueForTransfer).isTrue().describedAs("Earlier instructions are accepted as due");
     }
 
     @Test
     public void testAcceptCurrentDateAsDue() {
-        ExecuteStandingInstructionsTasklet tasklet = new ExecuteStandingInstructionsTasklet(null, null, null, null);
+        ExecuteStandingInstructionsTasklet tasklet = new ExecuteStandingInstructionsTasklet(null, null, null, null, null);
         boolean isDueForTransfer = tasklet.isDueForTransfer(new StandingInstructionDuesData(currentDate, BigDecimal.ONE));
         assertThat(isDueForTransfer).isTrue().describedAs("Current day instructions are accepted as due");
     }

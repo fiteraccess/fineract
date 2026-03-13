@@ -74,10 +74,10 @@ public class AccountTransferDetails extends AbstractPersistableCustom<Long> {
     @Column(name = "transfer_type")
     private Integer transferType;
 
-    @OneToMany(cascade = CascadeType.ALL, mappedBy = "accountTransferDetails", orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "accountTransferDetails", orphanRemoval = true, fetch = FetchType.LAZY)
     private List<AccountTransferTransaction> accountTransferTransactions = new ArrayList<>();
 
-    @OneToOne(mappedBy = "accountTransferDetails", cascade = CascadeType.ALL, optional = true, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToOne(mappedBy = "accountTransferDetails", cascade = CascadeType.ALL, optional = true, orphanRemoval = true, fetch = FetchType.LAZY)
     private AccountTransferStandingInstruction accountTransferStandingInstruction;
 
     public static AccountTransferDetails savingsToSavingsTransfer(final Office fromOffice, final Client fromClient,

@@ -18,8 +18,16 @@
  */
 package org.apache.fineract.portfolio.account.domain;
 
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface AccountTransferDetailRepository
-        extends JpaRepository<AccountTransferDetails, Long>, JpaSpecificationExecutor<AccountTransferDetails> {}
+        extends JpaRepository<AccountTransferDetails, Long>, JpaSpecificationExecutor<AccountTransferDetails> {
+
+    @Query("select distinct accountTransferDetails from AccountTransferDetails accountTransferDetails "
+            + "left join fetch accountTransferDetails.accountTransferTransactions where accountTransferDetails.id = :id")
+    Optional<AccountTransferDetails> findByIdWithAccountTransferTransactions(@Param("id") Long id);
+}

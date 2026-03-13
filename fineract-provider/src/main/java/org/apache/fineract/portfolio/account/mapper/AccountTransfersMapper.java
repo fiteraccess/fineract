@@ -73,8 +73,6 @@ public final class AccountTransfersMapper implements RowMapper<AccountTransferDa
         sqlBuilder.append("left join m_loan toloanacc on toloanacc.id = atd.to_loan_account_id ");
         sqlBuilder.append("left join m_savings_account_transaction fromsavtran on fromsavtran.id = att.from_savings_transaction_id ");
         sqlBuilder.append("left join m_savings_account_transaction tosavtran on tosavtran.id = att.to_savings_transaction_id ");
-        sqlBuilder.append("left join m_loan_transaction fromloantran on fromloantran.id = att.from_savings_transaction_id ");
-        sqlBuilder.append("left join m_loan_transaction toloantran on toloantran.id = att.to_savings_transaction_id ");
 
         this.schemaSql = sqlBuilder.toString();
     }
