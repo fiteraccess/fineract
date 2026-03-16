@@ -38,6 +38,7 @@ public class CashBasedAccountingProcessorForShares implements AccountingProcesso
 
     @Override
     public void createJournalEntriesForShares(SharesDTO sharesDTO) {
+        try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
         final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(sharesDTO.getOfficeId());
         final Long shareAccountId = sharesDTO.getShareAccountId();
         final Long shareProductId = sharesDTO.getShareProductId();
@@ -65,6 +66,7 @@ public class CashBasedAccountingProcessorForShares implements AccountingProcesso
                         CashAccountsForShares.INCOME_FROM_FEES, shareProductId, paymentTypeId, shareAccountId, transactionId,
                         transactionDate, amount, feePayments);
             }
+        }
         }
 
     }

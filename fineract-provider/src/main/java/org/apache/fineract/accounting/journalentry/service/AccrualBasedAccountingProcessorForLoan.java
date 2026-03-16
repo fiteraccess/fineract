@@ -52,6 +52,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
 
     @Override
     public void createJournalEntriesForLoan(final LoanDTO loanDTO) {
+        try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
         final Long officeId = loanDTO.getOfficeId();
         final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(officeId);
         final Office office = this.helper.getOfficeById(officeId);
@@ -156,6 +157,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
             if (transactionType.isBuyDownFeeAmortizationAdjustment()) {
                 createJournalEntriesForBuyDownFeeAmortizationAdjustment(loanDTO, loanTransactionDTO, office);
             }
+        }
         }
     }
 

@@ -107,6 +107,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDTO;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
 import org.apache.fineract.portfolio.savings.domain.interest.SavingsAccountTransactionDetailsForPostingPeriod;
@@ -1883,39 +1884,12 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         }
     }
 
-    public Map<String, Object> deriveAccountingBridgeData(final String currencyCode, final Set<Long> existingTransactionIds,
+    public SavingsAccountingBridgeDTO deriveAccountingBridgeData(final String currencyCode, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, boolean isAccountTransfer, final boolean backdatedTxnsAllowedTill) {
-
-        final Map<String, Object> accountingBridgeData = new LinkedHashMap<>();
-        accountingBridgeData.put("savingsId", getId());
-        accountingBridgeData.put("savingsProductId", productId());
-        accountingBridgeData.put("currencyCode", currencyCode);
-        accountingBridgeData.put("officeId", officeId());
-        accountingBridgeData.put("cashBasedAccountingEnabled", isCashBasedAccountingEnabledOnSavingsProduct());
-        accountingBridgeData.put("accrualBasedAccountingEnabled", isAccrualBasedAccountingEnabledOnSavingsProduct());
-        accountingBridgeData.put("isAccountTransfer", isAccountTransfer);
-
-        final List<Map<String, Object>> newSavingsTransactions = new ArrayList<>();
-
-        List<SavingsAccountTransaction> trans = null;
-
-        if (backdatedTxnsAllowedTill) {
-            trans = getSavingsAccountTransactionsWithPivotConfig();
-        } else {
-            trans = getTransactions();
-        }
-
-        // Adding new transactions to the array
-        for (final SavingsAccountTransaction transaction : trans) {
-            if (transaction.isReversed() && !existingReversedTransactionIds.contains(transaction.getId())) {
-                newSavingsTransactions.add(transaction.toMapData(currencyCode));
-            } else if (!existingTransactionIds.contains(transaction.getId())) {
-                newSavingsTransactions.add(transaction.toMapData(currencyCode));
-            }
-        }
-
-        accountingBridgeData.put("newSavingsTransactions", newSavingsTransactions);
-        return accountingBridgeData;
+        return SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(this,
+                SavingsAccountingBridgeDataHelper.findNewTransactions(this, existingTransactionIds, existingReversedTransactionIds,
+                        backdatedTxnsAllowedTill),
+                isAccountTransfer);
     }
 
     public Collection<Long> findExistingTransactionIds() {

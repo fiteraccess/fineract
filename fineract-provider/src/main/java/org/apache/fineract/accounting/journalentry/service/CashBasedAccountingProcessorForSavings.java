@@ -39,6 +39,7 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
 
     @Override
     public void createJournalEntriesForSavings(final SavingsDTO savingsDTO) {
+        try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
         final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(savingsDTO.getOfficeId());
         final Long savingsProductId = savingsDTO.getSavingsProductId();
         final Long savingsId = savingsDTO.getSavingsId();
@@ -250,6 +251,7 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                         CashAccountsForSavings.SAVINGS_REFERENCE, CashAccountsForSavings.INCOME_FROM_FEES, savingsProductId, paymentTypeId,
                         savingsId, transactionId, transactionDate, amount, isReversal, feePayments);
             }
+        }
         }
     }
 }

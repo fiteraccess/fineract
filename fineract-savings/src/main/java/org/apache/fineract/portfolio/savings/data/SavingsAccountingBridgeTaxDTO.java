@@ -16,22 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.portfolio.savings.event;
+package org.apache.fineract.portfolio.savings.data;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import org.apache.fineract.infrastructure.core.domain.FineractContext;
-import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
+import java.math.BigDecimal;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-/**
- * Event published when a savings transaction needs journal entries posted. Carries the accounting bridge data and the
- * {@link FineractContext} captured at publish-time so the async listener can restore thread-local context on a worker
- * thread.
- */
-@Getter
-@RequiredArgsConstructor
-public class SavingsJournalEntryPostingEvent {
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class SavingsAccountingBridgeTaxDTO {
 
-    private final SavingsAccountingBridgeDTO accountingBridgeData;
-    private final FineractContext fineractContext;
+    private BigDecimal amount;
+    private Long debitAccountId;
+    private Long creditAccountId;
 }

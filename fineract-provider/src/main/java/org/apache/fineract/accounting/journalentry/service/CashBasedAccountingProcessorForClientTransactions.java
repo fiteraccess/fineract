@@ -34,6 +34,7 @@ public class CashBasedAccountingProcessorForClientTransactions implements Accoun
 
     @Override
     public void createJournalEntriesForClientTransaction(ClientTransactionDTO clientTransactionDTO) {
+        try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
         if (clientTransactionDTO.isAccountingEnabled()) {
             final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(clientTransactionDTO.getOfficeId());
             final LocalDate transactionDate = clientTransactionDTO.getTransactionDate();
@@ -44,6 +45,7 @@ public class CashBasedAccountingProcessorForClientTransactions implements Accoun
             if (clientTransactionDTO.isChargePayment()) {
                 createJournalEntriesForChargePayments(clientTransactionDTO, office);
             }
+        }
         }
     }
 

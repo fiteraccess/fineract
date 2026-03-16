@@ -99,6 +99,7 @@ import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePla
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeDataValidator;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountDataValidator;
@@ -109,6 +110,7 @@ import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransact
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.GSIMRepositoy;
 import org.apache.fineract.portfolio.savings.domain.GroupSavingsIndividualMonitoring;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountCharge;
@@ -1039,10 +1041,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
         this.savingAccountAssembler.setHelpers(savingsAccount);
-        final Set<Long> existingTransactionIds = new HashSet<>();
-        final Set<Long> existingReversedTransactionIds = new HashSet<>();
-        updateExistingTransactionsDetails(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
-
         final SavingsAccountTransaction newTransferTransaction = SavingsAccountTransaction.initiateTransfer(savingsAccount,
                 savingsAccount.office(), transferDate);
         savingsAccount.addTransaction(newTransferTransaction);
@@ -1057,7 +1055,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.savingsAccountTransactionRepository.save(newTransferTransaction);
         this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
 
-        postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds, false);
+        postJournalEntriesForTransaction(savingsAccount, newTransferTransaction, false);
 
         return newTransferTransaction;
     }
@@ -1070,10 +1068,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
         this.savingAccountAssembler.setHelpers(savingsAccount);
-        final Set<Long> existingTransactionIds = new HashSet<>();
-        final Set<Long> existingReversedTransactionIds = new HashSet<>();
-        updateExistingTransactionsDetails(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
-
         final SavingsAccountTransaction withdrawtransferTransaction = SavingsAccountTransaction.withdrawTransfer(savingsAccount,
                 savingsAccount.office(), transferDate);
         savingsAccount.addTransaction(withdrawtransferTransaction);
@@ -1088,7 +1082,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.savingsAccountTransactionRepository.save(withdrawtransferTransaction);
         this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
 
-        postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds, false);
+        postJournalEntriesForTransaction(savingsAccount, withdrawtransferTransaction, false);
 
         return withdrawtransferTransaction;
     }
@@ -1109,10 +1103,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
         this.savingAccountAssembler.setHelpers(savingsAccount);
-        final Set<Long> existingTransactionIds = new HashSet<>();
-        final Set<Long> existingReversedTransactionIds = new HashSet<>();
-        updateExistingTransactionsDetails(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
-
         final SavingsAccountTransaction acceptTransferTransaction = SavingsAccountTransaction.approveTransfer(savingsAccount,
                 acceptedInOffice, transferDate);
         savingsAccount.addTransaction(acceptTransferTransaction);
@@ -1130,7 +1120,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.savingsAccountTransactionRepository.save(acceptTransferTransaction);
         this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
 
-        postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds, false);
+        postJournalEntriesForTransaction(savingsAccount, acceptTransferTransaction, false);
 
         return acceptTransferTransaction;
     }
@@ -1497,6 +1487,13 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         return chargeTransaction;
     }
 
+    private void postJournalEntriesForTransaction(final SavingsAccount account, final SavingsAccountTransaction transaction,
+            final boolean isAccountTransfer) {
+        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account,
+                List.of(transaction), isAccountTransfer);
+        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
+    }
+
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,
             Set<Long> existingReversedTransactionIds) {
         existingTransactionIds.addAll(account.findExistingTransactionIds());
@@ -1519,8 +1516,10 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             final Set<Long> existingReversedTransactionIds, final boolean backdatedTxnsAllowedTill) {
 
         boolean isAccountTransfer = false;
-        final Map<String, Object> accountingBridgeData = savingsAccount.deriveAccountingBridgeData(savingsAccount.getCurrency().getCode(),
-                existingTransactionIds, existingReversedTransactionIds, isAccountTransfer, backdatedTxnsAllowedTill);
+        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(savingsAccount,
+                SavingsAccountingBridgeDataHelper.findNewTransactions(savingsAccount, existingTransactionIds,
+                        existingReversedTransactionIds, backdatedTxnsAllowedTill),
+                isAccountTransfer);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
     }
 

@@ -48,6 +48,7 @@ import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDTO;
 import org.apache.fineract.portfolio.savings.exception.DepositAccountTransactionNotAllowedException;
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
@@ -670,8 +671,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private void postJournalEntries(final SavingsAccount savingsAccount, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, boolean isAccountTransfer, final boolean backdatedTxnsAllowedTill) {
 
-        final Map<String, Object> accountingBridgeData = savingsAccount.deriveAccountingBridgeData(savingsAccount.getCurrency().getCode(),
-                existingTransactionIds, existingReversedTransactionIds, isAccountTransfer, backdatedTxnsAllowedTill);
+        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(savingsAccount,
+                SavingsAccountingBridgeDataHelper.findNewTransactions(savingsAccount, existingTransactionIds,
+                        existingReversedTransactionIds, backdatedTxnsAllowedTill),
+                isAccountTransfer);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
     }
 
@@ -681,21 +684,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
      */
     private void postJournalEntriesForTransaction(final SavingsAccount account, final SavingsAccountTransaction transaction,
             final boolean isAccountTransfer) {
-        final String currencyCode = account.getCurrency().getCode();
-        final Map<String, Object> accountingBridgeData = new LinkedHashMap<>();
-        accountingBridgeData.put("savingsId", account.getId());
-        accountingBridgeData.put("savingsProductId", account.productId());
-        accountingBridgeData.put("currencyCode", currencyCode);
-        accountingBridgeData.put("officeId", account.officeId());
-        accountingBridgeData.put("cashBasedAccountingEnabled", account.savingsProduct().isCashBasedAccountingEnabled());
-        accountingBridgeData.put("accrualBasedAccountingEnabled", account.savingsProduct().isAccrualBasedAccountingEnabled());
-        accountingBridgeData.put("isAccountTransfer", isAccountTransfer);
-
-        final List<Map<String, Object>> newSavingsTransactions = new ArrayList<>();
-        newSavingsTransactions.add(transaction.toMapData(currencyCode));
-        accountingBridgeData.put("newSavingsTransactions", newSavingsTransactions);
-
-        // Post journal entries synchronously within the same transaction
+        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account,
+                List.of(transaction), isAccountTransfer);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
     }
 

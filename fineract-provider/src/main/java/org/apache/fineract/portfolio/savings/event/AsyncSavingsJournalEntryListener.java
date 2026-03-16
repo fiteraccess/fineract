@@ -18,12 +18,12 @@
  */
 package org.apache.fineract.portfolio.savings.event;
 
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.core.config.TaskExecutorConstant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -56,14 +56,14 @@ public class AsyncSavingsJournalEntryListener {
             postWithRetry(event.getAccountingBridgeData());
         } catch (Exception e) {
             // Log but do NOT re-throw — a failed journal entry must never affect the savings transaction
-            Long savingsId = (Long) event.getAccountingBridgeData().get("savingsId");
+            Long savingsId = event.getAccountingBridgeData().getSavingsId();
             log.error("Failed to post journal entries for savings account {} after {} retries", savingsId, MAX_RETRIES, e);
         } finally {
             ThreadLocalContextUtil.reset();
         }
     }
 
-    private void postWithRetry(Map<String, Object> accountingBridgeData) {
+    private void postWithRetry(SavingsAccountingBridgeDTO accountingBridgeData) {
         long backoff = INITIAL_BACKOFF_MS;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
@@ -73,7 +73,7 @@ public class AsyncSavingsJournalEntryListener {
                 if (attempt == MAX_RETRIES) {
                     throw e; // will be caught by the outer catch in handleJournalEntryPosting
                 }
-                Long savingsId = (Long) accountingBridgeData.get("savingsId");
+                Long savingsId = accountingBridgeData.getSavingsId();
                 log.warn("Journal entry posting attempt {}/{} failed for savings account {}, retrying in {}ms: {}", attempt, MAX_RETRIES,
                         savingsId, backoff, e.getMessage());
                 try {

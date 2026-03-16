@@ -40,6 +40,7 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
 
     @Override
     public void createJournalEntriesForSavings(final SavingsDTO savingsDTO) {
+        try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
         final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(savingsDTO.getOfficeId());
         final Long savingsProductId = savingsDTO.getSavingsProductId();
         final Long savingsId = savingsDTO.getSavingsId();
@@ -280,6 +281,7 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                         AccrualAccountsForSavings.SAVINGS_REFERENCE, AccrualAccountsForSavings.INCOME_FROM_FEES, savingsProductId,
                         paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal, feePayments);
             }
+        }
         }
     }
 }

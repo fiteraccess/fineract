@@ -19,6 +19,7 @@
 package org.apache.fineract.organisation.teller.service;
 
 import jakarta.persistence.PersistenceException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.AllArgsConstructor;
@@ -430,8 +431,7 @@ public class TellerWritePlatformServiceJpaImpl implements TellerWritePlatformSer
                                              // Savings
                                              // Txn
 
-            this.glJournalEntryRepository.saveAndFlush(debitJournalEntry);
-            this.glJournalEntryRepository.saveAndFlush(creditJournalEntry);
+            this.glJournalEntryRepository.saveAll(List.of(debitJournalEntry, creditJournalEntry));
 
             return new CommandProcessingResultBuilder() //
                     .withCommandId(command.commandId()) //

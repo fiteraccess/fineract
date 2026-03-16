@@ -21,10 +21,12 @@ package org.apache.fineract.accounting.journalentry.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.closure.domain.GLClosure;
@@ -74,6 +76,10 @@ import org.apache.fineract.portfolio.loanaccount.data.AccountingBridgeLoanTransa
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargeData;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargePaidByDTO;
 import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionEnumData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeChargePaymentDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTaxDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTransactionDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.shareaccounts.data.ShareAccountTransactionEnumData;
 import org.springframework.dao.DataAccessException;
@@ -96,6 +102,34 @@ public class AccountingProcessorHelper {
     private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
     private final ChargeRepositoryWrapper chargeRepositoryWrapper;
     private final BusinessEventNotifierService businessEventNotifierService;
+    private final ThreadLocal<JournalEntryProcessingBatchCache> journalEntryProcessingBatchCache = new ThreadLocal<>();
+
+    public JournalEntryProcessingBatch startJournalEntryProcessingBatch() {
+        JournalEntryProcessingBatchCache cache = this.journalEntryProcessingBatchCache.get();
+        if (cache == null) {
+            cache = new JournalEntryProcessingBatchCache();
+            this.journalEntryProcessingBatchCache.set(cache);
+        }
+        cache.incrementDepth();
+        return new JournalEntryProcessingBatch();
+    }
+
+    public final class JournalEntryProcessingBatch implements AutoCloseable {
+
+        private boolean closed;
+
+        @Override
+        public void close() {
+            if (this.closed) {
+                return;
+            }
+            final JournalEntryProcessingBatchCache cache = journalEntryProcessingBatchCache.get();
+            if (cache != null && cache.decrementDepth() == 0) {
+                journalEntryProcessingBatchCache.remove();
+            }
+            this.closed = true;
+        }
+    }
 
     public LoanDTO populateLoanDtoFromDTO(
             final org.apache.fineract.portfolio.loanaccount.data.AccountingBridgeDataDTO accountingBridgeData) {
@@ -179,76 +213,112 @@ public class AccountingProcessorHelper {
 
     public ProductToGLAccountMapping getChargeOffMappingByCodeValue(Long loanProductId, PortfolioProductType productType,
             Long chargeOffReasonId) {
-        return accountMappingRepository.findChargeOffReasonMapping(loanProductId, productType.getValue(), chargeOffReasonId);
+        return getCachedProductToGLAccountMapping(ProductToGLAccountMappingCacheKey.chargeOffReason(loanProductId,
+                productType.getValue(), chargeOffReasonId),
+                () -> accountMappingRepository.findChargeOffReasonMapping(loanProductId, productType.getValue(), chargeOffReasonId));
     }
 
     public ProductToGLAccountMapping getWriteOffMappingByCodeValue(Long loanProductId, PortfolioProductType productType,
             Long writeOffReasonId) {
-        return accountMappingRepository.findWriteOffReasonMapping(loanProductId, productType.getValue(), writeOffReasonId);
+        return getCachedProductToGLAccountMapping(ProductToGLAccountMappingCacheKey.writeOffReason(loanProductId,
+                productType.getValue(), writeOffReasonId),
+                () -> accountMappingRepository.findWriteOffReasonMapping(loanProductId, productType.getValue(), writeOffReasonId));
     }
 
     public ProductToGLAccountMapping getClassificationMappingByCodeValue(Long loanProductId, PortfolioProductType productType,
             final Long classificationId, final String classificationType) {
         if (LoanProductAccountingParams.BUYDOWN_FEE_CLASSIFICATION_TO_INCOME_ACCOUNT_MAPPINGS.getValue().equals(classificationType)) {
-            return accountMappingRepository.findBuydownFeeClassificationMapping(loanProductId, productType.getValue(), classificationId);
+            return getCachedProductToGLAccountMapping(ProductToGLAccountMappingCacheKey.buydownFeeClassification(loanProductId,
+                    productType.getValue(), classificationId),
+                    () -> accountMappingRepository.findBuydownFeeClassificationMapping(loanProductId, productType.getValue(),
+                            classificationId));
         } else {
-            return accountMappingRepository.findCapitalizedIncomeClassificationMapping(loanProductId, productType.getValue(),
-                    classificationId);
+            return getCachedProductToGLAccountMapping(ProductToGLAccountMappingCacheKey.capitalizedIncomeClassification(loanProductId,
+                    productType.getValue(), classificationId),
+                    () -> accountMappingRepository.findCapitalizedIncomeClassificationMapping(loanProductId, productType.getValue(),
+                            classificationId));
         }
     }
 
-    public SavingsDTO populateSavingsDtoFromMap(final Map<String, Object> accountingBridgeData, final boolean cashBasedAccountingEnabled,
-            final boolean accrualBasedAccountingEnabled) {
-        final Long loanId = (Long) accountingBridgeData.get("savingsId");
-        final Long loanProductId = (Long) accountingBridgeData.get("savingsProductId");
-        final Long officeId = (Long) accountingBridgeData.get("officeId");
-        final String currencyCode = (String) accountingBridgeData.get("currencyCode");
+    private ProductToGLAccountMapping getCachedProductToGLAccountMapping(ProductToGLAccountMappingCacheKey cacheKey,
+            Supplier<ProductToGLAccountMapping> lookup) {
+        final JournalEntryProcessingBatchCache cache = this.journalEntryProcessingBatchCache.get();
+        if (cache == null) {
+            return lookup.get();
+        }
+        if (cache.contains(cacheKey)) {
+            return cache.get(cacheKey);
+        }
+        final ProductToGLAccountMapping accountMapping = lookup.get();
+        cache.put(cacheKey, accountMapping);
+        return accountMapping;
+    }
+
+    private ProductToGLAccountMapping findCoreProductToFinAccountMapping(final Long productId, final int productType,
+            final int financialAccountType) {
+        return getCachedProductToGLAccountMapping(ProductToGLAccountMappingCacheKey.core(productId, productType, financialAccountType),
+                () -> this.accountMappingRepository.findCoreProductToFinAccountMapping(productId, productType, financialAccountType));
+    }
+
+    private ProductToGLAccountMapping findPaymentTypeMapping(final Long productId, final int productType,
+            final int financialAccountType, final Long paymentTypeId) {
+        return getCachedProductToGLAccountMapping(
+                ProductToGLAccountMappingCacheKey.paymentType(productId, productType, financialAccountType, paymentTypeId),
+                () -> this.accountMappingRepository.findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(productId,
+                        productType, financialAccountType, paymentTypeId));
+    }
+
+    private ProductToGLAccountMapping findChargeMapping(final Long productId, final int productType, final int financialAccountType,
+            final Long chargeId) {
+        return getCachedProductToGLAccountMapping(
+                ProductToGLAccountMappingCacheKey.charge(productId, productType, financialAccountType, chargeId),
+                () -> this.accountMappingRepository.findProductIdAndProductTypeAndFinancialAccountTypeAndChargeId(productId, productType,
+                        financialAccountType, chargeId));
+    }
+
+    public SavingsDTO populateSavingsDtoFromDTO(final SavingsAccountingBridgeDTO accountingBridgeData) {
+        final Long loanId = accountingBridgeData.getSavingsId();
+        final Long loanProductId = accountingBridgeData.getSavingsProductId();
+        final Long officeId = accountingBridgeData.getOfficeId();
+        final String currencyCode = accountingBridgeData.getCurrencyCode();
         final List<SavingsTransactionDTO> newSavingsTransactions = new ArrayList<>();
-        boolean isAccountTransfer = (Boolean) accountingBridgeData.get("isAccountTransfer");
+        boolean isAccountTransfer = accountingBridgeData.isAccountTransfer();
+        final boolean cashBasedAccountingEnabled = accountingBridgeData.isCashBasedAccountingEnabled();
+        final boolean accrualBasedAccountingEnabled = accountingBridgeData.isAccrualBasedAccountingEnabled();
 
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> newTransactionsMap = (List<Map<String, Object>>) accountingBridgeData.get("newSavingsTransactions");
+        final List<SavingsAccountingBridgeTransactionDTO> newTransactionsMap = accountingBridgeData.getNewSavingsTransactions();
 
-        for (final Map<String, Object> map : newTransactionsMap) {
-            final Long transactionOfficeId = (Long) map.get("officeId");
-            final String transactionId = ((Long) map.get("id")).toString();
-            final LocalDate transactionDate = ((LocalDate) map.get("date"));
-            final SavingsAccountTransactionEnumData transactionType = (SavingsAccountTransactionEnumData) map.get("type");
-            final BigDecimal amount = (BigDecimal) map.get("amount");
-            final boolean reversed = (Boolean) map.get("reversed");
-            final Long paymentTypeId = (Long) map.get("paymentTypeId");
-            final BigDecimal overdraftAmount = (BigDecimal) map.get("overdraftAmount");
+        for (final SavingsAccountingBridgeTransactionDTO map : newTransactionsMap) {
+            final Long transactionOfficeId = map.getOfficeId();
+            final String transactionId = map.getId().toString();
+            final LocalDate transactionDate = map.getDate();
+            final SavingsAccountTransactionEnumData transactionType = map.getType();
+            final BigDecimal amount = map.getAmount();
+            final boolean reversed = map.isReversed();
+            final Long paymentTypeId = map.getPaymentTypeId();
+            final BigDecimal overdraftAmount = map.getOverdraftAmount();
 
             final List<ChargePaymentDTO> feePayments = new ArrayList<>();
             final List<ChargePaymentDTO> penaltyPayments = new ArrayList<>();
-            // extract charge payment details (if exists)
-            if (map.containsKey("savingsChargesPaid")) {
-                @SuppressWarnings("unchecked")
-                final List<Map<String, Object>> savingsChargesPaidData = (List<Map<String, Object>>) map.get("savingsChargesPaid");
-                for (final Map<String, Object> loanChargePaid : savingsChargesPaidData) {
-                    final Long chargeId = (Long) loanChargePaid.get("chargeId");
-                    final Long loanChargeId = (Long) loanChargePaid.get("savingsChargeId");
-                    final boolean isPenalty = (Boolean) loanChargePaid.get("isPenalty");
-                    final BigDecimal chargeAmountPaid = (BigDecimal) loanChargePaid.get("amount");
-                    final ChargePaymentDTO chargePaymentDTO = new ChargePaymentDTO(chargeId, chargeAmountPaid, loanChargeId);
-                    if (isPenalty) {
-                        penaltyPayments.add(chargePaymentDTO);
-                    } else {
-                        feePayments.add(chargePaymentDTO);
-                    }
+            for (final SavingsAccountingBridgeChargePaymentDTO loanChargePaid : map.getSavingsChargesPaid()) {
+                final Long chargeId = loanChargePaid.getChargeId();
+                final Long loanChargeId = loanChargePaid.getSavingsChargeId();
+                final boolean isPenalty = loanChargePaid.isPenalty();
+                final BigDecimal chargeAmountPaid = loanChargePaid.getAmount();
+                final ChargePaymentDTO chargePaymentDTO = new ChargePaymentDTO(chargeId, chargeAmountPaid, loanChargeId);
+                if (isPenalty) {
+                    penaltyPayments.add(chargePaymentDTO);
+                } else {
+                    feePayments.add(chargePaymentDTO);
                 }
             }
 
             final List<TaxPaymentDTO> taxPayments = new ArrayList<>();
-            if (map.containsKey("taxDetails")) {
-                @SuppressWarnings("unchecked")
-                final List<Map<String, Object>> taxDataList = (List<Map<String, Object>>) map.get("taxDetails");
-                for (final Map<String, Object> taxData : taxDataList) {
-                    final BigDecimal taxAmount = (BigDecimal) taxData.get("amount");
-                    final Long creditAccountId = (Long) taxData.get("creditAccountId");
-                    final Long debitAccountId = (Long) taxData.get("debitAccountId");
-                    taxPayments.add(new TaxPaymentDTO(debitAccountId, creditAccountId, taxAmount));
-                }
+            for (final SavingsAccountingBridgeTaxDTO taxData : map.getTaxDetails()) {
+                final BigDecimal taxAmount = taxData.getAmount();
+                final Long creditAccountId = taxData.getCreditAccountId();
+                final Long debitAccountId = taxData.getDebitAccountId();
+                taxPayments.add(new TaxPaymentDTO(debitAccountId, creditAccountId, taxAmount));
             }
 
             if (!isAccountTransfer) {
@@ -1118,7 +1188,7 @@ public class AccountingProcessorHelper {
                     .findByFinancialActivityTypeWithNotFoundDetection(accountMappingTypeId);
             glAccount = financialActivityAccount.getGlAccount();
         } else {
-            ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(loanProductId,
+            ProductToGLAccountMapping accountMapping = findCoreProductToFinAccountMapping(loanProductId,
                     PortfolioProductType.LOAN.getValue(), accountMappingTypeId);
 
             /****
@@ -1126,9 +1196,8 @@ public class AccountingProcessorHelper {
              * placeholder ID would be same for both cash and accrual accounts
              ***/
             if (accountMappingTypeId == CashAccountsForLoan.FUND_SOURCE.getValue()) {
-                final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = this.accountMappingRepository
-                        .findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(loanProductId,
-                                PortfolioProductType.LOAN.getValue(), accountMappingTypeId, paymentTypeId);
+                final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = findPaymentTypeMapping(loanProductId,
+                        PortfolioProductType.LOAN.getValue(), accountMappingTypeId, paymentTypeId);
                 if (paymentChannelSpecificAccountMapping != null) {
                     accountMapping = paymentChannelSpecificAccountMapping;
                 }
@@ -1145,8 +1214,8 @@ public class AccountingProcessorHelper {
     }
 
     private GLAccount getLinkedGLAccountForLoanCharges(final Long loanProductId, final int accountMappingTypeId, final Long chargeId) {
-        ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(loanProductId,
-                PortfolioProductType.LOAN.getValue(), accountMappingTypeId);
+        ProductToGLAccountMapping accountMapping = findCoreProductToFinAccountMapping(loanProductId, PortfolioProductType.LOAN.getValue(),
+                accountMappingTypeId);
         /*****
          * Get more specific mappings for Charges and penalties (based on the actual charge /penalty coupled with the
          * loan product). Note the income from fees and income from penalties placeholder ID would be the same for both
@@ -1156,9 +1225,8 @@ public class AccountingProcessorHelper {
         // Check for charge-specific mappings for all account types (not just income accounts)
         // This allows charge-specific GL account mappings for debit accounts as well
         if (chargeId != null) {
-            final ProductToGLAccountMapping chargeSpecificAccountMapping = this.accountMappingRepository
-                    .findProductIdAndProductTypeAndFinancialAccountTypeAndChargeId(loanProductId, PortfolioProductType.LOAN.getValue(),
-                            accountMappingTypeId, chargeId);
+            final ProductToGLAccountMapping chargeSpecificAccountMapping = findChargeMapping(loanProductId,
+                    PortfolioProductType.LOAN.getValue(), accountMappingTypeId, chargeId);
             if (chargeSpecificAccountMapping != null) {
                 accountMapping = chargeSpecificAccountMapping;
             }
@@ -1169,7 +1237,7 @@ public class AccountingProcessorHelper {
     private GLAccount getLinkedGLAccountForSavingsCharges(final Long savingsProductId, final int accountMappingTypeId,
             final Long chargeId) {
 
-        ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(savingsProductId,
+        ProductToGLAccountMapping accountMapping = findCoreProductToFinAccountMapping(savingsProductId,
                 PortfolioProductType.SAVING.getValue(), accountMappingTypeId);
         /*****
          * Get more specific mappings for Charges and penalties (based on the actual charge /penalty coupled with the
@@ -1185,9 +1253,8 @@ public class AccountingProcessorHelper {
             if (glAccount != null) {
                 return glAccount;
             }
-            final ProductToGLAccountMapping chargeSpecificIncomeAccountMapping = this.accountMappingRepository
-                    .findProductIdAndProductTypeAndFinancialAccountTypeAndChargeId(savingsProductId, PortfolioProductType.SAVING.getValue(),
-                            accountMappingTypeId, chargeId);
+            final ProductToGLAccountMapping chargeSpecificIncomeAccountMapping = findChargeMapping(savingsProductId,
+                    PortfolioProductType.SAVING.getValue(), accountMappingTypeId, chargeId);
             if (chargeSpecificIncomeAccountMapping != null) {
 
                 accountMapping = chargeSpecificIncomeAccountMapping;
@@ -1205,16 +1272,15 @@ public class AccountingProcessorHelper {
                     .findByFinancialActivityTypeWithNotFoundDetection(accountMappingTypeId);
             glAccount = financialActivityAccount.getGlAccount();
         } else {
-            ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(savingsProductId,
+            ProductToGLAccountMapping accountMapping = findCoreProductToFinAccountMapping(savingsProductId,
                     PortfolioProductType.SAVING.getValue(), accountMappingTypeId);
             /****
              * Get more specific mapping for FUND source accounts (based on payment channels). Note that fund source
              * placeholder ID would be same for both cash and accrual accounts
              ***/
             if (accountMappingTypeId == CashAccountsForSavings.SAVINGS_REFERENCE.getValue()) {
-                final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = this.accountMappingRepository
-                        .findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(savingsProductId,
-                                PortfolioProductType.SAVING.getValue(), accountMappingTypeId, paymentTypeId);
+                final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = findPaymentTypeMapping(savingsProductId,
+                        PortfolioProductType.SAVING.getValue(), accountMappingTypeId, paymentTypeId);
                 if (paymentChannelSpecificAccountMapping != null) {
                     accountMapping = paymentChannelSpecificAccountMapping;
                 }
@@ -1232,13 +1298,12 @@ public class AccountingProcessorHelper {
                     .findByFinancialActivityTypeWithNotFoundDetection(accountMappingTypeId);
             glAccount = financialActivityAccount.getGlAccount();
         } else {
-            ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(shareProductId,
+            ProductToGLAccountMapping accountMapping = findCoreProductToFinAccountMapping(shareProductId,
                     PortfolioProductType.SHARES.getValue(), accountMappingTypeId);
 
             if (accountMappingTypeId == CashAccountsForShares.SHARES_REFERENCE.getValue()) {
-                final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = this.accountMappingRepository
-                        .findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(shareProductId,
-                                PortfolioProductType.SHARES.getValue(), accountMappingTypeId, paymentTypeId);
+                final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = findPaymentTypeMapping(shareProductId,
+                        PortfolioProductType.SHARES.getValue(), accountMappingTypeId, paymentTypeId);
                 if (paymentChannelSpecificAccountMapping != null) {
                     accountMapping = paymentChannelSpecificAccountMapping;
                 }
@@ -1249,7 +1314,7 @@ public class AccountingProcessorHelper {
     }
 
     private GLAccount getLinkedGLAccountForShareCharges(final Long shareProductId, final int accountMappingTypeId, final Long chargeId) {
-        ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(shareProductId,
+        ProductToGLAccountMapping accountMapping = findCoreProductToFinAccountMapping(shareProductId,
                 PortfolioProductType.SHARES.getValue(), accountMappingTypeId);
         /*****
          * Get more specific mappings for Charges and penalties (based on the actual charge /penalty coupled with the
@@ -1257,13 +1322,119 @@ public class AccountingProcessorHelper {
          * cash and accrual based accounts
          *****/
 
-        final ProductToGLAccountMapping chargeSpecificIncomeAccountMapping = this.accountMappingRepository
-                .findProductIdAndProductTypeAndFinancialAccountTypeAndChargeId(shareProductId, PortfolioProductType.SHARES.getValue(),
-                        accountMappingTypeId, chargeId);
+        final ProductToGLAccountMapping chargeSpecificIncomeAccountMapping = findChargeMapping(shareProductId,
+                PortfolioProductType.SHARES.getValue(), accountMappingTypeId, chargeId);
         if (chargeSpecificIncomeAccountMapping != null) {
             accountMapping = chargeSpecificIncomeAccountMapping;
         }
         return accountMapping.getGlAccount();
+    }
+
+    private static final class JournalEntryProcessingBatchCache {
+
+        private final Map<ProductToGLAccountMappingCacheKey, ProductToGLAccountMapping> productToGLAccountMappings = new HashMap<>();
+        private int depth;
+
+        private void incrementDepth() {
+            this.depth++;
+        }
+
+        private int decrementDepth() {
+            this.depth--;
+            return this.depth;
+        }
+
+        private boolean contains(ProductToGLAccountMappingCacheKey cacheKey) {
+            return this.productToGLAccountMappings.containsKey(cacheKey);
+        }
+
+        private ProductToGLAccountMapping get(ProductToGLAccountMappingCacheKey cacheKey) {
+            return this.productToGLAccountMappings.get(cacheKey);
+        }
+
+        private void put(ProductToGLAccountMappingCacheKey cacheKey, ProductToGLAccountMapping accountMapping) {
+            this.productToGLAccountMappings.put(cacheKey, accountMapping);
+        }
+    }
+
+    private enum ProductToGLAccountMappingLookupType {
+        CORE, PAYMENT_TYPE, CHARGE, CHARGE_OFF_REASON, WRITE_OFF_REASON, BUYDOWN_FEE_CLASSIFICATION, CAPITALIZED_INCOME_CLASSIFICATION
+    }
+
+    private static final class ProductToGLAccountMappingCacheKey {
+
+        private final ProductToGLAccountMappingLookupType lookupType;
+        private final Long productId;
+        private final Integer productType;
+        private final Integer financialAccountType;
+        private final Long referenceId;
+
+        private ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType lookupType, Long productId, Integer productType,
+                Integer financialAccountType, Long referenceId) {
+            this.lookupType = lookupType;
+            this.productId = productId;
+            this.productType = productType;
+            this.financialAccountType = financialAccountType;
+            this.referenceId = referenceId;
+        }
+
+        private static ProductToGLAccountMappingCacheKey core(Long productId, Integer productType, Integer financialAccountType) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.CORE, productId, productType,
+                    financialAccountType, null);
+        }
+
+        private static ProductToGLAccountMappingCacheKey paymentType(Long productId, Integer productType,
+                Integer financialAccountType, Long paymentTypeId) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.PAYMENT_TYPE, productId, productType,
+                    financialAccountType, paymentTypeId);
+        }
+
+        private static ProductToGLAccountMappingCacheKey charge(Long productId, Integer productType, Integer financialAccountType,
+                Long chargeId) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.CHARGE, productId, productType,
+                    financialAccountType, chargeId);
+        }
+
+        private static ProductToGLAccountMappingCacheKey chargeOffReason(Long productId, Integer productType, Long chargeOffReasonId) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.CHARGE_OFF_REASON, productId, productType,
+                    null, chargeOffReasonId);
+        }
+
+        private static ProductToGLAccountMappingCacheKey writeOffReason(Long productId, Integer productType, Long writeOffReasonId) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.WRITE_OFF_REASON, productId, productType,
+                    null, writeOffReasonId);
+        }
+
+        private static ProductToGLAccountMappingCacheKey buydownFeeClassification(Long productId, Integer productType,
+                Long classificationId) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.BUYDOWN_FEE_CLASSIFICATION, productId,
+                    productType, null, classificationId);
+        }
+
+        private static ProductToGLAccountMappingCacheKey capitalizedIncomeClassification(Long productId, Integer productType,
+                Long classificationId) {
+            return new ProductToGLAccountMappingCacheKey(ProductToGLAccountMappingLookupType.CAPITALIZED_INCOME_CLASSIFICATION,
+                    productId, productType, null, classificationId);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof ProductToGLAccountMappingCacheKey that)) {
+                return false;
+            }
+            return lookupType == that.lookupType && Objects.equals(productId, that.productId)
+                    && Objects.equals(productType, that.productType)
+                    && Objects.equals(financialAccountType, that.financialAccountType)
+                    && Objects.equals(referenceId, that.referenceId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(lookupType, productId, productType, financialAccountType, referenceId);
+        }
     }
 
     private boolean isOrganizationAccount(final int accountMappingTypeId) {
@@ -1340,13 +1511,20 @@ public class AccountingProcessorHelper {
         return incomeAccount;
     }
 
-    public JournalEntry persistJournalEntry(JournalEntry journalEntry) {
-        boolean isNew = journalEntry.isNew();
-        JournalEntry savedJournalEntry = this.glJournalEntryRepository.saveAndFlush(journalEntry);
-        if (isNew && journalEntry.getLoanTransactionId() != null) {
-            businessEventNotifierService.notifyPostBusinessEvent(new LoanJournalEntryCreatedBusinessEvent(savedJournalEntry));
+    public List<JournalEntry> persistJournalEntries(List<JournalEntry> journalEntries) {
+        if (journalEntries.isEmpty()) {
+            return List.of();
         }
-        return savedJournalEntry;
+        List<JournalEntry> loanJournalEntriesToNotify = journalEntries.stream()
+                .filter(journalEntry -> journalEntry.isNew() && journalEntry.getLoanTransactionId() != null).toList();
+        List<JournalEntry> savedJournalEntries = this.glJournalEntryRepository.saveAll(journalEntries);
+        loanJournalEntriesToNotify
+                .forEach(journalEntry -> businessEventNotifierService.notifyPostBusinessEvent(new LoanJournalEntryCreatedBusinessEvent(journalEntry)));
+        return savedJournalEntries;
+    }
+
+    public JournalEntry persistJournalEntry(JournalEntry journalEntry) {
+        return persistJournalEntries(List.of(journalEntry)).get(0);
     }
 
     private void createJournalEntriesForLoanChargesInternal(final Office office, final String currencyCode, final int accountMappingTypeId,

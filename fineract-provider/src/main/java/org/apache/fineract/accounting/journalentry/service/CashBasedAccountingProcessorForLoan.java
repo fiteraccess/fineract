@@ -47,6 +47,7 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
 
     @Override
     public void createJournalEntriesForLoan(final LoanDTO loanDTO) {
+        try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
         final Long officeId = loanDTO.getOfficeId();
         final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(officeId);
         final Long loanProductId = loanDTO.getLoanProductId();
@@ -125,6 +126,7 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
             else if (transactionType.isChargeoff()) {
                 createJournalEntriesForChargeOff(loanDTO, loanTransactionDTO, office);
             }
+        }
         }
     }
 
