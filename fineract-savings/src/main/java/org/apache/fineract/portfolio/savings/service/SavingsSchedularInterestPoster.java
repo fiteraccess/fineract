@@ -163,15 +163,18 @@ public class SavingsSchedularInterestPoster {
         String queryForSavingsUpdate = batchQueryForSavingsSummaryUpdate();
         String queryForTransactionInsertion = batchQueryForTransactionInsertion();
         String queryForTransactionUpdate = batchQueryForTransactionsUpdate();
+        // Build one parameter list per SQL statement, then execute each statement in bulk.
         List<Object[]> paramsForTransactionInsertion = new ArrayList<>();
         List<Object[]> paramsForSavingsSummary = new ArrayList<>();
         List<Object[]> paramsForTransactionUpdate = new ArrayList<>();
+        // Track the ref numbers of newly inserted rows so they can be fetched back with their ids.
         List<String> transRefNo = new ArrayList<>();
         LocalDate currentDate = DateUtils.getBusinessLocalDate();
         Long userId = platformSecurityContext.authenticatedUser().getId();
         for (SavingsAccountData savingsAccountData : savingsAccountDataList) {
             OffsetDateTime auditTime = DateUtils.getAuditOffsetDateTime();
             SavingsAccountSummaryData savingsAccountSummaryData = savingsAccountData.getSummary();
+            // Each account contributes one summary update.
             paramsForSavingsSummary.add(new Object[] { savingsAccountSummaryData.getTotalDeposits(),
                     savingsAccountSummaryData.getTotalWithdrawals(), savingsAccountSummaryData.getTotalInterestEarned(),
                     savingsAccountSummaryData.getTotalInterestPosted(), savingsAccountSummaryData.getTotalWithdrawalFees(),
@@ -185,9 +188,13 @@ public class SavingsSchedularInterestPoster {
             List<SavingsAccountTransactionData> savingsAccountTransactionDataList = savingsAccountData.getSavingsAccountTransactionData();
             for (SavingsAccountTransactionData savingsAccountTransactionData : savingsAccountTransactionDataList) {
                 if (savingsAccountTransactionData.getId() == null && !MathUtil.isZero(savingsAccountTransactionData.getAmount())) {
+                    // New transactions have no database id yet. Give each one a temporary ref
+                    // so the inserted row can be found again after the batch insert.
                     UUID uuid = UUID.randomUUID();
                     savingsAccountTransactionData.setRefNo(uuid.toString());
                     transRefNo.add(uuid.toString());
+
+                    //todo: new transactions will be saved in a new transaction collection
                     paramsForTransactionInsertion.add(new Object[] { savingsAccountData.getId(), savingsAccountData.getOfficeId(),
                             savingsAccountTransactionData.isReversed(), savingsAccountTransactionData.getTransactionType().getId(),
                             savingsAccountTransactionData.getTransactionDate(), savingsAccountTransactionData.getAmount(),
@@ -197,6 +204,8 @@ public class SavingsSchedularInterestPoster {
                             savingsAccountTransactionData.getRefNo(), savingsAccountTransactionData.isReversalTransaction(),
                             savingsAccountTransactionData.getOverdraftAmount(), currentDate });
                 } else {
+                    // Existing rows are updated in place with fresh derived balances and flags.
+                    //todo: also pickup the existing transactions
                     paramsForTransactionUpdate.add(new Object[] { savingsAccountTransactionData.isReversed(),
                             savingsAccountTransactionData.getAmount(), savingsAccountTransactionData.getOverdraftAmount(),
                             savingsAccountTransactionData.getBalanceEndDate(), savingsAccountTransactionData.getBalanceNumberOfDays(),
@@ -205,14 +214,17 @@ public class SavingsSchedularInterestPoster {
                             savingsAccountTransactionData.getId() });
                 }
             }
+            // Keep the processed transactions on the account object for the journal-entry step.
             savingsAccountData.setUpdatedTransactions(savingsAccountTransactionDataList);
         }
 
         if (transRefNo.size() > 0) {
+            // Persist summaries first, then insert new transactions, then refresh existing ones.
             this.jdbcTemplate.batchUpdate(queryForSavingsUpdate, paramsForSavingsSummary);
             this.jdbcTemplate.batchUpdate(queryForTransactionInsertion, paramsForTransactionInsertion);
             this.jdbcTemplate.batchUpdate(queryForTransactionUpdate, paramsForTransactionUpdate);
             log.debug("`Total No Of Interest Posting:` {}", transRefNo.size());
+            // Read back the newly inserted rows to obtain the ids assigned by the database.
             List<SavingsAccountTransactionData> savingsAccountTransactionDataList = fetchTransactionsFromIds(transRefNo);
             if (savingsAccountDataList != null) {
                 log.debug("Fetched Transactions from DB: {}", savingsAccountTransactionDataList.size());
@@ -223,6 +235,7 @@ public class SavingsSchedularInterestPoster {
                 final String key = savingsAccountTransactionData.getRefNo();
                 savingsAccountTransactionMap.put(key, savingsAccountTransactionData);
             }
+            // Journal entries are created last, because they need the real savings-transaction ids.
             batchUpdateJournalEntries(savingsAccountDataList, savingsAccountTransactionMap);
         }
 
