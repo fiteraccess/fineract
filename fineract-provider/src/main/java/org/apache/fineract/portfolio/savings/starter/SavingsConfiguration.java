@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.starter;
 
+import java.time.Duration;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.accounting.producttoaccountmapping.service.ProductToGLAccountMappingWritePlatformService;
 import org.apache.fineract.commands.service.CommandProcessingService;
@@ -142,11 +143,17 @@ import org.apache.fineract.portfolio.savings.service.search.SavingsAccountTransa
 import org.apache.fineract.portfolio.savings.service.search.SavingsAccountTransactionsSearchServiceImpl;
 import org.apache.fineract.portfolio.search.service.SearchUtil;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration
 public class SavingsConfiguration {
@@ -446,5 +453,22 @@ public class SavingsConfiguration {
     @ConditionalOnMissingBean(SavingsSchedularInterestPosterTask.class)
     public SavingsSchedularInterestPosterTask savingsSchedularInterestPosterTask(SavingsSchedularInterestPoster interestPoster) {
         return new SavingsSchedularInterestPosterTask(interestPoster);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseInstructionMapper synapseInstructionMapper() {
+        return new SynapseInstructionMapper();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseTransactionClient synapseTransactionClient(FineractProperties fineractProperties, RestTemplateBuilder restTemplateBuilder) {
+        FineractProperties.FineractSynapseProperties synapse = fineractProperties.getSynapse();
+        RestTemplate restTemplate = restTemplateBuilder
+                .connectTimeout(Duration.ofMillis(synapse.getConnectTimeoutMs()))
+                .readTimeout(Duration.ofMillis(synapse.getReadTimeoutMs()))
+                .build();
+        return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getBatchEndpoint());
     }
 }

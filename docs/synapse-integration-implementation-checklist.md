@@ -36,35 +36,36 @@ Feature-flagged behind `fineract.synapse.enabled` (default `false`); when off, t
 
 ---
 
-## Module 3: Synapse HTTP Client
+## Module 3: Synapse HTTP Client ✅
 
-**Package:** `fineract-savings/.../savings/service/synapse/`
+**Package:** `fineract-savings/.../savings/service/synapse/` and `data/synapse/`
 
-### Files to create
-- [ ] `SynapsePostingResult` — response DTO (traceId, status, correlationId)
-- [ ] `SynapseBatchPostingResponse` — response wrapper (batchId, accepted, failed, results list)
-- [ ] `SynapseTransactionClient` — interface with `SynapseBatchPostingResponse postBatch(SynapseInterestPostingBatch batch)`
-- [ ] `SynapseTransactionClientImpl` — implementation using `RestTemplate`/`WebClient`
+### Files created
+- [x] `SynapsePostingResult` — response DTO (traceId, status, correlationId) — in `data/synapse/`
+- [x] `SynapseBatchPostingResponse` — response wrapper (batchId, accepted, failed, results list) — in `data/synapse/`
+- [x] `SynapsePostingException` — unchecked exception (from Module 7, needed here) — in `service/synapse/`
+- [x] `SynapseTransactionClient` — concrete class using `RestTemplate` (no interface)
   - Reads `FineractSynapseProperties` for URL, timeouts
   - Sends POST to `{baseUrl}{batchEndpoint}`
-  - Handles HTTP errors, timeouts → throws a typed exception
+  - Handles HTTP errors, timeouts → throws `SynapsePostingException`
   - Logs request/response at DEBUG level
 
-### Files to modify
-- [ ] `SavingsConfiguration` — register `SynapseTransactionClient` bean (conditional on `synapse.enabled`)
+### Files modified
+- [x] `SavingsConfiguration` — register `SynapseTransactionClient` bean (`@ConditionalOnProperty` on `synapse.enabled`)
 
 ---
 
-## Module 4: Mapping Logic
+## Module 4: Mapping Logic ✅
 
 **Package:** `fineract-savings/.../savings/service/synapse/`
 
-### Files to create
-- [ ] `SynapseInstructionMapper` — stateless mapper
+### Files created
+- [x] `SynapseInstructionMapper` — stateless mapper (concrete class, no interface)
   - `SynapseTransactionInstruction map(SavingsAccountData account, SavingsAccountTransactionData tx, Operation op, String batchId)`
   - Determines `TransactionType` from `SavingsAccountTransactionEnumData` (interest posting → INTEREST_POSTING, overdraft interest → OVERDRAFT_INTEREST, withhold tax → WITHHOLD_TAX)
   - Determines `Direction` from transaction type (interest posting = CREDIT, overdraft/tax = DEBIT)
   - Sets `traceId` = UUID, `refNo` = tx.refNo, `currencyCode` from account currency
+  - Bean registered in `SavingsConfiguration` conditional on `synapse.enabled`
 
 ---
 
