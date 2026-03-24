@@ -34,6 +34,7 @@ import org.apache.fineract.portfolio.paymenttype.domain.PaymentTypeRepository;
 import org.apache.fineract.portfolio.paymenttype.exception.PaymentTypeNotFoundException;
 import org.apache.fineract.portfolio.paymenttype.mapper.PaymentTypeCreateRequestMapper;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.jpa.JpaSystemException;
 
@@ -44,7 +45,9 @@ public class PaymentTypeWriteServiceImpl implements PaymentTypeWriteService {
     private final PaymentTypeCreateRequestMapper createRequestMapper;
 
     @Override
-    @CacheEvict(value = "payment_types", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')")
+    @Caching(evict = {
+            @CacheEvict(value = "payment_types", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')"),
+            @CacheEvict(value = "paymentTypesWithCode", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')") })
     public PaymentTypeCreateResponse createPaymentType(@Valid PaymentTypeCreateRequest request) {
         final var paymentType = createRequestMapper.map(request);
 
@@ -54,7 +57,10 @@ public class PaymentTypeWriteServiceImpl implements PaymentTypeWriteService {
     }
 
     @Override
-    @CacheEvict(value = "payment_types", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')")
+    @Caching(evict = {
+            @CacheEvict(value = "payment_types", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')"),
+            @CacheEvict(value = "paymentTypesWithCode", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')"),
+            @CacheEvict(value = "paymentTypesById", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#request.id)") })
     @SuppressWarnings("AvoidHidingCauseException")
     public PaymentTypeUpdateResponse updatePaymentType(@Valid PaymentTypeUpdateRequest request) {
         try {
@@ -89,7 +95,10 @@ public class PaymentTypeWriteServiceImpl implements PaymentTypeWriteService {
     }
 
     @Override
-    @CacheEvict(value = "payment_types", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')")
+    @Caching(evict = {
+            @CacheEvict(value = "payment_types", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')"),
+            @CacheEvict(value = "paymentTypesWithCode", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('payment_types')"),
+            @CacheEvict(value = "paymentTypesById", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#request.id)") })
     public PaymentTypeDeleteResponse deletePaymentType(@Valid PaymentTypeDeleteRequest request) {
         final var paymentType = repository.findById(request.getId()).orElseThrow(() -> new PaymentTypeNotFoundException(request.getId()));
 

@@ -26,6 +26,7 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.investor.domain.ExternalAssetOwner;
 import org.apache.fineract.investor.domain.ExternalAssetOwnerTransfer;
+import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.loanaccount.data.AccountingBridgeDataDTO;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
@@ -40,6 +41,8 @@ public interface JournalEntryWritePlatformService {
     void createJournalEntriesForLoan(AccountingBridgeDataDTO accountingBridgeData);
 
     void createJournalEntriesForSavings(SavingsAccountingBridgeDTO accountingBridgeData);
+
+    void createJournalEntriesForSavings(SavingsAccountingBridgeDTO accountingBridgeData, Office office);
 
     void createJournalEntriesForClientTransactions(Map<String, Object> accountingBridgeData);
 

@@ -48,7 +48,8 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
         for (final SavingsTransactionDTO savingsTransactionDTO : savingsDTO.getNewSavingsTransactions()) {
             final LocalDate transactionDate = savingsTransactionDTO.getTransactionDate();
             final String transactionId = savingsTransactionDTO.getTransactionId();
-            final Office office = this.helper.getOfficeById(savingsTransactionDTO.getOfficeId());
+            final Office office = savingsDTO.getOffice() != null ? savingsDTO.getOffice()
+                    : this.helper.getOfficeById(savingsTransactionDTO.getOfficeId());
             final Long paymentTypeId = savingsTransactionDTO.getPaymentTypeId();
             final boolean isReversal = savingsTransactionDTO.isReversed();
             final BigDecimal amount = savingsTransactionDTO.getAmount();

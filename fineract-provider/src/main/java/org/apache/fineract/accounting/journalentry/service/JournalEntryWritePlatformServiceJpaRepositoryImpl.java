@@ -548,12 +548,19 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
     @Transactional
     @Override
     public void createJournalEntriesForSavings(final SavingsAccountingBridgeDTO accountingBridgeData) {
+        createJournalEntriesForSavings(accountingBridgeData, null);
+    }
+
+    @Transactional
+    @Override
+    public void createJournalEntriesForSavings(final SavingsAccountingBridgeDTO accountingBridgeData, final Office office) {
 
         final boolean cashBasedAccountingEnabled = accountingBridgeData.isCashBasedAccountingEnabled();
         final boolean accrualBasedAccountingEnabled = accountingBridgeData.isAccrualBasedAccountingEnabled();
 
         if (cashBasedAccountingEnabled || accrualBasedAccountingEnabled) {
-            final SavingsDTO savingsDTO = this.helper.populateSavingsDtoFromDTO(accountingBridgeData);
+            final SavingsDTO savingsDTO = office == null ? this.helper.populateSavingsDtoFromDTO(accountingBridgeData)
+                    : this.helper.populateSavingsDtoFromDTO(accountingBridgeData, office);
             final AccountingProcessorForSavings accountingProcessorForSavings = this.accountingProcessorForSavingsFactory
                     .determineProcessor(savingsDTO);
             accountingProcessorForSavings.createJournalEntriesForSavings(savingsDTO);

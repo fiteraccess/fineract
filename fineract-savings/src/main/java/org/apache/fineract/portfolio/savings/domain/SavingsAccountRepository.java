@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.apache.fineract.cob.data.COBIdAndLastClosedBusinessDate;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.portfolio.savings.data.SavingsAccrualData;
@@ -62,6 +63,13 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
 
     @Query("select sa from SavingsAccount sa where sa.id = :accountId and sa.depositType = :depositAccountTypeId")
     SavingsAccount findByIdAndDepositAccountType(@Param("accountId") Long accountId,
+            @Param("depositAccountTypeId") Integer depositAccountTypeId);
+
+    @Query("SELECT DISTINCT sa FROM SavingsAccount sa LEFT JOIN FETCH sa.charges LEFT JOIN FETCH sa.savingsOfficerHistory LEFT JOIN FETCH sa.product LEFT JOIN FETCH sa.group WHERE sa.id = :id")
+    Optional<SavingsAccount> findByIdWithLightweightCollections(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT sa FROM SavingsAccount sa LEFT JOIN FETCH sa.charges LEFT JOIN FETCH sa.savingsOfficerHistory LEFT JOIN FETCH sa.product LEFT JOIN FETCH sa.group WHERE sa.id = :accountId and sa.depositType = :depositAccountTypeId")
+    Optional<SavingsAccount> findByIdAndDepositAccountTypeWithLightweightCollections(@Param("accountId") Long accountId,
             @Param("depositAccountTypeId") Integer depositAccountTypeId);
 
     @Query("select sa from SavingsAccount sa where sa.accountNumber = :accountNumber and sa.status in (100, 200, 300, 303, 304) ")

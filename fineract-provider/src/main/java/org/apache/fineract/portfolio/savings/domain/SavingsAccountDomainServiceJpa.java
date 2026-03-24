@@ -675,7 +675,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 SavingsAccountingBridgeDataHelper.findNewTransactions(savingsAccount, existingTransactionIds,
                         existingReversedTransactionIds, backdatedTxnsAllowedTill),
                 isAccountTransfer);
-        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
+        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData, savingsAccount.office());
     }
 
     /**
@@ -686,7 +686,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final boolean isAccountTransfer) {
         final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account,
                 List.of(transaction), isAccountTransfer);
-        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
+        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData, account.office());
     }
 
     @Transactional

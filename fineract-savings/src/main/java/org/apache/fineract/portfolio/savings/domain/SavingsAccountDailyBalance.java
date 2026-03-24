@@ -23,7 +23,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -55,10 +54,6 @@ public class SavingsAccountDailyBalance {
 
     @Column(name = "end_of_day_balance", scale = 6, precision = 19, nullable = false)
     private BigDecimal endOfDayBalance;
-
-    @Version
-    @Column(name = "version")
-    private Long version;
 
     public SavingsAccountDailyBalance(final Long savingsAccountId, final LocalDate balanceDate, final BigDecimal endOfDayBalance) {
         this.savingsAccountId = savingsAccountId;

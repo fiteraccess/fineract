@@ -18,11 +18,13 @@
  */
 package org.apache.fineract.portfolio.savings.domain;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -33,6 +35,17 @@ public interface SavingsAccountDailyBalanceRepository
      * Find snapshot for a specific account and date.
      */
     Optional<SavingsAccountDailyBalance> findBySavingsAccountIdAndBalanceDate(Long savingsAccountId, LocalDate balanceDate);
+
+    @Modifying
+    @Query(value = "INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance) "
+            + "VALUES (?1, ?2, ?3) "
+            + "ON CONFLICT (savings_account_id, balance_date) DO UPDATE SET end_of_day_balance = ?3", nativeQuery = true)
+    void upsertDailyBalance(Long accountId, LocalDate balanceDate, BigDecimal balance);
+
+    @Modifying
+    @Query(value = "UPDATE m_savings_account_daily_balance SET end_of_day_balance = end_of_day_balance + ?3 "
+            + "WHERE savings_account_id = ?1 AND balance_date > ?2", nativeQuery = true)
+    void addDeltaAfterDate(Long accountId, LocalDate fromDate, BigDecimal delta);
 
     /**
      * Find all snapshots for a savings account within a date range, ordered by date ascending. Used for interest

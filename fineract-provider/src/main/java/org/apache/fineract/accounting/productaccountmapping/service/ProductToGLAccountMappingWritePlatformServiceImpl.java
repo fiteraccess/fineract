@@ -43,6 +43,7 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.loanproduct.LoanProductConstants;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -308,6 +309,7 @@ public class ProductToGLAccountMappingWritePlatformServiceImpl implements Produc
 
     @Override
     @Transactional
+    @CacheEvict(value = "savingsProductToGLAccounts", allEntries = true)
     public void createSavingProductToGLAccountMapping(final Long savingProductId, final JsonCommand command,
             DepositAccountType accountType) {
         final JsonElement element = this.fromApiJsonHelper.parse(command.json());
@@ -433,6 +435,7 @@ public class ProductToGLAccountMappingWritePlatformServiceImpl implements Produc
 
     @Override
     @Transactional
+    @CacheEvict(value = "savingsProductToGLAccounts", allEntries = true)
     public Map<String, Object> updateSavingsProductToGLAccountMapping(final Long savingsProductId, final JsonCommand command,
             final boolean accountingRuleChanged, final int accountingRuleTypeId, final DepositAccountType accountType) {
         /***

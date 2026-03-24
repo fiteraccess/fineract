@@ -16,25 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.accounting.journalentry.data;
+package org.apache.fineract.infrastructure.core.config.cache;
 
-import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
-import org.apache.fineract.organisation.office.domain.Office;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
-@AllArgsConstructor
-@Getter
-@Setter
-public class SavingsDTO {
+import org.junit.jupiter.api.Test;
+import org.springframework.cache.jcache.JCacheCacheManager;
 
-    private Long savingsId;
-    private Long savingsProductId;
-    private Long officeId;
-    private String currencyCode;
-    private boolean cashBasedAccountingEnabled;
-    private boolean accrualBasedAccountingEnabled;
-    private List<SavingsTransactionDTO> newSavingsTransactions;
-    private Office office;
+class CacheConfigTest {
+
+    @Test
+    void defaultCacheManagerShouldSupportPaymentTypesByIdCache() {
+        CacheConfig cacheConfig = new CacheConfig();
+
+        TransactionBoundCacheManager cacheManager = cacheConfig.defaultCacheManager(mock(JCacheCacheManager.class));
+
+        assertThat(cacheManager.getCacheNames()).contains(CacheConfig.PAYMENT_TYPES_BY_ID_CACHE_NAME);
+    }
 }

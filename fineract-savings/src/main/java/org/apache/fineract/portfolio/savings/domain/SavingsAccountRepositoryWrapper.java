@@ -92,10 +92,8 @@ public class SavingsAccountRepositoryWrapper {
      */
     @Transactional(readOnly = true)
     public SavingsAccount findOneWithNotFoundDetectionLightweight(final Long savingsId) {
-        final SavingsAccount account = this.repository.findById(savingsId)
+        return this.repository.findByIdWithLightweightCollections(savingsId)
                 .orElseThrow(() -> new SavingsAccountNotFoundException(savingsId));
-        account.loadLazyCollectionsLightweight();
-        return account;
     }
 
     /**
@@ -104,12 +102,8 @@ public class SavingsAccountRepositoryWrapper {
      */
     @Transactional(readOnly = true)
     public SavingsAccount findOneWithNotFoundDetectionLightweight(final Long savingsId, final DepositAccountType depositAccountType) {
-        final SavingsAccount account = this.repository.findByIdAndDepositAccountType(savingsId, depositAccountType.getValue());
-        if (account == null) {
-            throw new SavingsAccountNotFoundException(savingsId);
-        }
-        account.loadLazyCollectionsLightweight();
-        return account;
+        return this.repository.findByIdAndDepositAccountTypeWithLightweightCollections(savingsId, depositAccountType.getValue())
+                .orElseThrow(() -> new SavingsAccountNotFoundException(savingsId));
     }
 
     @Transactional(readOnly = true)
