@@ -83,16 +83,23 @@ into the existing code.
   - Constructor deps: `SynapseInstructionMapper`, `SynapseTransactionClient`
   - `SynapsePostResult postInterestBatch(List<SavingsAccountData> accounts, LocalDate postingDate)`
     1. Generates a `batchId` (UUID)
-    2. Iterates accounts → transactions, delegates to mapper for each eligible tx
-    3. Wraps collected instructions in `SynapseInterestPostingBatch`
-    4. Calls `synapseClient.postBatch(batch)`
-    5. Returns a `SynapsePostResult` containing the cursor-update params per account
-       (account ID, interestPostedTillDate, lastInterestCalculationDate)
+    2. Extracts cursor data (`interestPostedTillDate`, `lastInterestCalculationDate`) from **every** account's summary — all accounts get cursor updates by default
+    3. Iterates accounts → transactions, delegates to mapper for each eligible tx (new non-zero + reversed)
+    4. Builds `Map<Long, List<String>>` (accountId → traceIds) during instruction collection for partial-success correlation
+    5. If no instructions collected → returns result immediately (no HTTP call, all cursors included)
+    6. If instructions exist → wraps in `SynapseInterestPostingBatch`, calls `synapseClient.postBatch(batch)`
+    7. On response: collects failed traceIds → derives failed accountIds (if **any** instruction for an account failed, that account is failed) → removes those accounts' cursor updates
+    8. Returns `SynapsePostResult` with surviving cursor updates + accepted/failed counts
   - Does **not** touch `JdbcTemplate` — returns data, caller persists
 
 - [ ] `SynapsePostResult` — simple data holder
   - `List<AccountCursorUpdate> cursorUpdates` (accountId, interestPostedTillDate, lastInterestCalculationDate)
   - `int accepted`, `int failed`
+
+### Key design decisions
+- **Zero-interest accounts** still get cursor updates — prevents re-calculation on next scheduler run
+- **Partial success at account level**: Synapse returns per-instruction results. If **any** instruction for an account fails, that account's cursor is not advanced. One bad account does not block the other 999,999.
+- **Empty batch** (all accounts have zero interest) skips the HTTP call entirely
 
 ### What this enables
 - The service is testable with: real mapper + mock client → assert batch payload + cursor params
@@ -145,13 +152,13 @@ if (synapseEnabled) {
 
 ## Module 7: Error Handling
 
-Handled inline in Modules 5–6, but worth calling out:
+Handled inline in Modules 3, 5, 6. Status:
 
-- [ ] Define `SynapsePostingException` (unchecked) in `service/synapse/`
-- [ ] `SynapseTransactionClientImpl`: HTTP failure / timeout → wrap in `SynapsePostingException`
-- [ ] `SynapseInterestPostingService`: lets `SynapsePostingException` propagate (no cursor data returned)
+- [x] Define `SynapsePostingException` (unchecked) in `service/synapse/` — **done in Module 3**
+- [x] `SynapseTransactionClient`: HTTP failure / timeout → wrap in `SynapsePostingException` — **done in Module 3**
+- [ ] `SynapseInterestPostingService`: HTTP-level failure (non-200) → lets `SynapsePostingException` propagate (no cursor data returned, entire batch retried)
+- [ ] `SynapseInterestPostingService`: 200 with per-instruction failures → removes failed accounts' cursors, returns partial result (good accounts proceed, bad accounts retry next run)
 - [ ] `batchUpdate()`: exception propagates up → `postInterest()` catches it per-account → no cursor advance → next scheduler run retries
-- [ ] Partial success: if batch endpoint returns per-instruction results, `SynapseInterestPostingService` only includes succeeded accounts in `SynapsePostResult.cursorUpdates`
 
 ---
 
@@ -178,9 +185,10 @@ directly unit-tested — its Synapse branch is a 3-line delegation, and the orig
 
 - [ ] `SynapseInterestPostingServiceTest` — real mapper, mock client
   - Happy path: 3 accounts with mixed tx types → client receives correct batch payload → returns cursor updates for all 3
-  - Accounts with only zero-amount txs → client not called (empty batch)
+  - Zero-interest accounts (no eligible txs) → client not called, cursor updates still returned for all accounts
   - Client throws `SynapsePostingException` → exception propagates, no cursor data returned
-  - Partial success response → cursor updates only for accepted accounts
+  - Partial success: account with 2 instructions, 1 rejected → that account's cursor excluded, other accounts' cursors included
+  - All instructions for an account accepted → that account's cursor included
   - batchId is consistent across all instructions in a single call
 
 - [ ] `SynapseTransactionClientImplTest` — `MockRestServiceServer`
