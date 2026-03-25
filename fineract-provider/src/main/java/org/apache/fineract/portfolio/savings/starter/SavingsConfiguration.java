@@ -145,6 +145,7 @@ import org.apache.fineract.portfolio.search.service.SearchUtil;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -470,5 +471,11 @@ public class SavingsConfiguration {
                 .readTimeout(Duration.ofMillis(synapse.getReadTimeoutMs()))
                 .build();
         return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getBatchEndpoint());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseInterestPostingService synapseInterestPostingService(SynapseInstructionMapper mapper, SynapseTransactionClient client) {
+        return new SynapseInterestPostingService(mapper, client);
     }
 }
