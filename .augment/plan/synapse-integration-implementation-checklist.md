@@ -79,7 +79,7 @@ Synapse-specific orchestration into its own class, we get a clean unit-test boun
 into the existing code.
 
 ### Files to create
-- [ ] `SynapseInterestPostingService` — owns the full Synapse posting flow:
+- [x] `SynapseInterestPostingService` — owns the full Synapse posting flow:
   - Constructor deps: `SynapseInstructionMapper`, `SynapseTransactionClient`
   - `SynapsePostResult postInterestBatch(List<SavingsAccountData> accounts, LocalDate postingDate)`
     1. Generates a `batchId` (UUID)
@@ -92,7 +92,7 @@ into the existing code.
     8. Returns `SynapsePostResult` with surviving cursor updates + accepted/failed counts
   - Does **not** touch `JdbcTemplate` — returns data, caller persists
 
-- [ ] `SynapsePostResult` — simple data holder
+- [x] `SynapsePostResult` — simple data holder
   - `List<AccountCursorUpdate> cursorUpdates` (accountId, interestPostedTillDate, lastInterestCalculationDate)
   - `int accepted`, `int failed`
 
