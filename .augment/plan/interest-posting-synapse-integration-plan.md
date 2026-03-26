@@ -236,15 +236,57 @@ This way:
 
 ## 7. Queue Replay (Fineract catching up)
 
-When Synapse processes the interest posting, the transaction flows back to Fineract via the queue.
+When Synapse processes the interest posting, the transaction flows back to Fineract so it
+can record the transaction in its own ledger.
 
-On replay, Fineract:
-1. Inserts the transaction row in `m_savings_account_transaction`
-2. Updates `account_balance_derived`, `total_interest_posted_derived`
-3. Creates journal entries
-4. Updates running balances
+### Why existing endpoints don't work
 
-This is the **existing queue consumer path** — no changes needed here, assuming the queue consumer already handles interest posting transaction types.
+Fineract's existing deposit/withdrawal endpoints (`/savingsaccounts/{id}/transactions?command=deposit`)
+are **not suitable** for replaying interest postings because they:
+- Create `DEPOSIT` or `WITHDRAWAL` transaction types instead of `INTEREST_POSTING` (3),
+  `OVERDRAFT_INTEREST` (17), or `WITHHOLD_TAX` (18)
+- Trigger business rules (min balance checks, hold restrictions) that don't apply to interest
+- Use the wrong GL accounts (deposit GL account vs interest expense GL account)
+- Go through the full command pipeline with maker-checker, which is unnecessary for replay
+
+### Solution: Fineract replay endpoint (Fineract builds this)
+
+Fineract will expose a dedicated internal endpoint:
+
+```
+POST /api/v1/internal/savings/interest-postings:replay
+```
+
+**Request body:**
+
+```json
+{
+  "traceId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "savingsAccountId": 12345,
+  "transactionType": "INTEREST_POSTING",
+  "direction": "CREDIT",
+  "amount": 250.00,
+  "overdraftAmount": null,
+  "transactionDate": "2026-03-20",
+  "currencyCode": "NGN",
+  "correlationId": "syn-tx-98765"
+}
+```
+
+**What it does:**
+1. Deduplicates on `traceId` — if already replayed, returns 200 with existing transaction ID
+2. Inserts the row in `m_savings_account_transaction` with the correct `SavingsAccountTransactionType`
+3. Updates `account_balance_derived`, `total_interest_posted_derived` on `m_savings_account`
+4. Creates journal entries with the correct GL accounts (interest expense → savings)
+5. Updates running balances
+
+**What it does NOT do:**
+- Recalculate interest (already calculated by the scheduler)
+- Check business rules (min balance, holds, overdraft limits)
+- Go through maker-checker command pipeline
+- Advance the posting cursor (already advanced when the batch was dispatched)
+
+This endpoint is **not yet built** — it is a prerequisite for end-to-end integration testing.
 
 ---
 
@@ -261,15 +303,25 @@ double-posting risk compounds with reversal logic.
 
 ## 9. Implementation Phases
 
-### Phase 1: Collection + API call (scheduler path)
+### Phase 1: Collection + API call (scheduler path) ✅
 1. Create `SynapseTransactionInstruction` and `SynapseInterestPostingBatch` DTOs
 2. Create `SynapseTransactionClient` service (HTTP client for Synapse)
 3. Modify `SavingsSchedularInterestPoster.batchUpdate()`:
    - Collect transactions instead of building SQL param arrays
    - Call Synapse batch endpoint
    - Update only posting cursor fields locally
-4. Build batch interest-posting endpoint in Synapse proxy
+4. Build batch interest-posting endpoint in Synapse proxy ← **Synapse team**
 5. Test with a small subset of accounts
+
+### Phase 1b: Replay endpoint (Fineract — prerequisite for end-to-end)
+1. Build `POST /api/v1/internal/savings/interest-postings:replay` endpoint
+2. Accepts `traceId`, `savingsAccountId`, `transactionType`, `direction`, `amount`,
+   `transactionDate`, `currencyCode`, `correlationId`, `overdraftAmount`
+3. Deduplicates on `traceId`
+4. Inserts correct `SavingsAccountTransactionType` row (not deposit/withdrawal)
+5. Updates balance derived fields, creates journal entries, updates running balances
+6. Skips business rules (min balance, holds) and maker-checker pipeline
+7. Does NOT recalculate interest or advance posting cursor
 
 ### Phase 2: Manual/non-scheduler path
 1. Modify `SavingsAccountWritePlatformServiceJpaRepositoryImpl.postInterest()` (manual path)
