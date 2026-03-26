@@ -248,7 +248,18 @@ This is the **existing queue consumer path** — no changes needed here, assumin
 
 ---
 
-## 8. Implementation Phases
+## 8. Local Persistence Layer Decision
+
+See **[synapse-persistence-layer-decision.md](synapse-persistence-layer-decision.md)** for the
+full evaluation of whether to introduce `m_synapse_posting_instruction`.
+
+**TL;DR:** Continue with in-memory DTOs for Phase 1 and Phase 2. Introduce the table as the
+first step of Phase 3 (Reversals), when original-instruction lookups become necessary and the
+double-posting risk compounds with reversal logic.
+
+---
+
+## 9. Implementation Phases
 
 ### Phase 1: Collection + API call (scheduler path)
 1. Create `SynapseTransactionInstruction` and `SynapseInterestPostingBatch` DTOs
