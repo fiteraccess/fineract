@@ -35,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryType;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
@@ -42,6 +43,9 @@ import org.apache.fineract.infrastructure.security.service.PlatformSecurityConte
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Isolation;
@@ -62,6 +66,10 @@ public class SavingsSchedularInterestPoster {
     private final List<SavingsAccountData> savingsAccountDataList = new ArrayList<>();
     private Collection<SavingsAccountData> savingAccounts;
     private boolean backdatedTxnsAllowedTill;
+
+    // Optional Synapse dependencies — injected via setter only when synapse is enabled
+    private SynapseInterestPostingService synapseInterestPostingService;
+    private FineractProperties fineractProperties;
 
     @Transactional(isolation = Isolation.READ_UNCOMMITTED, rollbackFor = Exception.class)
     public void postInterest() throws JobExecutionException {
@@ -160,6 +168,15 @@ public class SavingsSchedularInterestPoster {
 
     @SuppressWarnings("unused")
     private void batchUpdate(final List<SavingsAccountData> savingsAccountDataList) throws DataAccessException {
+        if (isSynapseEnabled()) {
+            LocalDate currentDate = DateUtils.getBusinessLocalDate();
+            Long userId = platformSecurityContext.authenticatedUser().getId();
+            SynapsePostResult result = synapseInterestPostingService.postInterestBatch(savingsAccountDataList, currentDate);
+            executeCursorUpdates(result.getCursorUpdates(), userId);
+            log.debug("Synapse batch complete: accepted={}, failed={}", result.getAccepted(), result.getFailed());
+            return;
+        }
+
         String queryForSavingsUpdate = batchQueryForSavingsSummaryUpdate();
         String queryForTransactionInsertion = batchQueryForTransactionInsertion();
         String queryForTransactionUpdate = batchQueryForTransactionsUpdate();
@@ -260,5 +277,28 @@ public class SavingsSchedularInterestPoster {
         return "UPDATE m_savings_account_transaction "
                 + "SET is_reversed=?, amount=?, overdraft_amount_derived=?, balance_end_date_derived=?, balance_number_of_days_derived=?, running_balance_derived=?, cumulative_balance_derived=?, is_reversal=?, "
                 + LAST_MODIFIED_DATE_DB_FIELD + " = ?, " + LAST_MODIFIED_BY_DB_FIELD + " = ? " + "WHERE id=?";
+    }
+
+    private boolean isSynapseEnabled() {
+        return fineractProperties != null && synapseInterestPostingService != null
+                && fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isEnabled();
+    }
+
+    private void executeCursorUpdates(List<AccountCursorUpdate> cursorUpdates, Long userId) {
+        if (cursorUpdates.isEmpty()) {
+            return;
+        }
+        OffsetDateTime auditTime = DateUtils.getAuditOffsetDateTime();
+        List<Object[]> params = new ArrayList<>();
+        for (AccountCursorUpdate cursor : cursorUpdates) {
+            params.add(new Object[] { cursor.getInterestPostedTillDate(), cursor.getLastInterestCalculationDate(), auditTime, userId,
+                    cursor.getAccountId() });
+        }
+        this.jdbcTemplate.batchUpdate(batchQueryForPostingCursorUpdate(), params);
+    }
+
+    private String batchQueryForPostingCursorUpdate() {
+        return "UPDATE m_savings_account SET interest_posted_till_date = ?, last_interest_calculation_date = ?, "
+                + LAST_MODIFIED_DATE_DB_FIELD + " = ?, " + LAST_MODIFIED_BY_DB_FIELD + " = ? WHERE id = ?";
     }
 }

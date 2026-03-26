@@ -107,35 +107,19 @@ into the existing code.
 
 ---
 
-## Module 6: Modify `batchUpdate()`
+## Module 6: Modify `batchUpdate()` ✅
 
 **File:** `SavingsSchedularInterestPoster.java`
 
 ### What changes
-- [ ] Add constructor dependency: `SynapseInterestPostingService` (nullable — only present when enabled)
-- [ ] Add constructor dependency: `FineractProperties` (to check `synapse.enabled`)
-- [ ] Inside `batchUpdate()`, thin branch on feature flag:
-
-```java
-if (synapseEnabled) {
-    SynapsePostResult result = synapseInterestPostingService.postInterestBatch(savingsAccountDataList, currentDate);
-    executeCursorUpdates(result.getCursorUpdates());
-} else {
-    // existing path unchanged — transaction inserts, updates, journal entries
-}
-```
+- [x] Add setter-injected dependency: `SynapseInterestPostingService` (nullable — only present when enabled)
+- [x] Add setter-injected dependency: `FineractProperties` (to check `synapse.enabled`)
+- [x] Inside `batchUpdate()`, early-return branch on feature flag (existing code untouched in else path)
 
 ### Cursor-only SQL (new private method)
-- [ ] `batchQueryForPostingCursorUpdate()` — returns:
-  ```sql
-  UPDATE m_savings_account
-  SET interest_posted_till_date = ?,
-      last_interest_calculation_date = ?,
-      last_modified_on_utc = ?,
-      last_modified_by = ?
-  WHERE id = ?
-  ```
-- [ ] `executeCursorUpdates(List<AccountCursorUpdate>)` — builds param array, calls `jdbcTemplate.batchUpdate`
+- [x] `batchQueryForPostingCursorUpdate()` — cursor-only UPDATE
+- [x] `executeCursorUpdates(List<AccountCursorUpdate>, Long userId)` — builds param array, calls `jdbcTemplate.batchUpdate`
+- [x] `isSynapseEnabled()` — null-safe check on properties + service
 
 ### What to keep in the Synapse path
 - ✅ Cursor date fields only (via `executeCursorUpdates`)
@@ -144,21 +128,21 @@ if (synapseEnabled) {
 - ❌ `fetchTransactionsFromIds()` — skip
 - ❌ `batchUpdateJournalEntries()` — skip
 
-### Files to modify
-- [ ] `SavingsSchedularInterestPoster` — add branch + cursor method
-- [ ] `SavingsConfiguration` — update bean wiring to pass new dependencies
+### Files modified
+- [x] `SavingsSchedularInterestPoster` — add branch + cursor method
+- [x] `SavingsConfiguration` — update bean wiring via `ObjectProvider` for optional deps
 
 ---
 
-## Module 7: Error Handling
+## Module 7: Error Handling ✅
 
 Handled inline in Modules 3, 5, 6. Status:
 
 - [x] Define `SynapsePostingException` (unchecked) in `service/synapse/` — **done in Module 3**
 - [x] `SynapseTransactionClient`: HTTP failure / timeout → wrap in `SynapsePostingException` — **done in Module 3**
-- [ ] `SynapseInterestPostingService`: HTTP-level failure (non-200) → lets `SynapsePostingException` propagate (no cursor data returned, entire batch retried)
-- [ ] `SynapseInterestPostingService`: 200 with per-instruction failures → removes failed accounts' cursors, returns partial result (good accounts proceed, bad accounts retry next run)
-- [ ] `batchUpdate()`: exception propagates up → `postInterest()` catches it per-account → no cursor advance → next scheduler run retries
+- [x] `SynapseInterestPostingService`: HTTP-level failure (non-200) → lets `SynapsePostingException` propagate (no cursor data returned, entire batch retried) — **already implemented: no try/catch around `client.postBatch()`**
+- [x] `SynapseInterestPostingService`: 200 with per-instruction failures → removes failed accounts' cursors, returns partial result — **already implemented in `filterByResponse()`**
+- [x] `batchUpdate()`: exception propagates up → `postInterest()` catches it via existing `catch (Exception)` → no cursor advance → next scheduler run retries — **wired in Module 6**
 
 ---
 

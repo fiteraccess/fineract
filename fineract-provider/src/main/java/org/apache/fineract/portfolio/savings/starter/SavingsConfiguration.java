@@ -147,6 +147,7 @@ import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -442,11 +443,14 @@ public class SavingsConfiguration {
     @ConditionalOnMissingBean(SavingsSchedularInterestPoster.class)
     public SavingsSchedularInterestPoster savingsSchedularInterestPoster(
             SavingsAccountWritePlatformService savingsAccountWritePlatformService, JdbcTemplate jdbcTemplate,
-            SavingsAccountReadPlatformService savingsAccountReadPlatformService, PlatformSecurityContext platformSecurityContext
-
-    ) {
-        return new SavingsSchedularInterestPoster(savingsAccountWritePlatformService, jdbcTemplate, savingsAccountReadPlatformService,
-                platformSecurityContext);
+            SavingsAccountReadPlatformService savingsAccountReadPlatformService, PlatformSecurityContext platformSecurityContext,
+            ObjectProvider<SynapseInterestPostingService> synapseServiceProvider,
+            ObjectProvider<FineractProperties> fineractPropertiesProvider) {
+        SavingsSchedularInterestPoster poster = new SavingsSchedularInterestPoster(savingsAccountWritePlatformService, jdbcTemplate,
+                savingsAccountReadPlatformService, platformSecurityContext);
+        synapseServiceProvider.ifAvailable(poster::setSynapseInterestPostingService);
+        fineractPropertiesProvider.ifAvailable(poster::setFineractProperties);
+        return poster;
     }
 
     @Bean
