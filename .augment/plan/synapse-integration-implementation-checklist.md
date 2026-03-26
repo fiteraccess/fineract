@@ -146,7 +146,7 @@ Handled inline in Modules 3, 5, 6. Status:
 
 ---
 
-## Module 8: Tests
+## Module 8: Tests ✅
 
 ### Testing strategy
 
@@ -158,7 +158,7 @@ directly unit-tested — its Synapse branch is a 3-line delegation, and the orig
 
 **Package:** `fineract-savings/src/test/.../savings/service/synapse/`
 
-- [ ] `SynapseInstructionMapperTest` — pure unit test, real domain objects, no mocks
+- [x] `SynapseInstructionMapperTest` — pure unit test, real domain objects, no mocks
   - Interest posting tx → CREDIT + INTEREST_POSTING + POST
   - Overdraft interest tx → DEBIT + OVERDRAFT_INTEREST + POST
   - Withhold tax tx → DEBIT + WITHHOLD_TAX + POST
@@ -167,7 +167,7 @@ directly unit-tested — its Synapse branch is a 3-line delegation, and the orig
   - traceId is a valid UUID
   - currencyCode, refNo, savingsAccountId, officeId populated from inputs
 
-- [ ] `SynapseInterestPostingServiceTest` — real mapper, mock client
+- [x] `SynapseInterestPostingServiceTest` — real mapper, mock client
   - Happy path: 3 accounts with mixed tx types → client receives correct batch payload → returns cursor updates for all 3
   - Zero-interest accounts (no eligible txs) → client not called, cursor updates still returned for all accounts
   - Client throws `SynapsePostingException` → exception propagates, no cursor data returned
@@ -175,7 +175,7 @@ directly unit-tested — its Synapse branch is a 3-line delegation, and the orig
   - All instructions for an account accepted → that account's cursor included
   - batchId is consistent across all instructions in a single call
 
-- [ ] `SynapseTransactionClientImplTest` — `MockRestServiceServer`
+- [x] `SynapseTransactionClientImplTest` — `MockRestServiceServer`
   - Successful POST → deserializes response correctly
   - HTTP 500 → throws `SynapsePostingException`
   - Connection timeout → throws `SynapsePostingException`
