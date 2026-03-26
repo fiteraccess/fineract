@@ -206,31 +206,40 @@ advancement and retries all its instructions next run.
 ### 4. Queue replay back to Fineract
 
 After processing each instruction in TigerBeetle, Synapse must call back into Fineract
-so it can record the transaction in its own ledger. **Fineract will expose a dedicated
-replay endpoint for this** — Synapse should NOT use the existing deposit/withdrawal
-endpoints (those trigger wrong transaction types and business rules).
+so it can record the transaction in its own ledger. **Fineract will expose a replay
+endpoint that follows the same pattern as its existing deposit/withdrawal endpoints.**
+
+Do NOT use the existing `?command=deposit` or `?command=withdrawal` endpoints — those
+create the wrong transaction types and trigger business rules that don't apply.
 
 **Fineract replay endpoint (Fineract will build this):**
 
 ```
-POST {fineract-base}/api/v1/internal/savings/interest-postings:replay
+POST {fineract-base}/api/v1/savingsaccounts/{savingsAccountId}/transactions?command=replayInterestPosting
 ```
 
-**Request body Synapse should send:**
+This follows the same URL pattern as deposits and withdrawals:
+- Deposit: `POST /v1/savingsaccounts/{id}/transactions?command=deposit`
+- Withdrawal: `POST /v1/savingsaccounts/{id}/transactions?command=withdrawal`
+- **Replay: `POST /v1/savingsaccounts/{id}/transactions?command=replayInterestPosting`**
+
+**Request body Synapse should send (standard Fineract JSON command format):**
 
 ```json
 {
-  "traceId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "savingsAccountId": 12345,
+  "transactionDate": "20 March 2026",
+  "transactionAmount": 250.00,
+  "dateFormat": "dd MMMM yyyy",
+  "locale": "en",
   "transactionType": "INTEREST_POSTING",
-  "direction": "CREDIT",
-  "amount": 250.00,
   "overdraftAmount": null,
-  "transactionDate": "2026-03-20",
-  "currencyCode": "NGN",
+  "traceId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "correlationId": "syn-tx-98765"
 }
 ```
+
+Note: `transactionDate` uses Fineract's standard date format with `dateFormat` and `locale`
+fields, matching how deposit/withdrawal requests are structured.
 
 **What Fineract does on receiving this (not Synapse's concern):**
 - Deduplicates on `traceId` — if already replayed, returns 200 with existing transaction ID

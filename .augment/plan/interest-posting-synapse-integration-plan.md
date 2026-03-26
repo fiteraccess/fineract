@@ -236,55 +236,81 @@ This way:
 
 ## 7. Queue Replay (Fineract catching up)
 
-When Synapse processes the interest posting, the transaction flows back to Fineract so it
-can record the transaction in its own ledger.
+When Synapse processes the interest posting in TigerBeetle, it calls back into Fineract
+so Fineract can record the transaction in its own ledger.
 
-### Why existing endpoints don't work
+### Endpoint: follows existing Fineract command pattern
 
-Fineract's existing deposit/withdrawal endpoints (`/savingsaccounts/{id}/transactions?command=deposit`)
-are **not suitable** for replaying interest postings because they:
-- Create `DEPOSIT` or `WITHDRAWAL` transaction types instead of `INTEREST_POSTING` (3),
-  `OVERDRAFT_INTEREST` (17), or `WITHHOLD_TAX` (18)
-- Trigger business rules (min balance checks, hold restrictions) that don't apply to interest
-- Use the wrong GL accounts (deposit GL account vs interest expense GL account)
-- Go through the full command pipeline with maker-checker, which is unnecessary for replay
-
-### Solution: Fineract replay endpoint (Fineract builds this)
-
-Fineract will expose a dedicated internal endpoint:
+The replay endpoint follows the **exact same pattern** as deposit and withdrawal:
 
 ```
-POST /api/v1/internal/savings/interest-postings:replay
+API Resource → CommandWrapperBuilder → CommandHandler → Service
 ```
 
-**Request body:**
+**Existing deposit pattern for reference:**
+
+| Layer | Deposit | Withdrawal |
+|---|---|---|
+| URL | `POST /v1/savingsaccounts/{id}/transactions?command=deposit` | `?command=withdrawal` |
+| CommandWrapperBuilder | `savingsAccountDeposit(id)` → `action=DEPOSIT, entity=SAVINGSACCOUNT` | `savingsAccountWithdrawal(id)` |
+| Handler | `@CommandType(entity="SAVINGSACCOUNT", action="DEPOSIT")` | `action="WITHDRAWAL"` |
+| Service | `writePlatformService.deposit(savingsId, command)` | `.withdrawal(savingsId, command)` |
+
+**New replay endpoint — same pattern:**
+
+| Layer | Interest Posting Replay |
+|---|---|
+| URL | `POST /v1/savingsaccounts/{savingsId}/transactions?command=replayInterestPosting` |
+| CommandWrapperBuilder | `savingsAccountReplayInterestPosting(savingsId)` → `action=REPLAYINTERESTPOSTING, entity=SAVINGSACCOUNT` |
+| Handler | `@CommandType(entity="SAVINGSACCOUNT", action="REPLAYINTERESTPOSTING")` |
+| Service | `writePlatformService.replayInterestPosting(savingsId, command)` |
+
+### Request body
+
+Follows Fineract's standard JSON command format (`JsonCommand`):
 
 ```json
 {
-  "traceId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "savingsAccountId": 12345,
+  "transactionDate": "20 March 2026",
+  "transactionAmount": 250.00,
+  "dateFormat": "dd MMMM yyyy",
+  "locale": "en",
   "transactionType": "INTEREST_POSTING",
-  "direction": "CREDIT",
-  "amount": 250.00,
   "overdraftAmount": null,
-  "transactionDate": "2026-03-20",
-  "currencyCode": "NGN",
+  "traceId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "correlationId": "syn-tx-98765"
 }
 ```
 
-**What it does:**
-1. Deduplicates on `traceId` — if already replayed, returns 200 with existing transaction ID
-2. Inserts the row in `m_savings_account_transaction` with the correct `SavingsAccountTransactionType`
-3. Updates `account_balance_derived`, `total_interest_posted_derived` on `m_savings_account`
-4. Creates journal entries with the correct GL accounts (interest expense → savings)
-5. Updates running balances
+### What the service method does
 
-**What it does NOT do:**
+1. Loads the `SavingsAccount` entity
+2. Deduplicates on `traceId` — if a transaction with this traceId already exists, returns
+   200 with the existing transaction ID (no double-posting)
+3. Creates a `SavingsAccountTransaction` with the correct `SavingsAccountTransactionType`:
+   - `INTEREST_POSTING` (3) — credits the account
+   - `OVERDRAFT_INTEREST` (17) — debits the account
+   - `WITHHOLD_TAX` (18) — debits the account
+4. Persists via `savingsAccountTransactionRepository.save()`
+5. Updates `account_balance_derived`, `total_interest_posted_derived` on `m_savings_account`
+6. Creates journal entries with the correct GL accounts (interest expense → savings)
+7. Updates running balances
+
+### What it does NOT do
+
 - Recalculate interest (already calculated by the scheduler)
 - Check business rules (min balance, holds, overdraft limits)
-- Go through maker-checker command pipeline
 - Advance the posting cursor (already advanced when the batch was dispatched)
+
+### Files to create/modify
+
+| File | Change |
+|---|---|
+| `SavingsAccountTransactionsApiResource` | Add `replayInterestPosting` branch in `transaction()` method |
+| `CommandWrapperBuilder` | Add `savingsAccountReplayInterestPosting(Long accountId)` |
+| **New:** `ReplayInterestPostingSavingsAccountCommandHandler` | `@CommandType(entity="SAVINGSACCOUNT", action="REPLAYINTERESTPOSTING")` |
+| `SavingsAccountWritePlatformService` | Add `replayInterestPosting(Long savingsId, JsonCommand command)` |
+| `SavingsAccountWritePlatformServiceJpaRepositoryImpl` | Implement `replayInterestPosting()` |
 
 This endpoint is **not yet built** — it is a prerequisite for end-to-end integration testing.
 
