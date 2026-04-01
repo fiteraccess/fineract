@@ -19,8 +19,6 @@
 package org.apache.fineract.integrationtests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.restassured.builder.RequestSpecBuilder;
@@ -43,272 +41,216 @@ import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntryHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.integrationtests.common.savings.SavingsTestLifecycleExtension;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith({ SavingsTestLifecycleExtension.class })
 public class ReplayInterestPostingIntegrationTest {
 
-    private static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
-    private static final String START_DATE = "10 April 2022";
+    private static final String DATE = "10 April 2022";
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private SavingsAccountHelper savingsAccountHelper;
-    private SavingsProductHelper savingsProductHelper;
-    private AccountHelper accountHelper;
-    private JournalEntryHelper journalEntryHelper;
 
     @BeforeEach
     public void setup() {
         Utils.initializeRESTAssured();
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
-        this.savingsProductHelper = new SavingsProductHelper();
-        this.accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
-        this.journalEntryHelper = new JournalEntryHelper(this.requestSpec, this.responseSpec);
+        requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void testHappyPath_interestPostingReplayCreatesTransactionAndUpdatesBalance() {
-        final Account assetAccount = this.accountHelper.createAssetAccount();
-        final Account liabilityAccount = this.accountHelper.createLiabilityAccount();
-        final Account incomeAccount = this.accountHelper.createIncomeAccount();
-        final Account expenseAccount = this.accountHelper.createExpenseAccount();
+    @Nested
+    class InterestPosting {
 
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, START_DATE);
-        assertNotNull(clientID);
+        @SuppressWarnings("unchecked")
+        @Test
+        void creditsAccountAndIncreasesBalance() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
 
-        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withAccountingRuleAsCashBased(new Account[] { assetAccount, liabilityAccount, incomeAccount, expenseAccount }).build();
-        final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
-        assertNotNull(savingsProductID);
+            Integer txnId = replayPosting(savingsId, "50.00", "INTEREST_POSTING", null);
 
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, START_DATE);
-        assertNotNull(savingsId);
-        HashMap savingsStatusHashMap = this.savingsAccountHelper.approveSavingsOnDate(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
-        savingsStatusHashMap = this.savingsAccountHelper.activateSavingsAccount(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
-
-        Integer depositTxnId = (Integer) this.savingsAccountHelper.depositToSavingsAccount(savingsId, "1000", START_DATE,
-                CommonConstants.RESPONSE_RESOURCE_ID);
-        assertNotNull(depositTxnId);
-
-        HashMap summaryBefore = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balanceBefore = (Float) summaryBefore.get("accountBalance");
-
-        String replayJson = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", START_DATE, "INTEREST_POSTING",
-                UUID.randomUUID().toString(), null);
-        Integer replayTxnId = this.savingsAccountHelper.replayInterestPosting(savingsId, replayJson);
-        assertNotNull(replayTxnId);
-
-        HashMap summaryAfter = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balanceAfter = (Float) summaryAfter.get("accountBalance");
-        assertEquals(balanceBefore + 50.0f, balanceAfter, 0.01f, "Balance should increase by 50.00 after interest posting replay");
-
-        HashMap txnDetails = this.savingsAccountHelper.getTransactionDetails(savingsId, replayTxnId);
-        HashMap transactionType = (HashMap) txnDetails.get("transactionType");
-        assertTrue((Boolean) transactionType.get("interestPosting"), "Transaction type should be interest posting");
-
-        ArrayList<HashMap> journalEntries = this.journalEntryHelper.getJournalEntriesByTransactionId("S" + replayTxnId);
-        assertFalse(journalEntries.isEmpty(), "Journal entries should be created for replay transaction");
-        boolean expenseDebitFound = false;
-        boolean liabilityCreditFound = false;
-        for (Map<String, Object> entry : journalEntries) {
-            String entryType = (String) ((HashMap) entry.get("entryType")).get("value");
-            Integer glAccountId = ((Number) entry.get("glAccountId")).intValue();
-            if ("DEBIT".equals(entryType) && glAccountId.equals(expenseAccount.getAccountID())) {
-                expenseDebitFound = true;
-            }
-            if ("CREDIT".equals(entryType) && glAccountId.equals(liabilityAccount.getAccountID())) {
-                liabilityCreditFound = true;
-            }
+            assertEquals(1050.0f, balanceOf(savingsId), 0.01f);
+            assertTrue((Boolean) transactionType(savingsId, txnId).get("interestPosting"));
         }
-        assertTrue(expenseDebitFound, "DEBIT to expense account (interest on savings) should exist");
-        assertTrue(liabilityCreditFound, "CREDIT to liability account (savings control) should exist");
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void createsExpenseDebitAndLiabilityCreditJournalEntries() {
+            Account[] gl = createCashBasedGlAccounts();
+            Account expenseAccount = gl[3];
+            Account liabilityAccount = gl[1];
+            Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
+
+            Integer txnId = replayPosting(savingsId, "50.00", "INTEREST_POSTING", null);
+
+            ArrayList<HashMap> entries = new JournalEntryHelper(requestSpec, responseSpec)
+                    .getJournalEntriesByTransactionId("S" + txnId);
+            boolean expenseDebited = false;
+            boolean liabilityCredited = false;
+            for (Map<String, Object> entry : entries) {
+                String type = (String) ((HashMap) entry.get("entryType")).get("value");
+                int accountId = ((Number) entry.get("glAccountId")).intValue();
+                if ("DEBIT".equals(type) && accountId == expenseAccount.getAccountID()) {
+                    expenseDebited = true;
+                }
+                if ("CREDIT".equals(type) && accountId == liabilityAccount.getAccountID()) {
+                    liabilityCredited = true;
+                }
+            }
+            assertTrue(expenseDebited, "Expected DEBIT to expense account");
+            assertTrue(liabilityCredited, "Expected CREDIT to liability account");
+        }
+    }
+
+    @Nested
+    class Idempotency {
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void sameTraceIdReturnsSameTransactionAndDoesNotDoublePost() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
+            String traceId = UUID.randomUUID().toString();
+
+            Integer firstTxnId = replayPosting(savingsId, "50.00", "INTEREST_POSTING", traceId);
+            Integer secondTxnId = replayPosting(savingsId, "50.00", "INTEREST_POSTING", traceId);
+
+            assertEquals(firstTxnId, secondTxnId);
+            assertEquals(1050.0f, balanceOf(savingsId), 0.01f);
+        }
+    }
+
+    @Nested
+    class OverdraftInterest {
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void debitsOverdrawnAccountAndDecreasesBalance() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createOverdrawnSavingsAccount(gl, "500", "1000");
+
+            Integer txnId = replayPosting(savingsId, "25.00", "OVERDRAFT_INTEREST", null);
+
+            assertEquals(-525.0f, balanceOf(savingsId), 0.01f);
+            assertTrue((Boolean) transactionType(savingsId, txnId).get("overdraftInterest"));
+            assertEquals(25.0f, transactionAmount(savingsId, txnId), 0.01f);
+        }
+    }
+
+    @Nested
+    class WithholdTax {
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void debitsAccountAndDecreasesBalance() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createSavingsWithWithholdTaxAndDeposit(gl, "1000");
+
+            Integer txnId = replayPosting(savingsId, "30.00", "WITHHOLD_TAX", null);
+
+            assertEquals(970.0f, balanceOf(savingsId), 0.01f);
+            assertTrue((Boolean) transactionType(savingsId, txnId).get("withholdTax"));
+            assertEquals(30.0f, transactionAmount(savingsId, txnId), 0.01f);
+        }
+    }
+
+    @Nested
+    class InvalidTransactionType {
+
+        @Test
+        void returnsServerError() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
+
+            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(500).build();
+            SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
+            String json = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", DATE, "INVALID_TYPE",
+                    UUID.randomUUID().toString(), null);
+            errorHelper.replayInterestPosting(savingsId, json);
+        }
+    }
+
+    // -- helpers: self-explanatory by name, no need to read their body to understand a test --
+
+    private Account[] createCashBasedGlAccounts() {
+        AccountHelper ah = new AccountHelper(requestSpec, responseSpec);
+        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(), ah.createIncomeAccount(),
+                ah.createExpenseAccount() };
+    }
+
+    private Integer createActiveSavingsWithDeposit(Account[] gl, String depositAmount) {
+        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
+        Integer productId = SavingsProductHelper.createSavingsProduct(
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
+                        .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
+                requestSpec, responseSpec);
+        SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
+        Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
+        sh.approveSavingsOnDate(savingsId, DATE);
+        sh.activateSavingsAccount(savingsId, DATE);
+        sh.depositToSavingsAccount(savingsId, depositAmount, DATE, CommonConstants.RESPONSE_RESOURCE_ID);
+        return savingsId;
+    }
+
+    private Integer createOverdrawnSavingsAccount(Account[] gl, String depositAmount, String withdrawalAmount) {
+        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
+        Integer productId = SavingsProductHelper.createSavingsProduct(
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
+                        .withInterestCalculationPeriodTypeAsDailyBalance().withOverDraft("10000").withAccountingRuleAsCashBased(gl).build(),
+                requestSpec, responseSpec);
+        SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
+        Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
+        sh.approveSavingsOnDate(savingsId, DATE);
+        sh.activateSavingsAccount(savingsId, DATE);
+        sh.depositToSavingsAccount(savingsId, depositAmount, DATE, CommonConstants.RESPONSE_RESOURCE_ID);
+        sh.withdrawalFromSavingsAccount(savingsId, withdrawalAmount, DATE, CommonConstants.RESPONSE_RESOURCE_ID);
+        return savingsId;
+    }
+
+    private Integer createSavingsWithWithholdTaxAndDeposit(Account[] gl, String depositAmount) {
+        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
+        Integer taxComponentId = TaxComponentHelper.createTaxComponent(requestSpec, responseSpec, "10", null);
+        Integer taxGroupId = TaxGroupHelper.createTaxGroup(requestSpec, responseSpec, Arrays.asList(taxComponentId));
+        Integer productId = SavingsProductHelper.createSavingsProduct(
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
+                        .withInterestCalculationPeriodTypeAsDailyBalance().withWithHoldTax(String.valueOf(taxGroupId))
+                        .withAccountingRuleAsCashBased(gl).build(),
+                requestSpec, responseSpec);
+        SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
+        Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
+        sh.approveSavingsOnDate(savingsId, DATE);
+        sh.activateSavingsAccount(savingsId, DATE);
+        sh.depositToSavingsAccount(savingsId, depositAmount, DATE, CommonConstants.RESPONSE_RESOURCE_ID);
+        return savingsId;
+    }
+
+    private Integer replayPosting(Integer savingsId, String amount, String type, String traceId) {
+        if (traceId == null) {
+            traceId = UUID.randomUUID().toString();
+        }
+        String json = SavingsAccountHelper.buildReplayInterestPostingJson(amount, DATE, type, traceId, null);
+        return new SavingsAccountHelper(requestSpec, responseSpec).replayInterestPosting(savingsId, json);
     }
 
     @SuppressWarnings("unchecked")
-    @Test
-    public void testIdempotency_sameTraceIdReturnsSameTransaction() {
-        final Account assetAccount = this.accountHelper.createAssetAccount();
-        final Account liabilityAccount = this.accountHelper.createLiabilityAccount();
-        final Account incomeAccount = this.accountHelper.createIncomeAccount();
-        final Account expenseAccount = this.accountHelper.createExpenseAccount();
-
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, START_DATE);
-        assertNotNull(clientID);
-
-        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withAccountingRuleAsCashBased(new Account[] { assetAccount, liabilityAccount, incomeAccount, expenseAccount }).build();
-        final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
-        assertNotNull(savingsProductID);
-
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, START_DATE);
-        assertNotNull(savingsId);
-        HashMap savingsStatusHashMap = this.savingsAccountHelper.approveSavingsOnDate(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
-        savingsStatusHashMap = this.savingsAccountHelper.activateSavingsAccount(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
-
-        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "1000", START_DATE, CommonConstants.RESPONSE_RESOURCE_ID);
-
-        String fixedTraceId = UUID.randomUUID().toString();
-        String replayJson = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", START_DATE, "INTEREST_POSTING", fixedTraceId,
-                null);
-
-        Integer firstTxnId = this.savingsAccountHelper.replayInterestPosting(savingsId, replayJson);
-        assertNotNull(firstTxnId);
-
-        Integer secondTxnId = this.savingsAccountHelper.replayInterestPosting(savingsId, replayJson);
-        assertNotNull(secondTxnId);
-
-        assertEquals(firstTxnId, secondTxnId, "Idempotent replay should return the same transaction ID");
-
-        HashMap summary = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balance = (Float) summary.get("accountBalance");
-        assertEquals(1050.0f, balance, 0.01f, "Balance should reflect only one posting of 50.00");
+    private float balanceOf(Integer savingsId) {
+        return (Float) ((HashMap) new SavingsAccountHelper(requestSpec, responseSpec).getSavingsSummary(savingsId)).get("accountBalance");
     }
 
     @SuppressWarnings("unchecked")
-    @Test
-    public void testOverdraftInterestReplayCreatesDebitTransaction() {
-        final Account assetAccount = this.accountHelper.createAssetAccount();
-        final Account liabilityAccount = this.accountHelper.createLiabilityAccount();
-        final Account incomeAccount = this.accountHelper.createIncomeAccount();
-        final Account expenseAccount = this.accountHelper.createExpenseAccount();
-
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, START_DATE);
-        assertNotNull(clientID);
-
-        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance().withOverDraft("10000")
-                .withAccountingRuleAsCashBased(new Account[] { assetAccount, liabilityAccount, incomeAccount, expenseAccount }).build();
-        final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
-        assertNotNull(savingsProductID);
-
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, START_DATE);
-        assertNotNull(savingsId);
-        HashMap savingsStatusHashMap = this.savingsAccountHelper.approveSavingsOnDate(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
-        savingsStatusHashMap = this.savingsAccountHelper.activateSavingsAccount(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
-
-        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "500", START_DATE, CommonConstants.RESPONSE_RESOURCE_ID);
-        this.savingsAccountHelper.withdrawalFromSavingsAccount(savingsId, "1000", START_DATE, CommonConstants.RESPONSE_RESOURCE_ID);
-
-        HashMap summaryBefore = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balanceBefore = (Float) summaryBefore.get("accountBalance");
-        assertEquals(-500.0f, balanceBefore, 0.01f, "Balance should be -500 after deposit 500 and withdrawal 1000");
-
-        String replayJson = SavingsAccountHelper.buildReplayInterestPostingJson("25.00", START_DATE, "OVERDRAFT_INTEREST",
-                UUID.randomUUID().toString(), "25.00");
-        Integer replayTxnId = this.savingsAccountHelper.replayInterestPosting(savingsId, replayJson);
-        assertNotNull(replayTxnId);
-
-        HashMap summaryAfter = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balanceAfter = (Float) summaryAfter.get("accountBalance");
-        assertEquals(balanceBefore - 25.0f, balanceAfter, 0.01f, "Balance should decrease by exactly 25.00 after overdraft interest");
-
-        HashMap txnDetails = this.savingsAccountHelper.getTransactionDetails(savingsId, replayTxnId);
-        HashMap transactionType = (HashMap) txnDetails.get("transactionType");
-        assertTrue((Boolean) transactionType.get("overdraftInterest"), "Transaction type should be overdraft interest");
-        assertEquals(25.0f, ((Number) txnDetails.get("amount")).floatValue(), 0.01f, "Transaction amount should be 25.00");
+    private HashMap transactionType(Integer savingsId, Integer txnId) {
+        HashMap txn = new SavingsAccountHelper(requestSpec, responseSpec).getTransactionDetails(savingsId, txnId);
+        return (HashMap) txn.get("transactionType");
     }
 
     @SuppressWarnings("unchecked")
-    @Test
-    public void testWithholdTaxReplayCreatesDebitTransaction() {
-        final Account assetAccount = this.accountHelper.createAssetAccount();
-        final Account liabilityAccount = this.accountHelper.createLiabilityAccount();
-        final Account incomeAccount = this.accountHelper.createIncomeAccount();
-        final Account expenseAccount = this.accountHelper.createExpenseAccount();
-
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, START_DATE);
-        assertNotNull(clientID);
-
-        final Integer taxComponentId = TaxComponentHelper.createTaxComponent(this.requestSpec, this.responseSpec, "10", null);
-        final Integer taxGroupId = TaxGroupHelper.createTaxGroup(this.requestSpec, this.responseSpec, Arrays.asList(taxComponentId));
-
-        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withWithHoldTax(String.valueOf(taxGroupId))
-                .withAccountingRuleAsCashBased(new Account[] { assetAccount, liabilityAccount, incomeAccount, expenseAccount }).build();
-        final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
-        assertNotNull(savingsProductID);
-
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, START_DATE);
-        assertNotNull(savingsId);
-        HashMap savingsStatusHashMap = this.savingsAccountHelper.approveSavingsOnDate(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
-        savingsStatusHashMap = this.savingsAccountHelper.activateSavingsAccount(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
-
-        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "1000", START_DATE, CommonConstants.RESPONSE_RESOURCE_ID);
-
-        HashMap summaryBefore = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balanceBefore = (Float) summaryBefore.get("accountBalance");
-        assertEquals(1000.0f, balanceBefore, 0.01f, "Balance should be 1000 after deposit");
-
-        String replayJson = SavingsAccountHelper.buildReplayInterestPostingJson("30.00", START_DATE, "WITHHOLD_TAX",
-                UUID.randomUUID().toString(), null);
-        Integer replayTxnId = this.savingsAccountHelper.replayInterestPosting(savingsId, replayJson);
-        assertNotNull(replayTxnId);
-
-        HashMap summaryAfter = this.savingsAccountHelper.getSavingsSummary(savingsId);
-        Float balanceAfter = (Float) summaryAfter.get("accountBalance");
-        assertEquals(970.0f, balanceAfter, 0.01f, "Balance should decrease by exactly 30.00 after withhold tax");
-
-        HashMap txnDetails = this.savingsAccountHelper.getTransactionDetails(savingsId, replayTxnId);
-        HashMap transactionType = (HashMap) txnDetails.get("transactionType");
-        assertTrue((Boolean) transactionType.get("withholdTax"), "Transaction type should be withhold tax");
-        assertEquals(30.0f, ((Number) txnDetails.get("amount")).floatValue(), 0.01f, "Transaction amount should be 30.00");
-    }
-
-    @Test
-    public void testUnknownTransactionTypeReturnsError() {
-        final Account assetAccount = this.accountHelper.createAssetAccount();
-        final Account liabilityAccount = this.accountHelper.createLiabilityAccount();
-        final Account incomeAccount = this.accountHelper.createIncomeAccount();
-        final Account expenseAccount = this.accountHelper.createExpenseAccount();
-
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, START_DATE);
-        assertNotNull(clientID);
-
-        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withAccountingRuleAsCashBased(new Account[] { assetAccount, liabilityAccount, incomeAccount, expenseAccount }).build();
-        final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
-        assertNotNull(savingsProductID);
-
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, START_DATE);
-        assertNotNull(savingsId);
-        HashMap savingsStatusHashMap = this.savingsAccountHelper.approveSavingsOnDate(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
-        savingsStatusHashMap = this.savingsAccountHelper.activateSavingsAccount(savingsId, START_DATE);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
-
-        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "1000", START_DATE, CommonConstants.RESPONSE_RESOURCE_ID);
-
-        ResponseSpecification errorResponseSpec = new ResponseSpecBuilder().expectStatusCode(500).build();
-        SavingsAccountHelper errorHelper = new SavingsAccountHelper(this.requestSpec, errorResponseSpec);
-
-        String replayJson = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", START_DATE, "INVALID_TYPE",
-                UUID.randomUUID().toString(), null);
-        errorHelper.replayInterestPosting(savingsId, replayJson);
+    private float transactionAmount(Integer savingsId, Integer txnId) {
+        HashMap txn = new SavingsAccountHelper(requestSpec, responseSpec).getTransactionDetails(savingsId, txnId);
+        return ((Number) txn.get("amount")).floatValue();
     }
 }
