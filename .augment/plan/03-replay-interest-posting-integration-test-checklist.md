@@ -39,7 +39,7 @@ without going through Synapse. This creates a balance split-brain with TigerBeet
 
 **File:** `fineract-provider/.../savings/service/SavingsAccountWritePlatformServiceJpaRepositoryImpl.java`
 
-- [ ] In `postInterest(JsonCommand command)` (~line 509), add an early guard at the top of the method:
+- [x] In `postInterest(JsonCommand command)` (~line 509), add an early guard at the top of the method:
   ```java
   @Override
   @Transactional
@@ -53,12 +53,12 @@ without going through Synapse. This creates a balance split-brain with TigerBeet
       // ... existing code unchanged
   }
   ```
-- [ ] This reuses the existing `ObjectProvider<InterestPostingReplayService>` field (already injected
+- [x] This reuses the existing `ObjectProvider<InterestPostingReplayService>` field (already injected
   in checklist 02). When the bean exists → synapse is enabled → block.
-- [ ] The `postInterest(SavingsAccount, boolean, LocalDate, boolean)` overload (line 559) is NOT gated —
+- [x] The `postInterest(SavingsAccount, boolean, LocalDate, boolean)` overload (line 559) is NOT gated —
   it's called by the scheduler batch path internally and by other domain services. Only the
   `JsonCommand` entry point (user-facing API) is blocked.
-- [ ] The `postInterest(SavingsAccountData, ...)` overload (line 609) also needs the same guard —
+- [x] The `postInterest(SavingsAccountData, ...)` overload (line 609) also needs the same guard —
   this is the batch/scheduler variant called from `SavingsSchedularInterestPoster`. However, when
   synapse is enabled, `batchUpdate()` takes the synapse path and never calls this method. Verify
   this is true by checking `SavingsSchedularInterestPoster.batchUpdate()` line 170-176. If so,
@@ -79,7 +79,7 @@ without going through Synapse. This creates a balance split-brain with TigerBeet
 
 **File:** `integration-tests/build.gradle`
 
-- [ ] In the Cargo `containerProperties` block (~line 75), append to `jvmArgs`:
+- [x] In the Cargo `containerProperties` block (~line 75), append to `jvmArgs`:
   ```groovy
   jvmArgs += ' -Dfineract.synapse.enabled=true'
   jvmArgs += ' -Dfineract.synapse.base-url=http://localhost:18089'
@@ -94,7 +94,7 @@ The WireMock runs in the test JVM process. The Cargo Fineract server (same host,
 calls `http://localhost:18089/api/v1/proxy/savings/interest-postings:batch`. This is the same
 pattern used by `CreditBureauTest` (WireMock on port 3558).
 
-- [ ] In the test class, use `WireMockExtension` with fixed port:
+- [x] In the test class, use `WireMockExtension` with fixed port:
   ```java
   @RegisterExtension
   static WireMockExtension synapse = WireMockExtension.newInstance()
@@ -102,7 +102,7 @@ pattern used by `CreditBureauTest` (WireMock on port 3558).
       .build();
   ```
 
-- [ ] In `@BeforeEach`, configure the default stub:
+- [x] In `@BeforeEach`, configure the default stub:
   ```java
   synapse.stubFor(WireMock.post(urlEqualTo("/api/v1/proxy/savings/interest-postings:batch"))
       .willReturn(WireMock.aResponse()
@@ -114,7 +114,7 @@ pattern used by `CreditBureauTest` (WireMock on port 3558).
   This catch-all stub returns success for any batch posted. Individual tests can override it
   or add more specific stubs.
 
-- [ ] For tests that need to verify what Fineract sent to Synapse, use `synapse.verify()`:
+- [x] For tests that need to verify what Fineract sent to Synapse, use `synapse.verify()`:
   ```java
   synapse.verify(postRequestedFor(urlEqualTo("/api/v1/proxy/savings/interest-postings:batch"))
       .withRequestBody(containing("\"traceId\"")));
@@ -160,9 +160,9 @@ pattern used by `CreditBureauTest` (WireMock on port 3558).
 **New file:** `integration-tests/src/test/java/org/apache/fineract/integrationtests/ReplayInterestPostingIntegrationTest.java`
 
 - [x] `@ExtendWith({ SavingsTestLifecycleExtension.class })`
-- [ ] `@RegisterExtension static WireMockExtension synapse` on port 18089
+- [x] `@RegisterExtension static WireMockExtension synapse` on port 18089
 - [x] Standard `@BeforeEach`: `Utils.initializeRESTAssured()`, RequestSpec, ResponseSpec, SavingsAccountHelper, SchedulerJobHelper
-- [ ] In `@BeforeEach`: register default synapse WireMock stub (returns 200 with empty success response)
+- [x] In `@BeforeEach`: register default synapse WireMock stub (returns 200 with empty success response)
 
 ### Test 1: Happy path — replay INTEREST_POSTING creates transaction and updates balance
 
@@ -210,25 +210,25 @@ pattern used by `CreditBureauTest` (WireMock on port 3558).
 
 ### Test 6: Direct `postInterest` blocked when synapse enabled
 
-- [ ] Create/activate account, deposit seed funds
-- [ ] Call `savingsAccountHelper.postInterestForSavings(savingsId)` using a `ResponseSpec` expecting 503
-- [ ] Assert: error response contains `"error.msg.direct.interest.posting.disabled.when.synapse.enabled"`
-- [ ] This proves Part A gating works end-to-end
+- [x] Create/activate account, deposit seed funds
+- [x] Call `savingsAccountHelper.postInterestForSavings(savingsId)` using a `ResponseSpec` expecting 503
+- [x] Assert: error response contains `"error.msg.direct.interest.posting.disabled.when.synapse.enabled"`
+- [x] This proves Part A gating works end-to-end
 
 ### Test 7: Direct `postInterestAsOn` blocked when synapse enabled
 
-- [ ] Same setup as Test 6
-- [ ] Call `savingsAccountHelper.postInterestAsOnSavings(savingsId, today)` with `ResponseSpec` expecting 503
-- [ ] Assert: same error as Test 6
+- [x] Same setup as Test 6
+- [x] Call `savingsAccountHelper.postInterestAsOnSavings(savingsId, today)` with `ResponseSpec` expecting 503
+- [x] Assert: same error as Test 6
 
 ### Test 8: Scheduler job → WireMock captures batch → manual replay completes the loop
 
 This is the **end-to-end test** proving the full outbound+inbound flow:
 
-- [ ] Create savings product with daily posting (compound interest, CASH_BASED accounting)
-- [ ] Create client, apply/approve/activate account, deposit `1000`
-- [ ] Set business date far enough in the future that interest accrues (or use a start date in the past)
-- [ ] Configure WireMock to capture the batch request body:
+- [x] Create savings product with daily posting (compound interest, CASH_BASED accounting)
+- [x] Create client, apply/approve/activate account, deposit `1000`
+- [x] Set business date far enough in the future that interest accrues (or use a start date in the past)
+- [x] Configure WireMock to capture the batch request body:
   ```java
   synapse.stubFor(WireMock.post(urlEqualTo("/api/v1/proxy/savings/interest-postings:batch"))
       .willReturn(WireMock.aResponse()
@@ -238,16 +238,16 @@ This is the **end-to-end test** proving the full outbound+inbound flow:
           .withBody(buildSuccessResponse())
       ));
   ```
-- [ ] Run the scheduler job: `schedulerJobHelper.executeAndAwaitJob("Post Interest For Savings")`
-- [ ] Verify WireMock received the batch POST:
+- [x] Run the scheduler job: `schedulerJobHelper.executeAndAwaitJob("Post Interest For Savings")`
+- [x] Verify WireMock received the batch POST:
   ```java
   synapse.verify(1, postRequestedFor(
       urlEqualTo("/api/v1/proxy/savings/interest-postings:batch")));
   ```
-- [ ] Extract the request body from WireMock logs to get the `traceId` and `amount` for each instruction
-- [ ] For each instruction in the captured batch, call `replayInterestPosting()` with matching fields
-- [ ] Verify final balance = deposit + total interest posted
-- [ ] Verify number of interest posting transactions matches number of instructions in the batch
+- [x] Extract the request body from WireMock logs to get the `traceId` and `amount` for each instruction
+- [x] For each instruction in the captured batch, call `replayInterestPosting()` with matching fields
+- [x] Verify final balance = deposit + total interest posted
+- [x] Verify number of interest posting transactions matches number of instructions in the batch
 
 **Why this test matters:** It proves:
   1. The scheduler correctly sends interest to Synapse (WireMock) instead of writing to DB

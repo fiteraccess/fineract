@@ -507,6 +507,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Override
     @Transactional
     public CommandProcessingResult postInterest(final JsonCommand command) {
+        if (interestPostingReplayServiceProvider.getIfAvailable() != null) {
+            throw new PlatformServiceUnavailableException(
+                    "error.msg.direct.interest.posting.disabled.when.synapse.enabled",
+                    "Direct interest posting is disabled when Synapse is enabled. "
+                            + "Interest is posted via the scheduler batch job and replayed from Synapse.");
+        }
         Long savingsId = command.getSavingsId();
         final boolean postInterestAs = command.booleanPrimitiveValueOfParameterNamed("isPostInterestAsOn");
         final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");

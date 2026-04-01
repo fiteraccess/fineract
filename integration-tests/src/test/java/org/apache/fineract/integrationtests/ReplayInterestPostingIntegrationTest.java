@@ -18,21 +18,40 @@
  */
 package org.apache.fineract.integrationtests;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
+import io.restassured.path.json.JsonPath;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
+import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
 import org.apache.fineract.integrationtests.common.TaxComponentHelper;
 import org.apache.fineract.integrationtests.common.TaxGroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -46,11 +65,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 @ExtendWith({ SavingsTestLifecycleExtension.class })
 public class ReplayInterestPostingIntegrationTest {
 
     private static final String DATE = "10 April 2022";
+
+    @RegisterExtension
+    static WireMockExtension synapse = WireMockExtension.newInstance()
+            .options(wireMockConfig().port(18089))
+            .build();
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
@@ -61,6 +86,12 @@ public class ReplayInterestPostingIntegrationTest {
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+
+        synapse.stubFor(WireMock.post(WireMock.urlEqualTo("/api/v1/proxy/savings/interest-postings:batch"))
+                .willReturn(WireMock.aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"batchId\":\"stub\",\"accepted\":999,\"failed\":0,\"results\":[]}")));
     }
 
     @Nested
@@ -172,6 +203,128 @@ public class ReplayInterestPostingIntegrationTest {
             String json = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", DATE, "INVALID_TYPE",
                     UUID.randomUUID().toString(), null);
             errorHelper.replayInterestPosting(savingsId, json);
+        }
+    }
+
+    @Nested
+    class DirectPostingGated {
+
+        @Test
+        void postInterestBlockedWhenSynapseEnabled() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
+
+            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(503).build();
+            SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
+            errorHelper.postInterestForSavings(savingsId);
+        }
+
+        @Test
+        void postInterestAsOnBlockedWhenSynapseEnabled() {
+            Account[] gl = createCashBasedGlAccounts();
+            Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
+
+            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(503).build();
+            SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
+            errorHelper.postInterestAsOnSavings(savingsId, DATE);
+        }
+    }
+
+    @Nested
+    class SchedulerRoundTrip {
+
+        private static final String BATCH_URL = "/api/v1/proxy/savings/interest-postings:batch";
+        private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ENGLISH);
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void schedulerSendsBatchToSynapseAndReplayRecordsTransactions() {
+            GlobalConfigurationHelper globalConfigHelper = new GlobalConfigurationHelper();
+            try {
+                globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
+                        new PutGlobalConfigurationsRequest().enabled(true));
+
+                String activationDate = "01 January 2022";
+                LocalDate postingDate = LocalDate.of(2022, 2, 2);
+                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
+                        LocalDate.of(2022, 1, 1));
+
+                Account[] gl = createCashBasedGlAccounts();
+                Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, activationDate);
+                Integer productId = SavingsProductHelper.createSavingsProduct(
+                        new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
+                                .withInterestPostingPeriodTypeAsDaily()
+                                .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
+                        requestSpec, responseSpec);
+                SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
+                Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", activationDate);
+                sh.approveSavingsOnDate(savingsId, activationDate);
+                sh.activateSavingsAccount(savingsId, activationDate);
+                sh.depositToSavingsAccount(savingsId, "1000", activationDate, CommonConstants.RESPONSE_RESOURCE_ID);
+
+                float balanceBefore = balanceOf(savingsId);
+
+                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, postingDate);
+
+                synapse.resetRequests();
+
+                SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
+                schedulerJobHelper.executeAndAwaitJob("Post Interest For Savings");
+
+                List<LoggedRequest> requests = synapse.findAll(postRequestedFor(urlEqualTo(BATCH_URL)));
+                assertFalse(requests.isEmpty(), "Expected at least one batch POST to Synapse");
+
+                String batchBody = requests.get(0).getBodyAsString();
+                JsonPath batchJson = JsonPath.from(batchBody);
+                List<Map<String, Object>> instructions = batchJson.getList("transactions");
+                assertNotNull(instructions, "Expected transactions in batch payload");
+                assertFalse(instructions.isEmpty(), "Expected at least one instruction in batch");
+
+                float totalReplayed = 0f;
+                int replayedCount = 0;
+                for (Map<String, Object> instruction : instructions) {
+                    String traceId = (String) instruction.get("traceId");
+                    Number amount = (Number) instruction.get("amount");
+                    String txType = (String) instruction.get("transactionType");
+                    String txDateStr = formatTransactionDate(instruction.get("transactionDate"));
+                    String overdraftAmt = instruction.get("overdraftAmount") != null
+                            ? instruction.get("overdraftAmount").toString()
+                            : null;
+
+                    String json = SavingsAccountHelper.buildReplayInterestPostingJson(amount.toString(), txDateStr, txType, traceId,
+                            overdraftAmt);
+                    Integer txnId = sh.replayInterestPosting(savingsId, json);
+                    assertNotNull(txnId, "Replay should return a transaction id for traceId=" + traceId);
+                    totalReplayed += amount.floatValue();
+                    replayedCount++;
+                }
+
+                float balanceAfter = balanceOf(savingsId);
+                assertEquals(balanceBefore + totalReplayed, balanceAfter, 0.01f,
+                        "Balance should equal deposit + total replayed interest");
+
+                HashMap details = sh.getSavingsDetails(savingsId);
+                ArrayList<HashMap<String, Object>> transactions = (ArrayList<HashMap<String, Object>>) details.get("transactions");
+                long interestPostings = transactions.stream()
+                        .filter(tx -> Boolean.TRUE.equals(((HashMap) tx.get("transactionType")).get("interestPosting"))).count();
+                assertEquals(replayedCount, interestPostings, "Number of interest posting transactions should match replayed count");
+            } finally {
+                globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
+                        new PutGlobalConfigurationsRequest().enabled(false));
+            }
+        }
+
+        private String formatTransactionDate(Object transactionDate) {
+            if (transactionDate instanceof String s) {
+                LocalDate date = LocalDate.parse(s);
+                return date.format(DATE_FORMATTER);
+            }
+            if (transactionDate instanceof List<?> parts) {
+                LocalDate date = LocalDate.of(((Number) parts.get(0)).intValue(), ((Number) parts.get(1)).intValue(),
+                        ((Number) parts.get(2)).intValue());
+                return date.format(DATE_FORMATTER);
+            }
+            return transactionDate.toString();
         }
     }
 
