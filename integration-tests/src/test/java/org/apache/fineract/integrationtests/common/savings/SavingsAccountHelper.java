@@ -420,6 +420,27 @@ public class SavingsAccountHelper {
         return performSavingActions(createSavingsTransactionURL(DEPOSIT_SAVINGS_COMMAND, savingsID), jsonBody, jsonAttributeToGetback);
     }
 
+    @Deprecated(forRemoval = true)
+    public Integer replayInterestPosting(final Integer savingsId, final String jsonBody) {
+        final String url = createSavingsTransactionURL("replayInterestPosting", savingsId);
+        return (Integer) performSavingActions(url, jsonBody, CommonConstants.RESPONSE_RESOURCE_ID);
+    }
+
+    public static String buildReplayInterestPostingJson(String amount, String date, String transactionType, String traceId,
+            String overdraftAmount) {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("transactionDate", date);
+        map.put("transactionAmount", amount);
+        map.put("transactionType", transactionType);
+        map.put("traceId", traceId);
+        map.put("locale", CommonConstants.LOCALE);
+        map.put("dateFormat", CommonConstants.DATE_FORMAT);
+        if (overdraftAmount != null) {
+            map.put("overdraftAmount", overdraftAmount);
+        }
+        return new Gson().toJson(map);
+    }
+
     // TODO: Rewrite to use fineract-client instead!
     // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
