@@ -97,7 +97,7 @@ The command routing layers mirror the existing deposit flow. The service layer d
 
 **File:** `fineract-core/src/main/java/org/apache/fineract/commands/service/CommandWrapperBuilder.java`
 
-- [ ] Add method `savingsAccountReplayInterestPosting(Long accountId)`:
+- [x] Add method `savingsAccountReplayInterestPosting(Long accountId)`:
   - `actionName = "REPLAYINTERESTPOSTING"`
   - `entityName = "SAVINGSACCOUNT"`
   - `savingsId = accountId`
@@ -111,14 +111,14 @@ The command routing layers mirror the existing deposit flow. The service layer d
 
 **File:** `fineract-provider/.../savings/api/SavingsAccountTransactionsApiResource.java`
 
-- [ ] In `transaction()` method (~line 178), add an `else if` branch:
+- [x] In `transaction()` method (~line 178), add an `else if` branch:
   ```java
   } else if (is(commandParam, "replayInterestPosting")) {
       final CommandWrapper commandRequest = builder.savingsAccountReplayInterestPosting(savingsId).build();
       result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
   }
   ```
-- [ ] Update the `UnrecognizedQueryParamException` array to include `"replayInterestPosting"`
+- [x] Update the `UnrecognizedQueryParamException` array to include `"replayInterestPosting"`
 
 ---
 
@@ -127,12 +127,12 @@ The command routing layers mirror the existing deposit flow. The service layer d
 **New file:** `fineract-provider/.../savings/handler/ReplayInterestPostingSavingsAccountCommandHandler.java`
 
 
-- [ ] `@Service`, `@CommandType(entity = "SAVINGSACCOUNT", action = "REPLAYINTERESTPOSTING")`
-- [ ] Implements `NewCommandSourceHandler`
-- [ ] Inject `SavingsAccountWritePlatformService`
-- [ ] `processCommand()` → `writePlatformService.replayInterestPosting(command.getSavingsId(), command)`
-- [ ] `@Transactional`
-- [ ] Pattern: identical to `DepositSavingsAccountCommandHandler` (~47 lines)
+- [x] `@Service`, `@CommandType(entity = "SAVINGSACCOUNT", action = "REPLAYINTERESTPOSTING")`
+- [x] Implements `NewCommandSourceHandler`
+- [x] Inject `SavingsAccountWritePlatformService`
+- [x] `processCommand()` → `writePlatformService.replayInterestPosting(command.getSavingsId(), command)`
+- [x] `@Transactional`
+- [x] Pattern: identical to `DepositSavingsAccountCommandHandler` (~47 lines)
 
 ---
 
@@ -140,7 +140,7 @@ The command routing layers mirror the existing deposit flow. The service layer d
 
 **File:** `fineract-savings/.../savings/service/SavingsAccountWritePlatformService.java`
 
-- [ ] Add method signature:
+- [x] Add method signature:
   ```java
   CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand command);
   ```
@@ -166,26 +166,26 @@ Only one dependency — the transaction repository for dedup lookup. Everything 
 
 ### 5a. Public method signature
 
-- [ ] Method:
+- [x] Method:
   ```java
   public ReplayResult replay(SavingsAccount account, String transactionType, BigDecimal transactionAmount,
           LocalDate transactionDate, BigDecimal overdraftAmount, String traceId)
   ```
-- [ ] Returns a new inner record/class `ReplayResult`:
+- [x] Returns a new inner record/class `ReplayResult`:
   ```java
   public record ReplayResult(SavingsAccountTransaction transaction, boolean alreadyExists) {}
   ```
-- [ ] The caller (God class) decides what to do with each case (persist vs return early)
+- [x] The caller (God class) decides what to do with each case (persist vs return early)
 
 ### 5b. Deduplicate on traceId
 
-- [ ] Call `transactionRepository.findByRefNo(traceId)`
-- [ ] If a non-reversed match exists for the same savings account → return `ReplayResult(existingTx, true)`
-- [ ] Uses existing `ref_no` column — no schema change needed
+- [x] Call `transactionRepository.findByRefNo(traceId)`
+- [x] If a non-reversed match exists for the same savings account → return `ReplayResult(existingTx, true)`
+- [x] Uses existing `ref_no` column — no schema change needed
 
 ### 5c. Resolve transaction type
 
-- [ ] Map `transactionType` string to `SavingsAccountTransactionType`:
+- [x] Map `transactionType` string to `SavingsAccountTransactionType`:
   - `"INTEREST_POSTING"` → `SavingsAccountTransactionType.INTEREST_POSTING` (value 3)
   - `"OVERDRAFT_INTEREST"` → `SavingsAccountTransactionType.OVERDRAFT_INTEREST` (value 17)
   - `"WITHHOLD_TAX"` → `SavingsAccountTransactionType.WITHHOLD_TAX` (value 18)
@@ -193,27 +193,27 @@ Only one dependency — the transaction repository for dedup lookup. Everything 
 
 ### 5d. Create the transaction entity
 
-- [ ] Use existing static factories on `SavingsAccountTransaction`:
+- [x] Use existing static factories on `SavingsAccountTransaction`:
   - For `INTEREST_POSTING`: `SavingsAccountTransaction.interestPosting(account, account.office(), date, money, false)`
   - For `OVERDRAFT_INTEREST`: `SavingsAccountTransaction.overdraftInterest(account, account.office(), date, money, false)`
   - For `WITHHOLD_TAX`: `SavingsAccountTransaction.withHoldTax(account, account.office(), date, money, emptyMap)`
-- [ ] Set `refNo` to `traceId` via setter (see Module 7)
+- [x] Set `refNo` to `traceId` via setter (see Module 7)
 
 ### 5e. Set overdraft amount (if applicable)
 
-- [ ] If `transactionType` is `OVERDRAFT_INTEREST` and `overdraftAmount` is not null:
-  - Set `overdraftAmount` on the transaction entity via `updateOverdraftAmount(BigDecimal)` or setter
+- [x] If `transactionType` is `OVERDRAFT_INTEREST` and `overdraftAmount` is not null:
+  - Set `overdraftAmount` on the transaction entity via `setOverdraftAmount(Money)` setter
 
 ### 5f. Update account summary balances
 
-- [ ] CREDIT (INTEREST_POSTING): add to `account_balance_derived`, add to `total_interest_posted_derived`
-- [ ] DEBIT (OVERDRAFT_INTEREST, WITHHOLD_TAX): subtract from `account_balance_derived`
-- [ ] Use `account.getSummary()` methods
-- [ ] Set running balance on the transaction
+- [x] CREDIT (INTEREST_POSTING): add to `account_balance_derived`, add to `total_interest_posted_derived`
+- [x] DEBIT (OVERDRAFT_INTEREST, WITHHOLD_TAX): subtract from `account_balance_derived`
+- [x] Uses `account.getSummary().updateSummaryWithTransaction()` + `SavingsAccountTransactionSummaryWrapper` for incremental O(1) update
+- [x] Set running balance on the transaction
 
 ### 5g. Return result
 
-- [ ] Return `ReplayResult(transaction, false)`
+- [x] Return `ReplayResult(transaction, false)`
 
 ---
 
@@ -223,8 +223,8 @@ Only one dependency — the transaction repository for dedup lookup. Everything 
 
 This method is a **thin orchestrator** — no business logic, just wiring.
 
-- [ ] Inject `InterestPostingReplayService` (add to constructor)
-- [ ] Implement `replayInterestPosting(Long savingsId, JsonCommand command)`:
+- [x] Inject `InterestPostingReplayService` via `ObjectProvider` (add to constructor)
+- [x] Implement `replayInterestPosting(Long savingsId, JsonCommand command)`:
 
 ```java
 public CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand command) {
@@ -265,7 +265,7 @@ public CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand
 }
 ```
 
-- [ ] The `postJournalEntries` helper reuses existing pattern:
+- [x] The `postJournalEntries` helper reuses existing `postJournalEntriesForTransaction` method:
   ```java
   SavingsAccountingBridgeDTO bridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(
       account, List.of(transaction), false);
@@ -286,16 +286,17 @@ public CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand
 
 **File:** `fineract-provider/.../savings/starter/SavingsConfiguration.java`
 
-- [ ] Add bean method (same pattern as `SynapseInterestPostingService`):
+- [x] Add bean method (same pattern as `SynapseInterestPostingService`):
   ```java
   @Bean
   @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
   public InterestPostingReplayService interestPostingReplayService(
-          SavingsAccountTransactionRepository transactionRepository) {
-      return new InterestPostingReplayService(transactionRepository);
+          SavingsAccountTransactionRepository transactionRepository,
+          SavingsAccountTransactionSummaryWrapper summaryWrapper) {
+      return new InterestPostingReplayService(transactionRepository, summaryWrapper);
   }
   ```
-- [ ] Inject into `SavingsAccountWritePlatformServiceJpaRepositoryImpl` via `ObjectProvider<InterestPostingReplayService>` (optional dependency — replay only available when synapse is enabled)
+- [x] Inject into `SavingsAccountWritePlatformServiceJpaRepositoryImpl` via `ObjectProvider<InterestPostingReplayService>` (optional dependency — replay only available when synapse is enabled)
 
 ---
 
@@ -303,12 +304,12 @@ public CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand
 
 **New Liquibase migration:** `fineract-savings/src/main/resources/db/changelog/tenant/module/savings/parts/parts/2006_add_replay_interest_posting_permission.xml`
 
-- [ ] Insert permission row:
+- [x] Insert permission row:
   ```sql
   INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
   VALUES ('transaction_savings', 'REPLAYINTERESTPOSTING_SAVINGSACCOUNT', 'SAVINGSACCOUNT', 'REPLAYINTERESTPOSTING', 0);
   ```
-- [ ] Register in `module-changelog-master.xml`
+- [x] Register in `module-changelog-master.xml`
 
 ---
 
@@ -316,13 +317,13 @@ public CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand
 
 **File:** `fineract-savings/.../savings/domain/SavingsAccountTransaction.java`
 
-- [ ] Add method:
+- [x] Add method:
   ```java
   public void setRefNo(final String refNo) {
       this.refNo = refNo;
   }
   ```
-- [ ] Needed because static factories set `refNo = null` and we need `traceId` for idempotency
+- [x] Needed because static factories set `refNo = null` and we need `traceId` for idempotency
 
 ---
 
@@ -334,18 +335,27 @@ public CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand
 
 Tests the extracted service directly. Real domain objects, only `SavingsAccountTransactionRepository` mocked.
 
-- [ ] INTEREST_POSTING happy path: returns `ReplayResult(tx, false)`, tx has correct type (value 3), `refNo = traceId`, account balance increased
-- [ ] OVERDRAFT_INTEREST happy path: debit type (value 17), `overdraftAmount` set, account balance decreased
-- [ ] WITHHOLD_TAX happy path: debit type (value 18), account balance decreased
-- [ ] Idempotency: mock `findByRefNo(traceId)` to return existing tx → returns `ReplayResult(existingTx, true)`, no static factory called
-- [ ] Unknown `transactionType` string → `IllegalArgumentException`
+- [x] INTEREST_POSTING happy path: returns `ReplayResult(tx, false)`, tx has correct type (value 3), `refNo = traceId`, account balance increased
+- [x] OVERDRAFT_INTEREST happy path: debit type (value 17), `overdraftAmount` set, account balance decreased
+- [x] WITHHOLD_TAX happy path: debit type (value 18), account balance decreased
+- [x] Idempotency: mock `findByRefNo(traceId)` to return existing tx → returns `ReplayResult(existingTx, true)`, no static factory called
+- [x] Unknown `transactionType` string → `IllegalArgumentException`
 
-### 8b. What NOT to test (and why)
+### 8b. `SavingsAccountWritePlatformServiceReplayInterestPostingTest` — God class delegate test
+
+**New file:** `fineract-provider/src/test/java/.../savings/service/SavingsAccountWritePlatformServiceReplayInterestPostingTest.java`
+
+Tests the thin orchestrator via reflection (bypasses 25-arg constructor using `Unsafe.allocateInstance`, sets only the 5 fields used).
+
+- [x] Happy path: delegates to replay service → saves tx → saves account → posts journal entries
+- [x] Idempotent replay: returns early without saving or posting journal entries
+- [x] Synapse disabled: `ObjectProvider` returns null → throws `PlatformServiceUnavailableException`
+
+### 8c. What NOT to test (and why)
 
 - `CommandWrapperBuilder` — trivial builder, no logic
 - `SavingsAccountTransactionsApiResource` routing — integration test territory
 - `ReplayInterestPostingSavingsAccountCommandHandler` — one-line delegation
-- `SavingsAccountWritePlatformServiceJpaRepositoryImpl.replayInterestPosting()` — thin orchestrator, covered by integration tests; testing it would require mocking 15+ constructor args for no value
 
 ---
 

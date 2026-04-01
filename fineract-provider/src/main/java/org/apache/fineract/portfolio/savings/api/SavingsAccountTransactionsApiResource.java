@@ -195,12 +195,16 @@ public class SavingsAccountTransactionsApiResource {
         } else if (is(commandParam, SavingsApiConstants.COMMAND_HOLD_AMOUNT)) {
             final CommandWrapper commandRequest = builder.holdAmount(savingsId).build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        } else if (is(commandParam, "replayInterestPosting")) {
+            final CommandWrapper commandRequest = builder.savingsAccountReplayInterestPosting(savingsId).build();
+            result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         }
 
         if (result == null) {
             //
             throw new UnrecognizedQueryParamException("command", commandParam,
-                    new Object[] { "deposit", "withdrawal", SavingsApiConstants.COMMAND_HOLD_AMOUNT });
+                    new Object[] { "deposit", "withdrawal", SavingsApiConstants.COMMAND_HOLD_AMOUNT,
+                            "replayInterestPosting" });
         }
 
         return this.toApiJsonSerializer.serialize(result);

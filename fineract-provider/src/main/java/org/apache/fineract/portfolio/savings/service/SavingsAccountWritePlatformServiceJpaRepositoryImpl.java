@@ -127,9 +127,11 @@ import org.apache.fineract.portfolio.savings.exception.SavingsAccountTransaction
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerAssignmentException;
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmentException;
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
+import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -167,6 +169,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final GSIMRepositoy gsimRepository;
     private final SavingsAccountInterestPostingService savingsAccountInterestPostingService;
     private final ErrorHandler errorHandler;
+    private final ObjectProvider<InterestPostingReplayService> interestPostingReplayServiceProvider;
 
     @Transactional
     @Override
@@ -1972,5 +1975,38 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         if (StringUtils.isBlank(reasonForBlock)) {
             throw new PlatformDataIntegrityException("Reason For Block is Mandatory", "error.msg.reason.for.block.mandatory");
         }
+    }
+
+    @Transactional
+    @Override
+    public CommandProcessingResult replayInterestPosting(final Long savingsId, final JsonCommand command) {
+        final InterestPostingReplayService replayService = interestPostingReplayServiceProvider.getIfAvailable();
+        if (replayService == null) {
+            throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
+                    "Synapse integration is not enabled. Cannot replay interest posting.");
+        }
+
+        final LocalDate txDate = command.localDateValueOfParameterNamed("transactionDate");
+        final BigDecimal txAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
+        final String txType = command.stringValueOfParameterNamed("transactionType");
+        final String traceId = command.stringValueOfParameterNamed("traceId");
+        final BigDecimal overdraftAmount = command.bigDecimalValueOfParameterNamed("overdraftAmount");
+
+        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
+
+        final InterestPostingReplayService.ReplayResult result = replayService.replay(account, txType, txAmount, txDate, overdraftAmount,
+                traceId);
+
+        if (result.alreadyExists()) {
+            return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId).build();
+        }
+
+        this.savingsAccountTransactionRepository.saveAndFlush(result.transaction());
+        this.savingAccountRepositoryWrapper.saveAndFlush(account);
+
+        postJournalEntriesForTransaction(account, result.transaction(), false);
+
+        return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId)
+                .withOfficeId(account.officeId()).withClientId(account.clientId()).build();
     }
 }

@@ -450,6 +450,10 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return this.refNo;
     }
 
+    public void setRefNo(final String refNo) {
+        this.refNo = refNo;
+    }
+
     public PaymentDetail getPaymentDetail() {
         return this.paymentDetail;
     }

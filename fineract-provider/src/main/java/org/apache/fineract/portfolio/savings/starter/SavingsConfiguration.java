@@ -90,6 +90,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeAssemble
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
@@ -144,6 +145,7 @@ import org.apache.fineract.portfolio.savings.service.search.SavingsAccountTransa
 import org.apache.fineract.portfolio.search.service.SearchUtil;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
@@ -382,7 +384,7 @@ public class SavingsConfiguration {
             EntityDatatableChecksWritePlatformService entityDatatableChecksWritePlatformService, AppUserRepositoryWrapper appuserRepository,
             StandingInstructionRepository standingInstructionRepository, BusinessEventNotifierService businessEventNotifierService,
             GSIMRepositoy gsimRepository, SavingsAccountInterestPostingService savingsAccountInterestPostingService,
-            ErrorHandler errorHandler) {
+            ErrorHandler errorHandler, ObjectProvider<InterestPostingReplayService> interestPostingReplayServiceProvider) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -390,7 +392,7 @@ public class SavingsConfiguration {
                 chargeRepository, savingsAccountChargeRepository, holidayRepository, workingDaysRepository, configurationDomainService,
                 depositAccountOnHoldTransactionRepository, entityDatatableChecksWritePlatformService, appuserRepository,
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
-                errorHandler);
+                errorHandler, interestPostingReplayServiceProvider);
     }
 
     @Bean
@@ -481,5 +483,13 @@ public class SavingsConfiguration {
     @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
     public SynapseInterestPostingService synapseInterestPostingService(SynapseInstructionMapper mapper, SynapseTransactionClient client) {
         return new SynapseInterestPostingService(mapper, client);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public InterestPostingReplayService interestPostingReplayService(
+            SavingsAccountTransactionRepository transactionRepository,
+            SavingsAccountTransactionSummaryWrapper summaryWrapper) {
+        return new InterestPostingReplayService(transactionRepository, summaryWrapper);
     }
 }
