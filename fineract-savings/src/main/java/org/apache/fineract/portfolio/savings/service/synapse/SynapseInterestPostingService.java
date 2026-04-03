@@ -61,6 +61,18 @@ public class SynapseInterestPostingService {
      * @return cursor updates for succeeded accounts + accepted/failed counts
      * @throws SynapsePostingException if the HTTP call itself fails
      */
+    /**
+     * Sends interest-posting instructions for a single account to Synapse.
+     * Delegates to {@link #postInterestBatch} with a list of one.
+     *
+     * @param account     the account whose interest has been calculated
+     * @param postingDate the date interest is being posted for
+     * @return cursor updates + accepted/failed counts
+     */
+    public SynapsePostResult postInterestForAccount(SavingsAccountData account, LocalDate postingDate) {
+        return postInterestBatch(List.of(account), postingDate);
+    }
+
     public SynapsePostResult postInterestBatch(List<SavingsAccountData> accounts, LocalDate postingDate) {
         String batchId = UUID.randomUUID().toString();
 

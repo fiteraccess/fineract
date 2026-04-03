@@ -130,6 +130,7 @@ public class SavingsAccountTransactionData implements Serializable {
         this.accountId = savingsId;
         this.accountNo = savingsAccountNo;
         this.date = transactionDate;
+        this.transactionDate = transactionDate;
         this.amount = amount;
 
         this.paymentDetailData = paymentDetailData;

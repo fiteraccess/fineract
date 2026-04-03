@@ -35,6 +35,7 @@ import io.github.resilience4j.retry.annotation.Retry;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -57,6 +58,7 @@ import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
+import org.apache.fineract.infrastructure.core.domain.AuditableFieldsConstants;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
@@ -123,16 +125,21 @@ import org.apache.fineract.portfolio.savings.exception.PostInterestAsOnDateExcep
 import org.apache.fineract.portfolio.savings.exception.PostInterestAsOnDateException.PostInterestAsOnExceptionType;
 import org.apache.fineract.portfolio.savings.exception.PostInterestClosingDateException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountClosingNotAllowedException;
+import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountTransactionNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerAssignmentException;
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmentException;
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
+import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
 import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
@@ -170,6 +177,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsAccountInterestPostingService savingsAccountInterestPostingService;
     private final ErrorHandler errorHandler;
     private final ObjectProvider<InterestPostingReplayService> interestPostingReplayServiceProvider;
+    private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
+    private final ObjectProvider<SynapseInterestPostingService> synapseInterestPostingServiceProvider;
+    private final JdbcTemplate jdbcTemplate;
 
     @Transactional
     @Override
@@ -507,11 +517,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Override
     @Transactional
     public CommandProcessingResult postInterest(final JsonCommand command) {
-        if (interestPostingReplayServiceProvider.getIfAvailable() != null) {
-            throw new PlatformServiceUnavailableException(
-                    "error.msg.direct.interest.posting.disabled.when.synapse.enabled",
-                    "Direct interest posting is disabled when Synapse is enabled. "
-                            + "Interest is posted via the scheduler batch job and replayed from Synapse.");
+        SynapseInterestPostingService synapseService = synapseInterestPostingServiceProvider.getIfAvailable();
+        if (synapseService != null) {
+            return postInterestViaSynapse(command.getSavingsId(), command, synapseService);
         }
         Long savingsId = command.getSavingsId();
         final boolean postInterestAs = command.booleanPrimitiveValueOfParameterNamed("isPostInterestAsOn");
@@ -2014,5 +2022,88 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId)
                 .withOfficeId(account.officeId()).withClientId(account.clientId()).build();
+    }
+
+    private CommandProcessingResult postInterestViaSynapse(Long savingsId, JsonCommand command,
+            SynapseInterestPostingService synapseService) {
+        // 1. Validate: load JPA entity for validation only (client/group active, pivot date)
+        final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
+        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
+        checkClientOrGroupActive(account);
+
+        final boolean postInterestAs = command.booleanPrimitiveValueOfParameterNamed("isPostInterestAsOn");
+        final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");
+        this.savingsAccountTransactionDataValidator.validateTransactionWithPivotDate(transactionDate, account);
+
+        if (postInterestAs) {
+            if (transactionDate == null) {
+                throw new PostInterestAsOnDateException(PostInterestAsOnExceptionType.VALID_DATE);
+            }
+            if (DateUtils.isBefore(transactionDate, account.accountSubmittedOrActivationDate())) {
+                throw new PostInterestAsOnDateException(PostInterestAsOnExceptionType.ACTIVATION_DATE);
+            }
+
+            List<SavingsAccountTransaction> savingTransactions = backdatedTxnsAllowedTill
+                    ? account.getSavingsAccountTransactionsWithPivotConfig()
+                    : account.getTransactions();
+
+            for (SavingsAccountTransaction savingTransaction : savingTransactions) {
+                if (DateUtils.isBefore(transactionDate, savingTransaction.getDateOf())) {
+                    throw new PostInterestAsOnDateException(PostInterestAsOnExceptionType.LAST_TRANSACTION_DATE);
+                }
+            }
+
+            if (DateUtils.isDateInTheFuture(transactionDate)) {
+                throw new PostInterestAsOnDateException(PostInterestAsOnExceptionType.FUTURE_DATE);
+            }
+        }
+
+        // 2. Load DTO with transactions (same shape the batch job uses)
+        SavingsAccountData accountData = savingsAccountReadPlatformService
+                .retrieveSavingsDataForInterestPosting(savingsId);
+        if (accountData == null) {
+            throw new SavingsAccountNotFoundException(savingsId);
+        }
+
+        // 3. Calculate interest in memory (reuse the same service the batch uses)
+        accountData = this.postInterest(accountData, postInterestAs, transactionDate, backdatedTxnsAllowedTill);
+
+        // 4. Send to Synapse
+        LocalDate postingDate = DateUtils.getBusinessLocalDate();
+        SynapsePostResult result = synapseService.postInterestForAccount(accountData, postingDate);
+
+        // 5. Persist cursor updates
+        if (!result.getCursorUpdates().isEmpty()) {
+            Long userId = context.authenticatedUser().getId();
+            persistCursorUpdates(result.getCursorUpdates(), userId);
+        }
+
+        // 6. Return response with synapse metadata
+        Map<String, Object> changes = new HashMap<>();
+        changes.put("synapseAccepted", result.getAccepted());
+        changes.put("synapseFailed", result.getFailed());
+
+        return new CommandProcessingResultBuilder()
+                .withEntityId(savingsId)
+                .withOfficeId(account.officeId())
+                .withClientId(account.clientId())
+                .withGroupId(account.groupId())
+                .withSavingsId(savingsId)
+                .with(changes)
+                .build();
+    }
+
+    private void persistCursorUpdates(List<AccountCursorUpdate> cursorUpdates, Long userId) {
+        OffsetDateTime auditTime = DateUtils.getAuditOffsetDateTime();
+        String sql = "UPDATE m_savings_account SET interest_posted_till_date = ?, "
+                + "last_interest_calculation_date = ?, "
+                + AuditableFieldsConstants.LAST_MODIFIED_DATE_DB_FIELD + " = ?, "
+                + AuditableFieldsConstants.LAST_MODIFIED_BY_DB_FIELD + " = ? WHERE id = ?";
+        List<Object[]> params = new ArrayList<>();
+        for (AccountCursorUpdate cursor : cursorUpdates) {
+            params.add(new Object[] { cursor.getInterestPostedTillDate(),
+                    cursor.getLastInterestCalculationDate(), auditTime, userId, cursor.getAccountId() });
+        }
+        jdbcTemplate.batchUpdate(sql, params);
     }
 }

@@ -384,7 +384,10 @@ public class SavingsConfiguration {
             EntityDatatableChecksWritePlatformService entityDatatableChecksWritePlatformService, AppUserRepositoryWrapper appuserRepository,
             StandingInstructionRepository standingInstructionRepository, BusinessEventNotifierService businessEventNotifierService,
             GSIMRepositoy gsimRepository, SavingsAccountInterestPostingService savingsAccountInterestPostingService,
-            ErrorHandler errorHandler, ObjectProvider<InterestPostingReplayService> interestPostingReplayServiceProvider) {
+            ErrorHandler errorHandler, ObjectProvider<InterestPostingReplayService> interestPostingReplayServiceProvider,
+            SavingsAccountReadPlatformService savingsAccountReadPlatformService,
+            ObjectProvider<SynapseInterestPostingService> synapseInterestPostingServiceProvider,
+            JdbcTemplate jdbcTemplate) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -392,7 +395,8 @@ public class SavingsConfiguration {
                 chargeRepository, savingsAccountChargeRepository, holidayRepository, workingDaysRepository, configurationDomainService,
                 depositAccountOnHoldTransactionRepository, entityDatatableChecksWritePlatformService, appuserRepository,
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
-                errorHandler, interestPostingReplayServiceProvider);
+                errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
+                synapseInterestPostingServiceProvider, jdbcTemplate);
     }
 
     @Bean
@@ -476,7 +480,7 @@ public class SavingsConfiguration {
                 .connectTimeout(Duration.ofMillis(synapse.getConnectTimeoutMs()))
                 .readTimeout(Duration.ofMillis(synapse.getReadTimeoutMs()))
                 .build();
-        return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getBatchEndpoint());
+        return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getBatchEndpoint(), synapse.getApiKey());
     }
 
     @Bean

@@ -34,10 +34,12 @@ public class SynapseTransactionClient {
 
     private final RestTemplate restTemplate;
     private final String postUrl;
+    private final String apiKey;
 
-    public SynapseTransactionClient(RestTemplate restTemplate, String baseUrl, String batchEndpoint) {
+    public SynapseTransactionClient(RestTemplate restTemplate, String baseUrl, String batchEndpoint, String apiKey) {
         this.restTemplate = restTemplate;
         this.postUrl = baseUrl + batchEndpoint;
+        this.apiKey = apiKey;
     }
 
     public SynapseBatchPostingResponse postBatch(SynapseInterestPostingBatch batch) {
@@ -45,6 +47,9 @@ public class SynapseTransactionClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        if (apiKey != null && !apiKey.isBlank()) {
+            headers.set(HttpHeaders.AUTHORIZATION, apiKey);
+        }
         HttpEntity<SynapseInterestPostingBatch> request = new HttpEntity<>(batch, headers);
 
         try {

@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -37,6 +38,7 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -62,7 +64,7 @@ class SynapseTransactionClientTest {
         restTemplate.setMessageConverters(List.of(new MappingJackson2HttpMessageConverter(objectMapper)));
 
         mockServer = MockRestServiceServer.createServer(restTemplate);
-        client = new SynapseTransactionClient(restTemplate, BASE_URL, BATCH_ENDPOINT);
+        client = new SynapseTransactionClient(restTemplate, BASE_URL, BATCH_ENDPOINT, "Bearer test-token");
     }
 
     @Test
@@ -114,6 +116,20 @@ class SynapseTransactionClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"batchId\":\"batch-3\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"totalCount\":1")))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(response), MediaType.APPLICATION_JSON));
+
+        client.postBatch(batch);
+        mockServer.verify();
+    }
+
+    @Test
+    void requestIncludesAuthorizationHeader() throws Exception {
+        SynapseInterestPostingBatch batch = buildBatch("batch-auth");
+        SynapseBatchPostingResponse response = new SynapseBatchPostingResponse("batch-auth", 1, 0, List.of());
+
+        mockServer.expect(requestTo(FULL_URL))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
                 .andRespond(withSuccess(objectMapper.writeValueAsString(response), MediaType.APPLICATION_JSON));
 
         client.postBatch(batch);

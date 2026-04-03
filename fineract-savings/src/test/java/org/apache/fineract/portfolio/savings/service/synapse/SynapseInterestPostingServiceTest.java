@@ -232,6 +232,33 @@ class SynapseInterestPostingServiceTest {
         assertThat(batch.getTransactions().get(0).getOperation().name()).isEqualTo("REVERSE");
     }
 
+    @Test
+    void postInterestForAccountDelegatesToBatchWithSingleAccount() {
+        SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("250.00"));
+
+        ArgumentCaptor<SynapseInterestPostingBatch> batchCaptor = ArgumentCaptor.forClass(SynapseInterestPostingBatch.class);
+        when(client.postBatch(batchCaptor.capture())).thenAnswer(inv -> {
+            SynapseInterestPostingBatch batch = inv.getArgument(0);
+            List<SynapsePostingResult> results = batch.getTransactions().stream()
+                    .map(tx -> new SynapsePostingResult(tx.getTraceId(), "ACCEPTED", null)).toList();
+            return new SynapseBatchPostingResponse(batch.getBatchId(), 1, 0, results);
+        });
+
+        SynapsePostResult result = service.postInterestForAccount(acct, POSTING_DATE);
+
+        assertThat(result.getAccepted()).isEqualTo(1);
+        assertThat(result.getFailed()).isEqualTo(0);
+        assertThat(result.getCursorUpdates()).hasSize(1);
+        assertThat(result.getCursorUpdates().get(0).getAccountId()).isEqualTo(1L);
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(INTEREST_POSTED_TILL);
+        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(LAST_CALC_DATE);
+
+        SynapseInterestPostingBatch sentBatch = batchCaptor.getValue();
+        assertThat(sentBatch.getTransactions()).hasSize(1);
+        assertThat(sentBatch.getPostingDate()).isEqualTo(POSTING_DATE);
+        assertThat(sentBatch.getTotalCount()).isEqualTo(1);
+    }
+
     // --- account builders ---
 
     private static SavingsAccountData buildAccountWithInterestTx(Long id, Long officeId, String currencyCode, BigDecimal amount) {

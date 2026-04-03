@@ -723,5 +723,6 @@ public class FineractProperties {
         private long readTimeoutMs;
         private int retryMaxAttempts;
         private long retryBackoffMs;
+        private String apiKey;
     }
 }
