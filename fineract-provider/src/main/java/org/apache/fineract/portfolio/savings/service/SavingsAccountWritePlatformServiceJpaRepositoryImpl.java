@@ -2016,7 +2016,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         }
 
         this.savingsAccountTransactionRepository.saveAndFlush(result.transaction());
-        this.savingAccountRepositoryWrapper.saveAndFlush(account);
+
+        // Use direct JPQL UPDATE instead of saveAndFlush(account) to avoid:
+        // 1. O(N) cascade through CascadeType.ALL on the transactions collection
+        // 2. OptimisticLockException when postInterestViaSynapse (Transaction A) holds
+        //    the same entity in its persistence context with a stale version
+        this.savingAccountRepositoryWrapper.updateSummaryDirectAndDetach(account);
 
         postJournalEntriesForTransaction(account, result.transaction(), false);
 
@@ -2058,6 +2063,17 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             }
         }
 
+        // Capture response fields before evicting the entity from the persistence context.
+        // The entity was loaded only for validation and must NOT remain managed — the Synapse
+        // callback (replayInterestPosting) runs in a separate transaction and increments the
+        // entity version.  If this entity stays managed, JPA's auto-flush at commit will attempt
+        // an UPDATE with a stale version, triggering an OptimisticLockException that rolls back
+        // the cursor update written by persistCursorUpdates below.
+        final Long officeId = account.officeId();
+        final Long clientId = account.clientId();
+        final Long groupId = account.groupId();
+        this.savingAccountRepositoryWrapper.detach(account);
+
         // 2. Load DTO with transactions (same shape the batch job uses)
         SavingsAccountData accountData = savingsAccountReadPlatformService
                 .retrieveSavingsDataForInterestPosting(savingsId);
@@ -2085,9 +2101,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         return new CommandProcessingResultBuilder()
                 .withEntityId(savingsId)
-                .withOfficeId(account.officeId())
-                .withClientId(account.clientId())
-                .withGroupId(account.groupId())
+                .withOfficeId(officeId)
+                .withClientId(clientId)
+                .withGroupId(groupId)
                 .withSavingsId(savingsId)
                 .with(changes)
                 .build();

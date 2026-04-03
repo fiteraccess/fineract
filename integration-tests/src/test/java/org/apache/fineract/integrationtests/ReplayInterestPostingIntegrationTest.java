@@ -67,7 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-@ExtendWith({ SavingsTestLifecycleExtension.class })
+//@ExtendWith({ SavingsTestLifecycleExtension.class })
 public class ReplayInterestPostingIntegrationTest {
 
     private static final String DATE = "10 April 2022";
@@ -207,26 +207,30 @@ public class ReplayInterestPostingIntegrationTest {
     }
 
     @Nested
-    class DirectPostingGated {
+    class DirectPostingViaSynapse {
+
+        private static final String BATCH_URL = "/api/v1/proxy/savings/interest-postings:batch";
 
         @Test
-        void postInterestBlockedWhenSynapseEnabled() {
+        void postInterestRoutedToSynapseWhenEnabled() {
             Account[] gl = createCashBasedGlAccounts();
             Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
 
-            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(503).build();
-            SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
-            errorHelper.postInterestForSavings(savingsId);
+            SavingsAccountHelper helper = new SavingsAccountHelper(requestSpec, responseSpec);
+            helper.postInterestForSavings(savingsId);
+
+            synapse.verify(postRequestedFor(urlEqualTo(BATCH_URL)));
         }
 
         @Test
-        void postInterestAsOnBlockedWhenSynapseEnabled() {
+        void postInterestAsOnRoutedToSynapseWhenEnabled() {
             Account[] gl = createCashBasedGlAccounts();
             Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
 
-            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(503).build();
-            SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
-            errorHelper.postInterestAsOnSavings(savingsId, DATE);
+            SavingsAccountHelper helper = new SavingsAccountHelper(requestSpec, responseSpec);
+            helper.postInterestAsOnSavings(savingsId, DATE);
+
+            synapse.verify(postRequestedFor(urlEqualTo(BATCH_URL)));
         }
     }
 
