@@ -1,1 +1,0 @@
-this project is using sdk man in zsh
