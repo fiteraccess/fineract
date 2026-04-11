@@ -18,12 +18,12 @@
  */
 package org.apache.fineract.portfolio.savings.service.synapse;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,10 +32,8 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
+import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Operation;
 
@@ -43,23 +41,21 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInst
 @RequiredArgsConstructor
 public class SynapseInterestPostingService {
 
-    private static final String ACCEPTED_STATUS = "ACCEPTED";
-
     private final SynapseInstructionMapper mapper;
-    private final SynapseTransactionClient client;
+    private final SynapseOutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Collects eligible interest-posting instructions from the given accounts,
-     * sends them to Synapse in a single batch, and returns cursor updates for
-     * accounts whose instructions all succeeded.
+     * writes them to the outbox for asynchronous dispatch, and returns cursor
+     * updates for all accounts.
      * <p>
      * Zero-interest accounts (no eligible transactions) always receive cursor
-     * updates since no Synapse call is needed for them.
+     * updates since no outbox write is needed for them.
      *
      * @param accounts    the accounts whose interest has been calculated
      * @param postingDate the date interest is being posted for
-     * @return cursor updates for succeeded accounts + accepted/failed counts
-     * @throws SynapsePostingException if the HTTP call itself fails
+     * @return cursor updates for all accounts + accepted/failed counts
      */
     /**
      * Sends interest-posting instructions for a single account to Synapse.
@@ -81,19 +77,14 @@ public class SynapseInterestPostingService {
                 .flatMap(acct -> toInstructions(acct, batchId)).toList();
 
         if (instructions.isEmpty()) {
-            log.debug("Batch {}: no eligible instructions, skipping Synapse call", batchId);
+            log.debug("Batch {}: no eligible instructions, skipping outbox write", batchId);
             return new SynapsePostResult(allCursors, accounts.size(), 0);
         }
 
-        SynapseInterestPostingBatch batch = SynapseInterestPostingBatch.builder()
-                .batchId(batchId).postingDate(postingDate)
-                .totalCount(instructions.size()).transactions(instructions).build();
+        writeToOutbox(batchId, instructions);
 
-        log.debug("Batch {}: sending {} instructions", batchId, instructions.size());
-
-        SynapseBatchPostingResponse response = client.postBatch(batch);
-
-        return filterByResponse(allCursors, instructions, response);
+        log.debug("Batch {}: wrote {} instructions to outbox", batchId, instructions.size());
+        return new SynapsePostResult(allCursors, allCursors.size(), 0);
     }
 
     private AccountCursorUpdate toCursorUpdate(SavingsAccountData account) {
@@ -119,29 +110,20 @@ public class SynapseInterestPostingService {
         return null;
     }
 
-    private SynapsePostResult filterByResponse(List<AccountCursorUpdate> allCursors,
-            List<SynapseTransactionInstruction> instructions, SynapseBatchPostingResponse response) {
-
-        Set<String> failedTraceIds = response.getResults().stream()
-                .filter(r -> !ACCEPTED_STATUS.equals(r.getStatus()))
-                .map(SynapsePostingResult::getTraceId)
-                .collect(Collectors.toSet());
-
-        Set<Long> failedAccountIds = instructions.stream()
-                .filter(i -> failedTraceIds.contains(i.getTraceId()))
-                .map(SynapseTransactionInstruction::getSavingsAccountId)
-                .collect(Collectors.toSet());
-
-        if (failedAccountIds.isEmpty()) {
-            return new SynapsePostResult(allCursors, allCursors.size(), 0);
-        }
-
-        log.warn("Batch had {} failed accounts: {}", failedAccountIds.size(), failedAccountIds);
-
-        List<AccountCursorUpdate> survivingCursors = allCursors.stream()
-                .filter(c -> !failedAccountIds.contains(c.getAccountId())).toList();
-
-        return new SynapsePostResult(survivingCursors, survivingCursors.size(), failedAccountIds.size());
+    private void writeToOutbox(String batchId, List<SynapseTransactionInstruction> instructions) {
+        List<OutboxEntry> entries = instructions.stream().map(instr -> {
+            try {
+                return OutboxEntry.builder()
+                        .traceId(instr.getTraceId())
+                        .accountId(instr.getSavingsAccountId())
+                        .officeId(instr.getOfficeId())
+                        .payload(objectMapper.writeValueAsString(instr))
+                        .build();
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Failed to serialize instruction for traceId: " + instr.getTraceId(), e);
+            }
+        }).toList();
+        outboxRepository.insertBatch("INTEREST_POSTING", batchId, entries);
     }
 }
 

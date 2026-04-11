@@ -147,6 +147,7 @@ import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
@@ -492,8 +493,9 @@ public class SavingsConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
-    public SynapseInterestPostingService synapseInterestPostingService(SynapseInstructionMapper mapper, SynapseTransactionClient client) {
-        return new SynapseInterestPostingService(mapper, client);
+    public SynapseInterestPostingService synapseInterestPostingService(SynapseInstructionMapper mapper,
+            SynapseOutboxRepository outboxRepository, ObjectMapper objectMapper) {
+        return new SynapseInterestPostingService(mapper, outboxRepository, objectMapper);
     }
 
     @Bean

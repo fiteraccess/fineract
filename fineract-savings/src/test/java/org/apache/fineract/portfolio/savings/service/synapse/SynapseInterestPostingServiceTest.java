@@ -19,13 +19,14 @@
 package org.apache.fineract.portfolio.savings.service.synapse;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,36 +38,28 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
+import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class SynapseInterestPostingServiceTest {
 
     private final SynapseInstructionMapper mapper = new SynapseInstructionMapper();
-    private final SynapseTransactionClient client = mock(SynapseTransactionClient.class);
-    private final SynapseInterestPostingService service = new SynapseInterestPostingService(mapper, client);
+    private final SynapseOutboxRepository outboxRepository = mock(SynapseOutboxRepository.class);
+    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final SynapseInterestPostingService service = new SynapseInterestPostingService(mapper, outboxRepository, objectMapper);
 
     private static final LocalDate POSTING_DATE = LocalDate.of(2026, 3, 20);
     private static final LocalDate INTEREST_POSTED_TILL = LocalDate.of(2026, 3, 20);
     private static final LocalDate LAST_CALC_DATE = LocalDate.of(2026, 3, 20);
 
+    @SuppressWarnings("unchecked")
     @Test
-    void happyPathThreeAccountsAllAccepted() {
+    void happyPathThreeAccountsAllWrittenToOutbox() {
         SavingsAccountData acct1 = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("100.00"));
         SavingsAccountData acct2 = buildAccountWithInterestTx(2L, 10L, "NGN", new BigDecimal("200.00"));
         SavingsAccountData acct3 = buildAccountWithInterestTx(3L, 10L, "NGN", new BigDecimal("50.00"));
-
-        ArgumentCaptor<SynapseInterestPostingBatch> batchCaptor = ArgumentCaptor.forClass(SynapseInterestPostingBatch.class);
-        when(client.postBatch(batchCaptor.capture())).thenAnswer(inv -> {
-            SynapseInterestPostingBatch batch = inv.getArgument(0);
-            List<SynapsePostingResult> results = batch.getTransactions().stream()
-                    .map(tx -> new SynapsePostingResult(tx.getTraceId(), "ACCEPTED", null)).toList();
-            return new SynapseBatchPostingResponse(batch.getBatchId(), 3, 0, results);
-        });
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2, acct3), POSTING_DATE);
 
@@ -75,22 +68,19 @@ class SynapseInterestPostingServiceTest {
         assertThat(result.getCursorUpdates()).hasSize(3);
         assertThat(result.getCursorUpdates()).extracting(AccountCursorUpdate::getAccountId).containsExactly(1L, 2L, 3L);
 
-        SynapseInterestPostingBatch sentBatch = batchCaptor.getValue();
-        assertThat(sentBatch.getTransactions()).hasSize(3);
-        assertThat(sentBatch.getPostingDate()).isEqualTo(POSTING_DATE);
-        assertThat(sentBatch.getTotalCount()).isEqualTo(3);
-        String batchId = sentBatch.getBatchId();
-        assertThat(sentBatch.getTransactions()).allSatisfy(tx -> assertThat(tx.getBatchId()).isEqualTo(batchId));
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(3);
     }
 
     @Test
-    void zeroInterestAccountsSkipHttpCallAndReturnAllCursors() {
+    void zeroInterestAccountsSkipOutboxWriteAndReturnAllCursors() {
         SavingsAccountData acct1 = buildAccountNoTx(1L, 10L, "NGN");
         SavingsAccountData acct2 = buildAccountNoTx(2L, 10L, "NGN");
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2), POSTING_DATE);
 
-        verify(client, never()).postBatch(any());
+        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
         assertThat(result.getAccepted()).isEqualTo(2);
         assertThat(result.getFailed()).isEqualTo(0);
         assertThat(result.getCursorUpdates()).hasSize(2);
@@ -99,50 +89,11 @@ class SynapseInterestPostingServiceTest {
                 .containsExactly(LAST_CALC_DATE, LAST_CALC_DATE);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    void clientThrowsSynapsePostingExceptionPropagates() {
-        SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("100.00"));
-        when(client.postBatch(any())).thenThrow(new SynapsePostingException("connection refused"));
-
-        assertThatThrownBy(() -> service.postInterestBatch(List.of(acct), POSTING_DATE))
-                .isInstanceOf(SynapsePostingException.class)
-                .hasMessageContaining("connection refused");
-    }
-
-    @Test
-    void partialSuccessAccountWithRejectedInstructionExcludedFromCursors() {
-        SavingsAccountData acct1 = buildAccountWithTwoTx(1L, 10L, "NGN",
-                new BigDecimal("100.00"), new BigDecimal("10.00"));
-        SavingsAccountData acct2 = buildAccountWithInterestTx(2L, 10L, "NGN", new BigDecimal("50.00"));
-
-        when(client.postBatch(any())).thenAnswer(inv -> {
-            SynapseInterestPostingBatch batch = inv.getArgument(0);
-            List<SynapsePostingResult> results = List.of(
-                    new SynapsePostingResult(batch.getTransactions().get(0).getTraceId(), "ACCEPTED", null),
-                    new SynapsePostingResult(batch.getTransactions().get(1).getTraceId(), "REJECTED", null),
-                    new SynapsePostingResult(batch.getTransactions().get(2).getTraceId(), "ACCEPTED", null));
-            return new SynapseBatchPostingResponse(batch.getBatchId(), 2, 1, results);
-        });
-
-        SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2), POSTING_DATE);
-
-        assertThat(result.getFailed()).isEqualTo(1);
-        assertThat(result.getAccepted()).isEqualTo(1);
-        assertThat(result.getCursorUpdates()).hasSize(1);
-        assertThat(result.getCursorUpdates().get(0).getAccountId()).isEqualTo(2L);
-    }
-
-    @Test
-    void allInstructionsForAccountAcceptedCursorIncluded() {
+    void multipleInstructionsForAccountAllWrittenToOutbox() {
         SavingsAccountData acct = buildAccountWithTwoTx(1L, 10L, "NGN",
                 new BigDecimal("100.00"), new BigDecimal("10.00"));
-
-        when(client.postBatch(any())).thenAnswer(inv -> {
-            SynapseInterestPostingBatch batch = inv.getArgument(0);
-            List<SynapsePostingResult> results = batch.getTransactions().stream()
-                    .map(tx -> new SynapsePostingResult(tx.getTraceId(), "ACCEPTED", null)).toList();
-            return new SynapseBatchPostingResponse(batch.getBatchId(), 2, 0, results);
-        });
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
 
@@ -152,28 +103,27 @@ class SynapseInterestPostingServiceTest {
         assertThat(result.getCursorUpdates().get(0).getAccountId()).isEqualTo(1L);
         assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(INTEREST_POSTED_TILL);
         assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(LAST_CALC_DATE);
+
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(2);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    void batchIdConsistentAcrossAllInstructions() {
+    void outboxEntriesContainCorrectAccountAndOfficeIds() {
         SavingsAccountData acct1 = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("100.00"));
-        SavingsAccountData acct2 = buildAccountWithInterestTx(2L, 10L, "NGN", new BigDecimal("200.00"));
-
-        ArgumentCaptor<SynapseInterestPostingBatch> batchCaptor = ArgumentCaptor.forClass(SynapseInterestPostingBatch.class);
-        when(client.postBatch(batchCaptor.capture())).thenAnswer(inv -> {
-            SynapseInterestPostingBatch batch = inv.getArgument(0);
-            List<SynapsePostingResult> results = batch.getTransactions().stream()
-                    .map(tx -> new SynapsePostingResult(tx.getTraceId(), "ACCEPTED", null)).toList();
-            return new SynapseBatchPostingResponse(batch.getBatchId(), 2, 0, results);
-        });
+        SavingsAccountData acct2 = buildAccountWithInterestTx(2L, 20L, "NGN", new BigDecimal("200.00"));
 
         service.postInterestBatch(List.of(acct1, acct2), POSTING_DATE);
 
-        SynapseInterestPostingBatch batch = batchCaptor.getValue();
-        String batchId = batch.getBatchId();
-        assertThat(batchId).isNotNull();
-        assertThat(batch.getTransactions().get(0).getBatchId()).isEqualTo(batchId);
-        assertThat(batch.getTransactions().get(1).getBatchId()).isEqualTo(batchId);
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        List<OutboxEntry> entries = entriesCaptor.getValue();
+        assertThat(entries).hasSize(2);
+        assertThat(entries).extracting(OutboxEntry::getAccountId).containsExactly(1L, 2L);
+        assertThat(entries).extracting(OutboxEntry::getOfficeId).containsExactly(10L, 20L);
+        assertThat(entries).allSatisfy(e -> assertThat(e.getPayload()).isNotBlank());
     }
 
     @Test
@@ -185,25 +135,26 @@ class SynapseInterestPostingServiceTest {
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
 
-        verify(client, never()).postBatch(any());
+        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
         assertThat(result.getCursorUpdates()).hasSize(1);
         assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(LocalDate.of(2026, 3, 15));
         assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(LocalDate.of(2026, 3, 15));
     }
 
     @Test
-    void zeroAmountTransactionsAreNotSentToSynapse() {
+    void zeroAmountTransactionsSkipOutboxWrite() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", BigDecimal.ZERO);
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
 
-        verify(client, never()).postBatch(any());
+        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
         assertThat(result.getAccepted()).isEqualTo(1);
         assertThat(result.getCursorUpdates()).hasSize(1);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    void reversedTransactionWithIdSentAsReverseOperation() {
+    void reversedTransactionWrittenAsReverseOperation() {
         SavingsAccountData acct = buildAccountNoTx(1L, 10L, "NGN");
         SavingsAccountTransactionEnumData txType = new SavingsAccountTransactionEnumData(
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().longValue(),
@@ -216,33 +167,19 @@ class SynapseInterestPostingServiceTest {
         tx.reverse();
         acct.setSavingsAccountTransactionData(tx);
 
-        ArgumentCaptor<SynapseInterestPostingBatch> batchCaptor = ArgumentCaptor.forClass(SynapseInterestPostingBatch.class);
-        when(client.postBatch(batchCaptor.capture())).thenAnswer(inv -> {
-            SynapseInterestPostingBatch batch = inv.getArgument(0);
-            List<SynapsePostingResult> results = batch.getTransactions().stream()
-                    .map(t -> new SynapsePostingResult(t.getTraceId(), "ACCEPTED", null)).toList();
-            return new SynapseBatchPostingResponse(batch.getBatchId(), 1, 0, results);
-        });
-
         SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
 
         assertThat(result.getAccepted()).isEqualTo(1);
-        SynapseInterestPostingBatch batch = batchCaptor.getValue();
-        assertThat(batch.getTransactions()).hasSize(1);
-        assertThat(batch.getTransactions().get(0).getOperation().name()).isEqualTo("REVERSE");
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
+        assertThat(entriesCaptor.getValue().get(0).getPayload()).contains("REVERSE");
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void postInterestForAccountDelegatesToBatchWithSingleAccount() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("250.00"));
-
-        ArgumentCaptor<SynapseInterestPostingBatch> batchCaptor = ArgumentCaptor.forClass(SynapseInterestPostingBatch.class);
-        when(client.postBatch(batchCaptor.capture())).thenAnswer(inv -> {
-            SynapseInterestPostingBatch batch = inv.getArgument(0);
-            List<SynapsePostingResult> results = batch.getTransactions().stream()
-                    .map(tx -> new SynapsePostingResult(tx.getTraceId(), "ACCEPTED", null)).toList();
-            return new SynapseBatchPostingResponse(batch.getBatchId(), 1, 0, results);
-        });
 
         SynapsePostResult result = service.postInterestForAccount(acct, POSTING_DATE);
 
@@ -253,10 +190,9 @@ class SynapseInterestPostingServiceTest {
         assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(INTEREST_POSTED_TILL);
         assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(LAST_CALC_DATE);
 
-        SynapseInterestPostingBatch sentBatch = batchCaptor.getValue();
-        assertThat(sentBatch.getTransactions()).hasSize(1);
-        assertThat(sentBatch.getPostingDate()).isEqualTo(POSTING_DATE);
-        assertThat(sentBatch.getTotalCount()).isEqualTo(1);
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
     }
 
     // --- account builders ---
