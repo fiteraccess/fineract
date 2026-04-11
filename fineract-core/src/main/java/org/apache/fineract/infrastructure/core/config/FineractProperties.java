@@ -724,5 +724,7 @@ public class FineractProperties {
         private int retryMaxAttempts;
         private long retryBackoffMs;
         private String apiKey;
+        private int outboxPageSize = 200;
+        private int outboxThreadPoolSize = 4;
     }
 }

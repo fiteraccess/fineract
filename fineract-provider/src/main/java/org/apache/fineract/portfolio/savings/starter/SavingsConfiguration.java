@@ -148,6 +148,7 @@ import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -464,6 +465,12 @@ public class SavingsConfiguration {
     @ConditionalOnMissingBean(SavingsSchedularInterestPosterTask.class)
     public SavingsSchedularInterestPosterTask savingsSchedularInterestPosterTask(SavingsSchedularInterestPoster interestPoster) {
         return new SavingsSchedularInterestPosterTask(interestPoster);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseOutboxRepository synapseOutboxRepository(JdbcTemplate jdbcTemplate) {
+        return new SynapseOutboxRepository(jdbcTemplate);
     }
 
     @Bean

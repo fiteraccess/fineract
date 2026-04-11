@@ -29,4 +29,6 @@
   <include file="parts/2004_add_savings_account_cob_infrastructure.xml" relativeToChangelogFile="true" />
   <include file="parts/2005_add_savings_account_daily_balance.xml" relativeToChangelogFile="true" />
   <include file="parts/2006_add_replay_interest_posting_permission.xml" relativeToChangelogFile="true" />
+  <include file="parts/2007_add_synapse_outbox_table.xml" relativeToChangelogFile="true" />
+  <include file="parts/2008_add_synapse_outbox_dispatch_job.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
