@@ -67,6 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+
 //@ExtendWith({ SavingsTestLifecycleExtension.class })
 public class ReplayInterestPostingIntegrationTest {
 
@@ -231,6 +232,68 @@ public class ReplayInterestPostingIntegrationTest {
             helper.postInterestAsOnSavings(savingsId, DATE);
 
             synapse.verify(postRequestedFor(urlEqualTo(BATCH_URL)));
+        }
+    }
+
+    @Nested
+    class OutboxDispatch {
+
+        private static final String BATCH_URL = "/api/v1/proxy/savings/interest-postings:batch";
+
+        @Test
+        void postInterestCreatesOutboxRowAndDispatchJobMarksItSent() {
+            GlobalConfigurationHelper globalConfigHelper = new GlobalConfigurationHelper();
+            try {
+                globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
+                        new PutGlobalConfigurationsRequest().enabled(true));
+
+                String activationDate = "01 January 2022";
+                LocalDate postingDate = LocalDate.of(2022, 2, 2);
+                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
+                        LocalDate.of(2022, 1, 1));
+
+                Account[] gl = createCashBasedGlAccounts();
+                Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, activationDate);
+                Integer productId = SavingsProductHelper.createSavingsProduct(
+                        new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
+                                .withInterestPostingPeriodTypeAsDaily()
+                                .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
+                        requestSpec, responseSpec);
+                SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
+                Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", activationDate);
+                sh.approveSavingsOnDate(savingsId, activationDate);
+                sh.activateSavingsAccount(savingsId, activationDate);
+                sh.depositToSavingsAccount(savingsId, "1000", activationDate, CommonConstants.RESPONSE_RESOURCE_ID);
+
+                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, postingDate);
+
+                synapse.resetRequests();
+
+                sh.postInterestForSavings(savingsId);
+
+                synapse.verify(0, postRequestedFor(urlEqualTo(BATCH_URL)));
+
+                SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
+                schedulerJobHelper.executeAndAwaitJob("Dispatch Synapse Outbox");
+
+                List<LoggedRequest> requests = synapse.findAll(postRequestedFor(urlEqualTo(BATCH_URL)));
+                assertFalse(requests.isEmpty(), "Expected at least one batch POST to Synapse after outbox dispatch");
+
+                boolean found = false;
+                for (LoggedRequest request : requests) {
+                    JsonPath batchJson = JsonPath.from(request.getBodyAsString());
+                    List<Map<String, Object>> instructions = batchJson.getList("transactions");
+                    if (instructions != null && instructions.stream()
+                            .anyMatch(instr -> savingsId.equals(((Number) instr.get("savingsAccountId")).intValue()))) {
+                        found = true;
+                        break;
+                    }
+                }
+                assertTrue(found, "Expected at least one batch request containing savingsAccountId=" + savingsId);
+            } finally {
+                globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
+                        new PutGlobalConfigurationsRequest().enabled(false));
+            }
         }
     }
 
@@ -410,4 +473,6 @@ public class ReplayInterestPostingIntegrationTest {
         HashMap txn = new SavingsAccountHelper(requestSpec, responseSpec).getTransactionDetails(savingsId, txnId);
         return ((Number) txn.get("amount")).floatValue();
     }
+
+
 }

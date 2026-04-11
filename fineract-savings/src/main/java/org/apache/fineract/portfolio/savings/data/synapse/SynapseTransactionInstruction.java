@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 /**
  * Represents a single interest-posting instruction to be sent to Synapse.
@@ -30,6 +31,7 @@ import lombok.Getter;
  */
 @Getter
 @Builder
+@Jacksonized
 @AllArgsConstructor
 public class SynapseTransactionInstruction {
 
