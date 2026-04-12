@@ -105,36 +105,48 @@ public class SynapseOutboxTasklet implements Tasklet {
      */
     private DrainResult drainTaskType(SynapseTaskHandler handler) {
         String taskType = handler.taskType();
-        log.debug("Worker [{}] draining outbox for taskType={}", Thread.currentThread().getName(), taskType);
+        log.debug("Worker started: taskType={}, thread={}", taskType, Thread.currentThread().getName());
 
         long sent = 0;
         long failed = 0;
         long reset = 0;
+        boolean firstIteration = true;
 
         while (true) {
             List<OutboxEntry> batch = outboxRepository.claimPending(taskType, pageSize);
             if (batch.isEmpty()) {
+                if (firstIteration) {
+                    log.debug("No pending entries for taskType={}", taskType);
+                }
                 break;
             }
+            firstIteration = false;
+            log.debug("Claimed {} entries for taskType={}", batch.size(), taskType);
 
             for (int i = 0; i < batch.size(); i++) {
                 OutboxEntry entry = batch.get(i);
+                log.debug("Dispatching entry id={} traceId={} accountId={} taskType={}", entry.getId(), entry.getTraceId(),
+                        entry.getAccountId(), taskType);
                 try {
                     circuitBreaker.executeRunnable(() -> handler.dispatch(entry));
                     outboxRepository.markSent(List.of(entry.getId()));
                     sent++;
+                    log.debug("Dispatched entry id={} traceId={}", entry.getId(), entry.getTraceId());
                 } catch (CallNotPermittedException e) {
-                    log.warn("Circuit breaker OPEN for taskType={}, resetting remaining entries to PENDING.", taskType);
                     List<Long> remainingIds = batch.subList(i, batch.size()).stream().map(OutboxEntry::getId).toList();
+                    log.warn("Circuit breaker OPEN for taskType={}, resetting {} remaining entries to PENDING.", taskType,
+                            remainingIds.size());
                     outboxRepository.resetToPending(remainingIds);
                     reset += remainingIds.size();
                     return new DrainResult(sent, failed, reset);
                 } catch (SynapsePostingException e) {
-                    log.error("Synapse posting failed for entry id={}: {}", entry.getId(), e.getMessage());
+                    log.error("Synapse posting failed for entry id={} traceId={} accountId={}: {}", entry.getId(), entry.getTraceId(),
+                            entry.getAccountId(), e.getMessage());
                     outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts());
                     failed++;
                 } catch (Exception e) {
-                    log.error("Unexpected error dispatching entry id={}: {}", entry.getId(), e.getMessage(), e);
+                    log.error("Unexpected error dispatching entry id={} traceId={} accountId={}: {}", entry.getId(), entry.getTraceId(),
+                            entry.getAccountId(), e.getMessage(), e);
                     outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()),
                             entry.getAttempts(), entry.getMaxAttempts());
                     failed++;
@@ -142,6 +154,7 @@ public class SynapseOutboxTasklet implements Tasklet {
             }
         }
 
+        log.debug("Worker finished: taskType={}, sent={}, failed={}, reset={}", taskType, sent, failed, reset);
         return new DrainResult(sent, failed, reset);
     }
 
