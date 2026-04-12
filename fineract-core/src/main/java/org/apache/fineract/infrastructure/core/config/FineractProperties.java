@@ -726,5 +726,6 @@ public class FineractProperties {
         private String apiKey;
         private int outboxPageSize = 200;
         private int outboxThreadPoolSize = 4;
+        private int outboxRetentionDays = 30;
     }
 }

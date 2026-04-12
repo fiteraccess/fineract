@@ -61,6 +61,7 @@ public enum JobName {
     ADD_PERIODIC_ACCRUAL_ENTRIES_FOR_SAVINGS_WITH_INCOME_POSTED_AS_TRANSACTIONS("Add Accrual Transactions For Savings"), //
     JOURNAL_ENTRY_AGGREGATION("Journal Entry Aggregation"), //
     DISPATCH_SYNAPSE_OUTBOX("Dispatch Synapse Outbox"), //
+    PURGE_SYNAPSE_OUTBOX("Purge Synapse Outbox"), //
     ; //
 
     private final String name;

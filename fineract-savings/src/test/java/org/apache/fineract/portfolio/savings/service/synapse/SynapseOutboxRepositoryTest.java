@@ -31,16 +31,20 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,13 +84,13 @@ class SynapseOutboxRepositoryTest {
 
     @Test
     void claimPending_noRows_returnsEmptyAndSkipsUpdate() {
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(10)))
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(Timestamp.from(FIXED_NOW)), eq(10)))
                 .thenReturn(Collections.emptyList());
 
         List<OutboxEntry> result = repository.claimPending("INTEREST_POSTING", 10);
 
         assertThat(result).isEmpty();
-        verify(jdbcTemplate).query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(10));
+        verify(jdbcTemplate).query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(Timestamp.from(FIXED_NOW)), eq(10));
     }
 
     @Test
@@ -94,7 +98,7 @@ class SynapseOutboxRepositoryTest {
         List<OutboxEntry> entries = List.of(
                 OutboxEntry.builder().id(1L).status("PENDING").attempts(0).build(),
                 OutboxEntry.builder().id(2L).status("PENDING").attempts(0).build());
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(10)))
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(Timestamp.from(FIXED_NOW)), eq(10)))
                 .thenReturn(entries);
 
         List<OutboxEntry> result = repository.claimPending("INTEREST_POSTING", 10);
@@ -135,11 +139,21 @@ class SynapseOutboxRepositoryTest {
 
     @Test
     void markFailed_delegatesToUpdate() {
-        repository.markFailed(42L, "connection timeout");
+        repository.markFailed(42L, "connection timeout", 2, 20);
+
+        Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds((long) (1.0 * Math.pow(1.5, 2) * 60)));
+        verify(jdbcTemplate).update(
+                argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
+                eq(20), eq("connection timeout"), eq(expectedNextAttempt), eq(42L));
+    }
+
+    @Test
+    void markFailed_deadEntry_setsNullNextAttempt() {
+        repository.markFailed(42L, "connection timeout", 19, 20);
 
         verify(jdbcTemplate).update(
-                argThat(sql -> sql.contains("CASE WHEN attempts >= max_attempts")),
-                eq("connection timeout"), eq(42L));
+                argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
+                eq(20), eq("connection timeout"), eq(null), eq(42L));
     }
 
     @Test
@@ -162,5 +176,160 @@ class SynapseOutboxRepositoryTest {
         repository.resetToPending(Collections.emptyList());
 
         verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Nested
+    class MarkFailedBackoff {
+
+        @Test
+        void attempt5_producesExpectedBackoffDelay() {
+            repository.markFailed(7L, "timeout", 5, 20);
+
+            long expectedDelaySeconds = (long) (1.0 * Math.pow(1.5, 5) * 60);
+            Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds(expectedDelaySeconds));
+            verify(jdbcTemplate).update(
+                    argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
+                    eq(20), eq("timeout"), eq(expectedNextAttempt), eq(7L));
+        }
+
+        @Test
+        void highAttemptCount_capsAtMaxBackoff() {
+            repository.markFailed(8L, "timeout", 100, 200);
+
+            Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds((long) (1440.0 * 60)));
+            verify(jdbcTemplate).update(
+                    argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
+                    eq(200), eq("timeout"), eq(expectedNextAttempt), eq(8L));
+        }
+
+        @Test
+        void firstAttempt_usesBaseDelay() {
+            repository.markFailed(9L, "error", 0, 20);
+
+            Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds(60));
+            verify(jdbcTemplate).update(
+                    argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
+                    eq(20), eq("error"), eq(expectedNextAttempt), eq(9L));
+        }
+    }
+
+    @Nested
+    class RetryDeadEntry {
+
+        @Test
+        void resetsDeadEntryToPending() {
+            when(jdbcTemplate.update(anyString(), eq(99L))).thenReturn(1);
+
+            int updated = repository.retryDeadEntry(99L);
+
+            assertThat(updated).isEqualTo(1);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).update(sqlCaptor.capture(), eq(99L));
+            String sql = sqlCaptor.getValue();
+            assertThat(sql).contains("status = 'PENDING'");
+            assertThat(sql).contains("attempts = 0");
+            assertThat(sql).contains("next_attempt_at = NULL");
+            assertThat(sql).contains("status = 'DEAD'");
+        }
+
+        @Test
+        void returnsZeroWhenEntryNotDead() {
+            when(jdbcTemplate.update(anyString(), eq(404L))).thenReturn(0);
+
+            int updated = repository.retryDeadEntry(404L);
+
+            assertThat(updated).isEqualTo(0);
+            verify(jdbcTemplate).update(anyString(), eq(404L));
+        }
+    }
+
+    @Nested
+    class GetOutboxStats {
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void delegatesToJdbcQueryWithResultSetExtractor() {
+            when(jdbcTemplate.query(anyString(), any(ResultSetExtractor.class))).thenReturn(Map.of());
+
+            repository.getOutboxStats();
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).query(sqlCaptor.capture(), any(ResultSetExtractor.class));
+            assertThat(sqlCaptor.getValue()).contains("GROUP BY task_type, status");
+        }
+
+        @Test
+        void returnsStatsGroupedByTaskTypeAndStatus() {
+            Map<String, Map<String, Long>> expected = Map.of(
+                    "INTEREST_POSTING", Map.of("PENDING", 5L, "SENT", 10L),
+                    "BALANCE_SYNC", Map.of("DISPATCHED", 3L));
+            when(jdbcTemplate.query(anyString(), any(ResultSetExtractor.class))).thenReturn(expected);
+
+            Map<String, Map<String, Long>> result = repository.getOutboxStats();
+
+            assertThat(result).containsOnlyKeys("INTEREST_POSTING", "BALANCE_SYNC");
+            assertThat(result.get("INTEREST_POSTING")).containsEntry("PENDING", 5L).containsEntry("SENT", 10L);
+            assertThat(result.get("BALANCE_SYNC")).containsEntry("DISPATCHED", 3L);
+        }
+
+        @Test
+        void returnsEmptyMapWhenNoRows() {
+            when(jdbcTemplate.query(anyString(), any(ResultSetExtractor.class))).thenReturn(Map.of());
+
+            Map<String, Map<String, Long>> result = repository.getOutboxStats();
+
+            assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    class PurgeOldSentEntries {
+
+        @Test
+        void calculatesCutoffTimestampCorrectly() {
+            int retentionDays = 30;
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(5);
+
+            repository.purgeOldSentEntries(retentionDays);
+
+            Timestamp expectedCutoff = Timestamp.from(FIXED_NOW.minus(retentionDays, ChronoUnit.DAYS));
+            ArgumentCaptor<Timestamp> cutoffCaptor = ArgumentCaptor.forClass(Timestamp.class);
+            verify(jdbcTemplate).update(anyString(), cutoffCaptor.capture());
+            assertThat(cutoffCaptor.getValue()).isEqualTo(expectedCutoff);
+        }
+
+        @Test
+        void executesPurgeSqlTargetingSentStatus() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(0);
+
+            repository.purgeOldSentEntries(7);
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).update(sqlCaptor.capture(), any(Timestamp.class));
+            String sql = sqlCaptor.getValue();
+            assertThat(sql).contains("DELETE FROM synapse_outbox");
+            assertThat(sql).contains("status = 'SENT'");
+            assertThat(sql).contains("completed_at < ?");
+        }
+
+        @Test
+        void returnsDeletedRowCount() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(42);
+
+            int deleted = repository.purgeOldSentEntries(30);
+
+            assertThat(deleted).isEqualTo(42);
+        }
+
+        @Test
+        void zeroDaysRetention_cutoffEqualsNow() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(0);
+
+            repository.purgeOldSentEntries(0);
+
+            ArgumentCaptor<Timestamp> cutoffCaptor = ArgumentCaptor.forClass(Timestamp.class);
+            verify(jdbcTemplate).update(anyString(), cutoffCaptor.capture());
+            assertThat(cutoffCaptor.getValue()).isEqualTo(Timestamp.from(FIXED_NOW));
+        }
     }
 }

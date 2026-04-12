@@ -24,11 +24,15 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
 /**
@@ -45,8 +49,9 @@ public class SynapseOutboxRepository {
             + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)";
 
     private static final String CLAIM_SQL = "SELECT id, trace_id, batch_id, task_type, account_id, office_id, "
-            + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at "
+            + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at "
             + "FROM synapse_outbox WHERE status = 'PENDING' AND task_type = ? AND attempts < max_attempts "
+            + "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
             + "ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED";
 
     private static final String UPDATE_DISPATCHED_SQL = "UPDATE synapse_outbox SET status = 'DISPATCHED', "
@@ -54,11 +59,18 @@ public class SynapseOutboxRepository {
 
     private static final String MARK_SENT_SQL = "UPDATE synapse_outbox SET status = 'SENT', completed_at = ? WHERE id IN (%s)";
 
-    private static final String MARK_FAILED_SQL = "UPDATE synapse_outbox SET status = CASE WHEN attempts >= max_attempts "
-            + "THEN 'DEAD' ELSE 'PENDING' END, error_detail = ? WHERE id = ?";
+    private static final String MARK_FAILED_SQL = "UPDATE synapse_outbox SET status = CASE WHEN attempts >= ? "
+            + "THEN 'DEAD' ELSE 'PENDING' END, error_detail = ?, next_attempt_at = ? WHERE id = ?";
 
     private static final String RESET_TO_PENDING_SQL = "UPDATE synapse_outbox SET status = 'PENDING', dispatched_at = NULL, "
             + "attempts = GREATEST(attempts - 1, 0) WHERE id IN (%s)";
+
+    private static final String RETRY_DEAD_SQL = "UPDATE synapse_outbox SET status = 'PENDING', attempts = 0, "
+            + "next_attempt_at = NULL WHERE id = ? AND status = 'DEAD'";
+
+    private static final String PURGE_SQL = "DELETE FROM synapse_outbox WHERE status = 'SENT' AND completed_at < ?";
+
+    private static final String STATS_SQL = "SELECT task_type, status, COUNT(*) as cnt FROM synapse_outbox GROUP BY task_type, status";
 
     private static final OutboxEntryRowMapper ROW_MAPPER = new OutboxEntryRowMapper();
 
@@ -100,7 +112,7 @@ public class SynapseOutboxRepository {
      * @return the claimed entries (status = DISPATCHED)
      */
     public List<OutboxEntry> claimPending(String taskType, int limit) {
-        List<OutboxEntry> entries = jdbcTemplate.query(CLAIM_SQL, ROW_MAPPER, taskType, limit);
+        List<OutboxEntry> entries = jdbcTemplate.query(CLAIM_SQL, ROW_MAPPER, taskType, Timestamp.from(clock.instant()), limit);
         if (entries.isEmpty()) {
             return Collections.emptyList();
         }
@@ -137,12 +149,44 @@ public class SynapseOutboxRepository {
         log.debug("Marked {} outbox entries as SENT", ids.size());
     }
 
+    private static final double BACKOFF_BASE_MINUTES = 1.0;
+    private static final double BACKOFF_MULTIPLIER = 1.5;
+    private static final double BACKOFF_MAX_MINUTES = 1440.0;
+
     /**
      * Mark a single row as FAILED (or DEAD if max attempts reached).
+     * Applies exponential backoff for the next retry attempt.
      */
-    public void markFailed(Long id, String errorDetail) {
-        jdbcTemplate.update(MARK_FAILED_SQL, errorDetail, id);
-        log.debug("Marked outbox entry id={} as FAILED/DEAD", id);
+    public void markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts) {
+        boolean isDead = (currentAttempts + 1) >= maxAttempts;
+        Timestamp nextAttempt = null;
+
+        if (!isDead) {
+            double delayMinutes = BACKOFF_BASE_MINUTES * Math.pow(BACKOFF_MULTIPLIER, currentAttempts);
+            delayMinutes = Math.min(delayMinutes, BACKOFF_MAX_MINUTES);
+            nextAttempt = Timestamp.from(clock.instant().plusSeconds((long) (delayMinutes * 60)));
+        }
+
+        jdbcTemplate.update(MARK_FAILED_SQL, maxAttempts, errorDetail, nextAttempt, id);
+        log.debug("Marked outbox entry id={} as FAILED/DEAD (nextAttempt={})", id, nextAttempt);
+    }
+
+    /**
+     * Returns outbox entry counts grouped by task type and status.
+     *
+     * @return a map of task_type → (status → count)
+     */
+    public Map<String, Map<String, Long>> getOutboxStats() {
+        return jdbcTemplate.query(STATS_SQL, rs -> {
+            Map<String, Map<String, Long>> stats = new HashMap<>();
+            while (rs.next()) {
+                String taskType = rs.getString("task_type");
+                String status = rs.getString("status");
+                long count = rs.getLong("cnt");
+                stats.computeIfAbsent(taskType, k -> new HashMap<>()).put(status, count);
+            }
+            return stats;
+        });
     }
 
     /**
@@ -158,6 +202,35 @@ public class SynapseOutboxRepository {
         Object[] params = ids.toArray();
         jdbcTemplate.update(sql, params);
         log.debug("Reset {} outbox entries to PENDING (circuit breaker open)", ids.size());
+    }
+
+    /**
+     * Reset a DEAD outbox entry back to PENDING for manual retry.
+     *
+     * @param id the outbox entry id
+     * @return the number of rows updated (1 if reset, 0 if not found or not DEAD)
+     */
+    public int retryDeadEntry(Long id) {
+        int updated = jdbcTemplate.update(RETRY_DEAD_SQL, id);
+        if (updated > 0) {
+            log.debug("Reset DEAD outbox entry id={} to PENDING for retry", id);
+        } else {
+            log.warn("No DEAD outbox entry found with id={}", id);
+        }
+        return updated;
+    }
+
+    /**
+     * Delete SENT outbox entries older than the given retention period.
+     *
+     * @param retentionDays number of days to retain completed entries
+     * @return the number of deleted rows
+     */
+    public int purgeOldSentEntries(int retentionDays) {
+        Timestamp cutoff = Timestamp.from(clock.instant().minus(retentionDays, ChronoUnit.DAYS));
+        int deleted = jdbcTemplate.update(PURGE_SQL, cutoff);
+        log.info("Purged {} SENT outbox entries older than {} days (cutoff={})", deleted, retentionDays, cutoff);
+        return deleted;
     }
 
     private static final class OutboxEntryRowMapper implements RowMapper<OutboxEntry> {
@@ -179,6 +252,7 @@ public class SynapseOutboxRepository {
                     .createdAt(toInstant(rs.getTimestamp("created_at")))
                     .dispatchedAt(toInstant(rs.getTimestamp("dispatched_at")))
                     .completedAt(toInstant(rs.getTimestamp("completed_at")))
+                    .nextAttemptAt(toInstant(rs.getTimestamp("next_attempt_at")))
                     .build();
         }
 

@@ -64,6 +64,7 @@ public class SynapseOutboxTasklet implements Tasklet {
         for (SynapseTaskHandler handler : handlers) {
             drainTaskType(handler);
         }
+        log.info("Synapse Outbox Stats: {}", outboxRepository.getOutboxStats());
         return RepeatStatus.FINISHED;
     }
 
@@ -93,10 +94,12 @@ public class SynapseOutboxTasklet implements Tasklet {
                     break;
                 } catch (SynapsePostingException e) {
                     log.error("Synapse posting failed for entry id={}: {}", entry.getId(), e.getMessage());
-                    outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()));
+                    outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(),
+                            entry.getMaxAttempts());
                 } catch (Exception e) {
                     log.error("Unexpected error dispatching entry id={}: {}", entry.getId(), e.getMessage(), e);
-                    outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()));
+                    outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()),
+                            entry.getAttempts(), entry.getMaxAttempts());
                 }
             }
         }

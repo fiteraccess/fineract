@@ -32,4 +32,6 @@
   <include file="parts/2007_add_synapse_outbox_table.xml" relativeToChangelogFile="true" />
   <include file="parts/2008_add_synapse_outbox_dispatch_job.xml" relativeToChangelogFile="true" />
   <include file="parts/2009_activate_synapse_outbox_dispatch_job.xml" relativeToChangelogFile="true" />
+  <include file="parts/2010_add_next_attempt_at_to_synapse_outbox.xml" relativeToChangelogFile="true" />
+  <include file="parts/2011_add_synapse_outbox_purge_job.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

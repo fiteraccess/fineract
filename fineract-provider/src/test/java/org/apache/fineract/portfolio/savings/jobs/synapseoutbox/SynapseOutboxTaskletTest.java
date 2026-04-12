@@ -20,6 +20,7 @@ package org.apache.fineract.portfolio.savings.jobs.synapseoutbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -36,6 +37,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.config.FineractProperties.FineractSynapseProperties;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
@@ -78,6 +80,11 @@ class SynapseOutboxTaskletTest {
 
     @Nested
     class Execute {
+
+        @org.junit.jupiter.api.BeforeEach
+        void stubStats() {
+            org.mockito.Mockito.lenient().when(outboxRepository.getOutboxStats()).thenReturn(Map.of());
+        }
 
         @Test
         void execute_noHandlers_returnsFinished() throws Exception {
@@ -135,7 +142,7 @@ class SynapseOutboxTaskletTest {
             tasklet.execute(null, null);
 
             verify(outboxRepository).markSent(List.of(1L));
-            verify(outboxRepository).markFailed(eq(2L), eq("posting failed"));
+            verify(outboxRepository).markFailed(eq(2L), eq("posting failed"), eq(e2.getAttempts()), eq(e2.getMaxAttempts()));
             verify(outboxRepository).markSent(List.of(3L));
         }
 
@@ -159,7 +166,7 @@ class SynapseOutboxTaskletTest {
 
             verify(outboxRepository).markSent(List.of(1L));
             verify(outboxRepository).resetToPending(List.of(2L, 3L));
-            verify(outboxRepository, never()).markFailed(any(), anyString());
+            verify(outboxRepository, never()).markFailed(any(), anyString(), anyInt(), anyInt());
         }
 
         @Test
@@ -175,7 +182,8 @@ class SynapseOutboxTaskletTest {
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
             tasklet.execute(null, null);
 
-            verify(outboxRepository).markFailed(eq(1L), eq("java.lang.RuntimeException: something broke"));
+            verify(outboxRepository).markFailed(eq(1L), eq("java.lang.RuntimeException: something broke"), eq(e1.getAttempts()),
+                    eq(e1.getMaxAttempts()));
             verify(outboxRepository, never()).markSent(any());
         }
 
