@@ -83,29 +83,28 @@ class SynapseOutboxRepositoryTest {
     }
 
     @Test
-    void claimPending_noRows_returnsEmptyAndSkipsUpdate() {
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(Timestamp.from(FIXED_NOW)), eq(10)))
+    void claimPending_noRows_returnsEmpty() {
+        Timestamp now = Timestamp.from(FIXED_NOW);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(now), eq("INTEREST_POSTING"), eq(now), eq(10)))
                 .thenReturn(Collections.emptyList());
 
         List<OutboxEntry> result = repository.claimPending("INTEREST_POSTING", 10);
 
         assertThat(result).isEmpty();
-        verify(jdbcTemplate).query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(Timestamp.from(FIXED_NOW)), eq(10));
+        verify(jdbcTemplate).query(anyString(), any(RowMapper.class), eq(now), eq("INTEREST_POSTING"), eq(now), eq(10));
     }
 
     @Test
-    void claimPending_claimsAndMutatesEntries() {
+    void claimPending_returnsClaimedEntries() {
+        Timestamp now = Timestamp.from(FIXED_NOW);
         List<OutboxEntry> entries = List.of(
-                OutboxEntry.builder().id(1L).status("PENDING").attempts(0).build(),
-                OutboxEntry.builder().id(2L).status("PENDING").attempts(0).build());
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("INTEREST_POSTING"), eq(Timestamp.from(FIXED_NOW)), eq(10)))
+                OutboxEntry.builder().id(1L).status("DISPATCHED").attempts(1).dispatchedAt(FIXED_NOW).build(),
+                OutboxEntry.builder().id(2L).status("DISPATCHED").attempts(1).dispatchedAt(FIXED_NOW).build());
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(now), eq("INTEREST_POSTING"), eq(now), eq(10)))
                 .thenReturn(entries);
 
         List<OutboxEntry> result = repository.claimPending("INTEREST_POSTING", 10);
 
-        verify(jdbcTemplate).batchUpdate(
-                argThat(sql -> sql.contains("DISPATCHED")),
-                eq(entries), eq(2), any());
         assertThat(result).hasSize(2);
         for (OutboxEntry entry : result) {
             assertThat(entry.getStatus()).isEqualTo("DISPATCHED");
@@ -279,6 +278,45 @@ class SynapseOutboxRepositoryTest {
             Map<String, Map<String, Long>> result = repository.getOutboxStats();
 
             assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    class ReclaimStaleDispatched {
+
+        @Test
+        void calculatesCutoffTimestampCorrectly() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(3);
+
+            repository.reclaimStaleDispatched(5);
+
+            Timestamp expectedCutoff = Timestamp.from(FIXED_NOW.minus(5, ChronoUnit.MINUTES));
+            ArgumentCaptor<Timestamp> cutoffCaptor = ArgumentCaptor.forClass(Timestamp.class);
+            verify(jdbcTemplate).update(anyString(), cutoffCaptor.capture());
+            assertThat(cutoffCaptor.getValue()).isEqualTo(expectedCutoff);
+        }
+
+        @Test
+        void executesReclaimSqlTargetingDispatchedStatus() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(0);
+
+            repository.reclaimStaleDispatched(10);
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).update(sqlCaptor.capture(), any(Timestamp.class));
+            String sql = sqlCaptor.getValue();
+            assertThat(sql).contains("status = 'PENDING'");
+            assertThat(sql).contains("status = 'DISPATCHED'");
+            assertThat(sql).contains("dispatched_at");
+        }
+
+        @Test
+        void returnsReclaimedRowCount() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class))).thenReturn(7);
+
+            int reclaimed = repository.reclaimStaleDispatched(5);
+
+            assertThat(reclaimed).isEqualTo(7);
         }
     }
 

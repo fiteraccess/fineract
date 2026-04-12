@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.jobs.synapseoutbox;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.cob.loan.ContextAwareTaskDecorator;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
@@ -34,6 +35,7 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -49,11 +51,25 @@ public class SynapseOutboxDispatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
 
+    @Bean("synapseOutboxExecutor")
+    public ThreadPoolTaskExecutor synapseOutboxExecutor(FineractProperties fineractProperties) {
+        int poolSize = fineractProperties.getSynapse().getOutboxThreadPoolSize();
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(poolSize);
+        executor.setMaxPoolSize(poolSize);
+        executor.setThreadNamePrefix("SynapseOutbox-");
+        executor.setTaskDecorator(new ContextAwareTaskDecorator());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
+
     @Bean
     public SynapseOutboxTasklet synapseOutboxTasklet(SynapseOutboxRepository outboxRepository,
             List<SynapseTaskHandler> handlers, CircuitBreakerRegistry circuitBreakerRegistry,
-            FineractProperties fineractProperties) {
-        return new SynapseOutboxTasklet(outboxRepository, handlers, circuitBreakerRegistry, fineractProperties);
+            FineractProperties fineractProperties, ThreadPoolTaskExecutor synapseOutboxExecutor) {
+        return new SynapseOutboxTasklet(outboxRepository, handlers, circuitBreakerRegistry, fineractProperties, synapseOutboxExecutor);
     }
 
     @Bean

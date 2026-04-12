@@ -48,14 +48,15 @@ public class SynapseOutboxRepository {
             + "(trace_id, batch_id, task_type, account_id, office_id, payload, status, attempts, max_attempts, created_at) "
             + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)";
 
-    private static final String CLAIM_SQL = "SELECT id, trace_id, batch_id, task_type, account_id, office_id, "
-            + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at "
-            + "FROM synapse_outbox WHERE status = 'PENDING' AND task_type = ? AND attempts < max_attempts "
-            + "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
-            + "ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED";
-
-    private static final String UPDATE_DISPATCHED_SQL = "UPDATE synapse_outbox SET status = 'DISPATCHED', "
-            + "dispatched_at = ?, attempts = attempts + 1 WHERE id = ?";
+    private static final String CLAIM_SQL = "UPDATE synapse_outbox SET status = 'DISPATCHED', "
+            + "dispatched_at = ?, attempts = attempts + 1 "
+            + "WHERE id IN ("
+            + "  SELECT id FROM synapse_outbox "
+            + "  WHERE status = 'PENDING' AND task_type = ? AND attempts < max_attempts "
+            + "  AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
+            + "  ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED"
+            + ") RETURNING id, trace_id, batch_id, task_type, account_id, office_id, "
+            + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at";
 
     private static final String MARK_SENT_SQL = "UPDATE synapse_outbox SET status = 'SENT', completed_at = ? WHERE id IN (%s)";
 
@@ -67,6 +68,9 @@ public class SynapseOutboxRepository {
 
     private static final String RETRY_DEAD_SQL = "UPDATE synapse_outbox SET status = 'PENDING', attempts = 0, "
             + "next_attempt_at = NULL WHERE id = ? AND status = 'DEAD'";
+
+    private static final String RECLAIM_STALE_DISPATCHED_SQL = "UPDATE synapse_outbox SET status = 'PENDING', dispatched_at = NULL "
+            + "WHERE status = 'DISPATCHED' AND dispatched_at < ?";
 
     private static final String PURGE_SQL = "DELETE FROM synapse_outbox WHERE status = 'SENT' AND completed_at < ?";
 
@@ -112,22 +116,11 @@ public class SynapseOutboxRepository {
      * @return the claimed entries (status = DISPATCHED)
      */
     public List<OutboxEntry> claimPending(String taskType, int limit) {
-        List<OutboxEntry> entries = jdbcTemplate.query(CLAIM_SQL, ROW_MAPPER, taskType, Timestamp.from(clock.instant()), limit);
-        if (entries.isEmpty()) {
-            return Collections.emptyList();
+        Timestamp now = Timestamp.from(clock.instant());
+        List<OutboxEntry> entries = jdbcTemplate.query(CLAIM_SQL, ROW_MAPPER, now, taskType, now, limit);
+        if (!entries.isEmpty()) {
+            log.debug("Claimed {} outbox entries for taskType={}", entries.size(), taskType);
         }
-        Instant now = clock.instant();
-        Timestamp dispatchedTs = Timestamp.from(now);
-        jdbcTemplate.batchUpdate(UPDATE_DISPATCHED_SQL, entries, entries.size(), (PreparedStatement ps, OutboxEntry entry) -> {
-            ps.setTimestamp(1, dispatchedTs);
-            ps.setLong(2, entry.getId());
-        });
-        for (OutboxEntry entry : entries) {
-            entry.setStatus("DISPATCHED");
-            entry.setDispatchedAt(now);
-            entry.setAttempts(entry.getAttempts() + 1);
-        }
-        log.debug("Claimed {} outbox entries for taskType={}", entries.size(), taskType);
         return entries;
     }
 
@@ -218,6 +211,23 @@ public class SynapseOutboxRepository {
             log.warn("No DEAD outbox entry found with id={}", id);
         }
         return updated;
+    }
+
+    /**
+     * Reclaim rows stuck in DISPATCHED status for longer than the given threshold.
+     * This handles entries left behind by crashed or interrupted runs.
+     * Safe because Synapse enforces trace_id idempotency.
+     *
+     * @param staleMinutes entries dispatched more than this many minutes ago are reclaimed
+     * @return the number of reclaimed rows
+     */
+    public int reclaimStaleDispatched(int staleMinutes) {
+        Timestamp cutoff = Timestamp.from(clock.instant().minus(staleMinutes, ChronoUnit.MINUTES));
+        int reclaimed = jdbcTemplate.update(RECLAIM_STALE_DISPATCHED_SQL, cutoff);
+        if (reclaimed > 0) {
+            log.info("Reclaimed {} stale DISPATCHED outbox entries older than {} minutes", reclaimed, staleMinutes);
+        }
+        return reclaimed;
     }
 
     /**
