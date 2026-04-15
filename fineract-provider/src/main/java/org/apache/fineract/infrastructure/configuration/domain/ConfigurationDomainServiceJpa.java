@@ -570,4 +570,9 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     public boolean isForcePasswordResetOnFirstLoginEnabled() {
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.FORCE_PASSWORD_RESET_ON_FIRST_LOGIN).isEnabled();
     }
+
+    @Override
+    public boolean isSynapseInterestPostingEnabled() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING).isEnabled();
+    }
 }
