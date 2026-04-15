@@ -518,7 +518,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Transactional
     public CommandProcessingResult postInterest(final JsonCommand command) {
         SynapseInterestPostingService synapseService = synapseInterestPostingServiceProvider.getIfAvailable();
-        if (synapseService != null) {
+        if (synapseService != null && configurationDomainService.isSynapseInterestPostingEnabled()) {
             return postInterestViaSynapse(command.getSavingsId(), command, synapseService);
         }
         Long savingsId = command.getSavingsId();
@@ -1995,7 +1995,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Override
     public CommandProcessingResult replayInterestPosting(final Long savingsId, final JsonCommand command) {
         final InterestPostingReplayService replayService = interestPostingReplayServiceProvider.getIfAvailable();
-        if (replayService == null) {
+        if (replayService == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
             throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
                     "Synapse integration is not enabled. Cannot replay interest posting.");
         }

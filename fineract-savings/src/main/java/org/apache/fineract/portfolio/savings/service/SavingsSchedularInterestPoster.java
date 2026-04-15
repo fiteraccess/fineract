@@ -35,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryType;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
@@ -70,6 +71,7 @@ public class SavingsSchedularInterestPoster {
     // Optional Synapse dependencies — injected via setter only when synapse is enabled
     private SynapseInterestPostingService synapseInterestPostingService;
     private FineractProperties fineractProperties;
+    private ConfigurationDomainService configurationDomainService;
 
     @Transactional(isolation = Isolation.READ_UNCOMMITTED, rollbackFor = Exception.class)
     public void postInterest() throws JobExecutionException {
@@ -281,7 +283,8 @@ public class SavingsSchedularInterestPoster {
 
     private boolean isSynapseEnabled() {
         return fineractProperties != null && synapseInterestPostingService != null
-                && fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isEnabled();
+                && fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isEnabled()
+                && configurationDomainService != null && configurationDomainService.isSynapseInterestPostingEnabled();
     }
 
     private void executeCursorUpdates(List<AccountCursorUpdate> cursorUpdates, Long userId) {

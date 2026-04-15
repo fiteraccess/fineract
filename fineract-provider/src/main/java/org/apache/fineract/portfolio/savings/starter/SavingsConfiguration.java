@@ -453,11 +453,13 @@ public class SavingsConfiguration {
             SavingsAccountWritePlatformService savingsAccountWritePlatformService, JdbcTemplate jdbcTemplate,
             SavingsAccountReadPlatformService savingsAccountReadPlatformService, PlatformSecurityContext platformSecurityContext,
             ObjectProvider<SynapseInterestPostingService> synapseServiceProvider,
-            ObjectProvider<FineractProperties> fineractPropertiesProvider) {
+            ObjectProvider<FineractProperties> fineractPropertiesProvider,
+            ConfigurationDomainService configurationDomainService) {
         SavingsSchedularInterestPoster poster = new SavingsSchedularInterestPoster(savingsAccountWritePlatformService, jdbcTemplate,
                 savingsAccountReadPlatformService, platformSecurityContext);
         synapseServiceProvider.ifAvailable(poster::setSynapseInterestPostingService);
         fineractPropertiesProvider.ifAvailable(poster::setFineractProperties);
+        poster.setConfigurationDomainService(configurationDomainService);
         return poster;
     }
 

@@ -61,6 +61,7 @@ import org.apache.fineract.integrationtests.common.accounting.JournalEntryHelper
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsTestLifecycleExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -80,6 +81,7 @@ public class ReplayInterestPostingIntegrationTest {
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
+    private GlobalConfigurationHelper globalConfigHelper;
 
     @BeforeEach
     public void setup() {
@@ -87,12 +89,21 @@ public class ReplayInterestPostingIntegrationTest {
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        globalConfigHelper = new GlobalConfigurationHelper();
+        globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING,
+                new PutGlobalConfigurationsRequest().enabled(true));
 
         synapse.stubFor(WireMock.post(WireMock.urlEqualTo("/api/v1/proxy/savings/interest-postings:batch"))
                 .willReturn(WireMock.aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"batchId\":\"stub\",\"accepted\":999,\"failed\":0,\"results\":[]}")));
+    }
+
+    @AfterEach
+    public void teardown() {
+        globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING,
+                new PutGlobalConfigurationsRequest().enabled(false));
     }
 
     @Nested
@@ -220,6 +231,9 @@ public class ReplayInterestPostingIntegrationTest {
             SavingsAccountHelper helper = new SavingsAccountHelper(requestSpec, responseSpec);
             helper.postInterestForSavings(savingsId);
 
+            SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
+            schedulerJobHelper.executeAndAwaitJob("Dispatch Synapse Outbox");
+
             synapse.verify(postRequestedFor(urlEqualTo(BATCH_URL)));
         }
 
@@ -230,6 +244,9 @@ public class ReplayInterestPostingIntegrationTest {
 
             SavingsAccountHelper helper = new SavingsAccountHelper(requestSpec, responseSpec);
             helper.postInterestAsOnSavings(savingsId, DATE);
+
+            SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
+            schedulerJobHelper.executeAndAwaitJob("Dispatch Synapse Outbox");
 
             synapse.verify(postRequestedFor(urlEqualTo(BATCH_URL)));
         }
@@ -337,6 +354,7 @@ public class ReplayInterestPostingIntegrationTest {
 
                 SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
                 schedulerJobHelper.executeAndAwaitJob("Post Interest For Savings");
+                schedulerJobHelper.executeAndAwaitJob("Dispatch Synapse Outbox");
 
                 List<LoggedRequest> requests = synapse.findAll(postRequestedFor(urlEqualTo(BATCH_URL)));
                 assertFalse(requests.isEmpty(), "Expected at least one batch POST to Synapse");
