@@ -32,6 +32,7 @@ import sun.misc.Unsafe;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
@@ -61,6 +62,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
     private SavingsAccountTransactionRepository txRepo;
     private SavingsAccountRepositoryWrapper accountRepo;
     private JournalEntryWritePlatformService journalService;
+    private ConfigurationDomainService configurationDomainService;
 
     @SuppressWarnings("unchecked")
     @BeforeEach
@@ -71,12 +73,14 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         txRepo = mock(SavingsAccountTransactionRepository.class);
         accountRepo = mock(SavingsAccountRepositoryWrapper.class);
         journalService = mock(JournalEntryWritePlatformService.class);
+        configurationDomainService = mock(ConfigurationDomainService.class);
 
         service = createServiceWithReflection();
     }
 
     @Test
     void happyPath_delegatesSavesAndPostsJournalEntries() throws Exception {
+        when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
         Long savingsId = 10L;
         SavingsAccount account = buildAccount(savingsId);
         SavingsAccountTransaction tx = mock(SavingsAccountTransaction.class);
@@ -95,12 +99,13 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
 
         assertThat(result.getSavingsId()).isEqualTo(savingsId);
         verify(txRepo).saveAndFlush(tx);
-        verify(accountRepo).saveAndFlush(account);
+        verify(accountRepo).updateSummaryDirectAndDetach(account);
         verify(journalService).createJournalEntriesForSavings(any());
     }
 
     @Test
     void idempotentReplay_returnsEarlyWithoutSaving() throws Exception {
+        when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
         Long savingsId = 11L;
         SavingsAccount account = buildAccount(savingsId);
         SavingsAccountTransaction existingTx = mock(SavingsAccountTransaction.class);
@@ -176,6 +181,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "savingsAccountTransactionRepository", txRepo);
         setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "savingAccountRepositoryWrapper", accountRepo);
         setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "journalEntryWritePlatformService", journalService);
+        setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "configurationDomainService", configurationDomainService);
         return svc;
     }
 
