@@ -75,7 +75,7 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
     private final CodeValueRepository codeValueRepository;
     private final LoanScheduleService loanScheduleService;
     private final ApplicationEventPublisher eventPublisher;
-    private CacheableLoanProductConfigService cacheableLoanProductConfigService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Transactional
     @Override

@@ -109,7 +109,7 @@ public class SavingsSchedularInterestPoster {
             for (SavingsAccountTransactionData savingsAccountTransactionData : savingsAccountTransactionDataList) {
                 if (savingsAccountTransactionData.getId() == null && !MathUtil.isZero(savingsAccountTransactionData.getAmount())) {
                     final String key = savingsAccountTransactionData.getRefNo();
-                    final Boolean isOverdraft = savingsAccountTransactionData.getIsOverdraft();
+
                     final SavingsAccountTransactionData dataFromFetch = savingsAccountTransactionDataHashMap.get(key);
                     savingsAccountTransactionData.setId(dataFromFetch.getId());
                     if (savingsAccountData.getGlAccountIdForSavingsControl() != 0

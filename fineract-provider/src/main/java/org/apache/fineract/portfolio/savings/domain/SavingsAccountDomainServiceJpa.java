@@ -40,7 +40,6 @@ import org.apache.fineract.infrastructure.event.business.domain.savings.transact
 import org.apache.fineract.infrastructure.event.business.domain.savings.transaction.SavingsWithdrawalBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
-import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
@@ -50,10 +49,9 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.exception.DepositAccountTransactionNotAllowedException;
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
+import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.DailyBalanceSnapshotService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,43 +59,38 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SavingsAccountDomainServiceJpa.class);
-
     private final PlatformSecurityContext context;
     private final SavingsAccountRepositoryWrapper savingsAccountRepository;
     private final SavingsAccountTransactionRepository savingsAccountTransactionRepository;
-    private final ApplicationCurrencyRepositoryWrapper applicationCurrencyRepositoryWrapper;
     private final JournalEntryWritePlatformService journalEntryWritePlatformService;
     private final ConfigurationDomainService configurationDomainService;
     private final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final BalanceValidationService balanceValidationService;
-    private final SavingsAccountTransactionSummaryWrapper savingsAccountTransactionSummaryWrapper;
     private final DailyBalanceSnapshotService dailyBalanceSnapshotService;
     private final EntityManager entityManager;
+    private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
 
     @Autowired
     public SavingsAccountDomainServiceJpa(final SavingsAccountRepositoryWrapper savingsAccountRepository,
             final SavingsAccountTransactionRepository savingsAccountTransactionRepository,
-            final ApplicationCurrencyRepositoryWrapper applicationCurrencyRepositoryWrapper,
             final JournalEntryWritePlatformService journalEntryWritePlatformService,
             final ConfigurationDomainService configurationDomainService, final PlatformSecurityContext context,
             final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository,
             final BusinessEventNotifierService businessEventNotifierService, final BalanceValidationService balanceValidationService,
-            final SavingsAccountTransactionSummaryWrapper savingsAccountTransactionSummaryWrapper,
-            final DailyBalanceSnapshotService dailyBalanceSnapshotService, final EntityManager entityManager) {
+            final DailyBalanceSnapshotService dailyBalanceSnapshotService, final EntityManager entityManager,
+            CacheableSavingsProductConfigService cacheableSavingsProductConfigService) {
         this.savingsAccountRepository = savingsAccountRepository;
         this.savingsAccountTransactionRepository = savingsAccountTransactionRepository;
-        this.applicationCurrencyRepositoryWrapper = applicationCurrencyRepositoryWrapper;
         this.journalEntryWritePlatformService = journalEntryWritePlatformService;
         this.configurationDomainService = configurationDomainService;
         this.context = context;
         this.depositAccountOnHoldTransactionRepository = depositAccountOnHoldTransactionRepository;
         this.businessEventNotifierService = businessEventNotifierService;
         this.balanceValidationService = balanceValidationService;
-        this.savingsAccountTransactionSummaryWrapper = savingsAccountTransactionSummaryWrapper;
         this.dailyBalanceSnapshotService = dailyBalanceSnapshotService;
         this.entityManager = entityManager;
+        this.cacheableSavingsProductConfigService = cacheableSavingsProductConfigService;
     }
 
     @Transactional
@@ -250,8 +243,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                         charge.setFreeWithdrawalCount(0);
                     }
 
-                    BigDecimal feeAmount = calculateWithdrawalFeeForOptimizedPath(charge, transactionAmount, transactionDate, paymentDetail,
-                            account);
+                    BigDecimal feeAmount = calculateWithdrawalFeeForOptimizedPath(charge, transactionAmount, paymentDetail, account);
 
                     if (feeAmount.compareTo(BigDecimal.ZERO) > 0) {
                         totalFeeAmount = totalFeeAmount.add(feeAmount);
@@ -273,7 +265,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 transactionBooleanValues.isExceptionForBalanceCheck());
 
         // Reverse accrual transactions on or after the transaction date (O(1) JPQL UPDATE)
-        if (Boolean.TRUE.equals(account.isAccrualBasedAccountingEnabledOnSavingsProduct())) {
+        if (Boolean.TRUE
+                .equals(cacheableSavingsProductConfigService.getSavingsProduct(account.productId()).getIsAccrualBasedAccountingEnabled())) {
             this.savingsAccountTransactionRepository.reverseAccrualTransactions(account.getId(), transactionDate);
         }
 
@@ -482,7 +475,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         account.validatePivotDateTransaction(transactionDate, backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, resourceTypeName);
 
         // Reverse accrual transactions on or after the transaction date (O(1) JPQL UPDATE)
-        if (Boolean.TRUE.equals(account.isAccrualBasedAccountingEnabledOnSavingsProduct())) {
+        if (Boolean.TRUE
+                .equals(cacheableSavingsProductConfigService.getSavingsProduct(account.productId()).getIsAccrualBasedAccountingEnabled())) {
             this.savingsAccountTransactionRepository.reverseAccrualTransactions(account.getId(), transactionDate);
         }
 
@@ -586,16 +580,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
     /**
      * Calculates the withdrawal fee for a single charge in the optimized path. Replicates the logic from
-     * {@link SavingsAccount#payWithdrawalFee} but calls {@link SavingsAccountCharge#pay} directly instead of
      * {@link SavingsAccount#payCharge} to avoid adding to the transactions collection.
      */
     private BigDecimal calculateWithdrawalFeeForOptimizedPath(final SavingsAccountCharge charge, final BigDecimal transactionAmount,
-            final LocalDate transactionDate, final PaymentDetail paymentDetail, final SavingsAccount account) {
+            final PaymentDetail paymentDetail, final SavingsAccount account) {
 
         if (charge.isEnablePaymentType() && charge.isEnableFreeWithdrawal()) {
             if (paymentDetail != null && paymentDetail.getPaymentType() != null
                     && paymentDetail.getPaymentType().getName().equals(charge.getCharge().getPaymentType().getName())) {
-                return handleFreeWithdrawalCountLogic(charge, transactionAmount, transactionDate, account);
+                return handleFreeWithdrawalCountLogic(charge, transactionAmount, account);
             }
             return BigDecimal.ZERO;
         } else if (charge.isEnablePaymentType()) {
@@ -608,7 +601,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             }
             return BigDecimal.ZERO;
         } else if (!charge.isEnablePaymentType() && charge.isEnableFreeWithdrawal()) {
-            return handleFreeWithdrawalCountLogic(charge, transactionAmount, transactionDate, account);
+            return handleFreeWithdrawalCountLogic(charge, transactionAmount, account);
         } else {
             // Normal withdraw — always charge
             charge.updateWithdralFeeAmount(transactionAmount);
@@ -620,10 +613,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
     /**
      * Handles the free withdrawal count logic for the optimized path. Replicates the logic from
-     * {@link SavingsAccount#resetFreeChargeDaysCount} and {@link SavingsAccount#countValidation}.
      */
     private BigDecimal handleFreeWithdrawalCountLogic(final SavingsAccountCharge charge, final BigDecimal transactionAmount,
-            final LocalDate transactionDate, final SavingsAccount account) {
+            final SavingsAccount account) {
 
         LocalDate resetDate = charge.getResetChargeDate();
         Integer restartPeriod = charge.getRestartFrequency();

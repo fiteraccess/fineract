@@ -1271,8 +1271,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         final Set<Long> existingTransactionIds = new HashSet<>();
         final Set<Long> existingReversedTransactionIds = new HashSet<>();
         updateExistingTransactionsDetails(account, existingTransactionIds, existingReversedTransactionIds);
-        final SavingsAccountTransaction chargeTransaction = account.payCharge(savingsAccountCharge, amountPaid, transactionDate, formatter,
-                false, null);
+        account.payCharge(savingsAccountCharge, amountPaid, transactionDate, formatter, false, null);
         boolean isInterestTransfer = false;
         LocalDate postInterestOnDate = null;
         final MathContext mc = MathContext.DECIMAL64;

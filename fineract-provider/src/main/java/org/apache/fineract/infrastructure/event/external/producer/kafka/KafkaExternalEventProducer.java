@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.AllArgsConstructor;
@@ -57,7 +56,7 @@ public class KafkaExternalEventProducer implements ExternalEventProducer {
         String topicName = kafkaProperties.getTopic().getName();
         List<CompletableFuture<SendResult<Long, byte[]>>> sendResults = new ArrayList<>();
         measure(() -> {
-            Set<Long> keys = partitions.keySet();
+
             for (Map.Entry<Long, List<byte[]>> entry : partitions.entrySet()) {
                 for (byte[] message : entry.getValue()) {
                     sendResults.add(externalEventsKafkaTemplate.send(topicName, entry.getKey(), message));

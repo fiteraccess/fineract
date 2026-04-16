@@ -35,10 +35,14 @@ import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
+import org.apache.fineract.portfolio.savings.data.CacheableSavingsProductConfig;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
+import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.shareaccounts.domain.ShareAccount;
 import org.apache.fineract.portfolio.shareproducts.domain.ShareProduct;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +54,8 @@ public class AccountNumberGeneratorTest {
     private ClientRepository clientRepo;
     private LoanRepository loanRepo;
     private SavingsAccountRepository savingsRepo;
+    private CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     private AccountNumberGenerator generator;
 
@@ -59,8 +65,11 @@ public class AccountNumberGeneratorTest {
         clientRepo = mock(ClientRepository.class);
         loanRepo = mock(LoanRepository.class);
         savingsRepo = mock(SavingsAccountRepository.class);
+        cacheableSavingsProductConfigService = mock(CacheableSavingsProductConfigService.class);
+        cacheableLoanProductConfigService = mock(CacheableLoanProductConfigService.class);
 
-        generator = new AccountNumberGenerator(configService, clientRepo, loanRepo, savingsRepo);
+        generator = new AccountNumberGenerator(configService, clientRepo, loanRepo, savingsRepo, cacheableSavingsProductConfigService,
+                cacheableLoanProductConfigService);
 
         GlobalConfigurationPropertyData accountLengthConfig = mock(GlobalConfigurationPropertyData.class);
         when(accountLengthConfig.getValue()).thenReturn(Long.valueOf("9"));
@@ -101,7 +110,11 @@ public class AccountNumberGeneratorTest {
         when(loan.getOffice()).thenReturn(office);
         when(office.getName()).thenReturn("LoanBranch");
         when(loan.loanProduct()).thenReturn(product);
+        when(loan.getProductId()).thenReturn(1L);
         when(product.getShortName()).thenReturn("LP01");
+        CacheableLoanProductConfig loanProductConfig = mock(CacheableLoanProductConfig.class);
+        when(loanProductConfig.getShortName()).thenReturn("LP01");
+        when(cacheableLoanProductConfigService.getConfig(1L)).thenReturn(loanProductConfig);
 
         AccountNumberFormat format = mock(AccountNumberFormat.class);
         when(format.getPrefixEnum()).thenReturn(null);
@@ -120,7 +133,11 @@ public class AccountNumberGeneratorTest {
         when(savings.office()).thenReturn(office);
         when(office.getName()).thenReturn("Branch01");
         when(savings.savingsProduct()).thenReturn(product);
+        when(savings.productId()).thenReturn(2L);
         when(product.getShortName()).thenReturn("SP01");
+        CacheableSavingsProductConfig savingsProductConfig = mock(CacheableSavingsProductConfig.class);
+        when(savingsProductConfig.getShortName()).thenReturn("SP01");
+        when(cacheableSavingsProductConfigService.getSavingsProduct(2L)).thenReturn(savingsProductConfig);
 
         AccountNumberFormat format = mock(AccountNumberFormat.class);
         when(format.getPrefixEnum()).thenReturn(null);

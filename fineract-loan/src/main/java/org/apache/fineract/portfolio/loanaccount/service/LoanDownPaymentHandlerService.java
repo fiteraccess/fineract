@@ -30,6 +30,5 @@ public interface LoanDownPaymentHandlerService {
             LoanTransaction disbursementTransaction, Loan loan, CacheableLoanProductConfig loanProductConfig);
 
     void handleRepaymentOrRecoveryOrWaiverTransaction(Loan loan, LoanTransaction newTransactionDetail,
-            LoanTransaction transactionForAdjustment, ScheduleGeneratorDTO scheduleGeneratorDTO,
-            final CacheableLoanProductConfig productConfig);
+            LoanTransaction transactionForAdjustment, ScheduleGeneratorDTO scheduleGeneratorDTO, CacheableLoanProductConfig productConfig);
 }

@@ -80,6 +80,7 @@ import org.apache.fineract.portfolio.loanaccount.data.LoanScheduleDelinquencyDat
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
 import org.apache.fineract.portfolio.loanproduct.service.LoanProductConfigProvider;
 import org.junit.jupiter.api.AfterAll;

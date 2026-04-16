@@ -110,7 +110,6 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
 
             final Role role = this.roleRepository.findById(roleId).orElseThrow(() -> new RoleNotFoundException(roleId));
 
-            String previousRoleName = role.getName();
             final Map<String, Object> changes = role.update(command);
             if (!changes.isEmpty()) {
                 this.roleRepository.saveAndFlush(role);

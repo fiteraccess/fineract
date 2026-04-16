@@ -2022,14 +2022,6 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.product;
     }
 
-    private Boolean isCashBasedAccountingEnabledOnSavingsProduct() {
-        return this.product.isCashBasedAccountingEnabled();
-    }
-
-    public Boolean isAccrualBasedAccountingEnabledOnSavingsProduct() {
-        return this.product.isAccrualBasedAccountingEnabled();
-    }
-
     public Long officeId() {
         Long officeId = null;
         if (this.client != null) {

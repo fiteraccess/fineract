@@ -242,9 +242,8 @@ public class SavingsAccountTransactionDataValidator {
         Boolean isAccountLienEnabled = account.isLienAllowed();
         Boolean isOverdraftEnabled = account.isAllowOverdraft();
 
-        Boolean lienAllowed = false;
         if (BooleanUtils.isTrue(fromApiJsonHelper.extractBooleanNamed(lienAllowedParamName, element))) {
-            lienAllowed = this.fromApiJsonHelper.extractBooleanNamed(lienAllowedParamName, element);
+
             if (isAccountLienEnabled) {
                 if (isOverdraftEnabled) {
                     if (account.getOverdraftLimit().compareTo(account.getMaxAllowedLienLimit()) > 0) {
