@@ -58,6 +58,7 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
 
     @Transactional
     @Override
+    @CacheEvict(value = "roles", allEntries = true)
     public CommandProcessingResult createRole(final JsonCommand command) {
 
         try {
@@ -97,7 +98,8 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
         throw ErrorHandler.getMappable(dve, "error.msg.role.unknown.data.integrity.issue", "Unknown data integrity issue with resource.");
     }
 
-    @Caching(evict = { @CacheEvict(value = "users", allEntries = true), @CacheEvict(value = "usersByUsername", allEntries = true) })
+    @Caching(evict = { @CacheEvict(value = "users", allEntries = true), @CacheEvict(value = "usersByUsername", allEntries = true),
+            @CacheEvict(value = "roles", allEntries = true) })
     @Transactional
     @Override
     public CommandProcessingResult updateRole(final Long roleId, final JsonCommand command) {
@@ -133,7 +135,8 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
         }
     }
 
-    @Caching(evict = { @CacheEvict(value = "users", allEntries = true), @CacheEvict(value = "usersByUsername", allEntries = true) })
+    @Caching(evict = { @CacheEvict(value = "users", allEntries = true), @CacheEvict(value = "usersByUsername", allEntries = true),
+            @CacheEvict(value = "roles", allEntries = true) })
     @Transactional
     @Override
     public CommandProcessingResult updateRolePermissions(final Long roleId, final JsonCommand command) {
@@ -187,6 +190,7 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
      */
     @Transactional
     @Override
+    @CacheEvict(value = "roles", allEntries = true)
     public CommandProcessingResult deleteRole(Long roleId) {
 
         try {
@@ -216,6 +220,7 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
      */
     @Transactional
     @Override
+    @CacheEvict(value = "roles", allEntries = true)
     public CommandProcessingResult disableRole(Long roleId) {
         try {
             /**
@@ -250,6 +255,7 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
      */
     @Transactional
     @Override
+    @CacheEvict(value = "roles", allEntries = true)
     public CommandProcessingResult enableRole(Long roleId) {
         try {
             /**

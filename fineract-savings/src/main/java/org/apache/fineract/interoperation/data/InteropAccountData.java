@@ -28,10 +28,10 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.interoperation.domain.InteropIdentifier;
 import org.apache.fineract.portfolio.accountdetails.domain.AccountType;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.apache.fineract.portfolio.savings.data.CacheableSavingsProductConfig;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
-import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
 
 public class InteropAccountData extends CommandProcessingResult {
 
@@ -98,7 +98,7 @@ public class InteropAccountData extends CommandProcessingResult {
                 status, subStatus, accountType, depositType, activatedOn, statusUpdateOn, withdrawnOn, balanceOn, identifiers, clientId);
     }
 
-    public static InteropAccountData build(SavingsAccount account) {
+    public static InteropAccountData build(SavingsAccount account, CacheableSavingsProductConfig productConfig) {
         if (account == null) {
             return null;
         }
@@ -108,14 +108,13 @@ public class InteropAccountData extends CommandProcessingResult {
             ids.add(InteropIdentifierData.build(identifier));
         }
 
-        SavingsProduct product = account.savingsProduct();
         SavingsAccountSubStatusEnum subStatus = SavingsAccountSubStatusEnum.fromInt(account.getSubStatus());
 
-        return new InteropAccountData(account.getExternalId().getValue(), product.getId().toString(), product.getName(),
-                product.getShortName(), account.getCurrency().getCode(), account.getAccountBalance(), account.getWithdrawableBalance(),
-                account.getStatus(), subStatus, account.getAccountType(), account.depositAccountType(), account.getActivationDate(),
-                calcStatusUpdateOn(account), account.getWithdrawnOnDate(), account.retrieveLastTransactionDate(), ids,
-                account.getClient().getId());
+        return new InteropAccountData(account.getExternalId().getValue(), productConfig.getId().toString(), productConfig.getName(),
+                productConfig.getShortName(), account.getCurrency().getCode(), account.getAccountBalance(),
+                account.getWithdrawableBalance(), account.getStatus(), subStatus, account.getAccountType(), account.depositAccountType(),
+                account.getActivationDate(), calcStatusUpdateOn(account), account.getWithdrawnOnDate(),
+                account.retrieveLastTransactionDate(), ids, account.getClient().getId());
     }
 
     private static LocalDate calcStatusUpdateOn(@NotNull SavingsAccount account) {

@@ -44,6 +44,7 @@ import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanResch
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanRescheduleRequestRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.exception.LoanRescheduleRequestNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +59,7 @@ public class LoanReschedulePreviewPlatformServiceImpl implements LoanRescheduleP
     private final LoanRepaymentScheduleTransactionProcessorFactory loanRepaymentScheduleTransactionProcessorFactory;
     private final LoanScheduleGeneratorFactory loanScheduleFactory;
     private final LoanTermVariationsMapper loanTermVariationsMapper;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public LoanScheduleModel previewLoanReschedule(Long requestId) {
@@ -74,8 +76,8 @@ public class LoanReschedulePreviewPlatformServiceImpl implements LoanRescheduleP
                 loanRescheduleRequest.getRescheduleFromDate());
         LocalDate rescheduleFromDate = null;
         List<LoanTermVariationsData> removeLoanTermVariationsData = new ArrayList<>();
-        final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO,
-                loan);
+        final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
+                cacheableLoanProductConfigService.getConfig(loan.getLoanProduct().getId()));
         LoanTermVariations dueDateVariationInCurrentRequest = loanRescheduleRequest.getDueDateTermVariationIfExists();
         if (dueDateVariationInCurrentRequest != null) {
             for (LoanTermVariationsData loanTermVariation : loanApplicationTerms.getLoanTermVariations().getDueDateVariation()) {

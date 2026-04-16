@@ -35,8 +35,10 @@ import org.apache.fineract.portfolio.client.domain.ClientRepository;
 import org.apache.fineract.portfolio.group.domain.Group;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
+import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.shareaccounts.domain.ShareAccount;
 import org.springframework.stereotype.Component;
 
@@ -62,6 +64,8 @@ public class AccountNumberGenerator {
     private final ClientRepository clientRepository;
     private final LoanRepository loanRepository;
     private final SavingsAccountRepository savingsAccountRepository;
+    private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     public String generate(Client client, AccountNumberFormat accountNumberFormat) {
         Map<String, String> propertyMap = new HashMap<>();
@@ -79,7 +83,7 @@ public class AccountNumberGenerator {
         Map<String, String> propertyMap = new HashMap<>();
         propertyMap.put(ID, loan.getId().toString());
         propertyMap.put(OFFICE_NAME, loan.getOffice().getName());
-        propertyMap.put(LOAN_PRODUCT_SHORT_NAME, loan.loanProduct().getShortName());
+        propertyMap.put(LOAN_PRODUCT_SHORT_NAME, cacheableLoanProductConfigService.getConfig(loan.getProductId()).getShortName());
         propertyMap.put(ENTITY_TYPE, "loan");
         return generateAccountNumber(propertyMap, accountNumberFormat);
     }
@@ -88,7 +92,8 @@ public class AccountNumberGenerator {
         Map<String, String> propertyMap = new HashMap<>();
         propertyMap.put(ID, savingsAccount.getId().toString());
         propertyMap.put(OFFICE_NAME, savingsAccount.office().getName());
-        propertyMap.put(SAVINGS_PRODUCT_SHORT_NAME, savingsAccount.savingsProduct().getShortName());
+        propertyMap.put(SAVINGS_PRODUCT_SHORT_NAME,
+                cacheableSavingsProductConfigService.getSavingsProduct(savingsAccount.productId()).getShortName());
         propertyMap.put(ENTITY_TYPE, "savingsAccount");
         return generateAccountNumber(propertyMap, accountNumberFormat);
     }

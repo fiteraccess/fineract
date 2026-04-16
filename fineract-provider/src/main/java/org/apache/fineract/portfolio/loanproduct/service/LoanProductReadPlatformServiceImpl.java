@@ -70,6 +70,7 @@ import org.apache.fineract.portfolio.loanproduct.domain.LoanSupportedInterestRef
 import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundException;
 import org.apache.fineract.portfolio.rate.data.RateData;
 import org.apache.fineract.portfolio.rate.service.RateReadService;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -88,6 +89,7 @@ public class LoanProductReadPlatformServiceImpl implements LoanProductReadPlatfo
     private final LoanProductRepository loanProductRepository;
 
     @Override
+    @Cacheable(value = "loanProductById", key = "'loan_product:' + #loanProductId")
     public LoanProductData retrieveLoanProduct(final Long loanProductId) {
 
         try {
@@ -141,6 +143,7 @@ public class LoanProductReadPlatformServiceImpl implements LoanProductReadPlatfo
     }
 
     @Override
+    @Cacheable(value = "loanProducts", key = "'loan_products'")
     public Collection<LoanProductData> retrieveAllLoanProducts() {
 
         this.context.authenticatedUser();

@@ -39,6 +39,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanAccrualsProcessingS
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +55,7 @@ public class LoanScheduleWritePlatformServiceImpl implements LoanScheduleWritePl
     private final LoanAccrualsProcessingService loanAccrualsProcessingService;
     private final LoanScheduleService loanScheduleService;
     private final LoanAccountService loanAccountService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public CommandProcessingResult addLoanScheduleVariations(final Long loanId, final JsonCommand command) {
@@ -100,7 +102,8 @@ public class LoanScheduleWritePlatformServiceImpl implements LoanScheduleWritePl
         loan.getLoanTermVariations().clear();
         final LocalDate recalculateFrom = null;
         ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
-        loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+        loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
         loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
         loanAccountService.saveLoanWithDataIntegrityViolationChecks(loan);
         businessEventNotifierService.notifyPostBusinessEvent(new LoanScheduleVariationsDeletedBusinessEvent(loan));

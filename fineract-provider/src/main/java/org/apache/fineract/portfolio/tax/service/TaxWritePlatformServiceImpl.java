@@ -32,6 +32,8 @@ import org.apache.fineract.portfolio.tax.domain.TaxGroupMappings;
 import org.apache.fineract.portfolio.tax.domain.TaxGroupRepository;
 import org.apache.fineract.portfolio.tax.domain.TaxGroupRepositoryWrapper;
 import org.apache.fineract.portfolio.tax.serialization.TaxValidator;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 
 @RequiredArgsConstructor
 public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
@@ -44,6 +46,7 @@ public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
     private final TaxGroupRepositoryWrapper taxGroupRepositoryWrapper;
 
     @Override
+    @CacheEvict(value = "taxComponents", allEntries = true)
     public CommandProcessingResult createTaxComponent(final JsonCommand command) {
         this.validator.validateForTaxComponentCreate(command.json());
         TaxComponent taxComponent = this.taxAssembler.assembleTaxComponentFrom(command);
@@ -55,6 +58,7 @@ public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
     }
 
     @Override
+    @CacheEvict(value = "taxComponents", allEntries = true)
     public CommandProcessingResult updateTaxComponent(final Long id, final JsonCommand command) {
         this.validator.validateForTaxComponentUpdate(command.json());
         final TaxComponent taxComponent = this.taxComponentRepositoryWrapper.findOneWithNotFoundDetection(id);
@@ -68,6 +72,7 @@ public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
     }
 
     @Override
+    @Caching(evict = { @CacheEvict(value = "taxGroups", allEntries = true), @CacheEvict(value = "taxComponents", allEntries = true) })
     public CommandProcessingResult createTaxGroup(final JsonCommand command) {
         this.validator.validateForTaxGroupCreate(command.json());
         final TaxGroup taxGroup = this.taxAssembler.assembleTaxGroupFrom(command);
@@ -80,6 +85,7 @@ public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
     }
 
     @Override
+    @Caching(evict = { @CacheEvict(value = "taxGroups", allEntries = true), @CacheEvict(value = "taxComponents", allEntries = true) })
     public CommandProcessingResult updateTaxGroup(final Long id, final JsonCommand command) {
         this.validator.validateForTaxGroupUpdate(command.json());
         final TaxGroup taxGroup = this.taxGroupRepositoryWrapper.findOneWithNotFoundDetection(id);

@@ -87,8 +87,7 @@ import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountDataDTO;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
-import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
-import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
+import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.SavingsApplicationProcessWritePlatformService;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -113,7 +112,7 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
     private final CodeValueRepositoryWrapper codeValueRepository;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final SavingsAccountRepositoryWrapper savingsRepositoryWrapper;
-    private final SavingsProductRepository savingsProductRepository;
+    private final CacheableSavingsProductConfigService savingsProductConfigService;
     private final SavingsApplicationProcessWritePlatformService savingsApplicationProcessWritePlatformService;
     private final CommandProcessingService commandProcessingService;
     private final ConfigurationDomainService configurationDomainService;
@@ -231,8 +230,7 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
 
             final Long savingsProductId = command.longValueOfParameterNamed(ClientApiConstants.savingsProductIdParamName);
             if (savingsProductId != null) {
-                this.savingsProductRepository.findById(savingsProductId)
-                        .orElseThrow(() -> new SavingsProductNotFoundException(savingsProductId));
+                savingsProductConfigService.getSavingsProduct(savingsProductId);
             }
 
             boolean isEntity = false;
@@ -579,8 +577,7 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
                 }
                 final Long savingsProductId = command.longValueOfParameterNamed(ClientApiConstants.savingsProductIdParamName);
                 if (savingsProductId != null) {
-                    this.savingsProductRepository.findById(savingsProductId)
-                            .orElseThrow(() -> new SavingsProductNotFoundException(savingsProductId));
+                    this.savingsProductConfigService.getSavingsProduct(savingsProductId);
                 }
                 clientForUpdate.updateSavingsProduct(savingsProductId);
             }

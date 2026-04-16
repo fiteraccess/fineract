@@ -46,6 +46,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionReadService;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.apache.fineract.portfolio.loanproduct.service.LoanProductConfigProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -83,12 +84,13 @@ public class DelinquencyConfiguration {
             DelinquencyReadPlatformService delinquencyReadPlatformService, LoanDelinquencyActionRepository loanDelinquencyActionRepository,
             DelinquencyActionParseAndValidator delinquencyActionParseAndValidator,
             DelinquencyEffectivePauseHelper delinquencyEffectivePauseHelper,
-            DelinquencyWritePlatformServiceHelper delinquencyWritePlatformServiceHelper) {
+            DelinquencyWritePlatformServiceHelper delinquencyWritePlatformServiceHelper,
+            LoanProductConfigProvider loanProductConfigProvider) {
         return new DelinquencyWritePlatformServiceImpl(dataValidatorBucket, dataValidatorRange, repositoryRange, repositoryBucket,
                 repositoryBucketMappings, loanDelinquencyTagRepository, loanRepository, loanProductRepository, loanDelinquencyDomainService,
                 loanInstallmentDelinquencyTagRepository, delinquencyReadPlatformService, loanDelinquencyActionRepository,
                 delinquencyActionParseAndValidator, delinquencyEffectivePauseHelper, businessEventNotifierService,
-                delinquencyWritePlatformServiceHelper);
+                delinquencyWritePlatformServiceHelper, loanProductConfigProvider);
     }
 
     @Bean

@@ -43,6 +43,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.imp
 import org.apache.fineract.portfolio.loanaccount.starter.AdvancedPaymentScheduleTransactionProcessorCondition;
 import org.apache.fineract.portfolio.loanproduct.calc.EMICalculator;
 import org.apache.fineract.portfolio.loanproduct.calc.data.ProgressiveLoanInterestScheduleModel;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -59,6 +60,7 @@ public class ProgressiveLoanInterestRefundServiceImpl implements InterestRefundS
     private final LoanScheduleService loanScheduleService;
     private final LoanUtilService loanUtilService;
     private final LoanTransactionProcessingService loanTransactionProcessingService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     private static void simulateRepaymentForDisbursements(LoanTransaction lt, final AtomicReference<BigDecimal> refundFinal,
             List<LoanTransaction> collect) {
@@ -92,7 +94,8 @@ public class ProgressiveLoanInterestRefundServiceImpl implements InterestRefundS
             LocalDate relatedRefundTransactionDate, List<LoanTransaction> transactionsToReprocess) {
 
         final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
-        loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+        loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                cacheableLoanProductConfigService.getConfig(loan.getId()));
 
         Pair<ChangedTransactionDetail, ProgressiveLoanInterestScheduleModel> reprocessResult = processor
                 .reprocessProgressiveLoanTransactions(loan.getDisbursementDate(), relatedRefundTransactionDate, transactionsToReprocess,

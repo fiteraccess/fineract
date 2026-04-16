@@ -24,6 +24,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -41,6 +42,7 @@ public class CurrencyReadPlatformServiceImpl implements CurrencyReadPlatformServ
     }
 
     @Override
+    @Cacheable(value = "currencies", key = "'currencies'")
     public List<CurrencyData> retrieveAllPlatformCurrencies() {
         final String sql = "select " + this.currencyRowMapper.schema() + " from m_currency c order by c.name";
 
@@ -48,6 +50,7 @@ public class CurrencyReadPlatformServiceImpl implements CurrencyReadPlatformServ
     }
 
     @Override
+    @Cacheable(value = "currencies", key = "'currency:' + #code")
     public CurrencyData retrieveCurrency(final String code) {
         final String sql = "select " + this.currencyRowMapper.schema() + " from m_currency c  where c.code = ? order by c.name";
 

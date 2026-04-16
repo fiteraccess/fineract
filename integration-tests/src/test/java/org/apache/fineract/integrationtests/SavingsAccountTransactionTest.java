@@ -202,9 +202,8 @@ public class SavingsAccountTransactionTest {
         this.datatableHelper.createDatatable(datatableJson, "");
 
         SavingsAccountHelper batchWithTransactionHelper = new SavingsAccountHelper(requestSpec, concurrentResponseSpec);
-        SavingsAccountHelper batchWithoutTransactionHelper = new SavingsAccountHelper(requestSpec,
-                new ResponseSpecBuilder().expectStatusCode(anyOf(is(SC_OK), is(SC_CONFLICT), is(SC_FORBIDDEN), is(SC_INTERNAL_SERVER_ERROR)))
-                        .build());
+        SavingsAccountHelper batchWithoutTransactionHelper = new SavingsAccountHelper(requestSpec, new ResponseSpecBuilder()
+                .expectStatusCode(anyOf(is(SC_OK), is(SC_CONFLICT), is(SC_FORBIDDEN), is(SC_INTERNAL_SERVER_ERROR))).build());
         String transactionDate = SavingsAccountHelper.TRANSACTION_DATE;
         String transactionAmount = "10";
         ExecutorService executor = Executors.newFixedThreadPool(30);
@@ -376,7 +375,8 @@ public class SavingsAccountTransactionTest {
                     headers = Optional.ofNullable(withdrawRequest.getHeaders()).orElse(new HashSet<>(1));
                     headers.add(new Header("Idempotency-Key", UUID.randomUUID().toString()));
                     withdrawRequest.setHeaders(headers);
-                    String json = BatchHelper.toJsonString(Arrays.asList(depositRequest, addEntryRequest, deleteEntryRequest, withdrawRequest));
+                    String json = BatchHelper
+                            .toJsonString(Arrays.asList(depositRequest, addEntryRequest, deleteEntryRequest, withdrawRequest));
                     RequestSpecification requestSpec = savingsHelper.getRequestSpec();
                     ResponseSpecification responseSpec = savingsHelper.getResponseSpec();
                     final List<BatchResponse> responses = enclosingTransaction

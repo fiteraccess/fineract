@@ -130,10 +130,10 @@ class TellerWritePlatformServiceJpaImplTest {
         when(tellerCashAccount.getGlAccount()).thenReturn(tellerCashGlAccount);
         when(financialActivityAccountRepositoryWrapper
                 .findByFinancialActivityTypeWithNotFoundDetection(FinancialActivity.CASH_AT_MAINVAULT.getValue()))
-                        .thenReturn(mainVaultAccount);
+                .thenReturn(mainVaultAccount);
         when(financialActivityAccountRepositoryWrapper
                 .findByFinancialActivityTypeWithNotFoundDetection(FinancialActivity.CASH_AT_TELLER.getValue()))
-                        .thenReturn(tellerCashAccount);
+                .thenReturn(tellerCashAccount);
 
         underTest.allocateCashToCashier(cashierId, command);
 

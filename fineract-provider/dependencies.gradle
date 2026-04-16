@@ -61,6 +61,8 @@ dependencies {
             'org.springframework.boot:spring-boot-starter-security',
             'org.springframework.boot:spring-boot-starter-oauth2-authorization-server',
             'org.springframework.boot:spring-boot-starter-cache',
+            'org.springframework.boot:spring-boot-starter-data-redis',
+            'org.apache.commons:commons-pool2',
             'org.springframework.boot:spring-boot-starter-oauth2-resource-server',
             'org.springframework.boot:spring-boot-starter-actuator',
             'org.springframework.boot:spring-boot-starter-batch',
@@ -227,4 +229,6 @@ dependencies {
         exclude group: 'org.skyscreamer'
     }
     testImplementation ('org.mockito:mockito-inline')
+    testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
 }

@@ -61,7 +61,7 @@ public class CodeReadPlatformServiceImpl implements CodeReadPlatformService {
     }
 
     @Override
-    @Cacheable(value = "codes", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('CD')")
+    @Cacheable(value = "codes", key = "'CD'")
     public Collection<CodeData> retrieveAllCodes() {
         this.context.authenticatedUser();
 

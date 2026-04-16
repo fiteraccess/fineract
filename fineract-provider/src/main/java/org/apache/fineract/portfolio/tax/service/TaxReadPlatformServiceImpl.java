@@ -30,6 +30,7 @@ import org.apache.fineract.portfolio.tax.domain.TaxGroupRepository;
 import org.apache.fineract.portfolio.tax.domain.TaxGroupRepositoryWrapper;
 import org.apache.fineract.portfolio.tax.mapper.TaxComponentMapper;
 import org.apache.fineract.portfolio.tax.mapper.TaxGroupMapper;
+import org.springframework.cache.annotation.Cacheable;
 
 @RequiredArgsConstructor
 public class TaxReadPlatformServiceImpl implements TaxReadPlatformService {
@@ -43,6 +44,7 @@ public class TaxReadPlatformServiceImpl implements TaxReadPlatformService {
     private final TaxGroupMapper taxGroupMapper;
 
     @Override
+    @Cacheable(value = "taxComponents", key = "'tax_components'")
     public List<TaxComponentData> retrieveAllTaxComponents() {
         return taxComponentMapper.map(taxComponentRepository.findAll());
     }
@@ -59,6 +61,7 @@ public class TaxReadPlatformServiceImpl implements TaxReadPlatformService {
     }
 
     @Override
+    @Cacheable(value = "taxGroups", key = "'tax_groups'")
     public List<TaxGroupData> retrieveAllTaxGroups() {
         return taxGroupMapper.map(taxGroupRepository.findAll());
     }

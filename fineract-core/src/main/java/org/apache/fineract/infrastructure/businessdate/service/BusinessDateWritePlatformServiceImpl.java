@@ -35,6 +35,7 @@ import org.apache.fineract.infrastructure.core.exception.AbstractPlatformDomainR
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -46,6 +47,7 @@ public class BusinessDateWritePlatformServiceImpl implements BusinessDateWritePl
     private final ConfigurationDomainService configurationDomainService;
 
     @Override
+    @CacheEvict(value = "businessDates", allEntries = true)
     public BusinessDateDTO updateBusinessDate(BusinessDateDTO businessDateDto) {
         adjustDate(businessDateDto);
         return businessDateDto;
@@ -80,6 +82,7 @@ public class BusinessDateWritePlatformServiceImpl implements BusinessDateWritePl
         }
     }
 
+    @CacheEvict(value = "businessDates", allEntries = true)
     private void adjustDate(BusinessDateDTO businessDateDto) {
         boolean isCOBDateAdjustmentEnabled = configurationDomainService.isCOBDateAdjustmentEnabled();
         boolean isBusinessDateEnabled = configurationDomainService.isBusinessDateEnabled();

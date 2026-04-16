@@ -70,6 +70,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanJournalEntryPoster;
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.domain.Note;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
@@ -102,6 +103,7 @@ public class LoanAdjustmentServiceImpl implements LoanAdjustmentService {
     private final LoanCapitalizedIncomeBalanceRepository loanCapitalizedIncomeBalanceRepository;
     private final LoanBuyDownFeeBalanceRepository loanBuyDownFeeBalanceRepository;
     private final LoanScheduleService loanScheduleService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public CommandProcessingResult adjustLoanTransaction(Loan loan, LoanTransaction transactionToAdjust, LoanAdjustmentParameter parameter,
@@ -344,11 +346,12 @@ public class LoanAdjustmentServiceImpl implements LoanAdjustmentService {
 
         if (newTransactionDetail.isRepaymentLikeType() || newTransactionDetail.isWaiver()) {
             loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, newTransactionDetail, transactionForAdjustment,
-                    scheduleGeneratorDTO);
+                    scheduleGeneratorDTO, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
         }
 
         if (transactionForAdjustment.getTypeOf().equals(LoanTransactionType.CAPITALIZED_INCOME)) {
-            loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan);
+            loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
+                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
         }
     }
 

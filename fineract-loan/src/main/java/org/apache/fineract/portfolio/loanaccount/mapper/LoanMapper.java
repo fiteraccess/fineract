@@ -36,6 +36,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanDisbursementDetails;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
 import org.springframework.stereotype.Component;
 
@@ -45,11 +46,21 @@ public class LoanMapper {
 
     private final LoanTermVariationsMapper loanTermVariationsMapper;
 
-    public LoanScheduleModel regenerateScheduleModel(final ScheduleGeneratorDTO scheduleGeneratorDTO, final Loan loan) {
+    /**
+     * Regenerates the loan schedule model using the cached product configuration.
+     *
+     * @param scheduleGeneratorDTO
+     *            the schedule generator DTO
+     * @param productConfig
+     *            the cached loan product configuration
+     * @return the regenerated loan schedule model
+     */
+    public LoanScheduleModel regenerateScheduleModel(final ScheduleGeneratorDTO scheduleGeneratorDTO, final Loan loan,
+            final CacheableLoanProductConfig productConfig) {
         final MathContext mc = MoneyHelper.getMathContext();
 
-        final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO,
-                loan);
+        final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
+                productConfig);
         LoanScheduleGenerator loanScheduleGenerator;
         if (loanApplicationTerms.isEqualAmortization()) {
             if (loanApplicationTerms.getInterestMethod().isDecliningBalance()) {

@@ -48,6 +48,7 @@ import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
 import org.apache.fineract.organisation.workingdays.service.WorkingDaysUtil;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +66,7 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
 
     @Transactional
     @Override
+    @CacheEvict(value = "holidays", allEntries = true)
     public CommandProcessingResult createHoliday(final JsonCommand command) {
 
         try {
@@ -92,6 +94,7 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
 
     @Transactional
     @Override
+    @CacheEvict(value = "holidays", allEntries = true)
     public CommandProcessingResult updateHoliday(final JsonCommand command) {
 
         try {
@@ -126,6 +129,7 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
 
     @Transactional
     @Override
+    @CacheEvict(value = "holidays", allEntries = true)
     public CommandProcessingResult activateHoliday(final Long holidayId) {
         this.context.authenticatedUser();
         final Holiday holiday = this.holidayRepository.findOneWithNotFoundDetection(holidayId);
@@ -137,6 +141,7 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
 
     @Transactional
     @Override
+    @CacheEvict(value = "holidays", allEntries = true)
     public CommandProcessingResult deleteHoliday(final Long holidayId) {
         this.context.authenticatedUser();
         final Holiday holiday = this.holidayRepository.findOneWithNotFoundDetection(holidayId);

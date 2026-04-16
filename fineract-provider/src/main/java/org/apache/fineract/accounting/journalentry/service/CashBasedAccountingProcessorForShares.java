@@ -22,7 +22,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.common.AccountingConstants.CashAccountsForShares;
 import org.apache.fineract.accounting.journalentry.data.ChargePaymentDTO;
 import org.apache.fineract.accounting.journalentry.data.SharesDTO;
@@ -39,34 +38,33 @@ public class CashBasedAccountingProcessorForShares implements AccountingProcesso
     @Override
     public void createJournalEntriesForShares(SharesDTO sharesDTO) {
         try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
-        final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(sharesDTO.getOfficeId());
-        final Long shareAccountId = sharesDTO.getShareAccountId();
-        final Long shareProductId = sharesDTO.getShareProductId();
-        final String currencyCode = sharesDTO.getCurrencyCode();
-        for (SharesTransactionDTO transactionDTO : sharesDTO.getNewTransactions()) {
-            final LocalDate transactionDate = transactionDTO.getTransactionDate();
-            final String transactionId = transactionDTO.getTransactionId();
-            final Office office = this.helper.getOfficeById(transactionDTO.getOfficeId());
-            final Long paymentTypeId = transactionDTO.getPaymentTypeId();
-            final BigDecimal amount = transactionDTO.getAmount();
-            final BigDecimal chargeAmount = transactionDTO.getChargeAmount();
-            final List<ChargePaymentDTO> feePayments = transactionDTO.getFeePayments();
+            final Long shareAccountId = sharesDTO.getShareAccountId();
+            final Long shareProductId = sharesDTO.getShareProductId();
+            final String currencyCode = sharesDTO.getCurrencyCode();
+            for (SharesTransactionDTO transactionDTO : sharesDTO.getNewTransactions()) {
+                final LocalDate transactionDate = transactionDTO.getTransactionDate();
+                final String transactionId = transactionDTO.getTransactionId();
+                final Office office = this.helper.getOfficeById(transactionDTO.getOfficeId());
+                final Long paymentTypeId = transactionDTO.getPaymentTypeId();
+                final BigDecimal amount = transactionDTO.getAmount();
+                final BigDecimal chargeAmount = transactionDTO.getChargeAmount();
+                final List<ChargePaymentDTO> feePayments = transactionDTO.getFeePayments();
 
-            this.helper.checkForBranchClosures(latestGLClosure, transactionDate);
+                this.helper.checkForBranchClosures(sharesDTO.getOfficeId(), transactionDate);
 
-            if (transactionDTO.getTransactionType().isPurchased()) {
-                createJournalEntriesForPurchase(shareAccountId, shareProductId, currencyCode, transactionDTO, transactionDate,
-                        transactionId, office, paymentTypeId, amount, chargeAmount, feePayments);
-            } else if (transactionDTO.getTransactionType().isRedeemed() && transactionDTO.getTransactionStatus().isApproved()) {
-                createJournalEntriesForRedeem(shareAccountId, shareProductId, currencyCode, transactionDate, transactionId, office,
-                        paymentTypeId, amount, chargeAmount, feePayments);
+                if (transactionDTO.getTransactionType().isPurchased()) {
+                    createJournalEntriesForPurchase(shareAccountId, shareProductId, currencyCode, transactionDTO, transactionDate,
+                            transactionId, office, paymentTypeId, amount, chargeAmount, feePayments);
+                } else if (transactionDTO.getTransactionType().isRedeemed() && transactionDTO.getTransactionStatus().isApproved()) {
+                    createJournalEntriesForRedeem(shareAccountId, shareProductId, currencyCode, transactionDate, transactionId, office,
+                            paymentTypeId, amount, chargeAmount, feePayments);
 
-            } else if (transactionDTO.getTransactionType().isChargePayment()) {
-                this.helper.createCashBasedJournalEntriesForSharesCharges(office, currencyCode, CashAccountsForShares.SHARES_REFERENCE,
-                        CashAccountsForShares.INCOME_FROM_FEES, shareProductId, paymentTypeId, shareAccountId, transactionId,
-                        transactionDate, amount, feePayments);
+                } else if (transactionDTO.getTransactionType().isChargePayment()) {
+                    this.helper.createCashBasedJournalEntriesForSharesCharges(office, currencyCode, CashAccountsForShares.SHARES_REFERENCE,
+                            CashAccountsForShares.INCOME_FROM_FEES, shareProductId, paymentTypeId, shareAccountId, transactionId,
+                            transactionDate, amount, feePayments);
+                }
             }
-        }
         }
 
     }

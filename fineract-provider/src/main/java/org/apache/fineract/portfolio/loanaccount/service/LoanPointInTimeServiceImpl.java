@@ -39,6 +39,7 @@ import org.apache.fineract.portfolio.loanaccount.data.ScheduleGeneratorDTO;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanCharge;
 import org.apache.fineract.portfolio.loanaccount.domain.arrears.LoanArrearsData;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
@@ -54,6 +55,7 @@ public class LoanPointInTimeServiceImpl implements LoanPointInTimeService {
     private final LoanPointInTimeData.Mapper dataMapper;
     private final EntityManager entityManager;
     private final LoanArrearsAgingService arrearsAgingService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public LoanPointInTimeData retrieveAt(Long loanId, LocalDate date) {
@@ -80,7 +82,8 @@ public class LoanPointInTimeServiceImpl implements LoanPointInTimeService {
 
             if (needsScheduleRegeneration) {
                 ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null, null);
-                loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan, scheduleGeneratorDTO);
+                loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan, scheduleGeneratorDTO,
+                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
                 recalculateSummaryForInstallmentsUpToDate(loan, date);
             } else if (!loan.isClosed()) {
                 recalculateSummaryForInstallmentsUpToDate(loan, date);

@@ -61,7 +61,11 @@ import org.apache.fineract.portfolio.loanaccount.data.LoanDelinquencyData;
 import org.apache.fineract.portfolio.loanaccount.data.LoanScheduleDelinquencyData;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.apache.fineract.portfolio.loanproduct.service.LoanProductConfigProvider;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -84,8 +88,10 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     private final DelinquencyEffectivePauseHelper delinquencyEffectivePauseHelper;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final DelinquencyWritePlatformServiceHelper delinquencyHelper;
+    private final LoanProductConfigProvider loanProductConfigProvider;
 
     @Override
+    @CacheEvict(value = "delinquencyRanges", allEntries = true)
     public CommandProcessingResult createDelinquencyRange(JsonCommand command) {
         DelinquencyRangeData data = dataValidatorRange.validateAndParseUpdate(command);
         Map<String, Object> changes = new HashMap<>();
@@ -95,6 +101,7 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     }
 
     @Override
+    @CacheEvict(value = "delinquencyRanges", allEntries = true)
     public CommandProcessingResult updateDelinquencyRange(Long delinquencyRangeId, JsonCommand command) {
         DelinquencyRangeData data = dataValidatorRange.validateAndParseUpdate(command);
         DelinquencyRange delinquencyRange = this.repositoryRange.getReferenceById(delinquencyRangeId);
@@ -105,6 +112,7 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     }
 
     @Override
+    @CacheEvict(value = "delinquencyRanges", allEntries = true)
     public CommandProcessingResult deleteDelinquencyRange(Long delinquencyRangeId, JsonCommand command) {
         final DelinquencyRange delinquencyRange = repositoryRange.getReferenceById(delinquencyRangeId);
         if (delinquencyRange != null) {
@@ -120,6 +128,8 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     }
 
     @Override
+    @Caching(evict = { @CacheEvict(value = "delinquencyBuckets", allEntries = true),
+            @CacheEvict(value = "delinquencyRanges", allEntries = true) })
     public CommandProcessingResult createDelinquencyBucket(JsonCommand command) {
         DelinquencyBucketData data = dataValidatorBucket.validateAndParseUpdate(command);
         Map<String, Object> changes = new HashMap<>();
@@ -129,6 +139,8 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     }
 
     @Override
+    @Caching(evict = { @CacheEvict(value = "delinquencyBuckets", allEntries = true),
+            @CacheEvict(value = "delinquencyRanges", allEntries = true) })
     public CommandProcessingResult updateDelinquencyBucket(Long delinquencyBucketId, JsonCommand command) {
         DelinquencyBucketData data = dataValidatorBucket.validateAndParseUpdate(command);
         DelinquencyBucket delinquencyBucket = this.repositoryBucket.getReferenceById(delinquencyBucketId);
@@ -140,6 +152,8 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     }
 
     @Override
+    @Caching(evict = { @CacheEvict(value = "delinquencyBuckets", allEntries = true),
+            @CacheEvict(value = "delinquencyRanges", allEntries = true) })
     public CommandProcessingResult deleteDelinquencyBucket(Long delinquencyBucketId, JsonCommand command) {
         final DelinquencyBucket delinquencyBucket = repositoryBucket.getReferenceById(delinquencyBucketId);
         if (delinquencyBucket != null) {
@@ -182,7 +196,10 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
                 .retrieveLoanDelinquencyActions(loan.getId());
         List<LoanDelinquencyActionData> effectiveDelinquencyList = delinquencyEffectivePauseHelper
                 .calculateEffectiveDelinquencyList(savedDelinquencyList);
-        final DelinquencyBucket delinquencyBucket = loan.getLoanProduct().getDelinquencyBucket();
+        final CacheableLoanProductConfig productConfig = loanProductConfigProvider.getConfig(loan.getProductId());
+        final DelinquencyBucket delinquencyBucket = productConfig.getDelinquencyBucketId() != null
+                ? repositoryBucket.findById(productConfig.getDelinquencyBucketId()).orElse(null)
+                : null;
         if (delinquencyBucket != null) {
             final LoanDelinquencyData loanDelinquencyData = loanDelinquencyDomainService.getLoanDelinquencyData(loan,
                     effectiveDelinquencyList);
@@ -207,8 +224,11 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     public void applyDelinquencyTagToLoan(LoanScheduleDelinquencyData loanDelinquencyData,
             List<LoanDelinquencyActionData> effectiveDelinquencyList) {
         final Loan loan = loanDelinquencyData.getLoan();
-        if (loan.hasDelinquencyBucket()) {
-            final DelinquencyBucket delinquencyBucket = loan.getLoanProduct().getDelinquencyBucket();
+        final CacheableLoanProductConfig productConfig = loanProductConfigProvider.getConfig(loan.getProductId());
+        final DelinquencyBucket delinquencyBucket = productConfig.getDelinquencyBucketId() != null
+                ? repositoryBucket.findById(productConfig.getDelinquencyBucketId()).orElse(null)
+                : null;
+        if (delinquencyBucket != null) {
             final LoanDelinquencyData loanDelinquentData = loanDelinquencyDomainService.getLoanDelinquencyData(loan,
                     effectiveDelinquencyList);
             // loan delinquent data

@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.common.AccountingConstants.AccrualAccountsForLoan;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.accounting.common.AccountingConstants.LoanProductAccountingParams;
@@ -53,111 +52,110 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
     @Override
     public void createJournalEntriesForLoan(final LoanDTO loanDTO) {
         try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
-        final Long officeId = loanDTO.getOfficeId();
-        final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(officeId);
-        final Office office = this.helper.getOfficeById(officeId);
-        for (final LoanTransactionDTO loanTransactionDTO : loanDTO.getNewLoanTransactions()) {
-            final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
-            this.helper.checkForBranchClosures(latestGLClosure, transactionDate);
-            final LoanTransactionEnumData transactionType = loanTransactionDTO.getTransactionType();
+            final Long officeId = loanDTO.getOfficeId();
+            final Office office = this.helper.getOfficeById(officeId);
+            for (final LoanTransactionDTO loanTransactionDTO : loanDTO.getNewLoanTransactions()) {
+                final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
+                this.helper.checkForBranchClosures(officeId, transactionDate);
+                final LoanTransactionEnumData transactionType = loanTransactionDTO.getTransactionType();
 
-            if (loanTransactionDTO.isReversed()) {
-                journalEntryWritePlatformService.createJournalEntryForReversedLoanTransaction(transactionDate,
-                        loanTransactionDTO.getTransactionId(), officeId);
-                continue;
-            }
+                if (loanTransactionDTO.isReversed()) {
+                    journalEntryWritePlatformService.createJournalEntryForReversedLoanTransaction(transactionDate,
+                            loanTransactionDTO.getTransactionId(), officeId);
+                    continue;
+                }
 
-            // Handle Disbursements
-            if (transactionType.isDisbursement()) {
-                createJournalEntriesForDisbursements(loanDTO, loanTransactionDTO, office);
-            }
+                // Handle Disbursements
+                if (transactionType.isDisbursement()) {
+                    createJournalEntriesForDisbursements(loanDTO, loanTransactionDTO, office);
+                }
 
-            // Handle Accruals
-            if (transactionType.isAccrual() || transactionType.isAccrualAdjustment()) {
-                createJournalEntriesForAccruals(loanDTO, loanTransactionDTO, office);
-            }
+                // Handle Accruals
+                if (transactionType.isAccrual() || transactionType.isAccrualAdjustment()) {
+                    createJournalEntriesForAccruals(loanDTO, loanTransactionDTO, office);
+                }
 
-            /*
-             * Handle repayments, loan refunds, repayments at disbursement (except charge adjustment)
-             */
-            else if ((transactionType.isRepaymentType() && !transactionType.isChargeAdjustment())
-                    || transactionType.isRepaymentAtDisbursement() || transactionType.isChargePayment()) {
-                createJournalEntriesForRepayments(loanDTO, loanTransactionDTO, office, transactionType.isRepaymentAtDisbursement());
-            }
+                /*
+                 * Handle repayments, loan refunds, repayments at disbursement (except charge adjustment)
+                 */
+                else if ((transactionType.isRepaymentType() && !transactionType.isChargeAdjustment())
+                        || transactionType.isRepaymentAtDisbursement() || transactionType.isChargePayment()) {
+                    createJournalEntriesForRepayments(loanDTO, loanTransactionDTO, office, transactionType.isRepaymentAtDisbursement());
+                }
 
-            // Logic for handling recovery payments
-            else if (transactionType.isRecoveryRepayment()) {
-                createJournalEntriesForRecoveryRepayments(loanDTO, loanTransactionDTO, office);
-            }
+                // Logic for handling recovery payments
+                else if (transactionType.isRecoveryRepayment()) {
+                    createJournalEntriesForRecoveryRepayments(loanDTO, loanTransactionDTO, office);
+                }
 
-            // Logic for Refunds of Overpayments
-            else if (transactionType.isRefund()) {
-                createJournalEntriesForRefund(loanDTO, loanTransactionDTO, office);
-            }
+                // Logic for Refunds of Overpayments
+                else if (transactionType.isRefund()) {
+                    createJournalEntriesForRefund(loanDTO, loanTransactionDTO, office);
+                }
 
-            // Logic for Credit Balance Refunds
-            else if (transactionType.isCreditBalanceRefund()) {
-                createJournalEntriesForCreditBalanceRefund(loanDTO, loanTransactionDTO, office);
-            }
+                // Logic for Credit Balance Refunds
+                else if (transactionType.isCreditBalanceRefund()) {
+                    createJournalEntriesForCreditBalanceRefund(loanDTO, loanTransactionDTO, office);
+                }
 
-            // Handle Write Offs
-            else if ((transactionType.isWriteOff() || transactionType.isWaiveInterest() || transactionType.isWaiveCharges())) {
-                createJournalEntriesForWriteOffs(loanDTO, loanTransactionDTO, office);
-            }
+                // Handle Write Offs
+                else if ((transactionType.isWriteOff() || transactionType.isWaiveInterest() || transactionType.isWaiveCharges())) {
+                    createJournalEntriesForWriteOffs(loanDTO, loanTransactionDTO, office);
+                }
 
-            // Logic for Refunds of Active Loans
-            else if (transactionType.isRefundForActiveLoans()) {
-                createJournalEntriesForRefundForActiveLoan(loanDTO, loanTransactionDTO, office);
+                // Logic for Refunds of Active Loans
+                else if (transactionType.isRefundForActiveLoans()) {
+                    createJournalEntriesForRefundForActiveLoan(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Chargebacks
+                else if (transactionType.isChargeback()) {
+                    createJournalEntriesForChargeback(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Charge Adjustment
+                else if (transactionType.isChargeAdjustment()) {
+                    createJournalEntriesForChargeAdjustment(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Charge-Off
+                else if (transactionType.isChargeoff()) {
+                    createJournalEntriesForChargeOff(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Interest Payment Waiver
+                else if (transactionType.isInterestPaymentWaiver() || transactionType.isInterestRefund()) {
+                    createJournalEntriesForInterestPaymentWaiverOrInterestRefund(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Capitalized Income
+                if (transactionType.isCapitalizedIncome()) {
+                    createJournalEntriesForCapitalizedIncome(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Capitalized Income Amortization
+                if (transactionType.isCapitalizedIncomeAmortization()) {
+                    createJournalEntriesForCapitalizedIncomeAmortization(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Capitalized Income Adjustment
+                if (transactionType.isCapitalizedIncomeAdjustment()) {
+                    createJournalEntriesForCapitalizedIncomeAdjustment(loanDTO, loanTransactionDTO, office);
+                }
+                // Capitalized Income Amortization Adjustment
+                if (transactionType.isCapitalizedIncomeAmortizationAdjustment()) {
+                    createJournalEntriesForCapitalizedIncomeAmortizationAdjustment(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Buy Down Fee
+                if (transactionType.isBuyDownFee()) {
+                    createJournalEntriesForBuyDownFee(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Buy Down Fee Adjustment
+                if (transactionType.isBuyDownFeeAdjustment()) {
+                    createJournalEntriesForBuyDownFeeAdjustment(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Buy Down Fee Amortization
+                if (transactionType.isBuyDownFeeAmortization()) {
+                    createJournalEntriesForBuyDownFeeAmortization(loanDTO, loanTransactionDTO, office);
+                }
+                // Handle Buy Down Fee Amortization Adjustment
+                if (transactionType.isBuyDownFeeAmortizationAdjustment()) {
+                    createJournalEntriesForBuyDownFeeAmortizationAdjustment(loanDTO, loanTransactionDTO, office);
+                }
             }
-            // Logic for Chargebacks
-            else if (transactionType.isChargeback()) {
-                createJournalEntriesForChargeback(loanDTO, loanTransactionDTO, office);
-            }
-            // Logic for Charge Adjustment
-            else if (transactionType.isChargeAdjustment()) {
-                createJournalEntriesForChargeAdjustment(loanDTO, loanTransactionDTO, office);
-            }
-            // Logic for Charge-Off
-            else if (transactionType.isChargeoff()) {
-                createJournalEntriesForChargeOff(loanDTO, loanTransactionDTO, office);
-            }
-            // Logic for Interest Payment Waiver
-            else if (transactionType.isInterestPaymentWaiver() || transactionType.isInterestRefund()) {
-                createJournalEntriesForInterestPaymentWaiverOrInterestRefund(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Capitalized Income
-            if (transactionType.isCapitalizedIncome()) {
-                createJournalEntriesForCapitalizedIncome(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Capitalized Income Amortization
-            if (transactionType.isCapitalizedIncomeAmortization()) {
-                createJournalEntriesForCapitalizedIncomeAmortization(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Capitalized Income Adjustment
-            if (transactionType.isCapitalizedIncomeAdjustment()) {
-                createJournalEntriesForCapitalizedIncomeAdjustment(loanDTO, loanTransactionDTO, office);
-            }
-            // Capitalized Income Amortization Adjustment
-            if (transactionType.isCapitalizedIncomeAmortizationAdjustment()) {
-                createJournalEntriesForCapitalizedIncomeAmortizationAdjustment(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Buy Down Fee
-            if (transactionType.isBuyDownFee()) {
-                createJournalEntriesForBuyDownFee(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Buy Down Fee Adjustment
-            if (transactionType.isBuyDownFeeAdjustment()) {
-                createJournalEntriesForBuyDownFeeAdjustment(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Buy Down Fee Amortization
-            if (transactionType.isBuyDownFeeAmortization()) {
-                createJournalEntriesForBuyDownFeeAmortization(loanDTO, loanTransactionDTO, office);
-            }
-            // Handle Buy Down Fee Amortization Adjustment
-            if (transactionType.isBuyDownFeeAmortizationAdjustment()) {
-                createJournalEntriesForBuyDownFeeAmortizationAdjustment(loanDTO, loanTransactionDTO, office);
-            }
-        }
         }
     }
 

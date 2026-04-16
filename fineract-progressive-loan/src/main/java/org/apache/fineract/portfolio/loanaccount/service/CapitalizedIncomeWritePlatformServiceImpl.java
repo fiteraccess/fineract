@@ -48,6 +48,8 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRelation;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRelationTypeEnum;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.loanaccount.repository.LoanCapitalizedIncomeBalanceRepository;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.data.NoteCreateRequest;
 import org.apache.fineract.portfolio.note.domain.NoteType;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
@@ -73,6 +75,7 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
     private final CodeValueRepository codeValueRepository;
     private final LoanScheduleService loanScheduleService;
     private final ApplicationEventPublisher eventPublisher;
+    private CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Transactional
     @Override
@@ -95,7 +98,7 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
         addClassificationCodeToTransaction(command, LoanTransactionApiConstants.CAPITALIZED_INCOME_CLASSIFICATION_CODE,
                 capitalizedIncomeTransaction);
         // Recalculate loan transactions
-        recalculateLoanTransactions(loan, capitalizedIncomeTransaction);
+        recalculateLoanTransactions(loan, capitalizedIncomeTransaction, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
         // Update loan with capitalized income
         loan.addLoanTransaction(capitalizedIncomeTransaction);
         // Save and flush (PK is set)
@@ -149,7 +152,7 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
         capitalizedIncomeAdjustment.getLoanTransactionRelations().add(LoanTransactionRelation.linkToTransaction(capitalizedIncomeAdjustment,
                 capitalizedIncome.get(), LoanTransactionRelationTypeEnum.ADJUSTMENT));
         capitalizedIncomeAdjustment.setClassification(capitalizedIncome.get().getClassification());
-        recalculateLoanTransactions(loan, capitalizedIncomeAdjustment);
+        recalculateLoanTransactions(loan, capitalizedIncomeAdjustment, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
         loan.addLoanTransaction(capitalizedIncomeAdjustment);
         LoanTransaction savedCapitalizedIncomeAdjustment = loanTransactionRepository.saveAndFlush(capitalizedIncomeAdjustment);
 
@@ -188,9 +191,9 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
                 .build();
     }
 
-    private void recalculateLoanTransactions(Loan loan, LoanTransaction transaction) {
+    private void recalculateLoanTransactions(Loan loan, LoanTransaction transaction, CacheableLoanProductConfig productConfig) {
         if (loan.isInterestRecalculationEnabled() || DateUtils.isBeforeBusinessDate(transaction.getTransactionDate())) {
-            loanScheduleService.regenerateRepaymentSchedule(loan);
+            loanScheduleService.regenerateRepaymentSchedule(loan, productConfig);
             reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(transaction));
         } else {
             reprocessLoanTransactionsService.processLatestTransaction(transaction, loan);

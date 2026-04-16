@@ -36,7 +36,9 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanConfigurationDetailsMapper;
 import org.apache.fineract.portfolio.loanproduct.calc.data.ProgressiveLoanInterestScheduleModel;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.ILoanConfigurationDetails;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -54,6 +56,7 @@ public class InternalProgressiveLoanApiResource implements InitializingBean {
     private final InterestScheduleModelRepositoryWrapper writePlatformService;
     private final InterestScheduleModelRepositoryWrapper interestScheduleModelRepositoryWrapper;
     private final LoanScheduleService loanScheduleService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
@@ -81,8 +84,9 @@ public class InternalProgressiveLoanApiResource implements InitializingBean {
                 loan.getLoanProductRelatedDetail().getInstallmentAmountInMultiplesOf()).orElse(null);
     }
 
-    private ProgressiveLoanInterestScheduleModel reprocessTransactionsAndGetModel(final Loan loan) {
-        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan);
+    private ProgressiveLoanInterestScheduleModel reprocessTransactionsAndGetModel(final Loan loan,
+            CacheableLoanProductConfig productConfig) {
+        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan, productConfig);
         return interestScheduleModelRepositoryWrapper.extractModel(interestScheduleModelRepositoryWrapper.findOneByLoan(loan)).get();
     }
 
@@ -96,7 +100,8 @@ public class InternalProgressiveLoanApiResource implements InitializingBean {
         if (!loan.isProgressiveSchedule()) {
             throw new IllegalArgumentException("The loan is not progressive.");
         }
-        ProgressiveLoanInterestScheduleModel model = reprocessTransactionsAndGetModel(loan);
+        ProgressiveLoanInterestScheduleModel model = reprocessTransactionsAndGetModel(loan,
+                cacheableLoanProductConfigService.getConfig(loanId));
 
         return writePlatformService.writeInterestScheduleModel(loan, model);
     }

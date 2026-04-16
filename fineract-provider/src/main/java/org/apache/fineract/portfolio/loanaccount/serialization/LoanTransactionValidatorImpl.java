@@ -201,7 +201,7 @@ public class LoanTransactionValidatorImpl implements LoanTransactionValidator {
             }
 
             entityDatatableChecksWritePlatformService.runTheCheckForProduct(loan.getId(), EntityTables.LOAN.getName(),
-                    StatusEnum.DISBURSE.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.productId());
+                    StatusEnum.DISBURSE.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.getProductId());
 
             ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, null);
             final CalendarInstance calendarInstance = this.calendarInstanceRepository.findCalendarInstanceByEntityId(loan.getId(),

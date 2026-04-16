@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.fineract.organisation.holiday.exception.HolidayNotFoundException;
 import org.apache.fineract.organisation.holiday.service.HolidayUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -60,6 +61,7 @@ public class HolidayRepositoryWrapper {
         this.repository.delete(holiday);
     }
 
+    @Cacheable(value = "holidays", key = "'holidays:' + #officeId + ':' + #date")
     public List<Holiday> findByOfficeIdAndGreaterThanDate(final Long officeId, final LocalDate date) {
         return this.repository.findByOfficeIdAndGreaterThanDate(officeId, date, HolidayStatusType.ACTIVE.getValue());
     }
@@ -68,6 +70,7 @@ public class HolidayRepositoryWrapper {
         return this.repository.findUnprocessed(HolidayStatusType.ACTIVE.getValue());
     }
 
+    @Cacheable(value = "holidays", key = "'isHoliday:' + #officeId + ':' + #transactionDate")
     public boolean isHoliday(Long officeId, LocalDate transactionDate) {
         final List<Holiday> holidays = findByOfficeIdAndGreaterThanDate(officeId, transactionDate);
         return HolidayUtil.isHoliday(transactionDate, holidays);

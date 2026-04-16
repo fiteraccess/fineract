@@ -21,7 +21,6 @@ package org.apache.fineract.accounting.journalentry.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.journalentry.data.ClientTransactionDTO;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.springframework.stereotype.Component;
@@ -35,17 +34,16 @@ public class CashBasedAccountingProcessorForClientTransactions implements Accoun
     @Override
     public void createJournalEntriesForClientTransaction(ClientTransactionDTO clientTransactionDTO) {
         try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
-        if (clientTransactionDTO.isAccountingEnabled()) {
-            final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(clientTransactionDTO.getOfficeId());
-            final LocalDate transactionDate = clientTransactionDTO.getTransactionDate();
-            final Office office = this.helper.getOfficeById(clientTransactionDTO.getOfficeId());
-            this.helper.checkForBranchClosures(latestGLClosure, transactionDate);
+            if (clientTransactionDTO.isAccountingEnabled()) {
+                final LocalDate transactionDate = clientTransactionDTO.getTransactionDate();
+                final Office office = this.helper.getOfficeById(clientTransactionDTO.getOfficeId());
+                this.helper.checkForBranchClosures(clientTransactionDTO.getOfficeId(), transactionDate);
 
-            /** Handle client payments **/
-            if (clientTransactionDTO.isChargePayment()) {
-                createJournalEntriesForChargePayments(clientTransactionDTO, office);
+                /** Handle client payments **/
+                if (clientTransactionDTO.isChargePayment()) {
+                    createJournalEntriesForChargePayments(clientTransactionDTO, office);
+                }
             }
-        }
         }
     }
 

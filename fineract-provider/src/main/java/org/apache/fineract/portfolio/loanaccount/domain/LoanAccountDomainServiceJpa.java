@@ -68,8 +68,7 @@ import org.apache.fineract.infrastructure.event.business.domain.loan.transaction
 import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanTransactionRecoveryPaymentPreBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
-import org.apache.fineract.organisation.holiday.domain.HolidayRepository;
-import org.apache.fineract.organisation.holiday.domain.HolidayStatusType;
+import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
@@ -112,6 +111,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanSupportedInterestRefundTypes;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.domain.Note;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
@@ -130,7 +130,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final LoanTransactionRepository loanTransactionRepository;
     private final ConfigurationDomainService configurationDomainService;
-    private final HolidayRepository holidayRepository;
+    private final HolidayRepositoryWrapper holidayRepository;
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final NoteRepository noteRepository;
     private final BusinessEventNotifierService businessEventNotifierService;
@@ -153,6 +153,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     private final LoanDownPaymentHandlerService loanDownPaymentHandlerService;
     private final LoanChargeValidator loanChargeValidator;
     private final LoanRefundService loanRefundService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final LoanAccountService loanAccountService;
     private final ReprocessLoanTransactionsService reprocessLoanTransactionsService;
     private final LoanTransactionProcessingService loanTransactionProcessingService;
@@ -404,8 +405,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             handlePayDisbursementTransaction(loan, chargeId, newPaymentTransaction);
         } else {
             final boolean allowTransactionsOnHoliday = this.configurationDomainService.allowTransactionsOnHolidayEnabled();
-            final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(), transactionDate,
-                    HolidayStatusType.ACTIVE.getValue());
+            final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(), transactionDate);
             final WorkingDays workingDays = this.workingDaysRepository.findOne();
             final boolean allowTransactionsOnNonWorkingDay = this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled();
             final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
@@ -488,8 +488,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         final LoanTransaction newRefundTransaction = LoanTransaction.refund(loan.getOffice(), refundAmount, paymentDetail, transactionDate,
                 txnExternalId);
         final boolean allowTransactionsOnHoliday = this.configurationDomainService.allowTransactionsOnHolidayEnabled();
-        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(), transactionDate,
-                HolidayStatusType.ACTIVE.getValue());
+        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(), transactionDate);
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         final boolean allowTransactionsOnNonWorkingDay = this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled();
 
@@ -680,8 +679,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
                 transactionDate, txnExternalId);
         loanTransactionValidator.validateRefundDateIsAfterLastRepayment(loan, newRefundTransaction.getTransactionDate());
         final boolean allowTransactionsOnHoliday = this.configurationDomainService.allowTransactionsOnHolidayEnabled();
-        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(), transactionDate,
-                HolidayStatusType.ACTIVE.getValue());
+        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(), transactionDate);
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         final boolean allowTransactionsOnNonWorkingDay = this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled();
 
@@ -876,7 +874,8 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             if (loan.isCumulativeSchedule() && loan.isInterestBearingAndInterestRecalculationEnabled()) {
                 loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
             } else if (loan.isProgressiveSchedule()) {
-                loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+                loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
             }
             loan.getLoanTransactions().add(refundTransaction);
             if (interestRefundTransaction != null) {
@@ -1033,13 +1032,15 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     private void makeRepayment(final Loan loan, final LoanTransaction repaymentTransaction,
             final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         loanChargeValidator.validateRepaymentTypeTransactionNotBeforeAChargeRefund(loan, repaymentTransaction, "created");
-        loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, repaymentTransaction, null, scheduleGeneratorDTO);
+        loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, repaymentTransaction, null, scheduleGeneratorDTO,
+                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
     }
 
     private void handleForeClosureTransactions(final Loan loan, final LoanTransaction repaymentTransaction,
             final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         loan.setLoanSubStatus(LoanSubStatus.FORECLOSED);
-        loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, repaymentTransaction, null, scheduleGeneratorDTO);
+        loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, repaymentTransaction, null, scheduleGeneratorDTO,
+                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
     }
 
 }

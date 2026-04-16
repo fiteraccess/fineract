@@ -34,6 +34,7 @@ import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsProductData;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
 import org.apache.fineract.portfolio.tax.data.TaxGroupData;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -48,6 +49,7 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
 
     @Override
+    @Cacheable(value = "savingsProducts", key = "'savings_products'")
     public Collection<SavingsProductData> retrieveAll() {
 
         this.context.authenticatedUser();
@@ -83,6 +85,7 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
     }
 
     @Override
+    @Cacheable(value = "savingsProductById", key = "'savings_product:' + #savingProductId")
     public SavingsProductData retrieveOne(final Long savingProductId) {
         try {
             this.context.authenticatedUser();

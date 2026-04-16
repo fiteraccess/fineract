@@ -125,7 +125,7 @@ public class AppUser extends AbstractPersistableCustom<Long> implements Platform
     private boolean isSelfServiceUser;
 
     @Getter
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER, mappedBy = "appUser")
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "appUser")
     private Set<AppUserClientMapping> appUserClientMappings = new HashSet<>();
 
     @Column(name = "cannot_change_password", nullable = true)

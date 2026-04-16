@@ -63,8 +63,7 @@ import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityToEn
 import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityToEntityMappingRepository;
 import org.apache.fineract.infrastructure.entityaccess.exception.NotOfficeSpecificProductException;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
-import org.apache.fineract.organisation.holiday.domain.HolidayRepository;
-import org.apache.fineract.organisation.holiday.domain.HolidayStatusType;
+import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.holiday.service.HolidayUtil;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
@@ -115,6 +114,7 @@ import org.apache.fineract.portfolio.loanaccount.mapper.LoanMapper;
 import org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanproduct.LoanProductConstants;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.data.LoanProductData;
 import org.apache.fineract.portfolio.loanproduct.domain.AdvancedPaymentAllocationsValidator;
 import org.apache.fineract.portfolio.loanproduct.domain.AmortizationMethod;
@@ -122,10 +122,10 @@ import org.apache.fineract.portfolio.loanproduct.domain.InterestCalculationPerio
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductPaymentAllocationRule;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepositoryWrapper;
 import org.apache.fineract.portfolio.loanproduct.exception.EqualAmortizationUnsupportedFeatureException;
-import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundException;
 import org.apache.fineract.portfolio.loanproduct.serialization.LoanProductDataValidator;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanProductReadPlatformService;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
@@ -186,7 +186,7 @@ public final class LoanApplicationValidator {
     private final LoanRepaymentScheduleTransactionProcessorFactory loanRepaymentScheduleTransactionProcessorFactory;
     private final AdvancedPaymentAllocationsValidator advancedPaymentAllocationsValidator;
     private final ConfigurationDomainService configurationDomainService;
-    private final LoanProductRepository loanProductRepository;
+    private final LoanProductRepositoryWrapper loanProductRepositoryWrapper;
     private final ClientRepositoryWrapper clientRepository;
     private final GroupRepositoryWrapper groupRepository;
     private final LoanReadPlatformService loanReadPlatformService;
@@ -198,12 +198,13 @@ public final class LoanApplicationValidator {
     private final LoanProductReadPlatformService loanProductReadPlatformService;
     private final LoanCollateralAssembler collateralAssembler;
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
-    private final HolidayRepository holidayRepository;
+    private final HolidayRepositoryWrapper holidayRepository;
     private final SavingsAccountRepositoryWrapper savingsAccountRepository;
     private final LoanLifecycleStateMachine loanLifecycleStateMachine;
     private final CalendarInstanceRepository calendarInstanceRepository;
     private final LoanUtilService loanUtilService;
     private final EntityDatatableChecksWritePlatformService entityDatatableChecksWritePlatformService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final LoanMapper loanMapper;
 
     public void validateForCreate(final Loan loan) {
@@ -257,8 +258,7 @@ public final class LoanApplicationValidator {
         if (productId == null) {
             throwMandatoryParameterError(LoanApiConstants.productIdParameterName);
         }
-        final LoanProduct loanProduct = this.loanProductRepository.findById(productId)
-                .orElseThrow(() -> new LoanProductNotFoundException(productId));
+        final LoanProduct loanProduct = this.loanProductRepositoryWrapper.findById(productId);
 
         final Long clientId = this.fromApiJsonHelper.extractLongNamed(LoanApiConstants.clientIdParameterName, element);
         final Long groupId = this.fromApiJsonHelper.extractLongNamed(LoanApiConstants.groupIdParameterName, element);
@@ -853,8 +853,7 @@ public final class LoanApplicationValidator {
     }
 
     private void validateDisbursementDateIsOnHoliday(final LocalDate expectedDisbursementDate, final Long officeId) {
-        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, expectedDisbursementDate,
-                HolidayStatusType.ACTIVE.getValue());
+        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, expectedDisbursementDate);
 
         final boolean allowTransactionsOnHoliday = this.configurationDomainService.allowTransactionsOnHolidayEnabled();
         if (!allowTransactionsOnHoliday && HolidayUtil.isHoliday(expectedDisbursementDate, holidays)) {
@@ -903,11 +902,8 @@ public final class LoanApplicationValidator {
         LoanProduct loanProduct;
         final String productIdParamName = "productId";
         final Long productId = command.longValueOfParameterNamed(productIdParamName);
-        if (productId == null || productId.equals(loan.getLoanProduct().getId())) {
-            loanProduct = loan.getLoanProduct();
-        } else {
-            loanProduct = this.loanProductRepository.findById(productId).orElseThrow(() -> new LoanProductNotFoundException(productId));
-        }
+        final Long resolvedProductId = (productId != null) ? productId : loan.getProductId();
+        loanProduct = this.loanProductRepositoryWrapper.findById(resolvedProductId);
 
         Validator.validateOrThrow("loan", baseDataValidator -> {
             final JsonElement element = this.fromApiJsonHelper.parse(json);
@@ -1608,8 +1604,9 @@ public final class LoanApplicationValidator {
          */
         // TODO: is this condition necessary?
         if (loan.getFixedEmiAmount() != null) {
-            Integer minimumNoOfRepayments = loan.loanProduct().getMinNumberOfRepayments();
-            Integer maximumNoOfRepayments = loan.loanProduct().getMaxNumberOfRepayments();
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            Integer minimumNoOfRepayments = productConfig.getMinNumberOfRepayments();
+            Integer maximumNoOfRepayments = productConfig.getMaxNumberOfRepayments();
             Integer actualNumberOfRepayments = loan.getLoanRepaymentScheduleInstallmentsSize();
             // validate actual number of repayments is > minimum number of
             // repayments
@@ -2080,17 +2077,18 @@ public final class LoanApplicationValidator {
                         loan.getSubmittedOnDate());
             }
 
-            LoanProduct loanProduct = loan.loanProduct();
-            if (loanProduct.isMultiDisburseLoan()) {
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            if (loan.isMultiDisburmentLoan()) {
                 validateLoanMultiDisbursementDate(element, expectedDisbursementDate, principal, loan);
 
                 final JsonArray disbursementDataArray = this.fromApiJsonHelper
                         .extractJsonArrayNamed(LoanApiConstants.disbursementDataParameterName, element);
                 int disbursementDataSize = disbursementDataArray != null ? disbursementDataArray.size() : 0;
-                if (disbursementDataSize > loanProduct.maxTrancheCount()) {
-                    final String errorMessage = "Number of tranche shouldn't be greater than " + loanProduct.maxTrancheCount();
-                    throw new ExceedingTrancheCountException(LoanApiConstants.disbursementDataParameterName, errorMessage,
-                            loanProduct.maxTrancheCount(), disbursementDataSize);
+                Integer maxTrancheCount = productConfig.getMaxTrancheCount();
+                if (maxTrancheCount != null && disbursementDataSize > maxTrancheCount) {
+                    final String errorMessage = "Number of tranche shouldn't be greater than " + maxTrancheCount;
+                    throw new ExceedingTrancheCountException(LoanApiConstants.disbursementDataParameterName, errorMessage, maxTrancheCount,
+                            disbursementDataSize);
                 }
             }
 
@@ -2107,7 +2105,7 @@ public final class LoanApplicationValidator {
             }
 
             entityDatatableChecksWritePlatformService.runTheCheckForProduct(loanId, EntityTables.LOAN.getName(),
-                    StatusEnum.APPROVE.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.productId());
+                    StatusEnum.APPROVE.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.getProductId());
 
             if (loan.isTopup() && loan.getClientId() != null) {
                 final BigDecimal loanOutstanding = validateTopupLoan(loan, expectedDisbursementDate);
@@ -2124,7 +2122,7 @@ public final class LoanApplicationValidator {
 
             BigDecimal approvedLoanAmount = command.bigDecimalValueOfParameterNamed(LoanApiConstants.approvedLoanAmountParameterName);
             if (approvedLoanAmount != null) {
-                compareApprovedToProposedPrincipal(loan, approvedLoanAmount);
+                compareApprovedToProposedPrincipal(loan, productConfig, approvedLoanAmount);
             }
 
             if (approvedOnDate != null && expectedDisbursementDate != null) {
@@ -2160,9 +2158,9 @@ public final class LoanApplicationValidator {
         }); // end validation
     }
 
-    private void compareApprovedToProposedPrincipal(Loan loan, BigDecimal approvedLoanAmount) {
-        if (loan.loanProduct().isAllowApprovedDisbursedAmountsOverApplied()) {
-            BigDecimal maxApprovedLoanAmount = getOverAppliedMax(loan);
+    private void compareApprovedToProposedPrincipal(Loan loan, CacheableLoanProductConfig productConfig, BigDecimal approvedLoanAmount) {
+        if (productConfig.isAllowApprovedDisbursedAmountsOverApplied()) {
+            BigDecimal maxApprovedLoanAmount = getOverAppliedMax(loan, productConfig);
             if (approvedLoanAmount.compareTo(maxApprovedLoanAmount) > 0) {
                 final String errorMessage = "Loan approved amount can't be greater than maximum applied loan amount calculation.";
                 throw new InvalidLoanStateTransitionException("approval",
@@ -2179,10 +2177,12 @@ public final class LoanApplicationValidator {
     }
 
     public BigDecimal getOverAppliedMax(Loan loan) {
-        LoanProduct loanProduct = loan.getLoanProduct();
+        return getOverAppliedMax(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+    }
 
+    public BigDecimal getOverAppliedMax(Loan loan, CacheableLoanProductConfig productConfig) {
         // Check if overapplied calculation type and number are properly configured
-        if (loanProduct.getOverAppliedCalculationType() == null || loanProduct.getOverAppliedNumber() == null) {
+        if (productConfig.getOverAppliedCalculationType() == null || productConfig.getOverAppliedNumber() == null) {
             // If overapplied calculation is not configured, return proposed principal (original behavior)
             return loan.getProposedPrincipal();
         }
@@ -2201,12 +2201,12 @@ public final class LoanApplicationValidator {
             basePrincipal = loan.getApprovedPrincipal() != null ? loan.getApprovedPrincipal() : loan.getProposedPrincipal();
         }
 
-        if ("percentage".equals(loanProduct.getOverAppliedCalculationType())) {
-            BigDecimal overAppliedNumber = BigDecimal.valueOf(loanProduct.getOverAppliedNumber());
+        if ("percentage".equals(productConfig.getOverAppliedCalculationType())) {
+            BigDecimal overAppliedNumber = BigDecimal.valueOf(productConfig.getOverAppliedNumber());
             BigDecimal totalPercentage = BigDecimal.valueOf(1).add(overAppliedNumber.divide(BigDecimal.valueOf(100)));
             return basePrincipal.multiply(totalPercentage);
         } else {
-            return basePrincipal.add(BigDecimal.valueOf(loanProduct.getOverAppliedNumber()));
+            return basePrincipal.add(BigDecimal.valueOf(productConfig.getOverAppliedNumber()));
         }
     }
 

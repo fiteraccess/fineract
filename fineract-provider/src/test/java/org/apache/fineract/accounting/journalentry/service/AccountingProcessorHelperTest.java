@@ -50,11 +50,11 @@ import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeChargePaymentDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTaxDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTransactionDTO;
-import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -159,14 +159,11 @@ class AccountingProcessorHelperTest {
             assertThat(savingsTransactionDTO.getOverdraftAmount()).isEqualByComparingTo(BigDecimal.ONE);
             assertThat(savingsTransactionDTO.getPaymentTypeId()).isEqualTo(77L);
             assertThat(savingsTransactionDTO.isAccountTransfer()).isTrue();
-            assertThat(savingsTransactionDTO.getPenaltyPayments()).singleElement()
-                    .extracting("chargeId", "loanChargeId", "amount")
+            assertThat(savingsTransactionDTO.getPenaltyPayments()).singleElement().extracting("chargeId", "loanChargeId", "amount")
                     .containsExactly(88L, 99L, BigDecimal.TWO);
-            assertThat(savingsTransactionDTO.getFeePayments()).singleElement()
-                    .extracting("chargeId", "loanChargeId", "amount")
+            assertThat(savingsTransactionDTO.getFeePayments()).singleElement().extracting("chargeId", "loanChargeId", "amount")
                     .containsExactly(111L, 222L, BigDecimal.valueOf(3));
-            assertThat(savingsTransactionDTO.getTaxPayments()).singleElement()
-                    .extracting("debitAccountId", "creditAccountId", "amount")
+            assertThat(savingsTransactionDTO.getTaxPayments()).singleElement().extracting("debitAccountId", "creditAccountId", "amount")
                     .containsExactly(333L, 444L, BigDecimal.valueOf(4));
         });
         verify(accountTransfersReadPlatformService).isAccountTransfer(55L, PortfolioAccountType.SAVINGS);

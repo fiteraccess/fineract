@@ -73,7 +73,7 @@ public class HookReadPlatformServiceImpl implements HookReadPlatformService {
     }
 
     @Override
-    @Cacheable(value = "hooks", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('HK')")
+    @Cacheable(value = "hooks", key = "'HK'")
     public List<Hook> retrieveHooksByEvent(final String entityName, final String actionName) {
         return hookRepository.findAllHooksListeningToEvent(entityName, actionName);
     }

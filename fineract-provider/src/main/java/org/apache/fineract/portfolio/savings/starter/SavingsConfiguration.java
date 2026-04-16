@@ -39,7 +39,6 @@ import org.apache.fineract.infrastructure.event.business.service.BusinessEventNo
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
-import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepositoryWrapper;
 import org.apache.fineract.organisation.staff.domain.StaffRepositoryWrapper;
 import org.apache.fineract.organisation.staff.service.StaffReadPlatformService;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
@@ -92,6 +91,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRep
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
+import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.savings.service.DepositAccountOnHoldTransactionReadPlatformService;
@@ -223,25 +223,24 @@ public class SavingsConfiguration {
             DepositAccountTransactionDataValidator depositAccountTransactionDataValidator,
             SavingsAccountChargeDataValidator savingsAccountChargeDataValidator,
             PaymentDetailWritePlatformService paymentDetailWritePlatformService,
-            ApplicationCurrencyRepositoryWrapper applicationCurrencyRepositoryWrapper,
             JournalEntryWritePlatformService journalEntryWritePlatformService, DepositAccountDomainService depositAccountDomainService,
             NoteRepository noteRepository, AccountTransfersReadPlatformService accountTransfersReadPlatformService,
             ChargeRepositoryWrapper chargeRepository, SavingsAccountChargeRepositoryWrapper savingsAccountChargeRepository,
             AccountAssociationsReadPlatformService accountAssociationsReadPlatformService,
             AccountTransfersWritePlatformService accountTransfersWritePlatformService,
-            DepositAccountReadPlatformService depositAccountReadPlatformService, CalendarInstanceRepository calendarInstanceRepository,
-            ConfigurationDomainService configurationDomainService, HolidayRepositoryWrapper holidayRepository,
-            WorkingDaysRepositoryWrapper workingDaysRepository,
-            DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository
+            CalendarInstanceRepository calendarInstanceRepository, ConfigurationDomainService configurationDomainService,
+            HolidayRepositoryWrapper holidayRepository, WorkingDaysRepositoryWrapper workingDaysRepository,
+            DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository,
+            CacheableSavingsProductConfigService cacheableSavingsProductConfigService
 
     ) {
         return new DepositAccountWritePlatformServiceJpaRepositoryImpl(context, savingAccountRepositoryWrapper,
                 savingsAccountTransactionRepository, depositAccountAssembler, depositAccountTransactionDataValidator,
-                savingsAccountChargeDataValidator, paymentDetailWritePlatformService, applicationCurrencyRepositoryWrapper,
-                journalEntryWritePlatformService, depositAccountDomainService, noteRepository, accountTransfersReadPlatformService,
-                chargeRepository, savingsAccountChargeRepository, accountAssociationsReadPlatformService,
-                accountTransfersWritePlatformService, depositAccountReadPlatformService, calendarInstanceRepository,
-                configurationDomainService, holidayRepository, workingDaysRepository, depositAccountOnHoldTransactionRepository);
+                savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
+                depositAccountDomainService, noteRepository, accountTransfersReadPlatformService, chargeRepository,
+                savingsAccountChargeRepository, accountAssociationsReadPlatformService, accountTransfersWritePlatformService,
+                calendarInstanceRepository, configurationDomainService, holidayRepository, workingDaysRepository,
+                depositAccountOnHoldTransactionRepository, cacheableSavingsProductConfigService);
     }
 
     @Bean
@@ -373,7 +372,7 @@ public class SavingsConfiguration {
             EntityDatatableChecksWritePlatformService entityDatatableChecksWritePlatformService, AppUserRepositoryWrapper appuserRepository,
             StandingInstructionRepository standingInstructionRepository, BusinessEventNotifierService businessEventNotifierService,
             GSIMRepositoy gsimRepository, SavingsAccountInterestPostingService savingsAccountInterestPostingService,
-            ErrorHandler errorHandler) {
+            ErrorHandler errorHandler, CacheableSavingsProductConfigService cacheableSavingsProductConfigService) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -381,7 +380,7 @@ public class SavingsConfiguration {
                 chargeRepository, savingsAccountChargeRepository, holidayRepository, workingDaysRepository, configurationDomainService,
                 depositAccountOnHoldTransactionRepository, entityDatatableChecksWritePlatformService, appuserRepository,
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
-                errorHandler);
+                errorHandler, cacheableSavingsProductConfigService);
     }
 
     @Bean

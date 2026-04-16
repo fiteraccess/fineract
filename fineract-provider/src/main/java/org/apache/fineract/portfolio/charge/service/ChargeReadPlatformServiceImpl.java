@@ -70,7 +70,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
     @Override
-    @Cacheable(value = "charges", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('ch')")
+    @Cacheable(value = "charges", key = "'ch'")
     public List<ChargeData> retrieveAllCharges() {
         final ChargeMapper rm = new ChargeMapper();
 
@@ -154,6 +154,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
                 .assetAccountOptions(assetAccountOptions).build();
     }
 
+    @Cacheable(value = "charges", key = "'loanProdCharges:' + #loanProductId")
     @Override
     public List<ChargeData> retrieveLoanProductCharges(final Long loanProductId) {
         final ChargeMapper rm = new ChargeMapper();
@@ -165,6 +166,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         return this.jdbcTemplate.query(sql, rm, new Object[] { loanProductId }); // NOSONAR
     }
 
+    @Cacheable(value = "charges", key = "'loanProdCharges:' + #loanProductId + ':' + #chargeTime")
     @Override
     public List<ChargeData> retrieveLoanProductCharges(final Long loanProductId, final ChargeTimeType chargeTime) {
 
@@ -177,6 +179,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         return this.jdbcTemplate.query(sql, rm, new Object[] { loanProductId, chargeTime.getValue() }); // NOSONAR
     }
 
+    @Cacheable(value = "charges", key = "'loanFees'")
     @Override
     public List<ChargeData> retrieveLoanApplicableFees() {
         final ChargeMapper rm = new ChargeMapper();
@@ -224,6 +227,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         }
     }
 
+    @Cacheable(value = "charges", key = "'loanProdApplicable:' + #loanProductId + ':' + T(java.util.Arrays).toString(#excludeChargeTimes)")
     @Override
     public List<ChargeData> retrieveLoanProductApplicableCharges(final Long loanProductId, ChargeTimeType[] excludeChargeTimes) {
         final ChargeMapper rm = new ChargeMapper();
@@ -241,6 +245,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         return this.namedParameterJdbcTemplate.query(sql, paramMap, rm);
     }
 
+    @Cacheable(value = "charges", key = "'loanPenalties'")
     @Override
     public List<ChargeData> retrieveLoanApplicablePenalties() {
         final ChargeMapper rm = new ChargeMapper();
@@ -385,6 +390,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         }
     }
 
+    @Cacheable(value = "charges", key = "'savApplicable:' + #feeChargesOnly")
     @Override
     public List<ChargeData> retrieveSavingsProductApplicableCharges(final boolean feeChargesOnly) {
         final ChargeMapper rm = new ChargeMapper();
@@ -400,6 +406,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.SAVINGS.getValue() }); // NOSONAR
     }
 
+    @Cacheable(value = "charges", key = "'savPenalties'")
     @Override
     public List<ChargeData> retrieveSavingsApplicablePenalties() {
         final ChargeMapper rm = new ChargeMapper();
@@ -411,6 +418,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
         return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.SAVINGS.getValue() }); // NOSONAR
     }
 
+    @Cacheable(value = "charges", key = "'savProdCharges:' + #savingsProductId")
     @Override
     public List<ChargeData> retrieveSavingsProductCharges(final Long savingsProductId) {
         final ChargeMapper rm = new ChargeMapper();

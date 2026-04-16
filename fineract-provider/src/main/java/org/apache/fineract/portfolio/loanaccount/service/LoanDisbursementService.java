@@ -142,7 +142,7 @@ public class LoanDisbursementService {
                 }
             }
         } else {
-            if (loan.getLoanProduct().isMultiDisburseLoan()) {
+            if (loan.isMultiDisburmentLoan()) {
                 disburseAmount = Money.of(loan.getCurrency(), principalDisbursed);
             } else {
                 disburseAmount = disburseAmount.plus(principalDisbursed);
@@ -193,7 +193,7 @@ public class LoanDisbursementService {
                 }
             }
             BigDecimal totalAmount = BigDecimal.ZERO;
-            if (loan.loanProduct().isMultiDisburseLoan()) {
+            if (loan.isMultiDisburmentLoan()) {
                 Collection<LoanDisbursementDetails> loanDisburseDetails = loan.getDisbursementDetails();
                 BigDecimal setPrincipalAmount = BigDecimal.ZERO;
                 for (LoanDisbursementDetails disbursementDetails : loanDisburseDetails) {

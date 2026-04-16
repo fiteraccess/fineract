@@ -46,6 +46,8 @@ public interface ConfigurationDomainService {
 
     boolean isEhcacheEnabled();
 
+    boolean isDistributedCacheEnabled();
+
     void updateCache(CacheType cacheType);
 
     Long retrievePenaltyWaitPeriod();

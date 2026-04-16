@@ -62,6 +62,7 @@ import org.apache.fineract.portfolio.savings.DepositsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
+import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.stereotype.Service;
@@ -81,6 +82,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
     private final AccountNumberFormatRepositoryWrapper accountNumberFormatRepository;
     private final CalendarInstanceRepository calendarInstanceRepository;
     private final ExternalIdFactory externalIdFactory;
+    private final SavingsProductRepository savingsProductRepository;
 
     @Transactional
     @Override
@@ -201,8 +203,10 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final Integer onAccountClosureId = command.integerValueOfParameterNamed(onAccountClosureIdParamName);
         final DepositAccountOnClosureType onClosureType = DepositAccountOnClosureType.fromInt(onAccountClosureId);
         if (onClosureType.isReinvest()) {
+            final SavingsProduct product = this.savingsProductRepository.findById(account.productId())
+                    .orElseThrow(() -> new SavingsProductNotFoundException(account.productId()));
             ExternalId externalId = this.externalIdFactory.create();
-            FixedDepositAccount reinvestedDeposit = account.reInvest(account.getAccountBalance(), externalId);
+            FixedDepositAccount reinvestedDeposit = account.reInvest(account.getAccountBalance(), externalId, product);
             this.depositAccountAssembler.assignSavingAccountHelpers(reinvestedDeposit);
             reinvestedDeposit.updateMaturityDateAndAmountBeforeAccountActivation(mc, isPreMatureClosure,
                     isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth);
@@ -268,9 +272,11 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
             } else {
                 reInvestAmount = account.getAccountBalance();
             }
+            final SavingsProduct product = this.savingsProductRepository.findById(account.productId())
+                    .orElseThrow(() -> new SavingsProductNotFoundException(account.productId()));
             ExternalId externalId = this.externalIdFactory.create();
 
-            FixedDepositAccount reinvestedDeposit = account.reInvest(reInvestAmount, externalId);
+            FixedDepositAccount reinvestedDeposit = account.reInvest(reInvestAmount, externalId, product);
             this.depositAccountAssembler.assignSavingAccountHelpers(reinvestedDeposit);
             reinvestedDeposit.updateMaturityDateAndAmountBeforeAccountActivation(mc, isPreMatureClosure,
                     isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth);
@@ -350,7 +356,9 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
             } else {
                 reInvestAmount = account.getAccountBalance();
             }
-            RecurringDepositAccount reinvestedDeposit = account.reInvest(reInvestAmount);
+            final SavingsProduct product = this.savingsProductRepository.findById(account.productId())
+                    .orElseThrow(() -> new SavingsProductNotFoundException(account.productId()));
+            RecurringDepositAccount reinvestedDeposit = account.reInvest(reInvestAmount, product);
             depositAccountAssembler.assignSavingAccountHelpers(reinvestedDeposit);
             this.savingsAccountRepository.save(reinvestedDeposit);
             final CalendarInstance calendarInstance = getCalendarInstance(account, reinvestedDeposit);

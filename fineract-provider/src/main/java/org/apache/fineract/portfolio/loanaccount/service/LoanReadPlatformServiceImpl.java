@@ -76,7 +76,6 @@ import org.apache.fineract.portfolio.calendar.data.CalendarData;
 import org.apache.fineract.portfolio.calendar.domain.CalendarEntityType;
 import org.apache.fineract.portfolio.calendar.service.CalendarReadPlatformService;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
-import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
 import org.apache.fineract.portfolio.client.data.ClientData;
@@ -142,9 +141,12 @@ import org.apache.fineract.portfolio.loanaccount.mapper.LoanTransactionMapper;
 import org.apache.fineract.portfolio.loanaccount.repository.LoanBuyDownFeeBalanceRepository;
 import org.apache.fineract.portfolio.loanaccount.repository.LoanCapitalizedIncomeBalanceRepository;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanForeclosureValidator;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.data.LoanProductData;
 import org.apache.fineract.portfolio.loanproduct.data.TransactionProcessingStrategyData;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepositoryWrapper;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanDropdownReadPlatformService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations;
 import org.apache.fineract.portfolio.loanproduct.service.LoanProductReadPlatformService;
@@ -191,6 +193,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
     private final LoanChargePaidByReadService loanChargePaidByReadService;
     private final LoanTransactionRelationReadService loanTransactionRelationReadService;
     private final LoanForeclosureValidator loanForeclosureValidator;
+    private final LoanProductRepositoryWrapper loanProductRepositoryWrapper;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final LoanTransactionMapper loanTransactionMapper;
     private final LoanTransactionProcessingService loadTransactionProcessingService;
     private final LoanBalanceService loanBalanceService;
@@ -1594,13 +1598,13 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
             return list;
         }
 
-        Optional<Charge> optPenaltyCharge = loan.getLoanProduct().getCharges().stream()
-                .filter((e) -> ChargeTimeType.OVERDUE_INSTALLMENT.getValue().equals(e.getChargeTimeType()) && e.isLoanCharge()).findFirst();
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
 
-        if (optPenaltyCharge.isEmpty()) {
+        if (productConfig.getOverdueInstallmentPenaltyChargeId() == null) {
             return list;
         }
-        final Charge penaltyCharge = optPenaltyCharge.get();
+        final Long penaltyChargeId = productConfig.getOverdueInstallmentPenaltyChargeId();
+        final BigDecimal penaltyChargeAmount = productConfig.getOverdueInstallmentPenaltyChargeAmount();
 
         final Long penaltyWaitPeriod = configurationDomainService.retrievePenaltyWaitPeriod();
         final boolean backdatePenalties = configurationDomainService.isBackdatePenaltiesEnabled();
@@ -1618,8 +1622,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                     continue;
                 }
 
-                list.add(new OverdueLoanScheduleData(loan.getId(), penaltyCharge.getId(),
-                        DateUtils.DEFAULT_DATE_FORMATTER.format(installment.getDueDate()), penaltyCharge.getAmount(),
+                list.add(new OverdueLoanScheduleData(loan.getId(), penaltyChargeId,
+                        DateUtils.DEFAULT_DATE_FORMATTER.format(installment.getDueDate()), penaltyChargeAmount,
                         DateUtils.DEFAULT_DATE_FORMAT, Locale.ENGLISH.toLanguageTag(),
                         installment.getPrincipalOutstanding(loan.getCurrency()).getAmount(),
                         installment.getInterestOutstanding(loan.getCurrency()).getAmount(), installment.getInstallmentNumber()));

@@ -597,6 +597,22 @@ public class FineractProperties {
 
     @Getter
     @Setter
+    public static class FineractRedisProperties {
+
+        private boolean enabled;
+        private String host;
+        private int port;
+        private String password;
+        private int database;
+        private long defaultTtlSeconds;
+        private int poolMinIdle = 2;
+        private int poolMaxIdle = 8;
+        private int poolMaxActive = 16;
+        private boolean ssl = false;
+    }
+
+    @Getter
+    @Setter
     public static class FineractModulesProperties {
 
         private FineractInvestorModuleProperties investor;
@@ -662,6 +678,7 @@ public class FineractProperties {
 
         private FineractCacheDetails defaultTemplate;
         private Map<String, FineractCacheDetails> customTemplates = new HashMap<>();
+        private FineractRedisProperties redis;
     }
 
     @Getter

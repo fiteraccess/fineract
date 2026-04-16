@@ -46,8 +46,7 @@ import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
-import org.apache.fineract.organisation.holiday.domain.HolidayRepository;
-import org.apache.fineract.organisation.holiday.domain.HolidayStatusType;
+import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.staff.domain.Staff;
 import org.apache.fineract.organisation.staff.domain.StaffRepository;
@@ -94,10 +93,11 @@ import org.apache.fineract.portfolio.loanaccount.mapper.LoanChargeMapper;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanCollateralManagementMapper;
 import org.apache.fineract.portfolio.loanaccount.service.schedule.LoanScheduleComponent;
 import org.apache.fineract.portfolio.loanproduct.LoanProductConstants;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
-import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundException;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepositoryWrapper;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations;
 import org.apache.fineract.portfolio.rate.domain.Rate;
 import org.apache.fineract.portfolio.rate.service.RateAssembler;
@@ -108,7 +108,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
 
     private final FromJsonHelper fromApiJsonHelper;
     private final LoanRepositoryWrapper loanRepository;
-    private final LoanProductRepository loanProductRepository;
+    private final LoanProductRepositoryWrapper loanProductRepositoryWrapper;
     private final ClientRepositoryWrapper clientRepository;
     private final GroupRepositoryWrapper groupRepository;
     private final FundRepository fundRepository;
@@ -118,7 +118,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
     private final LoanChargeAssembler loanChargeAssembler;
     private final LoanCollateralAssembler collateralAssembler;
     private final LoanRepaymentScheduleTransactionProcessorFactory loanRepaymentScheduleTransactionProcessorFactory;
-    private final HolidayRepository holidayRepository;
+    private final HolidayRepositoryWrapper holidayRepository;
     private final ConfigurationDomainService configurationDomainService;
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final RateAssembler rateAssembler;
@@ -136,6 +136,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
     private final LoanDisbursementService loanDisbursementService;
     private final LoanChargeService loanChargeService;
     private final LoanOfficerService loanOfficerService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final LoanScheduleComponent loanSchedule;
 
     @Override
@@ -173,8 +174,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
         final Boolean createStandingInstructionAtDisbursement = this.fromApiJsonHelper
                 .extractBooleanNamed("createStandingInstructionAtDisbursement", element);
 
-        final LoanProduct loanProduct = this.loanProductRepository.findById(productId)
-                .orElseThrow(() -> new LoanProductNotFoundException(productId));
+        final LoanProduct loanProduct = this.loanProductRepositoryWrapper.findById(productId);
         final Boolean allowOverridingTransactionProcessingStrategy = loanProduct.getLoanConfigurableAttributes()
                 .getTransactionProcessingStrategyBoolean();
         final String transactionProcessingStrategyCode = allowOverridingTransactionProcessingStrategy
@@ -257,7 +257,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
         Long officeId = client != null ? client.getOffice().getId() : group.getOffice().getId();
         final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId,
-                loanApplicationTerms.getExpectedDisbursementDate(), HolidayStatusType.ACTIVE.getValue());
+                loanApplicationTerms.getExpectedDisbursementDate());
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         final LoanScheduleModel loanScheduleModel = this.loanScheduleAssembler.assembleLoanScheduleFrom(loanApplicationTerms,
                 isHolidayEnabled, holidays, workingDays, element, disbursementDetails);
@@ -378,7 +378,8 @@ public class LoanAssemblerImpl implements LoanAssembler {
     }
 
     private void topUpLoanConfiguration(JsonElement element, Loan loan) {
-        if (loan.getLoanProduct().isCanUseForTopup() && loan.getClientId() != null) {
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        if (productConfig.isCanUseForTopup() && loan.getClientId() != null) {
             final Boolean isTopUp = this.fromApiJsonHelper.extractBooleanNamed(LoanApiConstants.isTopup, element);
             if (null == isTopUp) {
                 loan.setIsTopup(false);
@@ -446,14 +447,16 @@ public class LoanAssemblerImpl implements LoanAssembler {
     @Override
     public Map<String, Object> updateFrom(JsonCommand command, Loan loan) {
         final Map<String, Object> changes = new HashMap<>();
-        LoanProduct loanProduct;
+        LoanProduct fullLoanProduct = null;
+        CacheableLoanProductConfig productConfig;
 
         final String productIdParamName = "productId";
         final Long productId = command.longValueOfParameterNamed(productIdParamName);
-        if (productId == null || productId.equals(loan.getLoanProduct().getId())) {
-            loanProduct = loan.getLoanProduct();
+        if (productId == null || productId.equals(loan.getProductId())) {
+            productConfig = this.cacheableLoanProductConfigService.getConfig(loan.getProductId());
         } else {
-            loanProduct = this.loanProductRepository.findById(productId).orElseThrow(() -> new LoanProductNotFoundException(productId));
+            fullLoanProduct = this.loanProductRepositoryWrapper.findById(productId);
+            productConfig = this.cacheableLoanProductConfigService.getConfig(productId);
         }
 
         final Set<LoanCharge> existingCharges = loan.getActiveCharges();
@@ -569,19 +572,19 @@ public class LoanAssemblerImpl implements LoanAssembler {
             loan.updateGroup(group);
         }
 
-        if (command.isChangeInLongParameterNamed(LoanApiConstants.productIdParameterName, loan.getLoanProduct().getId())) {
+        if (command.isChangeInLongParameterNamed(LoanApiConstants.productIdParameterName, loan.getProductId())) {
             final Long newValue = command.longValueOfParameterNamed(LoanApiConstants.productIdParameterName);
             changes.put(LoanApiConstants.productIdParameterName, newValue);
-            loan.updateLoanProduct(loanProduct);
-            final MonetaryCurrency currency = new MonetaryCurrency(loanProduct.getCurrency().getCode(),
-                    loanProduct.getCurrency().getDigitsAfterDecimal(), loanProduct.getCurrency().getInMultiplesOf());
+            loan.updateLoanProduct(fullLoanProduct);
+            final MonetaryCurrency currency = new MonetaryCurrency(fullLoanProduct.getCurrency().getCode(),
+                    fullLoanProduct.getCurrency().getDigitsAfterDecimal(), fullLoanProduct.getCurrency().getInMultiplesOf());
             loan.getLoanRepaymentScheduleDetail().setCurrency(currency);
 
             if (!changes.containsKey(LoanApiConstants.interestRateFrequencyTypeParameterName)) {
                 loan.updateInterestRateFrequencyType();
             }
 
-            if (loanProduct.isLinkedToFloatingInterestRate()) {
+            if (fullLoanProduct.isLinkedToFloatingInterestRate()) {
                 loan.getLoanProductRelatedDetail().updateForFloatingInterestRates();
             } else {
                 loan.setInterestRateDifferential(null);
@@ -606,8 +609,8 @@ public class LoanAssemblerImpl implements LoanAssembler {
         }
 
         Long existingFundId = null;
-        if (loan.getFund() != null) {
-            existingFundId = loan.getFund().getId();
+        if (loan.getFundId() != null) {
+            existingFundId = loan.getFundId();
         }
         if (command.isChangeInLongParameterNamed(LoanApiConstants.fundIdParameterName, existingFundId)) {
             final Long newValue = command.longValueOfParameterNamed(LoanApiConstants.fundIdParameterName);
@@ -642,7 +645,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
 
         if (command.isChangeInStringParameterNamed(LoanApiConstants.transactionProcessingStrategyCodeParameterName,
                 loan.getTransactionProcessingStrategyCode())
-                && loanProduct.getLoanConfigurableAttributes().getTransactionProcessingStrategyBoolean()) {
+                && Boolean.TRUE.equals(productConfig.getConfigurableTransactionProcessingStrategy())) {
             final String newValue = command.stringValueOfParameterNamed(LoanApiConstants.transactionProcessingStrategyCodeParameterName);
 
             final String transactionProcessingStrategyCode = command.stringValueOfParameterNamed("transactionProcessingStrategyCode");
@@ -734,7 +737,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
             loan.setProposedPrincipal(newValue);
         }
 
-        if (loanProduct.isMultiDisburseLoan()) {
+        if (productConfig.isMultiDisburseLoan()) {
             loanDisbursementService.updateDisbursementDetails(loan, command, changes);
             if (command.isChangeInBigDecimalParameterNamed(LoanApiConstants.maxOutstandingBalanceParameterName,
                     loan.getMaxOutstandingLoanBalance())) {
@@ -743,7 +746,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
             }
             final JsonArray disbursementDataArray = command.arrayOfParameterNamed(LoanApiConstants.disbursementDataParameterName);
 
-            if (loanProduct.isDisallowExpectedDisbursements()) {
+            if (productConfig.isDisallowExpectedDisbursements()) {
                 if (disbursementDataArray != null && !disbursementDataArray.isEmpty()) {
                     final String errorMessage = "For this loan product, disbursement details are not allowed";
                     throw new MultiDisbursementDataNotAllowedException(LoanApiConstants.disbursementDataParameterName, errorMessage);
@@ -754,17 +757,17 @@ public class LoanAssemblerImpl implements LoanAssembler {
                     throw new MultiDisbursementDataRequiredException(LoanApiConstants.disbursementDataParameterName, errorMessage);
                 }
 
-                if (disbursementDataArray.size() > loanProduct.maxTrancheCount()) {
-                    final String errorMessage = "Number of tranche shouldn't be greter than " + loanProduct.maxTrancheCount();
+                if (disbursementDataArray.size() > productConfig.getMaxTrancheCount()) {
+                    final String errorMessage = "Number of tranche shouldn't be greter than " + productConfig.getMaxTrancheCount();
                     throw new ExceedingTrancheCountException(LoanApiConstants.disbursementDataParameterName, errorMessage,
-                            loanProduct.maxTrancheCount(), disbursementDetails.size());
+                            productConfig.getMaxTrancheCount(), disbursementDetails.size());
                 }
             }
         } else {
             loan.clearDisbursementDetails();
         }
 
-        if (loanProduct.isMultiDisburseLoan() || loanProduct.isCanDefineInstallmentAmount()) {
+        if (productConfig.isMultiDisburseLoan() || productConfig.isCanDefineInstallmentAmount()) {
             if (command.isChangeInBigDecimalParameterNamed(LoanApiConstants.fixedEmiAmountParameterName, loan.getFixedEmiAmount())) {
                 loan.setFixedEmiAmount(command.bigDecimalValueOfParameterNamed(LoanApiConstants.fixedEmiAmountParameterName));
                 changes.put(LoanApiConstants.fixedEmiAmountParameterName, loan.getFixedEmiAmount());
@@ -782,11 +785,11 @@ public class LoanAssemblerImpl implements LoanAssembler {
         }
 
         final LoanProductRelatedDetail productRelatedDetail = loan.getLoanProductRelatedDetail();
-        if (loan.loanProduct().getLoanConfigurableAttributes() != null) {
-            loanScheduleAssembler.updateProductRelatedDetails(productRelatedDetail, loan);
+        if (productConfig.isHasConfigurableAttributes()) {
+            loanScheduleAssembler.updateProductRelatedDetails(productRelatedDetail, productConfig);
         }
 
-        if (loan.getLoanProduct().isCanUseForTopup() && loan.getClientId() != null) {
+        if (productConfig.isCanUseForTopup() && loan.getClientId() != null) {
             final Boolean isTopup = command.booleanObjectValueOfParameterNamed(LoanApiConstants.isTopup);
             if (command.isChangeInBooleanParameterNamed(LoanApiConstants.isTopup, loan.isTopup())) {
                 loan.setIsTopup(isTopup);

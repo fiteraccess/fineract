@@ -107,8 +107,8 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
-import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
 import org.apache.fineract.portfolio.savings.domain.interest.SavingsAccountTransactionDetailsForPostingPeriod;
 import org.apache.fineract.portfolio.savings.exception.InsufficientAccountBalanceException;
@@ -165,6 +165,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @JoinColumn(name = "product_id", nullable = false)
     protected SavingsProduct product;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "field_officer_id", insertable = false, updatable = false)
+    protected Long savingsOfficerId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "field_officer_id", nullable = true)
     protected Staff savingsOfficer;
@@ -181,12 +185,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "submittedon_date", nullable = true)
     protected LocalDate submittedOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "submittedon_userid", insertable = false, updatable = false)
+    protected Long submittedByUserId;
+
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "submittedon_userid", nullable = true)
     protected AppUser submittedBy;
 
     @Column(name = "rejectedon_date")
     protected LocalDate rejectedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "rejectedon_userid", insertable = false, updatable = false)
+    protected Long rejectedByUserId;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "rejectedon_userid", nullable = true)
@@ -195,12 +207,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "withdrawnon_date")
     protected LocalDate withdrawnOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "withdrawnon_userid", insertable = false, updatable = false)
+    protected Long withdrawnByUserId;
+
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "withdrawnon_userid", nullable = true)
     protected AppUser withdrawnBy;
 
     @Column(name = "approvedon_date")
     protected LocalDate approvedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "approvedon_userid", insertable = false, updatable = false)
+    protected Long approvedByUserId;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "approvedon_userid", nullable = true)
@@ -209,12 +229,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "activatedon_date", nullable = true)
     protected LocalDate activatedOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "activatedon_userid", insertable = false, updatable = false)
+    protected Long activatedByUserId;
+
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "activatedon_userid", nullable = true)
     protected AppUser activatedBy;
 
     @Column(name = "closedon_date")
     protected LocalDate closedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "closedon_userid", insertable = false, updatable = false)
+    protected Long closedByUserId;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "closedon_userid", nullable = true)
@@ -335,7 +363,15 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "withhold_tax", nullable = false)
     protected boolean withHoldTax;
 
-    @ManyToOne
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "tax_group_id", insertable = false, updatable = false)
+    private Long taxGroupId;
+
+    /**
+     * TaxGroup entity reference. Changed to LAZY to avoid unnecessary JOINs. Use {@link #taxGroupId()} when only the ID
+     * is needed.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tax_group_id")
     private TaxGroup taxGroup;
 
@@ -408,7 +444,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.client = client;
         this.group = group;
         this.product = product;
+        // Store Staff entity and denormalized ID
         this.savingsOfficer = savingsOfficer;
+        this.savingsOfficerId = savingsOfficer != null ? savingsOfficer.getId() : null;
         if (StringUtils.isBlank(accountNo)) {
             this.accountNumber = new RandomPasswordGenerator(19).generate();
             this.accountNumberRequiresAutoGeneration = true;
@@ -421,7 +459,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.status = status.getValue();
         this.accountType = accountType.getValue();
         this.submittedOnDate = submittedOnDate;
+        // Store AppUser entity and denormalized ID
         this.submittedBy = submittedBy;
+        this.submittedByUserId = submittedBy != null ? submittedBy.getId() : null;
         this.nominalAnnualInterestRate = nominalAnnualInterestRate;
         this.interestCompoundingPeriodType = interestCompoundingPeriodType.getValue();
         this.interestPostingPeriodType = interestPostingPeriodType.getValue();
@@ -452,7 +492,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.minBalanceForInterestCalculation = product.minBalanceForInterestCalculation();
         // this.savingsOfficerHistory = null;
         this.withHoldTax = withHoldTax;
-        this.taxGroup = product.getTaxGroup();
+        // Store TaxGroup entity and denormalized ID
+        TaxGroup productTaxGroup = product.getTaxGroup();
+        this.taxGroup = productTaxGroup;
+        this.taxGroupId = productTaxGroup != null ? productTaxGroup.getId() : null;
     }
 
     /**
@@ -1886,10 +1929,8 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public SavingsAccountingBridgeDTO deriveAccountingBridgeData(final String currencyCode, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, boolean isAccountTransfer, final boolean backdatedTxnsAllowedTill) {
-        return SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(this,
-                SavingsAccountingBridgeDataHelper.findNewTransactions(this, existingTransactionIds, existingReversedTransactionIds,
-                        backdatedTxnsAllowedTill),
-                isAccountTransfer);
+        return SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(this, SavingsAccountingBridgeDataHelper.findNewTransactions(this,
+                existingTransactionIds, existingReversedTransactionIds, backdatedTxnsAllowedTill), isAccountTransfer);
     }
 
     public Collection<Long> findExistingTransactionIds() {
@@ -1948,10 +1989,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     public void update(final SavingsProduct product) {
         this.product = product;
         this.minBalanceForInterestCalculation = product.minBalanceForInterestCalculation();
+        TaxGroup productTaxGroup = product.getTaxGroup();
+        this.taxGroup = productTaxGroup;
+        this.taxGroupId = productTaxGroup != null ? productTaxGroup.getId() : null;
     }
 
+    /**
+     * Updates the savings officer and the denormalized ID field.
+     *
+     * @param savingsOfficer
+     *            the new savings officer
+     */
     public void update(final Staff savingsOfficer) {
         this.savingsOfficer = savingsOfficer;
+        this.savingsOfficerId = savingsOfficer != null ? savingsOfficer.getId() : null;
     }
 
     public void updateAccountNo(final String newAccountNo) {
@@ -2003,6 +2054,24 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.savingsOfficer;
     }
 
+    /**
+     * Returns the Savings Officer (Staff) ID without triggering a lazy load of the Staff entity.
+     *
+     * @return the savings officer ID, or null if no officer is assigned
+     */
+    public Long savingsOfficerId() {
+        return this.savingsOfficerId;
+    }
+
+    /**
+     * Returns the Tax Group ID without triggering a lazy load of the TaxGroup entity.
+     *
+     * @return the tax group ID, or null if no tax group is assigned
+     */
+    public Long taxGroupId() {
+        return this.taxGroupId;
+    }
+
     public Boolean getEnforceMinRequiredBalance() {
         return this.enforceMinRequiredBalance;
     }
@@ -2013,10 +2082,12 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public void unassignSavingsOfficer() {
         this.savingsOfficer = null;
+        this.savingsOfficerId = null;
     }
 
     public void assignSavingsOfficer(final Staff fieldOfficer) {
         this.savingsOfficer = fieldOfficer;
+        this.savingsOfficerId = fieldOfficer != null ? fieldOfficer.getId() : null;
     }
 
     public Long clientId() {
@@ -2055,15 +2126,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return id;
     }
 
+    /**
+     * Checks if the savings account has the specified savings officer assigned. Uses the denormalized savingsOfficerId
+     * to avoid lazy loading the Staff entity.
+     *
+     * @param fromSavingsOfficer
+     *            the staff to compare against
+     * @return true if the savings account has the specified savings officer
+     */
     public boolean hasSavingsOfficer(final Staff fromSavingsOfficer) {
-
-        boolean matchesCurrentSavingsOfficer = false;
-        if (this.savingsOfficer != null) {
-            matchesCurrentSavingsOfficer = this.savingsOfficer.identifiedBy(fromSavingsOfficer);
+        if (this.savingsOfficerId != null) {
+            return fromSavingsOfficer != null && this.savingsOfficerId.equals(fromSavingsOfficer.getId());
         } else {
-            matchesCurrentSavingsOfficer = fromSavingsOfficer == null;
+            return fromSavingsOfficer == null;
         }
-        return matchesCurrentSavingsOfficer;
     }
 
     public void reassignSavingsOfficer(final Staff newSavingsOfficer, final LocalDate assignmentDate) {
@@ -2084,11 +2160,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         } else if (DateUtils.isDateInTheFuture(assignmentDate)) {
             final String errorMessage = "The Savings Officer assignment date (" + assignmentDate + ") cannot be in the future.";
             throw new SavingsOfficerAssignmentDateException("cannot.be.a.future.date", errorMessage, assignmentDate);
-        } else if (latestHistoryRecord != null && this.savingsOfficer.identifiedBy(newSavingsOfficer)) {
+        } else if (latestHistoryRecord != null && this.savingsOfficerId != null
+                && this.savingsOfficerId.equals(newSavingsOfficer.getId())) {
+            // Use savingsOfficerId to avoid lazy load for comparison
             latestHistoryRecord.setStartDate(assignmentDate);
         } else if (latestHistoryRecord != null && latestHistoryRecord.matchesStartDateOf(assignmentDate)) {
             latestHistoryRecord.setSavingsOfficer(newSavingsOfficer);
             this.savingsOfficer = newSavingsOfficer;
+            this.savingsOfficerId = newSavingsOfficer != null ? newSavingsOfficer.getId() : null;
         } else if (latestHistoryRecord != null && latestHistoryRecord.isBeforeStartDate(assignmentDate)) {
             final String errorMessage = "Savings account with identifier " + getId() + " was already assigned before date "
                     + assignmentDate;
@@ -2101,6 +2180,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                 latestHistoryRecord.setEndDate(assignmentDate);
             }
             this.savingsOfficer = newSavingsOfficer;
+            this.savingsOfficerId = newSavingsOfficer != null ? newSavingsOfficer.getId() : null;
             if (isNotSubmittedAndPendingApproval()) {
                 final SavingsOfficerAssignmentHistory savingsOfficerAssignmentHistory = SavingsOfficerAssignmentHistory.createNew(this,
                         this.savingsOfficer, assignmentDate);
@@ -2262,6 +2342,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.approvedOnDate = approvedOn;
         this.approvedBy = currentUser;
+        this.approvedByUserId = currentUser != null ? currentUser.getId() : null;
         actualChanges.put(SavingsApiConstants.localeParamName, command.locale());
         actualChanges.put(SavingsApiConstants.dateFormatParamName, command.dateFormat());
         actualChanges.put(SavingsApiConstants.approvedOnDateParamName, approvedOnDateChange);
@@ -2326,12 +2407,16 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.approvedOnDate = null;
         this.approvedBy = null;
+        this.approvedByUserId = null;
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = null;
         this.closedBy = null;
+        this.closedByUserId = null;
         actualChanges.put(SavingsApiConstants.approvedOnDateParamName, "");
 
         // FIXME - kw - support field officer history for savings accounts
@@ -2492,10 +2577,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = rejectedOn;
         this.rejectedBy = currentUser;
+        this.rejectedByUserId = currentUser != null ? currentUser.getId() : null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = rejectedOn;
         this.closedBy = currentUser;
+        this.closedByUserId = currentUser != null ? currentUser.getId() : null;
 
         actualChanges.put(SavingsApiConstants.localeParamName, command.locale());
         actualChanges.put(SavingsApiConstants.dateFormatParamName, command.dateFormat());
@@ -2553,10 +2641,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = withdrawnOn;
         this.withdrawnBy = currentUser;
+        this.withdrawnByUserId = currentUser != null ? currentUser.getId() : null;
         this.closedOnDate = withdrawnOn;
         this.closedBy = currentUser;
+        this.closedByUserId = currentUser != null ? currentUser.getId() : null;
 
         actualChanges.put(SavingsApiConstants.localeParamName, command.locale());
         actualChanges.put(SavingsApiConstants.dateFormatParamName, command.dateFormat());
@@ -2618,12 +2709,16 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = null;
         this.closedBy = null;
+        this.closedByUserId = null;
         this.activatedOnDate = activationDate;
         this.activatedBy = currentUser;
+        this.activatedByUserId = currentUser != null ? currentUser.getId() : null;
         this.lockedInUntilDate = calculateDateAccountIsLockedUntil(getActivationDate());
 
         /*
@@ -2695,14 +2790,19 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.status = SavingsAccountStatusType.ACTIVE.getValue();
         this.approvedOnDate = appliedonDate;
         this.approvedBy = appliedBy;
+        this.approvedByUserId = appliedBy != null ? appliedBy.getId() : null;
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = null;
         this.closedBy = null;
+        this.closedByUserId = null;
         this.activatedOnDate = appliedonDate;
         this.activatedBy = appliedBy;
+        this.activatedByUserId = appliedBy != null ? appliedBy.getId() : null;
         this.lockedInUntilDate = calculateDateAccountIsLockedUntil(getActivationDate());
     }
 
@@ -2794,10 +2894,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = closedDate;
         this.closedBy = currentUser;
+        this.closedByUserId = currentUser != null ? currentUser.getId() : null;
 
         return actualChanges;
     }
@@ -3486,6 +3589,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.sub_status = SavingsAccountSubStatusEnum.ESCHEAT.getValue();
         this.closedOnDate = DateUtils.getBusinessLocalDate();
         this.closedBy = appUser;
+        this.closedByUserId = appUser != null ? appUser.getId() : null;
         boolean postInterestAsOnDate = false;
         boolean postReversals = false;
         LocalDate transactionDate = DateUtils.getBusinessLocalDate();

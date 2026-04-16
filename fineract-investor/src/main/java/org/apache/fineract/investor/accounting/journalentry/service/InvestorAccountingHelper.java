@@ -21,21 +21,14 @@ package org.apache.fineract.investor.accounting.journalentry.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.accounting.closure.domain.GLClosure;
-import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
-import org.apache.fineract.accounting.common.AccountingConstants;
-import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
-import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccount;
-import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccountRepositoryWrapper;
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
+import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntry;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryRepository;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryType;
 import org.apache.fineract.accounting.journalentry.exception.JournalEntryInvalidException;
 import org.apache.fineract.accounting.journalentry.exception.JournalEntryInvalidException.GlJournalEntryInvalidReason;
-import org.apache.fineract.accounting.producttoaccountmapping.domain.ProductToGLAccountMapping;
-import org.apache.fineract.accounting.producttoaccountmapping.domain.ProductToGLAccountMappingRepository;
-import org.apache.fineract.accounting.producttoaccountmapping.exception.ProductToGLAccountMappingNotFoundException;
+import org.apache.fineract.accounting.producttoaccountmapping.service.ProductToGLAccountResolver;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.PortfolioProductType;
@@ -48,21 +41,13 @@ public class InvestorAccountingHelper {
     public static final String INVESTOR_TRANSFER_IDENTIFIER = "I";
 
     private final JournalEntryRepository glJournalEntryRepository;
-    private final ProductToGLAccountMappingRepository accountMappingRepository;
-    private final FinancialActivityAccountRepositoryWrapper financialActivityAccountRepository;
-    private final GLClosureRepository closureRepository;
+    private final ProductToGLAccountResolver glAccountResolver;
+    private final GLAccountRepository glAccountRepository;
 
-    /**
-     * @param officeId
-     * @param transactionDate
-     */
     public void checkForBranchClosures(Long officeId, final LocalDate transactionDate) {
-        /**
-         * check if an accounting closure has happened for this branch after the transaction Date
-         **/
-        GLClosure gLClosure = getLatestClosureByBranch(officeId);
-        if (gLClosure != null && !DateUtils.isAfter(transactionDate, gLClosure.getClosingDate())) {
-            throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.ACCOUNTING_CLOSED, gLClosure.getClosingDate(), null, null);
+        final LocalDate closingDate = this.glAccountResolver.resolveLatestClosingDateByBranch(officeId);
+        if (closingDate != null && !DateUtils.isAfter(transactionDate, closingDate)) {
+            throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.ACCOUNTING_CLOSED, closingDate, null, null);
         }
     }
 
@@ -87,11 +72,6 @@ public class InvestorAccountingHelper {
         }
     }
 
-    public ProductToGLAccountMapping getChargeOffMappingByCodeValue(final Long loanProductId, final PortfolioProductType productType,
-            final Long chargeOffReasonId) {
-        return accountMappingRepository.findChargeOffReasonMapping(loanProductId, productType.getValue(), chargeOffReasonId);
-    }
-
     private JournalEntry createCreditJournalEntryForInvestor(final Office office, final String currencyCode, final GLAccount account,
             final Long loanId, final Long transactionId, final LocalDate transactionDate, final BigDecimal amount) {
         final boolean manualEntry = false;
@@ -114,30 +94,9 @@ public class InvestorAccountingHelper {
     }
 
     public GLAccount getLinkedGLAccountForLoanProduct(final Long loanProductId, final int accountMappingTypeId) {
-        GLAccount glAccount;
-        if (isOrganizationAccount(accountMappingTypeId)) {
-            FinancialActivityAccount financialActivityAccount = this.financialActivityAccountRepository
-                    .findByFinancialActivityTypeWithNotFoundDetection(accountMappingTypeId);
-            glAccount = financialActivityAccount.getGlAccount();
-        } else {
-            ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(loanProductId,
-                    PortfolioProductType.LOAN.getValue(), accountMappingTypeId);
-
-            if (accountMapping == null) {
-                throw new ProductToGLAccountMappingNotFoundException(PortfolioProductType.LOAN, loanProductId,
-                        AccountingConstants.AccrualAccountsForLoan.fromInt(accountMappingTypeId).toString());
-            }
-            glAccount = accountMapping.getGlAccount();
-        }
-        return glAccount;
-    }
-
-    private boolean isOrganizationAccount(final int accountMappingTypeId) {
-        return FinancialActivity.fromInt(accountMappingTypeId) != null;
-    }
-
-    public GLClosure getLatestClosureByBranch(final long officeId) {
-        return this.closureRepository.getLatestGLClosureByBranch(officeId);
+        final Long glAccountId = this.glAccountResolver.resolveGLAccountIdForProduct(loanProductId, PortfolioProductType.LOAN.getValue(),
+                accountMappingTypeId, null);
+        return this.glAccountRepository.getReferenceById(glAccountId);
     }
 
 }

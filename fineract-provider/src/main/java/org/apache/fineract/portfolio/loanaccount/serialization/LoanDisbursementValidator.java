@@ -26,6 +26,8 @@ import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.exception.InvalidLoanStateTransitionException;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanDisbursalException;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -33,6 +35,7 @@ import org.springframework.stereotype.Component;
 public final class LoanDisbursementValidator {
 
     private final LoanApplicationValidator loanApplicationValidator;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     public void compareDisbursedToApprovedOrProposedPrincipal(final Loan loan, final BigDecimal disbursedAmount,
             final BigDecimal totalDisbursed) {
@@ -40,10 +43,11 @@ public final class LoanDisbursementValidator {
         final BigDecimal totalCapitalizedIncomeAdjustment = MathUtil.nullToZero(loan.getSummary().getTotalCapitalizedIncomeAdjustment());
         final BigDecimal netCapitalizedIncome = totalCapitalizedIncome.subtract(totalCapitalizedIncomeAdjustment);
 
-        if (loan.loanProduct().isDisallowExpectedDisbursements() && loan.loanProduct().isAllowApprovedDisbursedAmountsOverApplied()) {
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        if (productConfig.isDisallowExpectedDisbursements() && productConfig.isAllowApprovedDisbursedAmountsOverApplied()) {
             validateOverMaximumAmount(loan, totalDisbursed, netCapitalizedIncome);
         } else {
-            if (loan.loanProduct().isAllowApprovedDisbursedAmountsOverApplied()) {
+            if (productConfig.isAllowApprovedDisbursedAmountsOverApplied()) {
                 validateOverMaximumAmount(loan, disbursedAmount, netCapitalizedIncome);
             } else {
                 if ((totalDisbursed.compareTo(loan.getApprovedPrincipal()) > 0)
@@ -57,7 +61,8 @@ public final class LoanDisbursementValidator {
     }
 
     public void validateOverMaximumAmount(final Loan loan, final BigDecimal totalDisbursed, final BigDecimal capitalizedIncome) {
-        final BigDecimal maxDisbursedAmount = loanApplicationValidator.getOverAppliedMax(loan);
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        final BigDecimal maxDisbursedAmount = loanApplicationValidator.getOverAppliedMax(loan, productConfig);
         if (totalDisbursed.add(capitalizedIncome).compareTo(maxDisbursedAmount) > 0) {
             final String errorMessage = String.format(
                     "Loan disbursal amount can't be greater than maximum applied loan amount calculation. "

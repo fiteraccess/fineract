@@ -101,7 +101,7 @@ public final class LoanRefundValidator {
     }
 
     public void validateTransactionAmountThreshold(final Loan loan, final LoanTransaction adjustedTransaction) {
-        if (loan.getLoanProduct().isMultiDisburseLoan() && adjustedTransaction == null) {
+        if (loan.isMultiDisburmentLoan() && adjustedTransaction == null) {
             final BigDecimal totalDisbursed = loan.getDisbursedAmount();
             final BigDecimal totalPrincipalAdjusted = loan.getSummary().getTotalPrincipalAdjustments();
             final BigDecimal totalCapitalizedIncome = loan.getSummary().getTotalCapitalizedIncome();

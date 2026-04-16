@@ -65,7 +65,7 @@ public class CodeValueReadPlatformServiceImpl implements CodeValueReadPlatformSe
     }
 
     @Override
-    @Cacheable(value = "code_values", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#code+'cv')")
+    @Cacheable(value = "code_values", key = "#code + ':cv'")
     public List<CodeValueData> retrieveCodeValuesByCode(final String code) {
 
         this.context.authenticatedUser();
@@ -77,7 +77,7 @@ public class CodeValueReadPlatformServiceImpl implements CodeValueReadPlatformSe
     }
 
     @Override
-    @Cacheable(value = "code_values", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#codeId+'cv')")
+    @Cacheable(value = "code_values", key = "#codeId + ':cv'")
     public Collection<CodeValueData> retrieveAllCodeValues(final Long codeId) {
 
         this.context.authenticatedUser();
@@ -89,7 +89,7 @@ public class CodeValueReadPlatformServiceImpl implements CodeValueReadPlatformSe
     }
 
     @Override
-    @Cacheable(value = "code_values", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#codeValueId+'cv_by_id')")
+    @Cacheable(value = "code_values", key = "#codeValueId + ':cv_by_id'")
     public CodeValueData retrieveCodeValue(final Long codeValueId) {
 
         try {

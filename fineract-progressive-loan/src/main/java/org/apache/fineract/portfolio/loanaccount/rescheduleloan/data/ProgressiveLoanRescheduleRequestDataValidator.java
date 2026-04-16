@@ -51,6 +51,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRescheduleRequestToT
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariationType;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.RescheduleLoansApiConstants;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanRescheduleRequest;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.springframework.stereotype.Component;
 
 @Component("progressiveLoanRescheduleRequestDataValidatorImpl")
@@ -60,7 +61,7 @@ public class ProgressiveLoanRescheduleRequestDataValidator implements LoanResche
     private final FromJsonHelper fromJsonHelper;
 
     @Override
-    public void validateForCreateAction(JsonCommand jsonCommand, Loan loan) {
+    public void validateForCreateAction(JsonCommand jsonCommand, Loan loan, CacheableLoanProductConfig productConfig) {
         validateSupportedParameters(jsonCommand, CREATE_REQUEST_DATA_PARAMETERS);
 
         final List<ApiParameterError> dataValidationErrors = new ArrayList<>();

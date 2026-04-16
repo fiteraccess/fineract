@@ -48,6 +48,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -68,6 +69,7 @@ public class InternalCOBApiResource implements InitializingBean {
     private final ToApiJsonSerializer<List> toApiJsonSerializerForList;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final LoanScheduleService loanScheduleService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     protected DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(DATETIME_PATTERN);
 
@@ -113,7 +115,8 @@ public class InternalCOBApiResource implements InitializingBean {
     @Path("loan-reprocess/{loanId}")
     @Transactional
     public void loanReprocess(@Context final UriInfo uriInfo, @PathParam("loanId") long loanId) {
-        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loanRepositoryWrapper.findOneWithNotFoundDetection(loanId));
+        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loanRepositoryWrapper.findOneWithNotFoundDetection(loanId),
+                cacheableLoanProductConfigService.getConfig(loanId));
     }
 
 }
