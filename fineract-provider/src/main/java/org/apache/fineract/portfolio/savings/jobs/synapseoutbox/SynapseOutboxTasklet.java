@@ -135,13 +135,13 @@ public class SynapseOutboxTasklet implements Tasklet {
                 } catch (CallNotPermittedException e) {
                     List<Long> remainingIds = batch.subList(i, batch.size()).stream().map(OutboxEntry::getId).toList();
                     log.warn("Circuit breaker OPEN for taskType={}, resetting {} remaining entries to PENDING.", taskType,
-                            remainingIds.size());
+                            remainingIds.size(),e);
                     outboxRepository.resetToPending(remainingIds);
                     reset += remainingIds.size();
                     return new DrainResult(sent, failed, reset);
                 } catch (SynapsePostingException e) {
                     log.error("Synapse posting failed for entry id={} traceId={} accountId={}: {}", entry.getId(), entry.getTraceId(),
-                            entry.getAccountId(), e.getMessage());
+                            entry.getAccountId(), e.getMessage(),e);
                     outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts());
                     failed++;
                 } catch (Exception e) {

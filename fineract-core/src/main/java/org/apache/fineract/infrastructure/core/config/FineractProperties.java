@@ -717,6 +717,7 @@ public class FineractProperties {
     public static class FineractSynapseProperties {
 
         private boolean enabled;
+        private boolean forceEnabled;
         private String baseUrl;
         private String batchEndpoint;
         private long connectTimeoutMs;

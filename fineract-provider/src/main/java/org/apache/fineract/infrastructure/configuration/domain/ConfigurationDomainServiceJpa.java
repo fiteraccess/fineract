@@ -29,6 +29,7 @@ import org.apache.fineract.infrastructure.cache.domain.PlatformCache;
 import org.apache.fineract.infrastructure.cache.domain.PlatformCacheRepository;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.configuration.data.GlobalConfigurationPropertyData;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.config.cache.CacheConfig;
 import org.apache.fineract.useradministration.domain.Permission;
 import org.apache.fineract.useradministration.domain.PermissionRepository;
@@ -45,6 +46,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     private final PermissionRepository permissionRepository;
     private final GlobalConfigurationRepositoryWrapper globalConfigurationRepository;
     private final PlatformCacheRepository cacheTypeRepository;
+    private final FineractProperties fineractProperties;
 
     @Override
     public boolean isMakerCheckerEnabledForTask(final String taskPermissionCode) {
@@ -573,6 +575,9 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
 
     @Override
     public boolean isSynapseInterestPostingEnabled() {
+        if (fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isForceEnabled()) {
+            return true;
+        }
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING).isEnabled();
     }
 }
