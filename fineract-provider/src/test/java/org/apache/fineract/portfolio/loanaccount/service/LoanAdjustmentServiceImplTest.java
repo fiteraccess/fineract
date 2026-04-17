@@ -77,6 +77,8 @@ import org.apache.fineract.portfolio.loanaccount.serialization.LoanChargeValidat
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanTransactionValidator;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanUpdateCommandFromApiJsonDeserializer;
 import org.apache.fineract.portfolio.loanaccount.service.adjustment.LoanAdjustmentServiceImpl;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
 import org.apache.fineract.portfolio.repaymentwithpostdatedchecks.domain.PostDatedChecksRepository;
@@ -194,6 +196,8 @@ class LoanAdjustmentServiceImplTest {
     private LoanChargeValidator loanChargeValidator;
     @Mock
     private LoanJournalEntryPoster journalEntryPoster;
+    @Mock
+    private CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Test
     void givenMerchantIssuedRefundTransactionWithRelatedTransactions_whenAdjustExistingTransaction_thenRelatedTransactionsAreReversedAndEventsTriggered() {
@@ -234,6 +238,11 @@ class LoanAdjustmentServiceImplTest {
         when(loan.isClosedWrittenOff()).thenReturn(false);
         when(newTransactionDetail.isRepaymentLikeType()).thenReturn(true);
 
+        // Mock cacheable product config
+        when(loan.getProductId()).thenReturn(1L);
+        CacheableLoanProductConfig productConfig = mock(CacheableLoanProductConfig.class);
+        when(cacheableLoanProductConfigService.getConfig(1L)).thenReturn(productConfig);
+
         // Act
         underTest.adjustExistingTransaction(loan, newTransactionDetail, transactionForAdjustment, scheduleGeneratorDTO, reversalExternalId);
 
@@ -272,6 +281,11 @@ class LoanAdjustmentServiceImplTest {
         doNothing().when(loanTransactionValidator).validateActivityNotBeforeClientOrGroupTransferDate(any(), any(), any());
         when(loan.isClosedWrittenOff()).thenReturn(false);
         when(newTransactionDetail.isRepaymentLikeType()).thenReturn(true);
+
+        // Mock cacheable product config
+        when(loan.getProductId()).thenReturn(1L);
+        CacheableLoanProductConfig productConfig = mock(CacheableLoanProductConfig.class);
+        when(cacheableLoanProductConfigService.getConfig(1L)).thenReturn(productConfig);
 
         // Act
         underTest.adjustExistingTransaction(loan, newTransactionDetail, transactionForAdjustment, scheduleGeneratorDTO, reversalExternalId);

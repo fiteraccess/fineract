@@ -41,6 +41,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanDisbursementDetails;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariationType;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariations;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestRecalculationCompoundingMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanRescheduleStrategyMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.RecalculationFrequencyType;
@@ -62,7 +63,8 @@ public class LoanTermVariationsMapper {
         return constructFloatingInterestRates(annualNominalInterestRate, floatingRateDTO, loanTermVariations, loan);
     }
 
-    public LoanApplicationTerms constructLoanApplicationTerms(final ScheduleGeneratorDTO scheduleGeneratorDTO, final Loan loan) {
+    public LoanApplicationTerms constructLoanApplicationTerms(final ScheduleGeneratorDTO scheduleGeneratorDTO, final Loan loan,
+            final CacheableLoanProductConfig productConfig) {
         final Integer loanTermFrequency = loan.getTermFrequency();
         NthDayType nthDayType = null;
         DayOfWeekType dayOfWeekType = null;
@@ -84,7 +86,7 @@ public class LoanTermVariationsMapper {
         RecalculationFrequencyType compoundingFrequencyType = null;
         LoanRescheduleStrategyMethod rescheduleStrategyMethod = null;
         CalendarHistoryDataWrapper calendarHistoryDataWrapper;
-        RepaymentStartDateType repaymentStartDateType = loan.getLoanProduct().getRepaymentStartDateType();
+        RepaymentStartDateType repaymentStartDateType = productConfig.getRepaymentStartDateType();
         boolean allowCompoundingOnEod = false;
         if (loan.getLoanProductRelatedDetail().isInterestRecalculationEnabled()) {
             restCalendarInstance = scheduleGeneratorDTO.getCalendarInstanceForInterestRecalculation();
@@ -110,15 +112,14 @@ public class LoanTermVariationsMapper {
         return LoanApplicationTerms.assembleFrom(scheduleGeneratorDTO.getCurrency(), loanTermFrequency, loan.getTermPeriodFrequencyType(),
                 nthDayType, dayOfWeekType, loan.getDisbursementDate(), loan.getExpectedFirstRepaymentOnDate(),
                 scheduleGeneratorDTO.getCalculatedRepaymentsStartingFromDate(), loan.getInArrearsTolerance(),
-                loan.getLoanRepaymentScheduleDetail(), loan.getLoanProduct().isMultiDisburseLoan(), loan.getFixedEmiAmount(),
-                disbursementData, loan.getMaxOutstandingLoanBalance(), interestChargedFromDate,
-                loan.getLoanProduct().getPrincipalThresholdForLastInstallment(),
+                loan.getLoanRepaymentScheduleDetail(), productConfig.isMultiDisburseLoan(), loan.getFixedEmiAmount(), disbursementData,
+                loan.getMaxOutstandingLoanBalance(), interestChargedFromDate, productConfig.getPrincipalThresholdForLastInstallment(),
                 loan.getLoanProductRelatedDetail().getInstallmentAmountInMultiplesOf(), recalculationFrequencyType, restCalendarInstance,
                 compoundingMethod, compoundingCalendarInstance, compoundingFrequencyType,
-                loan.getLoanProduct().preCloseInterestCalculationStrategy(), rescheduleStrategyMethod, calendar,
-                loan.getApprovedPrincipal(), annualNominalInterestRate, loanTermVariations, calendarHistoryDataWrapper,
-                scheduleGeneratorDTO.getNumberOfdays(), scheduleGeneratorDTO.isSkipRepaymentOnFirstDayofMonth(), holidayDetailDTO,
-                allowCompoundingOnEod, scheduleGeneratorDTO.isFirstRepaymentDateAllowedOnHoliday(),
+                productConfig.getPreCloseInterestCalculationStrategy(), rescheduleStrategyMethod, calendar, loan.getApprovedPrincipal(),
+                annualNominalInterestRate, loanTermVariations, calendarHistoryDataWrapper, scheduleGeneratorDTO.getNumberOfdays(),
+                scheduleGeneratorDTO.isSkipRepaymentOnFirstDayofMonth(), holidayDetailDTO, allowCompoundingOnEod,
+                scheduleGeneratorDTO.isFirstRepaymentDateAllowedOnHoliday(),
                 scheduleGeneratorDTO.isInterestToBeRecoveredFirstWhenGreaterThanEMI(), loan.getFixedPrincipalPercentagePerInstallment(),
                 scheduleGeneratorDTO.isPrincipalCompoundingDisabledForOverdueLoans(), repaymentStartDateType, loan.getSubmittedOnDate(),
                 loan.isAllowFullTermForTranche());

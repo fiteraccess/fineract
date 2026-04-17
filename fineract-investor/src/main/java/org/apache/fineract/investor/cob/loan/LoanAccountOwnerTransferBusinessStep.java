@@ -85,7 +85,7 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
             ExternalTransferStatus firstTransferStatus = transferDataList.get(0).getStatus();
             ExternalTransferStatus secondTransferStatus = transferDataList.get(1).getStatus();
 
-            if (delayedSettlementAttributeService.isEnabled(loan.getLoanProduct().getId())) {
+            if (delayedSettlementAttributeService.isEnabled(loan.getProductId())) {
                 throw new IllegalStateException(String.format("Delayed Settlement enabled, but found 2 transfers of statuses: %s and %s",
                         firstTransferStatus, secondTransferStatus));
             }
@@ -180,7 +180,7 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
 
     private ExternalAssetOwner determinePreviousOwnerAndCleanupIfNeeded(final Loan loan, final LocalDate settlementDate,
             final ExternalAssetOwnerTransfer externalAssetOwnerTransfer) {
-        if (!delayedSettlementAttributeService.isEnabled(loan.getLoanProduct().getId())) {
+        if (!delayedSettlementAttributeService.isEnabled(loan.getProductId())) {
             // When delayed settlement is disabled, asset is directly sold to investor, and we are the previous owner.
             return null;
         }

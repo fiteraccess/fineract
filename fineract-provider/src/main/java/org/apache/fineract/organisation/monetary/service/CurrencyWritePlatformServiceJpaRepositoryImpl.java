@@ -33,6 +33,7 @@ import org.apache.fineract.organisation.monetary.exception.CurrencyInUseExceptio
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanProductReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsProductReadPlatformService;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -46,6 +47,7 @@ public class CurrencyWritePlatformServiceJpaRepositoryImpl implements CurrencyWr
 
     @Transactional
     @Override
+    @CacheEvict(value = "currencies", allEntries = true)
     public CurrencyUpdateResponse updateAllowedCurrencies(final CurrencyUpdateRequest request) {
         final var currencies = request.getCurrencies();
 

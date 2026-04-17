@@ -85,8 +85,8 @@ public class SavingsPerformanceBenchmarkTest {
     }
 
     /**
-     * Benchmark 1: Verify O(1) deposit latency across different account sizes. Creates accounts with 0, 100, 1000 historical
-     * transactions, then measures the time for a single deposit on each.
+     * Benchmark 1: Verify O(1) deposit latency across different account sizes. Creates accounts with 0, 100, 1000
+     * historical transactions, then measures the time for a single deposit on each.
      */
     @Test
     public void testDepositLatencyIsConstantRegardlessOfHistorySize() {
@@ -130,8 +130,8 @@ public class SavingsPerformanceBenchmarkTest {
 
         // Verify O(1): latency at largest size should be <= O1_THRESHOLD * latency at smallest
         double ratio = avgLatencies[avgLatencies.length - 1] / avgLatencies[0];
-        LOG.info("Latency ratio (size {} / size {}): {} (threshold: {})",
-                historySizes[historySizes.length - 1], historySizes[0], String.format("%.2f", ratio), O1_THRESHOLD);
+        LOG.info("Latency ratio (size {} / size {}): {} (threshold: {})", historySizes[historySizes.length - 1], historySizes[0],
+                String.format("%.2f", ratio), O1_THRESHOLD);
         assertTrue(ratio <= O1_THRESHOLD,
                 String.format("O(1) violation: latency at %d txns (%.2f ms) is %.2fx latency at %d txns (%.2f ms), threshold is %.1fx",
                         historySizes[historySizes.length - 1], avgLatencies[avgLatencies.length - 1], ratio, historySizes[0],
@@ -213,8 +213,7 @@ public class SavingsPerformanceBenchmarkTest {
         LOG.info("╚══════════════════════════════════════════════╝");
 
         if (tps < TPS_TARGET) {
-            LOG.warn("TPS ({}) is below target ({}). CI environments may have limited resources.",
-                    String.format("%.1f", tps), TPS_TARGET);
+            LOG.warn("TPS ({}) is below target ({}). CI environments may have limited resources.", String.format("%.1f", tps), TPS_TARGET);
         }
         // Don't fail on TPS — CI environments vary widely
         assertTrue(totalOps > 0, "At least some deposits should succeed");
@@ -235,8 +234,7 @@ public class SavingsPerformanceBenchmarkTest {
         final Integer savingsId = createAndActivateAccount(clientID, savingsProductID);
 
         // Seed account
-        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "100000", getTransactionDate(),
-                CommonConstants.RESPONSE_RESOURCE_ID);
+        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "100000", getTransactionDate(), CommonConstants.RESPONSE_RESOURCE_ID);
 
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         AtomicInteger successCount = new AtomicInteger(0);
@@ -294,9 +292,8 @@ public class SavingsPerformanceBenchmarkTest {
 
     private Integer createSimpleSavingsProduct() {
         SavingsProductHelper productHelper = new SavingsProductHelper();
-        final String savingsProductJSON = productHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsMonthly().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withMinimumOpenningBalance("0").build();
+        final String savingsProductJSON = productHelper.withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsMonthly()
+                .withInterestCalculationPeriodTypeAsDailyBalance().withMinimumOpenningBalance("0").build();
         return SavingsProductHelper.createSavingsProduct(savingsProductJSON, this.requestSpec, this.responseSpec);
     }
 
@@ -332,4 +329,3 @@ public class SavingsPerformanceBenchmarkTest {
         LOG.info("╚══════════════════════════════════════════════╝");
     }
 }
-

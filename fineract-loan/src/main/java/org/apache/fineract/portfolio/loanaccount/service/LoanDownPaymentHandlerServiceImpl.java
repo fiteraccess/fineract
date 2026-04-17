@@ -47,6 +47,7 @@ import org.apache.fineract.portfolio.loanaccount.exception.InvalidLoanStateTrans
 import org.apache.fineract.portfolio.loanaccount.exception.InvalidLoanTransactionTypeException;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanDownPaymentTransactionValidator;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanRefundValidator;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -67,9 +68,10 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
 
     @Override
     public LoanTransaction handleDownPayment(ScheduleGeneratorDTO scheduleGeneratorDTO, JsonCommand command,
-            LoanTransaction disbursementTransaction, Loan loan) {
+            LoanTransaction disbursementTransaction, Loan loan, CacheableLoanProductConfig productConfig) {
         businessEventNotifierService.notifyPreBusinessEvent(new LoanTransactionDownPaymentPreBusinessEvent(loan));
-        LoanTransaction downPaymentTransaction = handleDownPayment(loan, disbursementTransaction, command, scheduleGeneratorDTO);
+        LoanTransaction downPaymentTransaction = handleDownPayment(loan, disbursementTransaction, command, scheduleGeneratorDTO,
+                productConfig);
         if (downPaymentTransaction != null) {
             downPaymentTransaction = loanTransactionRepository.saveAndFlush(downPaymentTransaction);
             journalEntryPoster.postJournalEntriesForLoanTransaction(downPaymentTransaction, false, false);
@@ -80,7 +82,8 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
 
     @Override
     public void handleRepaymentOrRecoveryOrWaiverTransaction(final Loan loan, final LoanTransaction loanTransaction,
-            final LoanTransaction adjustedTransaction, final ScheduleGeneratorDTO scheduleGeneratorDTO) {
+            final LoanTransaction adjustedTransaction, final ScheduleGeneratorDTO scheduleGeneratorDTO,
+            final CacheableLoanProductConfig productConfig) {
         if (loanTransaction.isRecoveryRepayment()) {
             loanLifecycleStateMachine.transition(LoanEvent.LOAN_RECOVERY_PAYMENT, loan);
         }
@@ -157,7 +160,7 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
             if (loan.isCumulativeSchedule() && loan.isInterestBearingAndInterestRecalculationEnabled()) {
                 loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
             } else if (loan.isProgressiveSchedule()) {
-                loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+                loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO, productConfig);
             }
             reprocessLoanTransactionsService.reprocessTransactions(loan);
         }
@@ -171,7 +174,7 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
             loanBalanceService.updateLoanSummaryDerivedFields(loan);
         }
 
-        if (loan.getLoanProduct().isMultiDisburseLoan()) {
+        if (loan.isMultiDisburmentLoan()) {
             final BigDecimal totalDisbursed = loan.getDisbursedAmount();
             final BigDecimal totalPrincipalAdjusted = loan.getSummary().getTotalPrincipalAdjustments();
             final BigDecimal totalCapitalizedIncome = loan.getSummary().getTotalCapitalizedIncome();
@@ -185,7 +188,7 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
     }
 
     private LoanTransaction handleDownPayment(final Loan loan, final LoanTransaction disbursementTransaction, final JsonCommand command,
-            final ScheduleGeneratorDTO scheduleGeneratorDTO) {
+            final ScheduleGeneratorDTO scheduleGeneratorDTO, final CacheableLoanProductConfig productConfig) {
         final LocalDate disbursedOn = command.localDateValueOfParameterNamed(ACTUAL_DISBURSEMENT_DATE);
         final BigDecimal disbursedAmountPercentageForDownPayment = loan.getLoanRepaymentScheduleDetail()
                 .getDisbursedAmountPercentageForDownPayment();
@@ -195,9 +198,8 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
         }
         Money downPaymentMoney = Money.of(loan.getCurrency(),
                 MathUtil.percentageOf(disbursementTransaction.getAmount(), disbursedAmountPercentageForDownPayment, 19));
-        if (loan.getLoanProductRelatedDetail().getInstallmentAmountInMultiplesOf() != null) {
-            downPaymentMoney = Money.roundToMultiplesOf(downPaymentMoney,
-                    loan.getLoanProductRelatedDetail().getInstallmentAmountInMultiplesOf());
+        if (productConfig.getInstallmentAmountInMultiplesOf() != null) {
+            downPaymentMoney = Money.roundToMultiplesOf(downPaymentMoney, productConfig.getInstallmentAmountInMultiplesOf());
         }
         final Money adjustedDownPaymentMoney = switch (loan.getLoanProductRelatedDetail().getLoanScheduleType()) {
             // For Cumulative loan: To check whether the loan was overpaid when the disbursement happened and to get the
@@ -229,7 +231,7 @@ public class LoanDownPaymentHandlerServiceImpl implements LoanDownPaymentHandler
             loanDownPaymentTransactionValidator.validateRepaymentDateIsOnNonWorkingDay(downPaymentTransaction.getTransactionDate(),
                     holidayDetailDTO.getWorkingDays(), holidayDetailDTO.isAllowTransactionsOnNonWorkingDay());
 
-            handleRepaymentOrRecoveryOrWaiverTransaction(loan, downPaymentTransaction, null, scheduleGeneratorDTO);
+            handleRepaymentOrRecoveryOrWaiverTransaction(loan, downPaymentTransaction, null, scheduleGeneratorDTO, productConfig);
             return downPaymentTransaction;
         } else {
             return null;

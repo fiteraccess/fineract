@@ -556,7 +556,7 @@ class AccountingServiceImplTest {
         public Loan createMockedLoan() {
             Loan loan = mock(Loan.class);
             when(loan.getId()).thenReturn(LOAN_ID);
-            when(loan.productId()).thenReturn(LOAN_PRODUCT_ID);
+            when(loan.getProductId()).thenReturn(LOAN_PRODUCT_ID);
 
             Office office = Office.headOffice("office", LocalDate.of(2024, 9, 27), new ExternalId("officeId"));
             when(loan.getOffice()).thenReturn(office);
@@ -573,7 +573,7 @@ class AccountingServiceImplTest {
         public Loan createMockedOverpaidLoan() {
             Loan loan = mock(Loan.class);
             when(loan.getId()).thenReturn(LOAN_ID);
-            when(loan.productId()).thenReturn(LOAN_PRODUCT_ID);
+            when(loan.getProductId()).thenReturn(LOAN_PRODUCT_ID);
             when(loan.getStatus()).thenReturn(LoanStatus.OVERPAID);
 
             Office office = Office.headOffice("office", LocalDate.of(2024, 9, 27), new ExternalId("officeId"));

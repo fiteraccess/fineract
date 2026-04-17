@@ -18,7 +18,6 @@
  */
 package org.apache.fineract.infrastructure.core.data;
 
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
@@ -55,8 +54,8 @@ public class DateFormat {
 
     private void validate(String dateTimeFormat) {
         try {
-            DateTimeFormatter formatter = new DateTimeFormatterBuilder().parseCaseInsensitive().parseLenient().appendPattern(dateTimeFormat)
-                    .optionalStart().appendPattern(TIME_PATTERN).optionalEnd().parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
+            new DateTimeFormatterBuilder().parseCaseInsensitive().parseLenient().appendPattern(dateTimeFormat).optionalStart()
+                    .appendPattern(TIME_PATTERN).optionalEnd().parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
                     .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0).parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0).toFormatter()
                     .withResolverStyle(ResolverStyle.STRICT);
         } catch (final IllegalArgumentException | DateTimeParseException e) {

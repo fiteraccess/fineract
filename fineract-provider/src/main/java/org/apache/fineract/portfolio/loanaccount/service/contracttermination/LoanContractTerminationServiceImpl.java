@@ -52,6 +52,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanTransactionValidator;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.domain.Note;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,7 @@ public class LoanContractTerminationServiceImpl {
     private final LoanChargeValidator loanChargeValidator;
     private final ProgressiveLoanTransactionValidator loanTransactionValidator;
     private final LoanTransactionService loanTransactionService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     public CommandProcessingResult applyContractTermination(final JsonCommand command) {
         Loan loan = loanAssembler.assembleFrom(command.getLoanId());
@@ -93,7 +95,7 @@ public class LoanContractTerminationServiceImpl {
         changes.put(LoanApiConstants.subStatusAttributeName, loan.getLoanSubStatus().getCode());
 
         if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan);
+            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
             reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(contractTermination));
             loan.addLoanTransaction(contractTermination);
         } else {
@@ -160,7 +162,8 @@ public class LoanContractTerminationServiceImpl {
         if (loan.isCumulativeSchedule() && loan.isInterestBearingAndInterestRecalculationEnabled()) {
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else if (loan.isProgressiveSchedule()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+            loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
         }
 
         reprocessLoanTransactionsService.reprocessTransactions(loan);

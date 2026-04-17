@@ -43,7 +43,8 @@ public final class SavingsAccountingBridgeDataHelper {
 
     public static List<SavingsAccountTransaction> findNewTransactions(final SavingsAccount account, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, final boolean backdatedTxnsAllowedTill) {
-        final List<SavingsAccountTransaction> transactions = backdatedTxnsAllowedTill ? account.getSavingsAccountTransactionsWithPivotConfig()
+        final List<SavingsAccountTransaction> transactions = backdatedTxnsAllowedTill
+                ? account.getSavingsAccountTransactionsWithPivotConfig()
                 : account.getTransactions();
         final List<SavingsAccountTransaction> newTransactions = new ArrayList<>();
         for (final SavingsAccountTransaction transaction : transactions) {

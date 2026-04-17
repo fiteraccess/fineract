@@ -32,7 +32,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.cob.data.ConfiguredJobNamesDTO;
@@ -43,6 +42,7 @@ import org.apache.fineract.cob.service.ConfigJobParameterService;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.springframework.stereotype.Component;
 
@@ -81,15 +81,15 @@ public class ConfigureBusinessStepApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "List Business Step Configurations for a Job", description = "Updates the Business steps execution order for a job")
     @RequestBody(content = @Content(schema = @Schema(implementation = BusinessStepRequest.class)))
-    @ApiResponse(responseCode = "204", description = "NO_CONTENT")
-    public Response updateJobBusinessStepConfig(@PathParam("jobName") @Parameter(description = "jobName") final String jobName,
+    @ApiResponse(responseCode = "200", description = "OK")
+    public String updateJobBusinessStepConfig(@PathParam("jobName") @Parameter(description = "jobName") final String jobName,
             @Parameter(hidden = true) BusinessStepRequest businessStepRequest) {
 
         final CommandWrapper commandRequest = new CommandWrapperBuilder().updateBusinessStepConfig(jobName)
                 .withJson(toApiJsonSerializer.serialize(businessStepRequest)).build();
 
-        commandWritePlatformService.logCommandSource(commandRequest);
-        return Response.status(Response.Status.NO_CONTENT).build();
+        final CommandProcessingResult result = commandWritePlatformService.logCommandSource(commandRequest);
+        return toApiJsonSerializer.serialize(result);
     }
 
     @GET

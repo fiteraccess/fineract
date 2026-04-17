@@ -22,12 +22,13 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.portfolio.loanaccount.data.ScheduleGeneratorDTO;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 
 public interface LoanDownPaymentHandlerService {
 
     LoanTransaction handleDownPayment(ScheduleGeneratorDTO scheduleGeneratorDTO, JsonCommand command,
-            LoanTransaction disbursementTransaction, Loan loan);
+            LoanTransaction disbursementTransaction, Loan loan, CacheableLoanProductConfig loanProductConfig);
 
     void handleRepaymentOrRecoveryOrWaiverTransaction(Loan loan, LoanTransaction newTransactionDetail,
-            LoanTransaction transactionForAdjustment, ScheduleGeneratorDTO scheduleGeneratorDTO);
+            LoanTransaction transactionForAdjustment, ScheduleGeneratorDTO scheduleGeneratorDTO, CacheableLoanProductConfig productConfig);
 }

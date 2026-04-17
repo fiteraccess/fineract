@@ -350,8 +350,7 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
     @Override
     public void createJournalEntryForReversedLoanTransaction(final LocalDate transactionDate, final String loanTransactionId,
             final Long officeId) {
-        final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(officeId);
-        this.helper.checkForBranchClosures(latestGLClosure, transactionDate);
+        this.helper.checkForBranchClosures(officeId, transactionDate);
         final String transactionId = AccountingProcessorHelper.LOAN_TRANSACTION_IDENTIFIER + loanTransactionId;
         final List<JournalEntry> journalEntries = this.glJournalEntryRepository.findJournalEntries(transactionId,
                 PortfolioProductType.LOAN.getValue());
@@ -674,10 +673,11 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
             this.organisationCurrencyRepository.findOneWithNotFoundDetection(currencyCode);
 
             journalEntries.add(JournalEntry.createNew(office, paymentDetail, glAccount, currencyCode, transactionId, manualEntry,
-                    transactionDate, type, singleDebitOrCreditEntryCommand.getAmount(), comments, null, null, referenceNumber, null,
-                    null, null, null));
+                    transactionDate, type, singleDebitOrCreditEntryCommand.getAmount(), comments, null, null, referenceNumber, null, null,
+                    null, null));
         }
-        helper.persistJournalEntries(journalEntries).forEach(journalEntry -> accountingService.createMappingToOwner(externalAssetOwner, journalEntry));
+        helper.persistJournalEntries(journalEntries)
+                .forEach(journalEntry -> accountingService.createMappingToOwner(externalAssetOwner, journalEntry));
     }
 
     /**
@@ -784,12 +784,11 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
                 comments = singleDebitOrCreditEntryCommand.getComments();
             }
 
-            journalEntries.add(JournalEntry.createNew(office, null, glAccount, currencyCode, transactionId, manualEntry,
-                    transactionDate, type, singleDebitOrCreditEntryCommand.getAmount(), comments, null, null, null, null, null, null,
-                    null));
-            journalEntries.add(JournalEntry.createNew(office, null, contraAccount, currencyCode, transactionId, manualEntry,
-                    transactionDate, contraType, singleDebitOrCreditEntryCommand.getAmount(), comments, null, null, null, null, null,
-                    null, null));
+            journalEntries.add(JournalEntry.createNew(office, null, glAccount, currencyCode, transactionId, manualEntry, transactionDate,
+                    type, singleDebitOrCreditEntryCommand.getAmount(), comments, null, null, null, null, null, null, null));
+            journalEntries
+                    .add(JournalEntry.createNew(office, null, contraAccount, currencyCode, transactionId, manualEntry, transactionDate,
+                            contraType, singleDebitOrCreditEntryCommand.getAmount(), comments, null, null, null, null, null, null, null));
         }
         helper.persistJournalEntries(journalEntries);
     }
@@ -887,7 +886,7 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
             writeOffReasonAdvancedMappingData = new AdvancedMappingtDTO(loan.getWriteOffReason().getId(), BigDecimal.ZERO);
         }
 
-        return new AccountingBridgeDataDTO(loan.getId(), loan.productId(), loan.getOfficeId(), currencyCode,
+        return new AccountingBridgeDataDTO(loan.getId(), loan.getProductId(), loan.getOfficeId(), currencyCode,
                 loan.getSummary().getTotalInterestCharged(), loan.isCashBasedAccountingEnabledOnLoanProduct(),
                 loan.isUpfrontAccrualAccountingEnabledOnLoanProduct(), loan.isPeriodicAccrualAccountingEnabledOnLoanProduct(),
                 isAccountTransfer, wasChargedOffAtTransactionTime, loan.isFraud(), loan.fetchChargeOffReasonId(), loan.isClosedWrittenOff(),

@@ -296,6 +296,9 @@ public class SavingsApplicationProcessWritePlatformServiceJpaRepositoryImpl impl
             checkClientOrGroupActive(account);
             account.modifyApplication(command, changes);
             account.validateNewApplicationState(SAVINGS_ACCOUNT_RESOURCE_NAME);
+
+            this.savingsProductRepository.findById(account.productId())
+                    .orElseThrow(() -> new SavingsProductNotFoundException(account.productId()));
             account.validateAccountValuesWithProduct();
 
             if (!changes.isEmpty()) {

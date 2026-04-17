@@ -148,7 +148,7 @@ public class OfficeReadPlatformServiceImpl implements OfficeReadPlatformService 
     }
 
     @Override
-    @Cacheable(value = "offices", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#root.target.context.authenticatedUser().getOffice().getHierarchy()+'of')")
+    @Cacheable(value = "offices", key = "#root.target.context.authenticatedUser().getOffice().getHierarchy() + ':offices'")
     public Collection<OfficeData> retrieveAllOffices(final boolean includeAllOffices, final SearchParameters searchParameters) {
         final AppUser currentUser = this.context.authenticatedUser();
         final String hierarchy = currentUser.getOffice().getHierarchy();
@@ -175,7 +175,7 @@ public class OfficeReadPlatformServiceImpl implements OfficeReadPlatformService 
     }
 
     @Override
-    @Cacheable(value = "officesForDropdown", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#root.target.context.authenticatedUser().getOffice().getHierarchy()+'ofd')")
+    @Cacheable(value = "officesForDropdown", key = "#root.target.context.authenticatedUser().getOffice().getHierarchy() + ':offices_for_dropdown'")
     public Collection<OfficeData> retrieveAllOfficesForDropdown() {
         final AppUser currentUser = this.context.authenticatedUser();
 
@@ -189,7 +189,7 @@ public class OfficeReadPlatformServiceImpl implements OfficeReadPlatformService 
     }
 
     @Override
-    @Cacheable(value = "officesById", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#officeId)")
+    @Cacheable(value = "officesById", key = "#officeId")
     public OfficeData retrieveOffice(final Long officeId) {
 
         try {

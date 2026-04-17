@@ -143,12 +143,27 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @JoinColumn(name = "product_id", nullable = false)
     private LoanProduct loanProduct;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "fund_id")
-    private Fund fund;
+    @Column(name = "product_id", insertable = false, updatable = false)
+    private Long productId;
+    /**
+     * Fund ID reference. The full Fund entity is no longer EAGER loaded to avoid unnecessary JOINs on every loan
+     * operation. Use {@link #getFundId()} to get the ID without triggering a lazy load.
+     */
+    @Column(name = "fund_id")
+    private Long fundId;
 
-    @Setter
-    @ManyToOne(fetch = FetchType.EAGER)
+    /**
+     * Loan Officer ID reference. The full Staff entity is no longer EAGER loaded to avoid unnecessary JOINs on every
+     * loan operation. Use {@link #getLoanOfficerId()} to get the ID without triggering a lazy load.
+     */
+    @Column(name = "loan_officer_id", insertable = false, updatable = false)
+    private Long loanOfficerId;
+
+    /**
+     * Loan Officer entity reference. Changed from EAGER to LAZY to avoid unnecessary JOINs. Use {@link #loanOfficerId}
+     * when only the ID is needed. Use {@link #updateLoanOfficer(Staff)} to set the loan officer.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "loan_officer_id")
     private Staff loanOfficer;
 
@@ -202,6 +217,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Column(name = "rejectedon_date")
     private LocalDate rejectedOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "rejectedon_userid", insertable = false, updatable = false)
+    private Long rejectedByUserId;
+
     @Setter()
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rejectedon_userid")
@@ -211,6 +230,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Column(name = "withdrawnon_date")
     private LocalDate withdrawnOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "withdrawnon_userid", insertable = false, updatable = false)
+    private Long withdrawnByUserId;
+
     @Setter()
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "withdrawnon_userid")
@@ -219,6 +242,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Setter()
     @Column(name = "approvedon_date")
     private LocalDate approvedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "approvedon_userid", insertable = false, updatable = false)
+    private Long approvedByUserId;
 
     @Setter()
     @ManyToOne(fetch = FetchType.LAZY)
@@ -233,6 +260,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Column(name = "disbursedon_date")
     private LocalDate actualDisbursementDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "disbursedon_userid", insertable = false, updatable = false)
+    private Long disbursedByUserId;
+
     @Setter()
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "disbursedon_userid")
@@ -241,6 +272,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Setter()
     @Column(name = "closedon_date")
     private LocalDate closedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "closedon_userid", insertable = false, updatable = false)
+    private Long closedByUserId;
 
     @Setter()
     @ManyToOne(fetch = FetchType.LAZY)
@@ -254,6 +289,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Setter
     @Column(name = "rescheduledon_date")
     private LocalDate rescheduledOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "rescheduledon_userid", insertable = false, updatable = false)
+    private Long rescheduledByUserId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rescheduledon_userid")
@@ -509,8 +548,11 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.client = client;
         this.group = group;
         this.loanType = loanType;
-        this.fund = fund;
+        // Store Fund entity and denormalized ID
+        this.fundId = fund != null ? fund.getId() : null;
+        // Store Staff entity and denormalized ID
         this.loanOfficer = loanOfficer;
+        this.loanOfficerId = loanOfficer != null ? loanOfficer.getId() : null;
         this.loanPurpose = loanPurpose;
 
         this.transactionProcessingStrategyCode = transactionProcessingStrategy.getCode();
@@ -683,7 +725,18 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     }
 
     public void updateFund(final Fund fund) {
-        this.fund = fund;
+        this.fundId = fund != null ? fund.getId() : null;
+    }
+
+    /**
+     * Updates the loan officer and the denormalized ID field.
+     *
+     * @param loanOfficer
+     *            the new loan officer
+     */
+    public void updateLoanOfficer(final Staff loanOfficer) {
+        this.loanOfficer = loanOfficer;
+        this.loanOfficerId = loanOfficer != null ? loanOfficer.getId() : null;
     }
 
     public void updateLoanPurpose(final CodeValue loanPurpose) {
@@ -720,7 +773,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     }
 
     private boolean isInterestRecalculationEnabledForProduct() {
-        return this.loanProduct.isInterestRecalculationEnabled();
+        return this.loanRepaymentScheduleDetail.isInterestRecalculationEnabled();
     }
 
     public boolean isMultiDisburmentLoan() {
@@ -850,6 +903,14 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         for (final LoanRepaymentScheduleInstallment repaymentPeriod : installments) {
             repaymentPeriod.updateObligationsMet(getCurrency(), actualDisbursementDate);
         }
+    }
+
+    public boolean isLinkedToFloatingInterestRate() {
+        return this.loanProduct.isLinkedToFloatingInterestRate();
+    }
+
+    public boolean isArrearsBasedOnOriginalSchedule() {
+        return this.loanProduct.isArrearsBasedOnOriginalSchedule();
     }
 
     public boolean isAutoRepaymentForDownPaymentEnabled() {
@@ -1069,9 +1130,17 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return loanId.equals(getId());
     }
 
+    /**
+     * Checks if the loan has the specified loan officer assigned. Uses the denormalized loanOfficerId to avoid lazy
+     * loading the Staff entity.
+     *
+     * @param fromLoanOfficer
+     *            the staff to compare against
+     * @return true if the loan has the specified loan officer
+     */
     public boolean hasLoanOfficer(final Staff fromLoanOfficer) {
-        if (this.loanOfficer != null) {
-            return this.loanOfficer.identifiedBy(fromLoanOfficer);
+        if (this.loanOfficerId != null) {
+            return fromLoanOfficer != null && this.loanOfficerId.equals(fromLoanOfficer.getId());
         } else {
             return fromLoanOfficer == null;
         }
@@ -1098,6 +1167,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
                 .ifPresent(loanOfficerAssignmentHistory -> loanOfficerAssignmentHistory.updateEndDate(unassignDate));
 
         this.loanOfficer = null;
+        this.loanOfficerId = null;
     }
 
     public Optional<LoanOfficerAssignmentHistory> findLatestIncompleteHistoryRecord() {
@@ -1163,10 +1233,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return this.loanProduct.isPeriodicAccrualAccountingEnabled();
     }
 
-    public Long productId() {
-        return this.loanProduct.getId();
-    }
-
     public Long fetchChargeOffReasonId() {
         return isChargedOff() && getChargeOffReason() != null ? getChargeOffReason().getId() : null;
     }
@@ -1207,8 +1273,15 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return this.loanType.isJLGAccount();
     }
 
+    /**
+     * Updates the interest rate frequency type from the loan product. This method requires the transient loanProduct
+     * reference to be set, or the interestPeriodFrequencyType to be passed as a parameter.
+     */
+    @Deprecated
     public void updateInterestRateFrequencyType() {
-        this.loanRepaymentScheduleDetail.setInterestPeriodFrequencyType(this.loanProduct.getInterestPeriodFrequencyType());
+        if (this.loanProduct != null) {
+            this.loanRepaymentScheduleDetail.setInterestPeriodFrequencyType(this.loanProduct.getInterestPeriodFrequencyType());
+        }
     }
 
     public void addLoanTransaction(final LoanTransaction loanTransaction) {
@@ -1724,10 +1797,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
     public void removeCharges(Predicate<LoanCharge> predicate) {
         charges.removeIf(predicate);
-    }
-
-    public boolean hasDelinquencyBucket() {
-        return (getLoanProduct().getDelinquencyBucket() != null);
     }
 
     public void markAsChargedOff(final LocalDate chargedOffOn, final AppUser chargedOffBy, final CodeValue chargeOffReason) {

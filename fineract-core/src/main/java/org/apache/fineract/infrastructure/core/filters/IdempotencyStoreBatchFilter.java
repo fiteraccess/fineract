@@ -34,20 +34,13 @@ import org.springframework.stereotype.Component;
 public class IdempotencyStoreBatchFilter implements BatchFilter {
 
     private final FineractRequestContextHolder fineractRequestContextHolder;
-    private final IdempotencyStoreHelper helper;
     private final FineractProperties fineractProperties;
 
     @Override
     public BatchResponse doFilter(BatchRequest batchRequest, UriInfo uriInfo, BatchFilterChain chain) {
         extractIdempotentKeyFromBatchRequest(batchRequest).ifPresent(idempotentKey -> fineractRequestContextHolder
                 .setAttribute(SynchronousCommandProcessingService.IDEMPOTENCY_KEY_ATTRIBUTE, idempotentKey));
-        BatchResponse result = chain.serviceCall(batchRequest, uriInfo);
-        Optional<Long> commandId = helper.getCommandId(null);
-        boolean isSuccessWithoutStored = commandId.isPresent() && helper.isStoreIdempotencyKey(null);
-        if (isSuccessWithoutStored) {
-            helper.storeCommandResult(result.getStatusCode(), result.getBody(), commandId.get());
-        }
-        return result;
+        return chain.serviceCall(batchRequest, uriInfo);
     }
 
     private Optional<String> extractIdempotentKeyFromBatchRequest(BatchRequest request) {

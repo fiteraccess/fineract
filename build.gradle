@@ -479,7 +479,8 @@ configure(project.fineractJavaProjects) {
                 "-Xmaxwarns",
                 "1500",
                 "-Xmaxerrs",
-                "1500"
+                "1500",
+                "-parameters"
         ]
         // TODO FINERACT-959 (gradually) enable -Xlint:all (see "javac -help -X")
 

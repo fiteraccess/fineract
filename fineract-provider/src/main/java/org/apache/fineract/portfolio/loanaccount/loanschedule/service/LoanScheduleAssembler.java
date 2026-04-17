@@ -52,8 +52,7 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
-import org.apache.fineract.organisation.holiday.domain.HolidayRepository;
-import org.apache.fineract.organisation.holiday.domain.HolidayStatusType;
+import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.holiday.service.HolidayUtil;
 import org.apache.fineract.organisation.monetary.domain.ApplicationCurrency;
 import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepositoryWrapper;
@@ -125,6 +124,8 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanProductRelatedDetai
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanproduct.LoanProductConstants;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductVariableInstallmentConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.AmortizationMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestCalculationPeriodMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
@@ -132,11 +133,10 @@ import org.apache.fineract.portfolio.loanproduct.domain.InterestRecalculationCom
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductInterestRecalculationDetails;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProductVariableInstallmentConfig;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepositoryWrapper;
 import org.apache.fineract.portfolio.loanproduct.domain.RecalculationFrequencyType;
 import org.apache.fineract.portfolio.loanproduct.domain.RepaymentStartDateType;
-import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundException;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.stereotype.Service;
@@ -146,13 +146,13 @@ import org.springframework.stereotype.Service;
 public class LoanScheduleAssembler {
 
     private final FromJsonHelper fromApiJsonHelper;
-    private final LoanProductRepository loanProductRepository;
+    private final LoanProductRepositoryWrapper loanProductRepositoryWrapper;
     private final ApplicationCurrencyRepositoryWrapper applicationCurrencyRepository;
     private final LoanChargeAssembler loanChargeAssembler;
     private final LoanScheduleGeneratorFactory loanScheduleFactory;
     private final AprCalculator aprCalculator;
     private final CalendarRepository calendarRepository;
-    private final HolidayRepository holidayRepository;
+    private final HolidayRepositoryWrapper holidayRepository;
     private final ConfigurationDomainService configurationDomainService;
     private final ClientRepositoryWrapper clientRepository;
     private final GroupRepositoryWrapper groupRepository;
@@ -169,12 +169,12 @@ public class LoanScheduleAssembler {
     private final LoanChargeService loanChargeService;
     private final LoanScheduleService loanScheduleService;
     private final LoanProductRelatedDetailUpdateUtil relatedDetailUpdateUtil;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     public LoanApplicationTerms assembleLoanTerms(final JsonElement element) {
         final Long loanProductId = this.fromApiJsonHelper.extractLongNamed("productId", element);
 
-        final LoanProduct loanProduct = this.loanProductRepository.findById(loanProductId)
-                .orElseThrow(() -> new LoanProductNotFoundException(loanProductId));
+        final LoanProduct loanProduct = this.loanProductRepositoryWrapper.findById(loanProductId);
         return assembleLoanApplicationTermsFrom(element, loanProduct);
     }
 
@@ -477,8 +477,7 @@ public class LoanScheduleAssembler {
             officeId = group.getOffice().getId();
         }
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
-        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, expectedDisbursementDate,
-                HolidayStatusType.ACTIVE.getValue());
+        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, expectedDisbursementDate);
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         HolidayDetailDTO detailDTO = new HolidayDetailDTO(isHolidayEnabled, holidays, workingDays);
         final boolean isInterestToBeRecoveredFirstWhenGreaterThanEMI = this.configurationDomainService
@@ -722,8 +721,7 @@ public class LoanScheduleAssembler {
         }
 
         final LocalDate expectedDisbursementDate = this.fromApiJsonHelper.extractLocalDateNamed("expectedDisbursementDate", element);
-        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, expectedDisbursementDate,
-                HolidayStatusType.ACTIVE.getValue());
+        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, expectedDisbursementDate);
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
 
         validateDisbursementDateIsOnNonWorkingDay(loanApplicationTerms.getExpectedDisbursementDate(), workingDays);
@@ -771,7 +769,7 @@ public class LoanScheduleAssembler {
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
 
         final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId,
-                loanApplicationTerms.getExpectedDisbursementDate(), HolidayStatusType.ACTIVE.getValue());
+                loanApplicationTerms.getExpectedDisbursementDate());
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
 
         final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
@@ -791,7 +789,7 @@ public class LoanScheduleAssembler {
 
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
         final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId,
-                loanApplicationTerms.getExpectedDisbursementDate(), HolidayStatusType.ACTIVE.getValue());
+                loanApplicationTerms.getExpectedDisbursementDate());
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         HolidayDetailDTO holidayDetailDTO = new HolidayDetailDTO(isHolidayEnabled, holidays, workingDays);
 
@@ -800,7 +798,8 @@ public class LoanScheduleAssembler {
     }
 
     public void assempleVariableScheduleFrom(final Loan loan, final String json) {
-        this.variableLoanScheduleFromApiJsonValidator.validateSchedule(json, loan);
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        this.variableLoanScheduleFromApiJsonValidator.validateSchedule(json, loan, productConfig);
 
         List<LoanTermVariations> variations = loan.getLoanTermVariations();
         List<LoanTermVariations> newVariations = new ArrayList<>();
@@ -933,7 +932,9 @@ public class LoanScheduleAssembler {
             baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("variable.schedule.modify.date.can.not.be.due.date",
                     overlappings);
         }
-        LoanProductVariableInstallmentConfig installmentConfig = loan.loanProduct().loanProductVariableInstallmentConfig();
+        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+
+        CacheableLoanProductVariableInstallmentConfig installmentConfig = loanProductConfig.getLoanProductVariableInstallmentConfig();
         final CalendarInstance loanCalendarInstance = calendarInstanceRepository.findCalendarInstanceByEntityId(loan.getId(),
                 CalendarEntityType.LOANS.getValue());
         Calendar loanCalendar = null;
@@ -973,7 +974,8 @@ public class LoanScheduleAssembler {
         }
         final LocalDate recalculateFrom = null;
         ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
-        loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+        loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                cacheableLoanProductConfigService.getConfig(loan.getId()));
         loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
 
     }
@@ -1062,7 +1064,9 @@ public class LoanScheduleAssembler {
 
     private void extractLoanTermVariations(final Loan loan, final String json, final List<LoanTermVariations> loanTermVariations) {
         final JsonElement element = this.fromApiJsonHelper.parse(json);
-        if (loan.loanProduct().isAllowVariabeInstallments()) {
+        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+
+        if (loanProductConfig.isAllowVariableInstallments()) {
             if (element.isJsonObject() && this.fromApiJsonHelper.parameterExists(LoanApiConstants.exceptionParamName, element)) {
                 final JsonObject topLevelJsonElement = element.getAsJsonObject();
                 final String dateFormat = this.fromApiJsonHelper.extractDateFormatParameter(topLevelJsonElement);
@@ -1220,38 +1224,40 @@ public class LoanScheduleAssembler {
     }
 
     public void updateProductRelatedDetails(LoanProductRelatedDetail productRelatedDetail, Loan loan) {
-        final Boolean amortization = loan.loanProduct().getLoanConfigurableAttributes().getAmortizationBoolean();
-        final Boolean arrearsTolerance = loan.loanProduct().getLoanConfigurableAttributes().getArrearsToleranceBoolean();
-        final Boolean graceOnArrearsAging = loan.loanProduct().getLoanConfigurableAttributes().getGraceOnArrearsAgingBoolean();
-        final Boolean interestCalcPeriod = loan.loanProduct().getLoanConfigurableAttributes().getInterestCalcPeriodBoolean();
-        final Boolean interestMethod = loan.loanProduct().getLoanConfigurableAttributes().getInterestMethodBoolean();
-        final Boolean graceOnPrincipalAndInterestPayment = loan.loanProduct().getLoanConfigurableAttributes()
-                .getGraceOnPrincipalAndInterestPaymentBoolean();
-        final Boolean repaymentEvery = loan.loanProduct().getLoanConfigurableAttributes().getRepaymentEveryBoolean();
+        CacheableLoanProductConfig config = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        updateProductRelatedDetails(productRelatedDetail, config);
+    }
+
+    public void updateProductRelatedDetails(LoanProductRelatedDetail productRelatedDetail, CacheableLoanProductConfig config) {
+        final Boolean amortization = config.getConfigurableAmortization();
+        final Boolean arrearsTolerance = config.getConfigurableArrearsTolerance();
+        final Boolean graceOnArrearsAging = config.getConfigurableGraceOnArrearsAging();
+        final Boolean interestCalcPeriod = config.getConfigurableInterestCalcPeriod();
+        final Boolean interestMethod = config.getConfigurableInterestMethod();
+        final Boolean graceOnPrincipalAndInterestPayment = config.getConfigurableGraceOnPrincipalAndInterestPayment();
+        final Boolean repaymentEvery = config.getConfigurableRepaymentEvery();
 
         if (!amortization) {
-            productRelatedDetail.setAmortizationMethod(loan.loanProduct().getLoanProductRelatedDetail().getAmortizationMethod());
+            productRelatedDetail.setAmortizationMethod(config.getDefaultAmortizationMethod());
         }
         if (!arrearsTolerance) {
-            productRelatedDetail
-                    .setInArrearsTolerance(loan.loanProduct().getLoanProductRelatedDetail().getInArrearsTolerance().getAmount());
+            productRelatedDetail.setInArrearsTolerance(config.getDefaultInArrearsTolerance());
         }
         if (!graceOnArrearsAging) {
-            productRelatedDetail.setGraceOnArrearsAgeing(loan.loanProduct().getLoanProductRelatedDetail().getGraceOnArrearsAgeing());
+            productRelatedDetail.setGraceOnArrearsAgeing(config.getDefaultGraceOnArrearsAgeing());
         }
         if (!interestCalcPeriod) {
-            productRelatedDetail.setInterestCalculationPeriodMethod(
-                    loan.loanProduct().getLoanProductRelatedDetail().getInterestCalculationPeriodMethod());
+            productRelatedDetail.setInterestCalculationPeriodMethod(config.getDefaultInterestCalculationPeriodMethod());
         }
         if (!interestMethod) {
-            productRelatedDetail.setInterestMethod(loan.loanProduct().getLoanProductRelatedDetail().getInterestMethod());
+            productRelatedDetail.setInterestMethod(config.getDefaultInterestMethod());
         }
         if (!graceOnPrincipalAndInterestPayment) {
-            productRelatedDetail.setGraceOnInterestPayment(loan.loanProduct().getLoanProductRelatedDetail().getGraceOnInterestPayment());
-            productRelatedDetail.setGraceOnPrincipalPayment(loan.loanProduct().getLoanProductRelatedDetail().getGraceOnPrincipalPayment());
+            productRelatedDetail.setGraceOnInterestPayment(config.getDefaultGraceOnInterestPayment());
+            productRelatedDetail.setGraceOnPrincipalPayment(config.getDefaultGraceOnPrincipalPayment());
         }
         if (!repaymentEvery) {
-            productRelatedDetail.setRepayEvery(loan.loanProduct().getLoanProductRelatedDetail().getRepayEvery());
+            productRelatedDetail.setRepayEvery(config.getDefaultRepayEvery());
         }
     }
 
@@ -1458,8 +1464,8 @@ public class LoanScheduleAssembler {
         }
 
         if (loanProductRelatedDetail.isEnableDownPayment()) {
-            Boolean enableAutoRepaymentForDownPayment = loan.loanProduct().getLoanProductRelatedDetail()
-                    .isEnableAutoRepaymentForDownPayment();
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            Boolean enableAutoRepaymentForDownPayment = productConfig.isEnableAutoRepaymentForDownPayment();
             if (this.fromApiJsonHelper.parameterExists(LoanProductConstants.ENABLE_AUTO_REPAYMENT_DOWN_PAYMENT, command.parsedJson())) {
                 if (command.isChangeInBooleanParameterNamed(LoanProductConstants.ENABLE_AUTO_REPAYMENT_DOWN_PAYMENT,
                         loanProductRelatedDetail.isEnableAutoRepaymentForDownPayment())) {
@@ -1470,8 +1476,7 @@ public class LoanScheduleAssembler {
             }
             loanProductRelatedDetail.setEnableAutoRepaymentForDownPayment(enableAutoRepaymentForDownPayment);
 
-            BigDecimal disbursedAmountPercentageDownPayment = loan.loanProduct().getLoanProductRelatedDetail()
-                    .getDisbursedAmountPercentageForDownPayment();
+            BigDecimal disbursedAmountPercentageDownPayment = productConfig.getDisbursedAmountPercentageForDownPayment();
             if (this.fromApiJsonHelper.parameterExists(LoanProductConstants.DISBURSED_AMOUNT_PERCENTAGE_DOWN_PAYMENT,
                     command.parsedJson())) {
                 if (command.isChangeInBigDecimalParameterNamed(LoanProductConstants.DISBURSED_AMOUNT_PERCENTAGE_DOWN_PAYMENT,
@@ -1541,7 +1546,8 @@ public class LoanScheduleAssembler {
             actualChanges.put(EXPECTED_DISBURSEMENT_DATE, expectedDisbursementDate);
         }
 
-        if (loan.getLoanOfficer() != null) {
+        // Use loanOfficerId() to check if officer is assigned without triggering lazy load
+        if (loan.getLoanOfficerId() != null) {
             final LoanOfficerAssignmentHistory loanOfficerAssignmentHistory = LoanOfficerAssignmentHistory.createNew(loan,
                     loan.getLoanOfficer(), approvedOn);
             loan.getLoanOfficerHistory().add(loanOfficerAssignmentHistory);
@@ -1552,7 +1558,8 @@ public class LoanScheduleAssembler {
         if (!actualChanges.isEmpty()) {
             if (actualChanges.containsKey(LoanApiConstants.approvedLoanAmountParameterName)
                     || actualChanges.containsKey("recalculateLoanSchedule") || actualChanges.containsKey("expectedDisbursementDate")) {
-                loanScheduleService.regenerateRepaymentSchedule(loan, loanUtilService.buildScheduleGeneratorDTO(loan, null));
+                loanScheduleService.regenerateRepaymentSchedule(loan, loanUtilService.buildScheduleGeneratorDTO(loan, null),
+                        cacheableLoanProductConfigService.getConfig(loanId));
                 loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
             }
         }

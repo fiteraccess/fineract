@@ -47,6 +47,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleIns
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleType;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.RescheduleLoansApiConstants;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanRescheduleRequest;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -88,9 +89,10 @@ public class LoanRescheduleRequestDataValidatorImpl implements LoanRescheduleReq
         return interestRate;
     }
 
-    private static void validateMultiDisburseLoan(Loan loan, DataValidatorBuilder dataValidatorBuilder) {
+    private static void validateMultiDisburseLoan(Loan loan, CacheableLoanProductConfig productConfig,
+            DataValidatorBuilder dataValidatorBuilder) {
         if (loan.isMultiDisburmentLoan()) {
-            if (!loan.loanProduct().isDisallowExpectedDisbursements()) {
+            if (!productConfig.isDisallowExpectedDisbursements()) {
                 dataValidatorBuilder.reset().failWithCodeNoParameterAddedToErrorCode(
                         RescheduleLoansApiConstants.rescheduleForMultiDisbursementNotSupportedErrorCode,
                         "Loan rescheduling is not supported for multidisbursement tranche loans");
@@ -246,9 +248,9 @@ public class LoanRescheduleRequestDataValidatorImpl implements LoanRescheduleReq
      *            the JSON command object (instance of the JsonCommand class)
      **/
     @Override
-    public void validateForCreateAction(final JsonCommand jsonCommand, final Loan loan) {
+    public void validateForCreateAction(final JsonCommand jsonCommand, final Loan loan, final CacheableLoanProductConfig productConfig) {
         if (loan.getLoanProductRelatedDetail().getLoanScheduleType() == LoanScheduleType.PROGRESSIVE) {
-            progressiveLoanRescheduleRequestDataValidatorDelegate.validateForCreateAction(jsonCommand, loan);
+            progressiveLoanRescheduleRequestDataValidatorDelegate.validateForCreateAction(jsonCommand, loan, productConfig);
         } else {
             if (loan.isChargedOff()) {
                 throw new GeneralPlatformDomainRuleException("error.msg.loan.is.charged.off",
@@ -274,7 +276,7 @@ public class LoanRescheduleRequestDataValidatorImpl implements LoanRescheduleReq
             validateAndRetrieveAdjustedDate(fromJsonHelper, jsonElement, rescheduleFromDate, dataValidatorBuilder);
             validateEMIAndEndDate(fromJsonHelper, loan, jsonElement, dataValidatorBuilder);
             validateIsThereAnyIncomingChange(fromJsonHelper, jsonElement, dataValidatorBuilder);
-            validateMultiDisburseLoan(loan, dataValidatorBuilder);
+            validateMultiDisburseLoan(loan, productConfig, dataValidatorBuilder);
 
             LoanRepaymentScheduleInstallment installment = loan.fetchLoanRepaymentScheduleInstallmentByDueDate(rescheduleFromDate);
             validateReschedulingInstallment(dataValidatorBuilder, installment);

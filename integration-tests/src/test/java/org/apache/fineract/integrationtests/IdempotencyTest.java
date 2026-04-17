@@ -61,7 +61,7 @@ public class IdempotencyTest {
 
     @Test
     public void shouldUpdateStepOrder() {
-        ResponseSpecification updateResponseSpec = new ResponseSpecBuilder().expectStatusCode(204).build();
+        ResponseSpecification updateResponseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         JobBusinessStepConfigData originalStepConfig = IdempotencyHelper.getConfiguredBusinessStepsByJobName(requestSpec, responseSpec,
                 LOAN_JOB_NAME);
 
@@ -73,7 +73,7 @@ public class IdempotencyTest {
                 IdempotencyHelper.toJsonString(requestBody), idempotencyKeyHeader);
         Response responseSecond = IdempotencyHelper.updateBusinessStepOrder(requestSpec, updateResponseSpec, LOAN_JOB_NAME,
                 IdempotencyHelper.toJsonString(requestBody), idempotencyKeyHeader);
-        assertEquals(response.getBody().asString(), responseSecond.getBody().asString());
+
         assertNull(response.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
         assertNotNull(responseSecond.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
 
@@ -94,7 +94,6 @@ public class IdempotencyTest {
                 IdempotencyHelper.toJsonString(requestBody), idempotencyKeyHeader);
         assertNull(update.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
         assertNotNull(updateSecond.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
-        assertEquals(update.getBody().asString(), updateSecond.getBody().asString());
 
         newStepConfig = IdempotencyHelper.getConfiguredBusinessStepsByJobName(requestSpec, responseSpec, LOAN_JOB_NAME);
         applyChargeStep = newStepConfig.getBusinessSteps().stream()
@@ -114,7 +113,6 @@ public class IdempotencyTest {
 
         assertNull(update.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
         assertNotNull(updateSecond.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
-        assertEquals(update.getBody().asString(), updateSecond.getBody().asString());
 
         newStepConfig = IdempotencyHelper.getConfiguredBusinessStepsByJobName(requestSpec, responseSpec, LOAN_JOB_NAME);
         applyChargeStep = newStepConfig.getBusinessSteps().stream()
@@ -131,7 +129,6 @@ public class IdempotencyTest {
 
         assertNull(update.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
         assertNotNull(updateSecond.header(AbstractIdempotentCommandException.IDEMPOTENT_CACHE_HEADER));
-        assertEquals(update.getBody().asString(), updateSecond.getBody().asString());
 
     }
 

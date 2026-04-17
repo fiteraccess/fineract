@@ -100,8 +100,8 @@ public final class LoanDownPaymentTransactionValidator {
                 }
             }
             case LOAN_DISBURSED -> {
-                if ((!(loan.isApproved() && loan.isNotDisbursed()) && !loan.getLoanProduct().isMultiDisburseLoan())
-                        || (loan.getLoanProduct().isMultiDisburseLoan() && !loan.isAllTranchesNotDisbursed())) {
+                if ((!(loan.isApproved() && loan.isNotDisbursed()) && !loan.isMultiDisburmentLoan())
+                        || (loan.isMultiDisburmentLoan() && !loan.isAllTranchesNotDisbursed())) {
                     final String defaultUserMessage = "Loan Disbursal is not allowed. Loan Account is not in approved and not disbursed state.";
                     final ApiParameterError error = ApiParameterError
                             .generalError("error.msg.loan.disbursal.account.is.not.approve.not.disbursed.state", defaultUserMessage);

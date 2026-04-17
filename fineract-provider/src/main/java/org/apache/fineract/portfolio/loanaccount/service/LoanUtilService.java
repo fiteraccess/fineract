@@ -20,14 +20,15 @@ package org.apache.fineract.portfolio.loanaccount.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.exception.PlatformServiceUnavailableException;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
-import org.apache.fineract.organisation.holiday.domain.HolidayRepository;
-import org.apache.fineract.organisation.holiday.domain.HolidayStatusType;
+import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.ApplicationCurrency;
 import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
@@ -44,6 +45,7 @@ import org.apache.fineract.portfolio.calendar.service.CalendarUtils;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotActiveException;
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRateDTO;
+import org.apache.fineract.portfolio.floatingrates.data.FloatingRateData;
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRatePeriodData;
 import org.apache.fineract.portfolio.floatingrates.exception.FloatingRateNotFoundException;
 import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadPlatformService;
@@ -54,7 +56,9 @@ import org.apache.fineract.portfolio.loanaccount.data.ScheduleGeneratorDTO;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionType;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 
 @RequiredArgsConstructor
@@ -63,11 +67,12 @@ public class LoanUtilService implements ILoanUtilService {
     private final ApplicationCurrencyRepositoryWrapper applicationCurrencyRepository;
     private final CalendarInstanceRepository calendarInstanceRepository;
     private final ConfigurationDomainService configurationDomainService;
-    private final HolidayRepository holidayRepository;
+    private final HolidayRepositoryWrapper holidayRepository;
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final LoanScheduleGeneratorFactory loanScheduleFactory;
     private final FloatingRatesReadPlatformService floatingRatesReadPlatformService;
     private final CalendarReadPlatformService calendarReadPlatformService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final NoteRepository noteRepository;
 
     @Override
@@ -181,7 +186,7 @@ public class LoanUtilService implements ILoanUtilService {
     private HolidayDetailDTO constructHolidayDTO(final Loan loan) {
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
         final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(loan.getOfficeId(),
-                loan.getDisbursementDate(), HolidayStatusType.ACTIVE.getValue());
+                loan.getDisbursementDate());
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         final boolean allowTransactionsOnHoliday = this.configurationDomainService.allowTransactionsOnHolidayEnabled();
         final boolean allowTransactionsOnNonWorkingDay = this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled();
@@ -194,8 +199,7 @@ public class LoanUtilService implements ILoanUtilService {
     @Override
     public HolidayDetailDTO constructHolidayDTO(final Long officeId, LocalDate localDate) {
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
-        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, localDate,
-                HolidayStatusType.ACTIVE.getValue());
+        final List<Holiday> holidays = this.holidayRepository.findByOfficeIdAndGreaterThanDate(officeId, localDate);
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
         final boolean allowTransactionsOnHoliday = this.configurationDomainService.allowTransactionsOnHolidayEnabled();
         final boolean allowTransactionsOnNonWorkingDay = this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled();
@@ -205,7 +209,7 @@ public class LoanUtilService implements ILoanUtilService {
 
     private FloatingRateDTO constructFloatingRateDTO(final Loan loan) {
         FloatingRateDTO floatingRateDTO = null;
-        if (loan.loanProduct().isLinkedToFloatingInterestRate()) {
+        if (loan.isLinkedToFloatingInterestRate()) {
             boolean isFloatingInterestRate = loan.getIsFloatingInterestRate();
             BigDecimal interestRateDiff = loan.getInterestRateDifferential();
             List<FloatingRatePeriodData> baseLendingRatePeriods = null;
@@ -217,8 +221,85 @@ public class LoanUtilService implements ILoanUtilService {
 
             floatingRateDTO = new FloatingRateDTO(isFloatingInterestRate, loan.getDisbursementDate(), interestRateDiff,
                     baseLendingRatePeriods);
+
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            BigDecimal productDifferential = productConfig.getFloatingRateDifferential();
+            if (productDifferential != null) {
+                floatingRateDTO.addInterestRateDiff(productDifferential);
+            }
+
+            Long floatingRateId = productConfig.getFloatingRateId();
+            if (floatingRateId != null) {
+                FloatingRateData floatingRateData = this.floatingRatesReadPlatformService.retrieveOne(floatingRateId);
+                Collection<FloatingRatePeriodData> applicableRates = buildApplicableFloatingRates(floatingRateDTO,
+                        floatingRateData.getRatePeriods());
+                floatingRateDTO.setApplicableRates(applicableRates);
+            }
         }
         return floatingRateDTO;
+    }
+
+    private Collection<FloatingRatePeriodData> buildApplicableFloatingRates(final FloatingRateDTO floatingRateDTO,
+            final List<FloatingRatePeriodData> floatingRatePeriods) {
+        if (floatingRateDTO == null || floatingRatePeriods == null || floatingRatePeriods.isEmpty()) {
+            return null;
+        }
+
+        List<FloatingRatePeriodData> orderedPeriods = new java.util.ArrayList<>(floatingRatePeriods);
+        orderedPeriods.sort((a, b) -> {
+            int dateCompare = a.getFromDate().compareTo(b.getFromDate());
+            if (dateCompare != 0) {
+                return dateCompare;
+            }
+            if (a.getId() == null && b.getId() == null) {
+                return 0;
+            }
+            if (a.getId() == null) {
+                return -1;
+            }
+            if (b.getId() == null) {
+                return 1;
+            }
+            return a.getId().compareTo(b.getId());
+        });
+
+        Collection<FloatingRatePeriodData> applicableRates = new java.util.ArrayList<>();
+        FloatingRatePeriodData previousPeriod = null;
+        boolean addPeriodData = false;
+        for (FloatingRatePeriodData periodData : orderedPeriods) {
+            if (periodData.getIsActive()) {
+                if (applicableRates.isEmpty() && DateUtils.isBefore(floatingRateDTO.getStartDate(), periodData.getFromDate())) {
+                    if (floatingRateDTO.isFloatingInterestRate()) {
+                        addPeriodData = true;
+                    }
+                    if (previousPeriod != null) {
+                        applicableRates.add(toApplicablePeriod(previousPeriod, floatingRateDTO));
+                    } else if (!addPeriodData) {
+                        applicableRates.add(toApplicablePeriod(periodData, floatingRateDTO));
+                    }
+                }
+                if (addPeriodData) {
+                    applicableRates.add(toApplicablePeriod(periodData, floatingRateDTO));
+                }
+                previousPeriod = periodData;
+            }
+        }
+        if (applicableRates.isEmpty() && previousPeriod != null) {
+            applicableRates.add(toApplicablePeriod(previousPeriod, floatingRateDTO));
+        }
+        return applicableRates;
+    }
+
+    private FloatingRatePeriodData toApplicablePeriod(final FloatingRatePeriodData periodData, final FloatingRateDTO floatingRateDTO) {
+        BigDecimal interest = periodData.getInterestRate().add(floatingRateDTO.getInterestRateDiff());
+        if (periodData.getIsDifferentialToBaseLendingRate()) {
+            BigDecimal baseRate = floatingRateDTO.fetchBaseRate(periodData.getFromDate());
+            if (baseRate != null) {
+                interest = interest.add(baseRate);
+            }
+        }
+        return new FloatingRatePeriodData(periodData.getId(), periodData.getFromDate(), interest,
+                periodData.getIsDifferentialToBaseLendingRate(), periodData.getIsActive());
     }
 
     private LocalDate getCalculatedRepaymentsStartingFromDate(final LocalDate actualDisbursementDate, final Loan loan,

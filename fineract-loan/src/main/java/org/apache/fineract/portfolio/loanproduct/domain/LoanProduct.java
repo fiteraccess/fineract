@@ -529,6 +529,21 @@ public class LoanProduct extends AbstractPersistableCustom<Long> {
         return this.floatingRates;
     }
 
+    /**
+     * @return the floating rate id if linked, otherwise null
+     */
+    public Long getFloatingRateId() {
+        return this.floatingRates != null && this.floatingRates.getFloatingRate() != null ? this.floatingRates.getFloatingRate().getId()
+                : null;
+    }
+
+    /**
+     * @return the product-level interest rate differential for floating rates, or null if not configured
+     */
+    public BigDecimal getFloatingRateDifferential() {
+        return this.floatingRates != null ? this.floatingRates.getInterestRateDifferential() : null;
+    }
+
     public LoanProductVariableInstallmentConfig loanProductVariableInstallmentConfig() {
         this.variableInstallmentConfig = this.variableInstallmentConfig == null ? new LoanProductVariableInstallmentConfig(this, null, null)
                 : this.variableInstallmentConfig;

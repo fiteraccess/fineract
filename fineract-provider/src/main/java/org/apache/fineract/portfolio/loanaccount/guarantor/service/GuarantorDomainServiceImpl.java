@@ -62,8 +62,11 @@ import org.apache.fineract.portfolio.loanaccount.guarantor.domain.GuarantorFundi
 import org.apache.fineract.portfolio.loanaccount.guarantor.domain.GuarantorFundingTransaction;
 import org.apache.fineract.portfolio.loanaccount.guarantor.domain.GuarantorFundingTransactionRepository;
 import org.apache.fineract.portfolio.loanaccount.guarantor.domain.GuarantorRepository;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductGuaranteeDetails;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepositoryWrapper;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransaction;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransactionRepository;
@@ -88,6 +91,8 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
     private final ConfigurationDomainService configurationDomainService;
     private final ExternalIdFactory externalIdFactory;
     private final LoanRepository loanRepository;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
+    private final LoanProductRepositoryWrapper loanProductRepository;
     private final LoanTransactionRepository loanTransactionRepository;
 
     @PostConstruct
@@ -107,9 +112,11 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
 
     @Override
     public void validateGuarantorBusinessRules(Loan loan) {
-        LoanProduct loanProduct = loan.loanProduct();
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
         BigDecimal principal = loan.getPrincipal().getAmount();
-        if (loanProduct.isHoldGuaranteeFunds()) {
+        if (productConfig.isHoldGuaranteeFunds()) {
+            // Load full product for guarantee details (not on hot path)
+            LoanProduct loanProduct = loanProductRepository.findById(loan.getProductId());
             LoanProductGuaranteeDetails guaranteeData = loanProduct.getLoanProductGuaranteeDetails();
             final List<Guarantor> existGuarantorList = this.guarantorRepository.findByLoan(loan);
             BigDecimal mandatoryAmount = principal.multiply(guaranteeData.getMandatoryGuarantee()).divide(BigDecimal.valueOf(100));
@@ -315,7 +322,8 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
      *
      */
     private void holdGuarantorFunds(final Loan loan) {
-        if (loan.loanProduct().isHoldGuaranteeFunds()) {
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        if (productConfig.isHoldGuaranteeFunds()) {
             final List<Guarantor> existGuarantorList = this.guarantorRepository.findByLoan(loan);
             List<GuarantorFundingDetails> guarantorFundingDetailList = new ArrayList<>();
             List<DepositAccountOnHoldTransaction> onHoldTransactions = new ArrayList<>();

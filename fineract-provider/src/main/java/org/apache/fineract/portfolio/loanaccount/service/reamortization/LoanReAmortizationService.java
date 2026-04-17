@@ -65,6 +65,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService
 import org.apache.fineract.portfolio.loanaccount.service.LoanRepaymentScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,6 +86,7 @@ public class LoanReAmortizationService {
     private final LoanRepaymentScheduleService loanRepaymentScheduleService;
     private final LoanReadPlatformService loanReadPlatformService;
     private final LoanCapitalizedIncomeBalanceRepository loanCapitalizedIncomeBalanceRepository;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     public CommandProcessingResult reAmortize(final Long loanId, final JsonCommand command) {
         final Loan loan = loanAssembler.assembleFrom(loanId);
@@ -122,7 +124,7 @@ public class LoanReAmortizationService {
         changes.put(LoanReAmortizationApiConstants.dateFormatParameterName, command.dateFormat());
 
         if (loan.isProgressiveSchedule()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan);
+            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loanId));
         }
         reverseReAmortizeTransaction(reAmortizeTransaction, command);
         loanTransactionRepository.saveAndFlush(reAmortizeTransaction);
@@ -239,7 +241,7 @@ public class LoanReAmortizationService {
     private void processReAmortizationTransaction(final Loan loan, final LoanTransaction reAmortizationTransaction,
             final boolean withPostTransactionChecks) {
         if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan);
+            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
             if (withPostTransactionChecks) {
                 reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(reAmortizationTransaction));
             } else {

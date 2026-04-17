@@ -85,8 +85,8 @@ class AccountingProcessorHelperBatchCacheTest {
         ProductToGLAccountMapping paymentSpecificMapping = new ProductToGLAccountMapping().setGlAccount(paymentSpecificAccount);
         int accountType = CashAccountsForLoan.FUND_SOURCE.getValue();
 
-        when(accountMappingRepository.findCoreProductToFinAccountMapping(LOAN_PRODUCT_ID, PortfolioProductType.LOAN.getValue(), accountType))
-                .thenReturn(coreMapping);
+        when(accountMappingRepository.findCoreProductToFinAccountMapping(LOAN_PRODUCT_ID, PortfolioProductType.LOAN.getValue(),
+                accountType)).thenReturn(coreMapping);
         when(accountMappingRepository.findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(LOAN_PRODUCT_ID,
                 PortfolioProductType.LOAN.getValue(), accountType, PAYMENT_TYPE_ID)).thenReturn(paymentSpecificMapping);
 
@@ -97,15 +97,15 @@ class AccountingProcessorHelperBatchCacheTest {
                     .isSameAs(paymentSpecificAccount);
         }
 
-        verify(accountMappingRepository, times(1)).findCoreProductToFinAccountMapping(LOAN_PRODUCT_ID,
-                PortfolioProductType.LOAN.getValue(), accountType);
+        verify(accountMappingRepository, times(1)).findCoreProductToFinAccountMapping(LOAN_PRODUCT_ID, PortfolioProductType.LOAN.getValue(),
+                accountType);
         verify(accountMappingRepository, times(1)).findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(LOAN_PRODUCT_ID,
                 PortfolioProductType.LOAN.getValue(), accountType, PAYMENT_TYPE_ID);
 
         underTest.getLinkedGLAccountForLoanProduct(LOAN_PRODUCT_ID, accountType, PAYMENT_TYPE_ID);
 
-        verify(accountMappingRepository, times(2)).findCoreProductToFinAccountMapping(LOAN_PRODUCT_ID,
-                PortfolioProductType.LOAN.getValue(), accountType);
+        verify(accountMappingRepository, times(2)).findCoreProductToFinAccountMapping(LOAN_PRODUCT_ID, PortfolioProductType.LOAN.getValue(),
+                accountType);
         verify(accountMappingRepository, times(2)).findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(LOAN_PRODUCT_ID,
                 PortfolioProductType.LOAN.getValue(), accountType, PAYMENT_TYPE_ID);
     }

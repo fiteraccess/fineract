@@ -28,7 +28,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
-import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.common.AccountingConstants.AccrualAccountsForLoan;
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
 import org.apache.fineract.accounting.journalentry.data.LoanDTO;
@@ -61,9 +60,6 @@ class CreateJournalEntriesForChargeOffLoanTest {
     void setUp() {
         Office office = Office.headOffice("Main Office", LocalDate.now(ZoneId.systemDefault()), null);
         when(helper.getOfficeById(1L)).thenReturn(office);
-
-        GLClosure mockClosure = mock(GLClosure.class);
-        when(helper.getLatestClosureByBranch(1L)).thenReturn(mockClosure);
 
         LoanTransactionEnumData transactionType = mock(LoanTransactionEnumData.class);
         when(transactionType.isChargeoff()).thenReturn(true);

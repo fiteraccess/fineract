@@ -64,6 +64,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.exception.LoanProductGeneralRuleException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -87,6 +88,7 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
     private final PossibleNextRepaymentCalculationServiceDiscovery possibleNextRepaymentCalculationServiceDiscovery;
 
     @Override
+    @Cacheable(value = "delinquencyRanges", key = "'delinquency_ranges'")
     public List<DelinquencyRangeData> retrieveAllDelinquencyRanges() {
         final List<DelinquencyRange> delinquencyRangeList = repositoryRange.findAll();
         return mapperRange.map(delinquencyRangeList);
@@ -99,6 +101,7 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
     }
 
     @Override
+    @Cacheable(value = "delinquencyBuckets", key = "'delinquency_buckets'")
     public List<DelinquencyBucketData> retrieveAllDelinquencyBuckets() {
         final List<DelinquencyBucket> delinquencyRangeList = repositoryBucket.findAll();
         return mapperBucket.map(delinquencyRangeList);

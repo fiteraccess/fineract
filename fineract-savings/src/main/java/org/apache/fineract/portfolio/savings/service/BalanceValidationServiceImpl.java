@@ -100,16 +100,4 @@ public class BalanceValidationServiceImpl implements BalanceValidationService {
         }
         return minReqBalance;
     }
-
-    /**
-     * Computes only the enforced minimum balance portion (without overdraft adjustment). Used for hold amount
-     * validation where overdraft is handled separately.
-     */
-    private Money computeEnforcedMinBalance(final SavingsAccount account, final MonetaryCurrency currency) {
-        Money minReqBalance = Money.zero(currency);
-        if (account.isEnforceMinRequiredBalance()) {
-            minReqBalance = minReqBalance.plus(account.getMinRequiredBalance());
-        }
-        return minReqBalance;
-    }
 }

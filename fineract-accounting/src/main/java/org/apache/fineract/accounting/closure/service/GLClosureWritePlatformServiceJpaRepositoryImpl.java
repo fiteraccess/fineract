@@ -57,7 +57,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
-    @CacheEvict(value = "glClosuresByOfficeId", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#result.officeId)")
+    @CacheEvict(value = "glClosures", allEntries = true)
     public CommandProcessingResult createGLClosure(final JsonCommand command) {
         try {
             final GLClosureCommand closureCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
@@ -93,7 +93,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
-    @CacheEvict(value = "glClosuresByOfficeId", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#result.officeId)")
+    @CacheEvict(value = "glClosures", allEntries = true)
     public CommandProcessingResult updateGLClosure(final Long glClosureId, final JsonCommand command) {
         final GLClosureCommand closureCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
         closureCommand.validateForUpdate();
@@ -114,7 +114,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
-    @CacheEvict(value = "glClosuresByOfficeId", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#result.officeId)")
+    @CacheEvict(value = "glClosures", allEntries = true)
     public CommandProcessingResult deleteGLClosure(final Long glClosureId) {
         final GLClosure glClosure = this.glClosureRepository.findById(glClosureId)
                 .orElseThrow(() -> new GLClosureNotFoundException(glClosureId));

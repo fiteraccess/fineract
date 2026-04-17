@@ -56,6 +56,7 @@ import org.apache.fineract.organisation.teller.exception.CashierExistForTellerEx
 import org.apache.fineract.organisation.teller.exception.CashierNotFoundException;
 import org.apache.fineract.organisation.teller.serialization.TellerCommandFromApiJsonDeserializer;
 import org.apache.fineract.useradministration.domain.AppUser;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,6 +78,7 @@ public class TellerWritePlatformServiceJpaImpl implements TellerWritePlatformSer
 
     @Override
     @Transactional
+    @CacheEvict(value = "tellers", allEntries = true)
     public CommandProcessingResult createTeller(JsonCommand command) {
         try {
             this.context.authenticatedUser();
@@ -110,6 +112,7 @@ public class TellerWritePlatformServiceJpaImpl implements TellerWritePlatformSer
 
     @Override
     @Transactional
+    @CacheEvict(value = "tellers", allEntries = true)
     public CommandProcessingResult modifyTeller(Long tellerId, JsonCommand command) {
         try {
 
@@ -161,6 +164,7 @@ public class TellerWritePlatformServiceJpaImpl implements TellerWritePlatformSer
 
     @Override
     @Transactional
+    @CacheEvict(value = "tellers", allEntries = true)
     public CommandProcessingResult deleteTeller(Long tellerId) {
         // TODO Auto-generated method stub
 

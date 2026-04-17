@@ -41,8 +41,9 @@ public final class LoanOfficerValidator {
         if (DateUtils.isAfter(startDate, unassignDate)) {
             final String errorMessage = "The Loan officer Unassign date(" + unassignDate + ") cannot be before its assignment date ("
                     + startDate + ").";
+            // Use loanOfficerId() to avoid lazy load when only ID is needed
             throw new LoanOfficerUnassignmentDateException("cannot.be.before.assignment.date", errorMessage, loan.getId(),
-                    loan.getLoanOfficer().getId(), startDate, unassignDate);
+                    loan.getLoanOfficerId(), startDate, unassignDate);
         } else if (DateUtils.isDateInTheFuture(unassignDate)) {
             final String errorMessage = "The Loan Officer Unassign date (" + unassignDate + ") cannot be in the future.";
             throw new LoanOfficerUnassignmentDateException("cannot.be.a.future.date", errorMessage, unassignDate);

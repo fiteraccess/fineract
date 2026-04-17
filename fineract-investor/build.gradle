@@ -70,6 +70,9 @@ eclipse {
     }
 }
 
+processResources.dependsOn compileJava
+compileTestJava.dependsOn compileJava
+
 if (!(project.hasProperty('env') && project.getProperty('env') == 'dev')) {
     sourceSets {
         test {

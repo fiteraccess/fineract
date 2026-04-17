@@ -31,6 +31,8 @@ import org.apache.fineract.infrastructure.event.business.service.BusinessEventNo
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -40,14 +42,16 @@ public class CheckLoanRepaymentDueBusinessStep implements LoanCOBBusinessStep {
 
     private final ConfigurationDomainService configurationDomainService;
     private final BusinessEventNotifierService businessEventNotifierService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public Loan execute(Loan loan) {
         log.debug("start processing loan repayment due business step loan for loan with id [{}]", loan.getId());
         Long numberOfDaysBeforeDueDateToRaiseEvent = configurationDomainService.retrieveRepaymentDueDays();
-        if (loan.getLoanProduct().getDueDaysForRepaymentEvent() != null) {
-            if (loan.getLoanProduct().getDueDaysForRepaymentEvent() > 0) {
-                numberOfDaysBeforeDueDateToRaiseEvent = loan.getLoanProduct().getDueDaysForRepaymentEvent().longValue();
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        if (productConfig.getDueDaysForRepaymentEvent() != null) {
+            if (productConfig.getDueDaysForRepaymentEvent() > 0) {
+                numberOfDaysBeforeDueDateToRaiseEvent = productConfig.getDueDaysForRepaymentEvent().longValue();
             }
         }
         final LocalDate currentDate = DateUtils.getBusinessLocalDate();

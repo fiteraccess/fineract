@@ -83,7 +83,7 @@ public class BusinessConfigurationApiTest {
 
     @Test
     public void shouldUpdateStepOrder() {
-        ResponseSpecification updateResponseSpec = new ResponseSpecBuilder().expectStatusCode(204).build();
+        ResponseSpecification updateResponseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         JobBusinessStepConfigData originalStepConfig = BusinessStepConfigurationHelper.getConfiguredBusinessStepsByJobName(requestSpec,
                 responseSpec, LOAN_JOB_NAME);
 

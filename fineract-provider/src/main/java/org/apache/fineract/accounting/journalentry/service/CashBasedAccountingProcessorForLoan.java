@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.common.AccountingConstants.CashAccountsForLoan;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
@@ -48,85 +47,84 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
     @Override
     public void createJournalEntriesForLoan(final LoanDTO loanDTO) {
         try (AccountingProcessorHelper.JournalEntryProcessingBatch ignored = this.helper.startJournalEntryProcessingBatch()) {
-        final Long officeId = loanDTO.getOfficeId();
-        final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(officeId);
-        final Long loanProductId = loanDTO.getLoanProductId();
-        final String currencyCode = loanDTO.getCurrencyCode();
-        final Office office = this.helper.getOfficeById(officeId);
-        for (final LoanTransactionDTO loanTransactionDTO : loanDTO.getNewLoanTransactions()) {
-            final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
-            final String transactionId = loanTransactionDTO.getTransactionId();
-            final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
-            final Long loanId = loanDTO.getLoanId();
-            final LoanTransactionEnumData transactionType = loanTransactionDTO.getTransactionType();
+            final Long officeId = loanDTO.getOfficeId();
+            final Long loanProductId = loanDTO.getLoanProductId();
+            final String currencyCode = loanDTO.getCurrencyCode();
+            final Office office = this.helper.getOfficeById(officeId);
+            for (final LoanTransactionDTO loanTransactionDTO : loanDTO.getNewLoanTransactions()) {
+                final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
+                final String transactionId = loanTransactionDTO.getTransactionId();
+                final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
+                final Long loanId = loanDTO.getLoanId();
+                final LoanTransactionEnumData transactionType = loanTransactionDTO.getTransactionType();
 
-            this.helper.checkForBranchClosures(latestGLClosure, transactionDate);
+                this.helper.checkForBranchClosures(officeId, transactionDate);
 
-            if (loanTransactionDTO.isReversed()) {
-                journalEntryWritePlatformService.createJournalEntryForReversedLoanTransaction(transactionDate, transactionId, officeId);
-                continue;
-            }
-
-            /** Handle Disbursements **/
-            if (transactionType.isDisbursement()) {
-                createJournalEntriesForDisbursements(loanDTO, loanTransactionDTO, office);
-            }
-            /***
-             * Logic for repayments, repayments at disbursement (except charge adjustment)
-             ***/
-            else if ((transactionType.isRepaymentType() && !transactionType.isChargeAdjustment())
-                    || transactionType.isRepaymentAtDisbursement() || transactionType.isChargePayment()) {
-                createJournalEntriesForRepayments(loanDTO, loanTransactionDTO, office);
-            }
-
-            /** Logic for handling recovery payments **/
-            else if (transactionType.isRecoveryRepayment()) {
-                createJournalEntriesForRecoveryRepayments(loanDTO, loanTransactionDTO, office);
-            }
-
-            /** Logic for Refunds of Overpayments **/
-            else if (transactionType.isRefund()) {
-                createJournalEntriesForRefund(loanDTO, loanTransactionDTO, office);
-            }
-
-            /** Logic for Credit Balance Refunds **/
-            else if (transactionType.isCreditBalanceRefund()) {
-                createJournalEntriesForCreditBalanceRefund(loanDTO, loanTransactionDTO, office);
-            }
-
-            /***
-             * Only principal write off affects cash based accounting (interest and fee write off need not be
-             * considered). Debit losses written off and credit Loan Portfolio
-             **/
-            else if (transactionType.isWriteOff()) {
-                final BigDecimal principalAmount = loanTransactionDTO.getPrincipal();
-                if (principalAmount != null && principalAmount.compareTo(BigDecimal.ZERO) > 0) {
-                    this.helper.createJournalEntriesForLoan(office, currencyCode, CashAccountsForLoan.LOSSES_WRITTEN_OFF.getValue(),
-                            CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), loanProductId, paymentTypeId, loanId, transactionId,
-                            transactionDate, principalAmount);
-
+                if (loanTransactionDTO.isReversed()) {
+                    journalEntryWritePlatformService.createJournalEntryForReversedLoanTransaction(transactionDate, transactionId, officeId);
+                    continue;
                 }
-            } else if (transactionType.isInitiateTransfer() || transactionType.isApproveTransfer()
-                    || transactionType.isWithdrawTransfer()) {
-                createJournalEntriesForTransfers(loanDTO, loanTransactionDTO, office);
+
+                /** Handle Disbursements **/
+                if (transactionType.isDisbursement()) {
+                    createJournalEntriesForDisbursements(loanDTO, loanTransactionDTO, office);
+                }
+                /***
+                 * Logic for repayments, repayments at disbursement (except charge adjustment)
+                 ***/
+                else if ((transactionType.isRepaymentType() && !transactionType.isChargeAdjustment())
+                        || transactionType.isRepaymentAtDisbursement() || transactionType.isChargePayment()) {
+                    createJournalEntriesForRepayments(loanDTO, loanTransactionDTO, office);
+                }
+
+                /** Logic for handling recovery payments **/
+                else if (transactionType.isRecoveryRepayment()) {
+                    createJournalEntriesForRecoveryRepayments(loanDTO, loanTransactionDTO, office);
+                }
+
+                /** Logic for Refunds of Overpayments **/
+                else if (transactionType.isRefund()) {
+                    createJournalEntriesForRefund(loanDTO, loanTransactionDTO, office);
+                }
+
+                /** Logic for Credit Balance Refunds **/
+                else if (transactionType.isCreditBalanceRefund()) {
+                    createJournalEntriesForCreditBalanceRefund(loanDTO, loanTransactionDTO, office);
+                }
+
+                /***
+                 * Only principal write off affects cash based accounting (interest and fee write off need not be
+                 * considered). Debit losses written off and credit Loan Portfolio
+                 **/
+                else if (transactionType.isWriteOff()) {
+                    final BigDecimal principalAmount = loanTransactionDTO.getPrincipal();
+                    if (principalAmount != null && principalAmount.compareTo(BigDecimal.ZERO) > 0) {
+                        this.helper.createJournalEntriesForLoan(office, currencyCode, CashAccountsForLoan.LOSSES_WRITTEN_OFF.getValue(),
+                                CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), loanProductId, paymentTypeId, loanId, transactionId,
+                                transactionDate, principalAmount);
+
+                    }
+                } else if (transactionType.isInitiateTransfer() || transactionType.isApproveTransfer()
+                        || transactionType.isWithdrawTransfer()) {
+                    createJournalEntriesForTransfers(loanDTO, loanTransactionDTO, office);
+                }
+                /** Logic for Refunds of Active Loans **/
+                else if (transactionType.isRefundForActiveLoans()) {
+                    createJournalEntriesForRefundForActiveLoan(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Chargebacks
+                else if (transactionType.isChargeback()) {
+                    createJournalEntriesForChargeback(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Charge Adjustment
+                else if (transactionType.isChargeAdjustment()) {
+                    createJournalEntriesForChargeAdjustment(loanDTO, loanTransactionDTO, office);
+                }
+                // Logic for Charge-Off
+                else if (transactionType.isChargeoff()) {
+                    createJournalEntriesForChargeOff(loanDTO, loanTransactionDTO, office);
+                }
             }
-            /** Logic for Refunds of Active Loans **/
-            else if (transactionType.isRefundForActiveLoans()) {
-                createJournalEntriesForRefundForActiveLoan(loanDTO, loanTransactionDTO, office);
-            }
-            // Logic for Chargebacks
-            else if (transactionType.isChargeback()) {
-                createJournalEntriesForChargeback(loanDTO, loanTransactionDTO, office);
-            }
-            // Logic for Charge Adjustment
-            else if (transactionType.isChargeAdjustment()) {
-                createJournalEntriesForChargeAdjustment(loanDTO, loanTransactionDTO, office);
-            }
-            // Logic for Charge-Off
-            else if (transactionType.isChargeoff()) {
-                createJournalEntriesForChargeOff(loanDTO, loanTransactionDTO, office);
-            }
-        }
         }
     }
 

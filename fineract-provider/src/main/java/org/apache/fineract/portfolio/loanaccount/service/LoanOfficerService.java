@@ -44,12 +44,12 @@ public class LoanOfficerService {
             latestHistoryRecord.get().updateStartDate(assignmentDate);
         } else if (latestHistoryRecord.isPresent() && latestHistoryRecord.get().matchesStartDateOf(assignmentDate)) {
             latestHistoryRecord.get().updateLoanOfficer(newLoanOfficer);
-            loan.setLoanOfficer(newLoanOfficer);
+            loan.updateLoanOfficer(newLoanOfficer);
         } else {
             // loan officer correctly changed from previous loan officer to new loan officer
             latestHistoryRecord.ifPresent(loanOfficerAssignmentHistory -> loanOfficerAssignmentHistory.updateEndDate(assignmentDate));
 
-            loan.setLoanOfficer(newLoanOfficer);
+            loan.updateLoanOfficer(newLoanOfficer);
             if (loan.isNotSubmittedAndPendingApproval()) {
                 final LoanOfficerAssignmentHistory loanOfficerAssignmentHistory = LoanOfficerAssignmentHistory.createNew(loan,
                         loan.getLoanOfficer(), assignmentDate);
@@ -60,12 +60,10 @@ public class LoanOfficerService {
 
     public void updateLoanOfficerOnLoanApplication(final Loan loan, final Staff newLoanOfficer) {
         if (!loan.isSubmittedAndPendingApproval()) {
-            Long loanOfficerId = null;
-            if (loan.getLoanOfficer() != null) {
-                loanOfficerId = loan.getLoanOfficer().getId();
-            }
+            // Use loanOfficerId() to avoid lazy load when only ID is needed
+            Long loanOfficerId = loan.getLoanOfficerId();
             throw new LoanOfficerAssignmentException(loan.getId(), loanOfficerId);
         }
-        loan.setLoanOfficer(newLoanOfficer);
+        loan.updateLoanOfficer(newLoanOfficer);
     }
 }

@@ -36,6 +36,12 @@ apply from: "${projectDir}/src/main/groovy/org.apache.fineract.dependencies.grad
 
 description = 'Fineract Gradle Plugin'
 
+// Handle duplicate class files that may be generated when using both
+// groovy-gradle-plugin and java-gradle-plugin with Groovy sources
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 repositories {
     gradlePluginPortal()
     mavenCentral()

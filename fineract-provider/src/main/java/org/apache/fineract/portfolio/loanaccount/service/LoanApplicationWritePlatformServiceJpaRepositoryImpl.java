@@ -90,7 +90,9 @@ import org.apache.fineract.portfolio.loanaccount.serialization.LoanApplicationTr
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanApplicationValidator;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanDownPaymentTransactionValidator;
 import org.apache.fineract.portfolio.loanproduct.LoanProductConstants;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.RecalculationFrequencyType;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations;
 import org.apache.fineract.portfolio.note.domain.Note;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
@@ -129,6 +131,7 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
     private final LoanAccrualsProcessingService loanAccrualsProcessingService;
     private final LoanDownPaymentTransactionValidator loanDownPaymentTransactionValidator;
     private final LoanScheduleService loanScheduleService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final LoanOriginatorLinkingService loanOriginatorLinkingService;
 
     @Transactional
@@ -146,7 +149,9 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
             // Account number regeneration (need loan id...)
             this.loanAssembler.accountNumberGeneration(command, loan);
             // Save interest recalculation calendar
-            if (loan.getLoanProduct().isInterestRecalculationEnabled()) {
+            CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+
+            if (loanProductConfig.isInterestRecalculationEnabled()) {
                 createAndPersistCalendarInstanceForInterestRecalculation(loan);
             }
             // Save note
@@ -160,13 +165,13 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
             // Save related datatable entries
             if (command.parameterExists(LoanApiConstants.datatables)) {
                 this.entityDatatableChecksWritePlatformService.saveDatatables(StatusEnum.CREATE.getValue(), EntityTables.LOAN.getName(),
-                        loan.getId(), loan.productId(), command.arrayOfParameterNamed(LoanApiConstants.datatables));
+                        loan.getId(), loan.getProductId(), command.arrayOfParameterNamed(LoanApiConstants.datatables));
             }
             // TODO: review whether we really need this
             loanRepositoryWrapper.flush();
             // Check mandatory datatable entries were created
             this.entityDatatableChecksWritePlatformService.runTheCheckForProduct(loan.getId(), EntityTables.LOAN.getName(),
-                    StatusEnum.CREATE.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.productId());
+                    StatusEnum.CREATE.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.getProductId());
             // Process originators if provided
             if (command.parameterExists(LoanApiConstants.ORIGINATORS_PARAM)) {
                 final JsonArray originatorsArray = command.arrayOfParameterNamed(LoanApiConstants.ORIGINATORS_PARAM);
@@ -632,7 +637,8 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
                     || changes.containsKey(LoanApiConstants.disbursementPrincipalParameterName)) {
                 LocalDate recalculateFrom = null;
                 ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
-                loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+                loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
                 loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
             }
 
@@ -696,7 +702,7 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
 
         // check for mandatory entities
         entityDatatableChecksWritePlatformService.runTheCheckForProduct(loanId, EntityTables.LOAN.getName(), StatusEnum.REJECTED.getValue(),
-                EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.productId());
+                EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.getProductId());
 
         // loan application rejection
         final AppUser currentUser = getAppUserIfPresent();
@@ -734,7 +740,7 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
 
         // check for mandatory entities
         entityDatatableChecksWritePlatformService.runTheCheckForProduct(loanId, EntityTables.LOAN.getName(),
-                StatusEnum.WITHDRAWN.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.productId());
+                StatusEnum.WITHDRAWN.getValue(), EntityTables.LOAN.getForeignKeyColumnNameOnDatatable(), loan.getProductId());
 
         // loan application withdrawal
         final AppUser currentUser = getAppUserIfPresent();

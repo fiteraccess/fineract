@@ -51,6 +51,8 @@ import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
 import org.apache.fineract.portfolio.tax.domain.TaxGroup;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,6 +98,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
+    @Caching(evict = { @CacheEvict(value = "savingsProducts", allEntries = true),
+            @CacheEvict(value = "savingsProductById", allEntries = true), @CacheEvict(value = "productGLMappings", allEntries = true),
+            @CacheEvict(value = "savingsProductConfig", allEntries = true) })
     public CommandProcessingResult create(final JsonCommand command) {
 
         try {
@@ -129,6 +134,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
+    @Caching(evict = { @CacheEvict(value = "savingsProducts", allEntries = true),
+            @CacheEvict(value = "savingsProductById", allEntries = true), @CacheEvict(value = "productGLMappings", allEntries = true),
+            @CacheEvict(value = "savingsProductConfig", allEntries = true) })
     public CommandProcessingResult update(final Long productId, final JsonCommand command) {
 
         try {
@@ -187,6 +195,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
+    @Caching(evict = { @CacheEvict(value = "savingsProducts", allEntries = true),
+            @CacheEvict(value = "savingsProductById", allEntries = true), @CacheEvict(value = "productGLMappings", allEntries = true),
+            @CacheEvict(value = "savingsProductConfig", allEntries = true) })
     public CommandProcessingResult delete(final Long productId) {
 
         this.context.authenticatedUser();

@@ -23,7 +23,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,14 +54,6 @@ public class IdempotencyStoreFilter extends OncePerRequestFilter {
                 .setAttribute(SynchronousCommandProcessingService.IDEMPOTENCY_KEY_ATTRIBUTE, idempotentKey, request));
 
         filterChain.doFilter(request, wrapper.get() != null ? wrapper.get() : response);
-        Optional<Long> commandId = helper.getCommandId(request);
-        boolean isSuccessWithoutStored = commandId.isPresent() && wrapper.get() != null && helper.isStoreIdempotencyKey(request)
-                && helper.isAllowedContentTypeResponse(response);
-        if (isSuccessWithoutStored) {
-            helper.storeCommandResult(response.getStatus(), Optional.ofNullable(wrapper.get())
-                    .map(ContentCachingResponseWrapper::getContentAsByteArray).map(s -> new String(s, StandardCharsets.UTF_8)).orElse(null),
-                    commandId.get());
-        }
         if (wrapper.get() != null) {
             wrapper.get().copyBodyToResponse();
         }
