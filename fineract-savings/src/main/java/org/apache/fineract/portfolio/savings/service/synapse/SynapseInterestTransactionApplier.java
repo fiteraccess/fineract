@@ -42,7 +42,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSum
  */
 @Slf4j
 @RequiredArgsConstructor
-public class InterestPostingReplayService {
+public class SynapseInterestTransactionApplier {
 
     private static final Map<String, SavingsAccountTransactionType> TRANSACTION_TYPES = Map.of("INTEREST_POSTING",
             SavingsAccountTransactionType.INTEREST_POSTING, "OVERDRAFT_INTEREST", SavingsAccountTransactionType.OVERDRAFT_INTEREST,

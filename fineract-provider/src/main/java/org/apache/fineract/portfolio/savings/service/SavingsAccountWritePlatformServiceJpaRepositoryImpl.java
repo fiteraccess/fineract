@@ -132,8 +132,8 @@ import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmen
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
-import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
-import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
@@ -176,9 +176,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final GSIMRepositoy gsimRepository;
     private final SavingsAccountInterestPostingService savingsAccountInterestPostingService;
     private final ErrorHandler errorHandler;
-    private final ObjectProvider<InterestPostingReplayService> interestPostingReplayServiceProvider;
+    private final ObjectProvider<SynapseInterestTransactionApplier> interestPostingReplayServiceProvider;
     private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
-    private final ObjectProvider<SynapseInterestPostingService> synapseInterestPostingServiceProvider;
+    private final ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider;
     private final JdbcTemplate jdbcTemplate;
 
     @Transactional
@@ -517,7 +517,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Override
     @Transactional
     public CommandProcessingResult postInterest(final JsonCommand command) {
-        SynapseInterestPostingService synapseService = synapseInterestPostingServiceProvider.getIfAvailable();
+        SynapseInterestPostingOutboxWriter synapseService = synapseInterestPostingServiceProvider.getIfAvailable();
         if (synapseService != null && configurationDomainService.isSynapseInterestPostingEnabled()) {
             return postInterestViaSynapse(command.getSavingsId(), command, synapseService);
         }
@@ -1994,7 +1994,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Transactional
     @Override
     public CommandProcessingResult replayInterestPosting(final Long savingsId, final JsonCommand command) {
-        final InterestPostingReplayService replayService = interestPostingReplayServiceProvider.getIfAvailable();
+        final SynapseInterestTransactionApplier replayService = interestPostingReplayServiceProvider.getIfAvailable();
         if (replayService == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
             throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
                     "Synapse integration is not enabled. Cannot replay interest posting.");
@@ -2008,7 +2008,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
 
-        final InterestPostingReplayService.ReplayResult result = replayService.replay(account, txType, txAmount, txDate, overdraftAmount,
+        final SynapseInterestTransactionApplier.ReplayResult result = replayService.replay(account, txType, txAmount, txDate, overdraftAmount,
                 traceId);
 
         if (result.alreadyExists()) {
@@ -2030,7 +2030,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     }
 
     private CommandProcessingResult postInterestViaSynapse(Long savingsId, JsonCommand command,
-            SynapseInterestPostingService synapseService) {
+            SynapseInterestPostingOutboxWriter synapseService) {
         // 1. Validate: load JPA entity for validation only (client/group active, pivot date)
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);

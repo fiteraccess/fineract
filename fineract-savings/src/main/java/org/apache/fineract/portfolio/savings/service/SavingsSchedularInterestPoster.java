@@ -46,7 +46,7 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
-import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingService;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Isolation;
@@ -69,7 +69,7 @@ public class SavingsSchedularInterestPoster {
     private boolean backdatedTxnsAllowedTill;
 
     // Optional Synapse dependencies — injected via setter only when synapse is enabled
-    private SynapseInterestPostingService synapseInterestPostingService;
+    private SynapseInterestPostingOutboxWriter synapseInterestPostingOutboxWriter;
     private FineractProperties fineractProperties;
     private ConfigurationDomainService configurationDomainService;
 
@@ -173,7 +173,7 @@ public class SavingsSchedularInterestPoster {
         if (isSynapseEnabled()) {
             LocalDate currentDate = DateUtils.getBusinessLocalDate();
             Long userId = platformSecurityContext.authenticatedUser().getId();
-            SynapsePostResult result = synapseInterestPostingService.postInterestBatch(savingsAccountDataList, currentDate);
+            SynapsePostResult result = synapseInterestPostingOutboxWriter.postInterestBatch(savingsAccountDataList, currentDate);
             executeCursorUpdates(result.getCursorUpdates(), userId);
             log.debug("Synapse batch complete: accepted={}, failed={}", result.getAccepted(), result.getFailed());
             return;
@@ -282,7 +282,7 @@ public class SavingsSchedularInterestPoster {
     }
 
     private boolean isSynapseEnabled() {
-        return fineractProperties != null && synapseInterestPostingService != null
+        return fineractProperties != null && synapseInterestPostingOutboxWriter != null
                 && fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isEnabled()
                 && configurationDomainService != null && configurationDomainService.isSynapseInterestPostingEnabled();
     }

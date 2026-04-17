@@ -39,7 +39,7 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInst
 
 @Slf4j
 @RequiredArgsConstructor
-public class SynapseInterestPostingService {
+public class SynapseInterestPostingOutboxWriter {
 
     private final SynapseInstructionMapper mapper;
     private final SynapseOutboxRepository outboxRepository;

@@ -43,12 +43,12 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-class SynapseInterestPostingServiceTest {
+class SynapseInterestPostingOutboxWriterTest {
 
     private final SynapseInstructionMapper mapper = new SynapseInstructionMapper();
     private final SynapseOutboxRepository outboxRepository = mock(SynapseOutboxRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-    private final SynapseInterestPostingService service = new SynapseInterestPostingService(mapper, outboxRepository, objectMapper);
+    private final SynapseInterestPostingOutboxWriter service = new SynapseInterestPostingOutboxWriter(mapper, outboxRepository, objectMapper);
 
     private static final LocalDate POSTING_DATE = LocalDate.of(2026, 3, 20);
     private static final LocalDate INTEREST_POSTED_TILL = LocalDate.of(2026, 3, 20);

@@ -46,8 +46,8 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrap
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
-import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService;
-import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService.ReplayResult;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier.ReplayResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -56,8 +56,8 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
 
     private SavingsAccountWritePlatformServiceJpaRepositoryImpl service;
 
-    private ObjectProvider<InterestPostingReplayService> replayServiceProvider;
-    private InterestPostingReplayService replayService;
+    private ObjectProvider<SynapseInterestTransactionApplier> replayServiceProvider;
+    private SynapseInterestTransactionApplier replayService;
     private SavingsAccountAssembler assembler;
     private SavingsAccountTransactionRepository txRepo;
     private SavingsAccountRepositoryWrapper accountRepo;
@@ -68,7 +68,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
     @BeforeEach
     void setUp() throws Exception {
         replayServiceProvider = mock(ObjectProvider.class);
-        replayService = mock(InterestPostingReplayService.class);
+        replayService = mock(SynapseInterestTransactionApplier.class);
         assembler = mock(SavingsAccountAssembler.class);
         txRepo = mock(SavingsAccountTransactionRepository.class);
         accountRepo = mock(SavingsAccountRepositoryWrapper.class);

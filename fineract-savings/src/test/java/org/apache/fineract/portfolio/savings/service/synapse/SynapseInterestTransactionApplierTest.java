@@ -43,7 +43,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountSummary;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
-import org.apache.fineract.portfolio.savings.service.synapse.InterestPostingReplayService.ReplayResult;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier.ReplayResult;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,7 +56,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class InterestPostingReplayServiceTest {
+class SynapseInterestTransactionApplierTest {
 
     private static MockedStatic<MoneyHelper> moneyHelper;
 
@@ -93,7 +93,7 @@ class InterestPostingReplayServiceTest {
         SavingsAccount account = buildAccount(1L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-1")).thenReturn(Collections.emptyList());
 
-        InterestPostingReplayService service = new InterestPostingReplayService(transactionRepository, summaryWrapper);
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
         ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"),
                 LocalDate.of(2026, 3, 20), null, "trace-1");
 
@@ -110,7 +110,7 @@ class InterestPostingReplayServiceTest {
         SavingsAccount account = buildAccount(2L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-2")).thenReturn(Collections.emptyList());
 
-        InterestPostingReplayService service = new InterestPostingReplayService(transactionRepository, summaryWrapper);
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
         ReplayResult result = service.replay(account, "OVERDRAFT_INTEREST", new BigDecimal("50.00"),
                 LocalDate.of(2026, 3, 20), new BigDecimal("300.00"), "trace-2");
 
@@ -125,7 +125,7 @@ class InterestPostingReplayServiceTest {
         SavingsAccount account = buildAccount(3L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-3")).thenReturn(Collections.emptyList());
 
-        InterestPostingReplayService service = new InterestPostingReplayService(transactionRepository, summaryWrapper);
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
         ReplayResult result = service.replay(account, "WITHHOLD_TAX", new BigDecimal("25.00"),
                 LocalDate.of(2026, 3, 20), null, "trace-3");
 
@@ -142,7 +142,7 @@ class InterestPostingReplayServiceTest {
                 org.apache.fineract.organisation.monetary.domain.Money.of(account.getCurrency(), new BigDecimal("100.00")), false);
         when(transactionRepository.findByRefNo("trace-dup")).thenReturn(List.of(existingTx));
 
-        InterestPostingReplayService service = new InterestPostingReplayService(transactionRepository, summaryWrapper);
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
         ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"),
                 LocalDate.of(2026, 3, 20), null, "trace-dup");
 
@@ -156,7 +156,7 @@ class InterestPostingReplayServiceTest {
         SavingsAccount account = buildAccount(5L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-bad")).thenReturn(Collections.emptyList());
 
-        InterestPostingReplayService service = new InterestPostingReplayService(transactionRepository, summaryWrapper);
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
 
         assertThatThrownBy(() -> service.replay(account, "INVALID_TYPE", new BigDecimal("10.00"),
                 LocalDate.of(2026, 3, 20), null, "trace-bad"))
