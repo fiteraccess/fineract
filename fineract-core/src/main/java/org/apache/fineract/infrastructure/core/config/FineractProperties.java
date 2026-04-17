@@ -91,6 +91,8 @@ public class FineractProperties {
 
     private RetryProperties retry;
 
+    private FineractSynapseProperties synapse;
+
     @Getter
     @Setter
     public static class FineractTenantProperties {
@@ -725,5 +727,24 @@ public class FineractProperties {
         private List<String> allowedHeaders;
         private List<String> exposedHeaders;
         private boolean allowCredentials;
+    }
+
+    @Getter
+    @Setter
+    public static class FineractSynapseProperties {
+
+        private boolean enabled;
+        private boolean forceEnabled;
+        private String baseUrl;
+        private String batchEndpoint;
+        private long connectTimeoutMs;
+        private long readTimeoutMs;
+        private int retryMaxAttempts;
+        private long retryBackoffMs;
+        private String apiKey;
+        private int outboxPageSize = 200;
+        private int outboxThreadPoolSize = 4;
+        private int outboxRetentionDays = 30;
+        private int outboxStaleDispatchedMinutes = 5;
     }
 }

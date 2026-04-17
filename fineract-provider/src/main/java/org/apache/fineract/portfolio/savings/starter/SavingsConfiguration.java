@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.starter;
 
+import java.time.Duration;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.accounting.producttoaccountmapping.service.ProductToGLAccountMappingWritePlatformService;
 import org.apache.fineract.commands.service.CommandProcessingService;
@@ -88,6 +89,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeAssemble
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
@@ -142,11 +144,22 @@ import org.apache.fineract.portfolio.savings.service.search.SavingsAccountTransa
 import org.apache.fineract.portfolio.savings.service.search.SavingsAccountTransactionsSearchServiceImpl;
 import org.apache.fineract.portfolio.search.service.SearchUtil;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration
 public class SavingsConfiguration {
@@ -372,7 +385,10 @@ public class SavingsConfiguration {
             EntityDatatableChecksWritePlatformService entityDatatableChecksWritePlatformService, AppUserRepositoryWrapper appuserRepository,
             StandingInstructionRepository standingInstructionRepository, BusinessEventNotifierService businessEventNotifierService,
             GSIMRepositoy gsimRepository, SavingsAccountInterestPostingService savingsAccountInterestPostingService,
-            ErrorHandler errorHandler, CacheableSavingsProductConfigService cacheableSavingsProductConfigService) {
+            ErrorHandler errorHandler, ObjectProvider<SynapseInterestTransactionApplier> interestPostingReplayServiceProvider,
+            SavingsAccountReadPlatformService savingsAccountReadPlatformService,
+            ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider,
+            JdbcTemplate jdbcTemplate, CacheableSavingsProductConfigService cacheableSavingsProductConfigService) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -380,7 +396,9 @@ public class SavingsConfiguration {
                 chargeRepository, savingsAccountChargeRepository, holidayRepository, workingDaysRepository, configurationDomainService,
                 depositAccountOnHoldTransactionRepository, entityDatatableChecksWritePlatformService, appuserRepository,
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
-                errorHandler, cacheableSavingsProductConfigService);
+                errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
+                synapseInterestPostingServiceProvider, jdbcTemplate,
+                cacheableSavingsProductConfigService);
     }
 
     @Bean
@@ -433,11 +451,16 @@ public class SavingsConfiguration {
     @ConditionalOnMissingBean(SavingsSchedularInterestPoster.class)
     public SavingsSchedularInterestPoster savingsSchedularInterestPoster(
             SavingsAccountWritePlatformService savingsAccountWritePlatformService, JdbcTemplate jdbcTemplate,
-            SavingsAccountReadPlatformService savingsAccountReadPlatformService, PlatformSecurityContext platformSecurityContext
-
-    ) {
-        return new SavingsSchedularInterestPoster(savingsAccountWritePlatformService, jdbcTemplate, savingsAccountReadPlatformService,
-                platformSecurityContext);
+            SavingsAccountReadPlatformService savingsAccountReadPlatformService, PlatformSecurityContext platformSecurityContext,
+            ObjectProvider<SynapseInterestPostingOutboxWriter> synapseServiceProvider,
+            ObjectProvider<FineractProperties> fineractPropertiesProvider,
+            ConfigurationDomainService configurationDomainService) {
+        SavingsSchedularInterestPoster poster = new SavingsSchedularInterestPoster(savingsAccountWritePlatformService, jdbcTemplate,
+                savingsAccountReadPlatformService, platformSecurityContext);
+        synapseServiceProvider.ifAvailable(poster::setSynapseInterestPostingOutboxWriter);
+        fineractPropertiesProvider.ifAvailable(poster::setFineractProperties);
+        poster.setConfigurationDomainService(configurationDomainService);
+        return poster;
     }
 
     @Bean
@@ -445,5 +468,43 @@ public class SavingsConfiguration {
     @ConditionalOnMissingBean(SavingsSchedularInterestPosterTask.class)
     public SavingsSchedularInterestPosterTask savingsSchedularInterestPosterTask(SavingsSchedularInterestPoster interestPoster) {
         return new SavingsSchedularInterestPosterTask(interestPoster);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseOutboxRepository synapseOutboxRepository(JdbcTemplate jdbcTemplate) {
+        return new SynapseOutboxRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseInstructionMapper synapseInstructionMapper() {
+        return new SynapseInstructionMapper();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseTransactionClient synapseTransactionClient(FineractProperties fineractProperties, RestTemplateBuilder restTemplateBuilder) {
+        FineractProperties.FineractSynapseProperties synapse = fineractProperties.getSynapse();
+        RestTemplate restTemplate = restTemplateBuilder
+                .connectTimeout(Duration.ofMillis(synapse.getConnectTimeoutMs()))
+                .readTimeout(Duration.ofMillis(synapse.getReadTimeoutMs()))
+                .build();
+        return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getBatchEndpoint(), synapse.getApiKey());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseInterestPostingOutboxWriter synapseInterestPostingService(SynapseInstructionMapper mapper,
+                                                                            SynapseOutboxRepository outboxRepository, ObjectMapper objectMapper) {
+        return new SynapseInterestPostingOutboxWriter(mapper, outboxRepository, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseInterestTransactionApplier interestPostingReplayService(
+            SavingsAccountTransactionRepository transactionRepository,
+            SavingsAccountTransactionSummaryWrapper summaryWrapper) {
+        return new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
     }
 }

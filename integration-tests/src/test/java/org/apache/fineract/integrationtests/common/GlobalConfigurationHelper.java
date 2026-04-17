@@ -607,6 +607,13 @@ public class GlobalConfigurationHelper {
         enableOriginatorCreationDuringLoanApplication.put("trapDoor", false);
         defaults.add(enableOriginatorCreationDuringLoanApplication);
 
+        HashMap<String, Object> enableSynapseInterestPosting = new HashMap<>();
+        enableSynapseInterestPosting.put("name", GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING);
+        enableSynapseInterestPosting.put("value", 0L);
+        enableSynapseInterestPosting.put("enabled", false);
+        enableSynapseInterestPosting.put("trapDoor", false);
+        defaults.add(enableSynapseInterestPosting);
+
         return defaults;
     }
 

@@ -157,4 +157,6 @@ public interface ConfigurationDomainService {
     Integer getPasswordReuseRestrictionCount();
 
     boolean isForcePasswordResetOnFirstLoginEnabled();
+
+    boolean isSynapseInterestPostingEnabled();
 }

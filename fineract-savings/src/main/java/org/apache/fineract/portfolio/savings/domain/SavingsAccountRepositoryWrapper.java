@@ -178,6 +178,16 @@ public class SavingsAccountRepositoryWrapper {
         return this.repository.saveAndFlush(account);
     }
 
+    /**
+     * Detaches the given entity from the persistence context so that Hibernate will not auto-flush it at transaction
+     * commit. Use this when the entity was loaded only for validation and should not participate in any further
+     * persistence operations (e.g., before an HTTP call whose callback modifies the same entity in a separate
+     * transaction).
+     */
+    public void detach(final SavingsAccount account) {
+        entityManager.detach(account);
+    }
+
     private void loadLazyCollections(final List<SavingsAccount> accounts) {
         if (accounts != null && accounts.size() > 0) {
             for (SavingsAccount account : accounts) {

@@ -118,4 +118,6 @@ public interface SavingsAccountWritePlatformService {
     CommandProcessingResult gsimDeposit(Long gsimId, JsonCommand command);
 
     CommandProcessingResult bulkGSIMClose(Long gsimId, JsonCommand command);
+
+    CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand command);
 }
