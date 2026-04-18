@@ -23,12 +23,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -144,24 +146,36 @@ public class SynapseOutboxRepository {
 
     private static final double BACKOFF_BASE_MINUTES = 1.0;
     private static final double BACKOFF_MULTIPLIER = 1.5;
-    private static final double BACKOFF_MAX_MINUTES = 1440.0;
+    private static final double BACKOFF_MAX_MINUTES = 15.0;
+    private static final double JITTER_FACTOR = 0.2;
+    private static final Duration RETRY_DEADLINE = Duration.ofHours(24);
 
     /**
-     * Mark a single row as FAILED (or DEAD if max attempts reached).
-     * Applies exponential backoff for the next retry attempt.
+     * Mark a single row as FAILED (or DEAD if max attempts or retry deadline reached).
+     * Applies exponential backoff with ±20% jitter for the next retry attempt.
      */
-    public void markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts) {
-        boolean isDead = (currentAttempts + 1) >= maxAttempts;
+    public void markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
+        boolean isDead = (currentAttempts + 1) >= maxAttempts || clock.instant().isAfter(createdAt.plus(RETRY_DEADLINE));
         Timestamp nextAttempt = null;
 
         if (!isDead) {
-            double delayMinutes = BACKOFF_BASE_MINUTES * Math.pow(BACKOFF_MULTIPLIER, currentAttempts);
-            delayMinutes = Math.min(delayMinutes, BACKOFF_MAX_MINUTES);
+            double delayMinutes = calculateBackoffMinutes(currentAttempts);
             nextAttempt = Timestamp.from(clock.instant().plusSeconds((long) (delayMinutes * 60)));
         }
 
         jdbcTemplate.update(MARK_FAILED_SQL, maxAttempts, errorDetail, nextAttempt, id);
         log.debug("Marked outbox entry id={} as FAILED/DEAD (nextAttempt={})", id, nextAttempt);
+    }
+
+    /**
+     * Calculate the backoff delay in minutes for the given attempt number.
+     * Uses exponential backoff with ±20% jitter, capped at {@link #BACKOFF_MAX_MINUTES}.
+     */
+    double calculateBackoffMinutes(int currentAttempts) {
+        double delayMinutes = BACKOFF_BASE_MINUTES * Math.pow(BACKOFF_MULTIPLIER, currentAttempts);
+        delayMinutes = Math.min(delayMinutes, BACKOFF_MAX_MINUTES);
+        double jitter = 1.0 + (ThreadLocalRandom.current().nextDouble(-JITTER_FACTOR, JITTER_FACTOR));
+        return delayMinutes * jitter;
     }
 
     /**

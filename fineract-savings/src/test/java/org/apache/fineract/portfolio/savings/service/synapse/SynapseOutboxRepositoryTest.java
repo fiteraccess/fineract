@@ -138,21 +138,32 @@ class SynapseOutboxRepositoryTest {
 
     @Test
     void markFailed_delegatesToUpdate() {
-        repository.markFailed(42L, "connection timeout", 2, 20);
+        Instant createdAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
+        repository.markFailed(42L, "connection timeout", 2, 1000, createdAt);
 
-        Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds((long) (1.0 * Math.pow(1.5, 2) * 60)));
         verify(jdbcTemplate).update(
                 argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
-                eq(20), eq("connection timeout"), eq(expectedNextAttempt), eq(42L));
+                eq(1000), eq("connection timeout"), argThat(ts -> ts != null), eq(42L));
     }
 
     @Test
-    void markFailed_deadEntry_setsNullNextAttempt() {
-        repository.markFailed(42L, "connection timeout", 19, 20);
+    void markFailed_deadByAttempts_setsNullNextAttempt() {
+        Instant createdAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
+        repository.markFailed(42L, "connection timeout", 999, 1000, createdAt);
 
         verify(jdbcTemplate).update(
                 argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
-                eq(20), eq("connection timeout"), eq(null), eq(42L));
+                eq(1000), eq("connection timeout"), eq(null), eq(42L));
+    }
+
+    @Test
+    void markFailed_deadByDeadline_setsNullNextAttempt() {
+        Instant createdAt = FIXED_NOW.minus(25, ChronoUnit.HOURS);
+        repository.markFailed(42L, "connection timeout", 2, 1000, createdAt);
+
+        verify(jdbcTemplate).update(
+                argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
+                eq(1000), eq("connection timeout"), eq(null), eq(42L));
     }
 
     @Test
@@ -180,35 +191,99 @@ class SynapseOutboxRepositoryTest {
     @Nested
     class MarkFailedBackoff {
 
-        @Test
-        void attempt5_producesExpectedBackoffDelay() {
-            repository.markFailed(7L, "timeout", 5, 20);
+        private final Instant recentCreatedAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
 
-            long expectedDelaySeconds = (long) (1.0 * Math.pow(1.5, 5) * 60);
-            Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds(expectedDelaySeconds));
+        @Test
+        void attempt5_producesExpectedBackoffDelayWithJitter() {
+            repository.markFailed(7L, "timeout", 5, 1000, recentCreatedAt);
+
+            double baseDelay = 1.0 * Math.pow(1.5, 5) * 60;
+            long minSeconds = (long) (baseDelay * 0.8);
+            long maxSeconds = (long) (baseDelay * 1.2) + 1;
             verify(jdbcTemplate).update(
                     argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
-                    eq(20), eq("timeout"), eq(expectedNextAttempt), eq(7L));
+                    eq(1000), eq("timeout"),
+                    argThat(ts -> {
+                        Timestamp t = (Timestamp) ts;
+                        long actualSeconds = t.toInstant().getEpochSecond() - FIXED_NOW.getEpochSecond();
+                        return actualSeconds >= minSeconds && actualSeconds <= maxSeconds;
+                    }),
+                    eq(7L));
         }
 
         @Test
         void highAttemptCount_capsAtMaxBackoff() {
-            repository.markFailed(8L, "timeout", 100, 200);
+            repository.markFailed(8L, "timeout", 100, 1000, recentCreatedAt);
 
-            Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds((long) (1440.0 * 60)));
+            long minSeconds = (long) (15.0 * 60 * 0.8);
+            long maxSeconds = (long) (15.0 * 60 * 1.2) + 1;
             verify(jdbcTemplate).update(
                     argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
-                    eq(200), eq("timeout"), eq(expectedNextAttempt), eq(8L));
+                    eq(1000), eq("timeout"),
+                    argThat(ts -> {
+                        Timestamp t = (Timestamp) ts;
+                        long actualSeconds = t.toInstant().getEpochSecond() - FIXED_NOW.getEpochSecond();
+                        return actualSeconds >= minSeconds && actualSeconds <= maxSeconds;
+                    }),
+                    eq(8L));
         }
 
         @Test
-        void firstAttempt_usesBaseDelay() {
-            repository.markFailed(9L, "error", 0, 20);
+        void firstAttempt_usesBaseDelayWithJitter() {
+            repository.markFailed(9L, "error", 0, 1000, recentCreatedAt);
 
-            Timestamp expectedNextAttempt = Timestamp.from(FIXED_NOW.plusSeconds(60));
+            long minSeconds = (long) (60 * 0.8);
+            long maxSeconds = (long) (60 * 1.2) + 1;
             verify(jdbcTemplate).update(
                     argThat(sql -> sql.contains("CASE WHEN attempts >= ?")),
-                    eq(20), eq("error"), eq(expectedNextAttempt), eq(9L));
+                    eq(1000), eq("error"),
+                    argThat(ts -> {
+                        Timestamp t = (Timestamp) ts;
+                        long actualSeconds = t.toInstant().getEpochSecond() - FIXED_NOW.getEpochSecond();
+                        return actualSeconds >= minSeconds && actualSeconds <= maxSeconds;
+                    }),
+                    eq(9L));
+        }
+    }
+
+    @Nested
+    class CalculateBackoffMinutes {
+
+        private static final int ITERATIONS = 100;
+
+        @Test
+        void attempt0_producesResultAroundBaseDelay() {
+            for (int i = 0; i < ITERATIONS; i++) {
+                double result = repository.calculateBackoffMinutes(0);
+                assertThat(result).isBetween(0.8, 1.2);
+            }
+        }
+
+        @Test
+        void attempt5_producesExpectedExponentialDelay() {
+            // 1.0 * 1.5^5 = 7.59375
+            double expectedBase = 7.59375;
+            for (int i = 0; i < ITERATIONS; i++) {
+                double result = repository.calculateBackoffMinutes(5);
+                assertThat(result).isBetween(expectedBase * 0.8, expectedBase * 1.2);
+            }
+        }
+
+        @Test
+        void highAttempt_cappedAtMaxBackoff() {
+            for (int i = 0; i < ITERATIONS; i++) {
+                double result = repository.calculateBackoffMinutes(100);
+                assertThat(result).isBetween(15.0 * 0.8, 15.0 * 1.2);
+            }
+        }
+
+        @Test
+        void resultIsAlwaysPositive() {
+            for (int attempt = 0; attempt <= 20; attempt++) {
+                for (int i = 0; i < ITERATIONS; i++) {
+                    assertThat(repository.calculateBackoffMinutes(attempt)).isPositive();
+                }
+            }
         }
     }
 

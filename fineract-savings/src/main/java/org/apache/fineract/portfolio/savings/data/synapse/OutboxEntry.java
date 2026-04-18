@@ -50,7 +50,7 @@ public class OutboxEntry {
     @Builder.Default
     private int attempts = 0;
     @Builder.Default
-    private int maxAttempts = 20;
+    private int maxAttempts = 1000;
     private String errorDetail;
     private Instant createdAt;
     private Instant dispatchedAt;
