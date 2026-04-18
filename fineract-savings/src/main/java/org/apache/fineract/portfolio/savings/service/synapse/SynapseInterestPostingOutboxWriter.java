@@ -62,14 +62,13 @@ public class SynapseInterestPostingOutboxWriter {
      * Delegates to {@link #postInterestBatch} with a list of one.
      *
      * @param account     the account whose interest has been calculated
-     * @param postingDate the date interest is being posted for
      * @return cursor updates + accepted/failed counts
      */
-    public SynapsePostResult postInterestForAccount(SavingsAccountData account, LocalDate postingDate) {
-        return postInterestBatch(List.of(account), postingDate);
+    public SynapsePostResult postInterestForAccount(SavingsAccountData account) {
+        return postInterestBatch(List.of(account));
     }
 
-    public SynapsePostResult postInterestBatch(List<SavingsAccountData> accounts, LocalDate postingDate) {
+    public SynapsePostResult postInterestBatch(List<SavingsAccountData> accounts) {
         String batchId = UUID.randomUUID().toString();
 
         List<AccountCursorUpdate> allCursors = accounts.stream().map(this::toCursorUpdate).toList();
