@@ -34,6 +34,7 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInst
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Direction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Operation;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.TransactionType;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class SynapseInstructionMapperTest {
@@ -127,6 +128,86 @@ class SynapseInstructionMapperTest {
         String traceId2 = mapper.map(account, tx, Operation.POST, "b").getTraceId();
 
         assertThat(traceId1).isNotEqualTo(traceId2);
+    }
+
+    @Nested
+    class MapCharge {
+
+        @Test
+        void setsDirectionToDebit() {
+            SynapseTransactionInstruction result = mapper.mapCharge(1L, 10L, "EXT-1",
+                    "Outbound Transfer Fee", new BigDecimal("50.00"),
+                    LocalDate.of(2026, 4, 1), "NGN", "batch-c1");
+
+            assertThat(result.getDirection()).isEqualTo(Direction.DEBIT);
+        }
+
+        @Test
+        void setsOperationToPost() {
+            SynapseTransactionInstruction result = mapper.mapCharge(1L, 10L, "EXT-1",
+                    "Stamp Duty", new BigDecimal("25.00"),
+                    LocalDate.of(2026, 4, 1), "NGN", "batch-c2");
+
+            assertThat(result.getOperation()).isEqualTo(Operation.POST);
+        }
+
+        @Test
+        void generatesNonNullTraceId() {
+            SynapseTransactionInstruction result = mapper.mapCharge(1L, 10L, "EXT-1",
+                    "Outbound Transfer Fee", new BigDecimal("10.00"),
+                    LocalDate.of(2026, 4, 1), "NGN", "batch-c3");
+
+            assertThat(UUID.fromString(result.getTraceId())).isNotNull();
+        }
+
+        @Test
+        void alwaysUseSavingsChargeTransactionType() {
+            SynapseTransactionInstruction result = mapper.mapCharge(42L, 7L, "EXT-42",
+                    "Outbound Transfer Fee", new BigDecimal("100.00"),
+                    LocalDate.of(2026, 4, 15), "USD", "batch-c4");
+
+            assertThat(result.getTransactionType()).isEqualTo(TransactionType.SAVINGS_CHARGE);
+        }
+
+        @Test
+        void setsAllFieldsCorrectly() {
+            SynapseTransactionInstruction result = mapper.mapCharge(42L, 7L, "EXT-42",
+                    "Outbound Transfer Fee", new BigDecimal("100.00"),
+                    LocalDate.of(2026, 4, 15), "USD", "batch-c4");
+
+            assertThat(result.getSavingsAccountId()).isEqualTo(42L);
+            assertThat(result.getOfficeId()).isEqualTo(7L);
+            assertThat(result.getExternalId()).isEqualTo("EXT-42");
+            assertThat(result.getTransactionType()).isEqualTo(TransactionType.SAVINGS_CHARGE);
+            assertThat(result.getDescription()).isEqualTo("Outbound Transfer Fee");
+            assertThat(result.getAmount()).isEqualByComparingTo("100.00");
+            assertThat(result.getTransactionDate()).isEqualTo(LocalDate.of(2026, 4, 15));
+            assertThat(result.getCurrencyCode()).isEqualTo("USD");
+            assertThat(result.getBatchId()).isEqualTo("batch-c4");
+        }
+    }
+
+    @Nested
+    class ResolveDirection {
+
+        @Test
+        void returnsDebitForSavingsCharge() {
+            SynapseTransactionInstruction result = mapper.mapCharge(1L, 1L, null,
+                    "Any Charge", BigDecimal.ONE,
+                    LocalDate.of(2026, 4, 1), "NGN", "b");
+
+            assertThat(result.getDirection()).isEqualTo(Direction.DEBIT);
+        }
+
+        @Test
+        void returnsCreditForInterestPosting() {
+            SavingsAccountData account = buildAccount(1L, 1L, null, "NGN");
+            SavingsAccountTransactionData tx = buildTx(SavingsAccountTransactionType.INTEREST_POSTING, BigDecimal.ONE);
+
+            SynapseTransactionInstruction result = mapper.map(account, tx, Operation.POST, "b");
+
+            assertThat(result.getDirection()).isEqualTo(Direction.CREDIT);
+        }
     }
 
     // --- helpers ---

@@ -65,13 +65,17 @@ public class SynapseTransactionInstruction {
     /** Original transaction ID when this is a reversal. */
     private final Long originalTransactionId;
 
+    /** Human-readable description — carries charge name or other metadata. */
+    private final String description;
+
     /** Scheduler run identifier — groups instructions into a single batch. */
     private final String batchId;
 
     public enum TransactionType {
         INTEREST_POSTING,
         OVERDRAFT_INTEREST,
-        WITHHOLD_TAX
+        WITHHOLD_TAX,
+        SAVINGS_CHARGE
     }
 
     public enum Direction {

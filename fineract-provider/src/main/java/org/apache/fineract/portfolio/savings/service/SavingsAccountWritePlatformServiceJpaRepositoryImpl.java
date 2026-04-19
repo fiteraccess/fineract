@@ -132,6 +132,7 @@ import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmen
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
@@ -181,6 +182,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider;
     private final JdbcTemplate jdbcTemplate;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private final ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider;
 
     @Transactional
     @Override
@@ -1424,11 +1426,31 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final SavingsAccountCharge savingsAccountCharge = this.savingsAccountChargeRepository
                 .findOneWithNotFoundDetection(savingsAccountChargeId, accountId);
 
+        if (isSynapseChargePostingEnabled()) {
+            SavingsAccount account = savingsAccountCharge.savingsAccount();
+            String externalId = account.getExternalId() != null ? account.getExternalId().getValue() : null;
+
+            synapseChargePostingOutboxWriterProvider.getObject().postCharge(
+                    account.getId(),
+                    account.officeId(),
+                    externalId,
+                    savingsAccountCharge.getCharge().getName(),
+                    savingsAccountCharge.amoutOutstanding(),
+                    transactionDate,
+                    savingsAccountCharge.currencyCode());
+            return;
+        }
+
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MM yyyy").withZone(DateUtils.getDateTimeZoneOfTenant());
 
         while (savingsAccountCharge.isNotFullyPaid() && DateUtils.isBefore(savingsAccountCharge.getDueDate(), transactionDate)) {
             payCharge(savingsAccountCharge, transactionDate, savingsAccountCharge.amoutOutstanding(), fmt, false);
         }
+    }
+
+    private boolean isSynapseChargePostingEnabled() {
+        return synapseChargePostingOutboxWriterProvider.getIfAvailable() != null
+                && configurationDomainService.isSynapseInterestPostingEnabled();
     }
 
     @SuppressWarnings("unused")
