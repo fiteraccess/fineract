@@ -26,7 +26,7 @@ import lombok.Getter;
 import lombok.extern.jackson.Jacksonized;
 
 /**
- * Represents a single interest-posting instruction to be sent to Synapse.
+ * Represents a single transaction instruction to be sent to Synapse (covers interest posting, withholding tax, and savings charges).
  * Each instruction is idempotent via its {@code traceId}.
  */
 @Getter
@@ -67,6 +67,9 @@ public class SynapseTransactionInstruction {
 
     /** Human-readable description — carries charge name or other metadata. */
     private final String description;
+
+    /** Synapse returns this ID in its callback so Fineract can identify and mark the specific charge as paid. Only set for SAVINGS_CHARGE instructions. */
+    private final Long savingsAccountChargeId;
 
     /** Scheduler run identifier — groups instructions into a single batch. */
     private final String batchId;

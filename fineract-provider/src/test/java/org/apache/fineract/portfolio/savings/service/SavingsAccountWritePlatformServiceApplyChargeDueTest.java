@@ -97,7 +97,7 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
             verify(outboxWriter).postCharge(
-                    eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
+                    eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
                     eq("Outbound Transfer Fee"),
                     eq(new BigDecimal("100.00")), eq(BUSINESS_DATE), eq(CURRENCY_CODE));
             verify(charge, never()).isNotFullyPaid();
@@ -112,7 +112,7 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
 
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
-            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any());
+            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any(), any());
             verify(charge).isNotFullyPaid();
         }
 
@@ -125,7 +125,7 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
 
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
-            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any());
+            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any(), any());
             verify(charge).isNotFullyPaid();
         }
 
@@ -138,7 +138,7 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
 
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
-            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any());
+            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -150,7 +150,7 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
             verify(outboxWriter).postCharge(
-                    eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
+                    eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
                     eq("Monthly Maintenance Fee"),
                     eq(new BigDecimal("100.00")), eq(BUSINESS_DATE), eq(CURRENCY_CODE));
         }
@@ -163,7 +163,7 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
 
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
-            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any());
+            verify(outboxWriter, never()).postCharge(any(), any(), any(), any(), any(), any(), any(), any());
             verify(charge).isNotFullyPaid();
         }
     }

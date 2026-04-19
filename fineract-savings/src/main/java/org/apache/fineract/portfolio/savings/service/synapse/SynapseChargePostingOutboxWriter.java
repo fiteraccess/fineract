@@ -37,11 +37,11 @@ public class SynapseChargePostingOutboxWriter {
     private final SynapseOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
-    public void postCharge(Long savingsAccountId, Long officeId, String externalId, String chargeName, BigDecimal amount,
+    public void postCharge(Long savingsAccountChargeId, Long savingsAccountId, Long officeId, String externalId, String chargeName, BigDecimal amount,
             LocalDate transactionDate, String currencyCode) {
         String batchId = UUID.randomUUID().toString();
 
-        SynapseTransactionInstruction instruction = mapper.mapCharge(savingsAccountId, officeId, externalId, chargeName, amount,
+        SynapseTransactionInstruction instruction = mapper.mapCharge(savingsAccountChargeId, savingsAccountId, officeId, externalId, chargeName, amount,
                 transactionDate, currencyCode, batchId);
 
         String payload;

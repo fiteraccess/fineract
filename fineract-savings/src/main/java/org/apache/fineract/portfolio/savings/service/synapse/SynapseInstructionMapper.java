@@ -67,12 +67,13 @@ public class SynapseInstructionMapper {
         throw new IllegalArgumentException("Unsupported transaction type for Synapse mapping: " + txType.getCode());
     }
 
-    public SynapseTransactionInstruction mapCharge(Long savingsAccountId, Long officeId, String externalId,
+    public SynapseTransactionInstruction mapCharge(Long savingsAccountChargeId, Long savingsAccountId, Long officeId, String externalId,
             String description, BigDecimal amount, LocalDate transactionDate, String currencyCode, String batchId) {
         Direction direction = resolveDirection(TransactionType.SAVINGS_CHARGE);
 
         return SynapseTransactionInstruction.builder()
                 .traceId(UUID.randomUUID().toString())
+                .savingsAccountChargeId(savingsAccountChargeId)
                 .savingsAccountId(savingsAccountId)
                 .officeId(officeId)
                 .externalId(externalId)

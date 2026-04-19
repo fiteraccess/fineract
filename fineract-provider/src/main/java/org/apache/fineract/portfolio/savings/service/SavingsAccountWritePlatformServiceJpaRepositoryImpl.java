@@ -1431,6 +1431,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             String externalId = account.getExternalId() != null ? account.getExternalId().getValue() : null;
 
             synapseChargePostingOutboxWriterProvider.getObject().postCharge(
+                    savingsAccountChargeId,
                     account.getId(),
                     account.officeId(),
                     externalId,

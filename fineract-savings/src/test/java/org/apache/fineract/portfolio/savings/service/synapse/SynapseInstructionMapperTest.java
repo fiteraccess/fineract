@@ -135,7 +135,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void setsDirectionToDebit() {
-            SynapseTransactionInstruction result = mapper.mapCharge(1L, 10L, "EXT-1",
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1",
                     "Outbound Transfer Fee", new BigDecimal("50.00"),
                     LocalDate.of(2026, 4, 1), "NGN", "batch-c1");
 
@@ -144,7 +144,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void setsOperationToPost() {
-            SynapseTransactionInstruction result = mapper.mapCharge(1L, 10L, "EXT-1",
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1",
                     "Stamp Duty", new BigDecimal("25.00"),
                     LocalDate.of(2026, 4, 1), "NGN", "batch-c2");
 
@@ -153,7 +153,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void generatesNonNullTraceId() {
-            SynapseTransactionInstruction result = mapper.mapCharge(1L, 10L, "EXT-1",
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1",
                     "Outbound Transfer Fee", new BigDecimal("10.00"),
                     LocalDate.of(2026, 4, 1), "NGN", "batch-c3");
 
@@ -162,7 +162,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void alwaysUseSavingsChargeTransactionType() {
-            SynapseTransactionInstruction result = mapper.mapCharge(42L, 7L, "EXT-42",
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 42L, 7L, "EXT-42",
                     "Outbound Transfer Fee", new BigDecimal("100.00"),
                     LocalDate.of(2026, 4, 15), "USD", "batch-c4");
 
@@ -171,10 +171,11 @@ class SynapseInstructionMapperTest {
 
         @Test
         void setsAllFieldsCorrectly() {
-            SynapseTransactionInstruction result = mapper.mapCharge(42L, 7L, "EXT-42",
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 42L, 7L, "EXT-42",
                     "Outbound Transfer Fee", new BigDecimal("100.00"),
                     LocalDate.of(2026, 4, 15), "USD", "batch-c4");
 
+            assertThat(result.getSavingsAccountChargeId()).isEqualTo(99L);
             assertThat(result.getSavingsAccountId()).isEqualTo(42L);
             assertThat(result.getOfficeId()).isEqualTo(7L);
             assertThat(result.getExternalId()).isEqualTo("EXT-42");
@@ -192,7 +193,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void returnsDebitForSavingsCharge() {
-            SynapseTransactionInstruction result = mapper.mapCharge(1L, 1L, null,
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 1L, null,
                     "Any Charge", BigDecimal.ONE,
                     LocalDate.of(2026, 4, 1), "NGN", "b");
 

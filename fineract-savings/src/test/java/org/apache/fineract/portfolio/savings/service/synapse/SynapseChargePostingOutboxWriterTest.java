@@ -39,6 +39,7 @@ import org.mockito.ArgumentCaptor;
 
 class SynapseChargePostingOutboxWriterTest {
 
+    private static final Long CHARGE_ID = 100L;
     private static final Long ACCOUNT_ID = 42L;
     private static final Long OFFICE_ID = 10L;
     private static final String EXTERNAL_ID = "EXT-42";
@@ -74,7 +75,7 @@ class SynapseChargePostingOutboxWriterTest {
                 .batchId("batch-placeholder")
                 .build();
 
-        when(mapper.mapCharge(eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID), eq(CHARGE_NAME),
+        when(mapper.mapCharge(eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID), eq(CHARGE_NAME),
                 eq(AMOUNT), eq(TX_DATE), eq(CURRENCY), anyString())).thenReturn(stubInstruction);
 
         when(objectMapper.writeValueAsString(any(SynapseTransactionInstruction.class)))
@@ -84,7 +85,7 @@ class SynapseChargePostingOutboxWriterTest {
     @SuppressWarnings("unchecked")
     @Test
     void postCharge_writesOutboxEntryWithCorrectTaskType() {
-        writer.postCharge(ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
+        writer.postCharge(CHARGE_ID, ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
 
         ArgumentCaptor<String> taskTypeCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
@@ -97,7 +98,7 @@ class SynapseChargePostingOutboxWriterTest {
     @SuppressWarnings("unchecked")
     @Test
     void postCharge_generatesUniqueTraceId() {
-        writer.postCharge(ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
+        writer.postCharge(CHARGE_ID, ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
 
         ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
         verify(outboxRepository).insertBatch(anyString(), anyString(), entriesCaptor.capture());
@@ -109,16 +110,17 @@ class SynapseChargePostingOutboxWriterTest {
 
     @Test
     void postCharge_serializesInstructionToJson() throws JsonProcessingException {
-        writer.postCharge(ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
+        writer.postCharge(CHARGE_ID, ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
 
         verify(objectMapper).writeValueAsString(any(SynapseTransactionInstruction.class));
     }
 
     @Test
     void postCharge_passesCorrectFieldsToMapper() {
-        writer.postCharge(ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
+        writer.postCharge(CHARGE_ID, ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
 
         verify(mapper).mapCharge(
+                eq(CHARGE_ID),
                 eq(ACCOUNT_ID),
                 eq(OFFICE_ID),
                 eq(EXTERNAL_ID),
