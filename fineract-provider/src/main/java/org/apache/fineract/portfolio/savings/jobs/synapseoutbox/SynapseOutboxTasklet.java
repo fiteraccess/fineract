@@ -24,7 +24,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
@@ -40,8 +39,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 /**
  * Fineract scheduled job tasklet that drains the {@code synapse_outbox} table.
  * <p>
- * For each registered {@link SynapseTaskHandler}, claims a page of PENDING rows
- * and dispatches them through the handler, respecting the circuit breaker state.
+ * For each registered {@link SynapseTaskHandler}, claims a page of PENDING rows and dispatches them through the
+ * handler, respecting the circuit breaker state.
  */
 @Slf4j
 public class SynapseOutboxTasklet implements Tasklet {
@@ -55,8 +54,7 @@ public class SynapseOutboxTasklet implements Tasklet {
     private final int staleDispatchedMinutes;
 
     public SynapseOutboxTasklet(SynapseOutboxRepository outboxRepository, List<SynapseTaskHandler> handlers,
-            CircuitBreakerRegistry circuitBreakerRegistry, FineractProperties fineractProperties,
-            ThreadPoolTaskExecutor executor) {
+            CircuitBreakerRegistry circuitBreakerRegistry, FineractProperties fineractProperties, ThreadPoolTaskExecutor executor) {
         this.outboxRepository = outboxRepository;
         this.handlers = handlers;
         this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("synapseOutbox");
@@ -99,9 +97,8 @@ public class SynapseOutboxTasklet implements Tasklet {
     }
 
     /**
-     * Drains all pending outbox entries for a single handler's task type.
-     * Claims a page, dispatches each entry, repeats until no more work.
-     * Stale DISPATCHED rows from crashed runs are reclaimed at the start of execute().
+     * Drains all pending outbox entries for a single handler's task type. Claims a page, dispatches each entry, repeats
+     * until no more work. Stale DISPATCHED rows from crashed runs are reclaimed at the start of execute().
      */
     private DrainResult drainTaskType(SynapseTaskHandler handler) {
         String taskType = handler.taskType();
@@ -135,18 +132,18 @@ public class SynapseOutboxTasklet implements Tasklet {
                 } catch (CallNotPermittedException e) {
                     List<Long> remainingIds = batch.subList(i, batch.size()).stream().map(OutboxEntry::getId).toList();
                     log.warn("Circuit breaker OPEN for taskType={}, resetting {} remaining entries to PENDING.", taskType,
-                            remainingIds.size(),e);
+                            remainingIds.size(), e);
                     outboxRepository.resetToPending(remainingIds);
                     reset += remainingIds.size();
                     return new DrainResult(sent, failed, reset);
                 } catch (SynapsePostingException e) {
-                    log.error("Synapse posting failed for entry id={} traceId={} accountId={}: {}", entry.getId(), entry.getTraceId(),
-                            entry.getAccountId(), e.getMessage(),e);
+                    log.error("Synapse posting failed for entry id={} traceId={} accountId={}", entry.getId(), entry.getTraceId(),
+                            entry.getAccountId(), e);
                     outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts());
                     failed++;
                 } catch (Exception e) {
-                    log.error("Unexpected error dispatching entry id={} traceId={} accountId={}: {}", entry.getId(), entry.getTraceId(),
-                            entry.getAccountId(), e.getMessage(), e);
+                    log.error("Unexpected error dispatching entry id={} traceId={} accountId={}", entry.getId(), entry.getTraceId(),
+                            entry.getAccountId(), e);
                     outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()),
                             entry.getAttempts(), entry.getMaxAttempts());
                     failed++;
@@ -167,5 +164,6 @@ public class SynapseOutboxTasklet implements Tasklet {
         return text.substring(0, MAX_ERROR_DETAIL_LENGTH) + "…[truncated]";
     }
 
-    record DrainResult(long sent, long failed, long reset) {}
+    record DrainResult(long sent, long failed, long reset) {
+    }
 }

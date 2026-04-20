@@ -26,8 +26,8 @@ import lombok.Getter;
 import lombok.extern.jackson.Jacksonized;
 
 /**
- * Represents a single interest-posting instruction to be sent to Synapse.
- * Each instruction is idempotent via its {@code traceId}.
+ * Represents a single interest-posting instruction to be sent to Synapse. Each instruction is idempotent via its
+ * {@code traceId}.
  */
 @Getter
 @Builder
@@ -69,19 +69,14 @@ public class SynapseTransactionInstruction {
     private final String batchId;
 
     public enum TransactionType {
-        INTEREST_POSTING,
-        OVERDRAFT_INTEREST,
-        WITHHOLD_TAX
+        INTEREST_POSTING, OVERDRAFT_INTEREST, WITHHOLD_TAX
     }
 
     public enum Direction {
-        CREDIT,
-        DEBIT
+        CREDIT, DEBIT
     }
 
     public enum Operation {
-        POST,
-        REVERSE
+        POST, REVERSE
     }
 }
-

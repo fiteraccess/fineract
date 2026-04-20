@@ -38,4 +38,3 @@ public class SynapseBatchPostingResponse {
     private int failed;
     private List<SynapsePostingResult> results;
 }
-

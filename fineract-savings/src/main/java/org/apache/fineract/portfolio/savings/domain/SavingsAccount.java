@@ -559,29 +559,23 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     /**
      * Posts calculated interest to the savings account for each posting period up to the given date.
      *
-     * High-level flow:
-     * 1. CALCULATE: Compute interest for all posting periods using the account's interest rate, compounding,
-     *    and balance history (via {@code calculateInterestUsing}).
-     * 2. INITIALIZE: Set up a running total of interest posted, determine if withholding tax applies,
-     *    and collect any existing withhold tax transactions.
-     * 3. ITERATE PERIODS: For each posting period whose posting date <= interestPostingUpToDate:
-     *    a. FIRST-TIME POSTING (no existing transaction for that date):
-     *       - Create an interest posting transaction (or overdraft interest if earned amount is negative).
-     *       - Optionally create a withholding tax transaction on the earned interest.
-     *    b. CORRECTION (an existing posting transaction exists but the amount has changed):
-     *       - Reverse the old posting transaction (and its withhold tax transaction if any).
-     *       - Optionally create a reversal record for audit trail (when postReversals is true).
-     *       - Create a new posting transaction with the recalculated amount.
-     *       - Re-apply withholding tax if it was previously applied.
-     * 4. RECALCULATE BALANCES: If any transactions were created or corrected, recalculate the
-     *    account's running balances and summary totals.
+     * High-level flow: 1. CALCULATE: Compute interest for all posting periods using the account's interest rate,
+     * compounding, and balance history (via {@code calculateInterestUsing}). 2. INITIALIZE: Set up a running total of
+     * interest posted, determine if withholding tax applies, and collect any existing withhold tax transactions. 3.
+     * ITERATE PERIODS: For each posting period whose posting date <= interestPostingUpToDate: a. FIRST-TIME POSTING (no
+     * existing transaction for that date): - Create an interest posting transaction (or overdraft interest if earned
+     * amount is negative). - Optionally create a withholding tax transaction on the earned interest. b. CORRECTION (an
+     * existing posting transaction exists but the amount has changed): - Reverse the old posting transaction (and its
+     * withhold tax transaction if any). - Optionally create a reversal record for audit trail (when postReversals is
+     * true). - Create a new posting transaction with the recalculated amount. - Re-apply withholding tax if it was
+     * previously applied. 4. RECALCULATE BALANCES: If any transactions were created or corrected, recalculate the
+     * account's running balances and summary totals.
      *
-     * Key concepts:
-     * - "backdatedTxnsAllowedTill": When true, uses a pivot-date-based strategy for finding and
-     *   adding transactions, enabling support for backdated transaction processing.
-     * - Positive interest earned → standard interest posting transaction.
-     * - Negative interest earned → overdraft interest transaction (amount is negated to store as positive).
-     * - Withholding tax is deducted from interest at posting time when the account's tax group is configured.
+     * Key concepts: - "backdatedTxnsAllowedTill": When true, uses a pivot-date-based strategy for finding and adding
+     * transactions, enabling support for backdated transaction processing. - Positive interest earned → standard
+     * interest posting transaction. - Negative interest earned → overdraft interest transaction (amount is negated to
+     * store as positive). - Withholding tax is deducted from interest at posting time when the account's tax group is
+     * configured.
      */
     public void postInterest(final MathContext mc, final LocalDate interestPostingUpToDate, final boolean isInterestTransfer,
             final boolean isSavingsInterestPostingAtCurrentPeriodEnd, final Integer financialYearBeginningMonth,
@@ -894,33 +888,41 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     /**
      * Calculates interest for this savings account based on END-OF-DAY-BALANCE methodology.
      *
-     * <p>High-level flow:</p>
+     * <p>
+     * High-level flow:
+     * </p>
      * <ol>
-     *   <li><b>Recalculate daily balances</b> — Walk through all transactions to compute the
-     *       running balance at the end of each day. This ensures derived balance fields are
-     *       accurate before interest calculation begins.</li>
-     *   <li><b>Resolve configuration</b> — Load the account's interest calculation settings:
-     *       posting frequency (Monthly/Quarterly/Annually), compounding frequency (Daily/Monthly),
-     *       day-count convention (360/365/Actual), calculation type (Daily Balance/Average Daily Balance),
-     *       and the nominal annual interest rate.</li>
-     *   <li><b>Determine posting period intervals</b> — Split the date range (from interest start
-     *       date to {@code upToInterestCalculationDate}) into discrete time intervals based on the
-     *       posting period type and any manual posting dates.</li>
-     *   <li><b>Build PostingPeriod objects</b> — For each interval, gather the non-interest
-     *       transactions, compute end-of-day balances, and calculate the interest earned. Each
-     *       period's closing balance feeds into the next period's opening balance.</li>
-     *   <li><b>Apply compounding across periods</b> — A final pass applies cross-period compounding
-     *       (interest-on-interest) and updates the account summary with the calculated totals.</li>
+     * <li><b>Recalculate daily balances</b> — Walk through all transactions to compute the running balance at the end
+     * of each day. This ensures derived balance fields are accurate before interest calculation begins.</li>
+     * <li><b>Resolve configuration</b> — Load the account's interest calculation settings: posting frequency
+     * (Monthly/Quarterly/Annually), compounding frequency (Daily/Monthly), day-count convention (360/365/Actual),
+     * calculation type (Daily Balance/Average Daily Balance), and the nominal annual interest rate.</li>
+     * <li><b>Determine posting period intervals</b> — Split the date range (from interest start date to
+     * {@code upToInterestCalculationDate}) into discrete time intervals based on the posting period type and any manual
+     * posting dates.</li>
+     * <li><b>Build PostingPeriod objects</b> — For each interval, gather the non-interest transactions, compute
+     * end-of-day balances, and calculate the interest earned. Each period's closing balance feeds into the next
+     * period's opening balance.</li>
+     * <li><b>Apply compounding across periods</b> — A final pass applies cross-period compounding
+     * (interest-on-interest) and updates the account summary with the calculated totals.</li>
      * </ol>
      *
-     * @param mc                                        MathContext for precision control
-     * @param upToInterestCalculationDate               Calculate interest up to (and including) this date
-     * @param isInterestTransfer                        Whether interest is being transferred to another account
-     * @param isSavingsInterestPostingAtCurrentPeriodEnd Whether to post at end of current period
-     * @param financialYearBeginningMonth               Month number (1-12) when the financial year starts
-     * @param postInterestOnDate                        Optional specific date to post interest on
-     * @param backdatedTxnsAllowedTill                  If true, uses pivot-date-based transaction retrieval
-     * @param postReversals                             If true, creates explicit reversal transaction records
+     * @param mc
+     *            MathContext for precision control
+     * @param upToInterestCalculationDate
+     *            Calculate interest up to (and including) this date
+     * @param isInterestTransfer
+     *            Whether interest is being transferred to another account
+     * @param isSavingsInterestPostingAtCurrentPeriodEnd
+     *            Whether to post at end of current period
+     * @param financialYearBeginningMonth
+     *            Month number (1-12) when the financial year starts
+     * @param postInterestOnDate
+     *            Optional specific date to post interest on
+     * @param backdatedTxnsAllowedTill
+     *            If true, uses pivot-date-based transaction retrieval
+     * @param postReversals
+     *            If true, creates explicit reversal transaction records
      * @return List of {@link PostingPeriod} objects, each containing the calculated interest for its interval
      */
     public List<PostingPeriod> calculateInterestUsing(final MathContext mc, final LocalDate upToInterestCalculationDate,
@@ -1015,7 +1017,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             // - interestRateAsFraction: Annual nominal rate converted to a decimal (e.g., 5% → 0.05)
             // - overdraftInterestRateAsFraction: Separate rate applied when account is overdrawn
             // - interestPostTransactions: IDs of existing interest posting transactions (to exclude
-            //   them from balance calculations so interest isn't compounded on itself incorrectly)
+            // them from balance calculations so interest isn't compounded on itself incorrectly)
             // - minBalanceForInterestCalculation: Minimum balance required to earn interest
             // - minOverdraftForInterestCalculation: Minimum overdraft amount to incur overdraft interest
             // =====================================================================================
@@ -1032,10 +1034,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             // For each time interval:
             // 1. Check if this is a user-initiated (manual) posting period
             // 2. Retrieve all non-interest-posting transactions (deposits, withdrawals, fees, etc.)
-            //    that fall within this period — these determine the daily balances
+            // that fall within this period — these determine the daily balances
             // 3. Create a PostingPeriod object that encapsulates the interval, its transactions,
-            //    and all the calculation parameters. The PostingPeriod computes end-of-day balances
-            //    and the interest earned for the period.
+            // and all the calculation parameters. The PostingPeriod computes end-of-day balances
+            // and the interest earned for the period.
             // 4. The closing balance of one period becomes the opening balance of the next
             // =====================================================================================
             for (final LocalDateInterval periodInterval : postingPeriodIntervals) {

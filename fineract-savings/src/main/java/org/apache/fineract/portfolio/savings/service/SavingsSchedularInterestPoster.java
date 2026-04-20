@@ -213,7 +213,7 @@ public class SavingsSchedularInterestPoster {
                     savingsAccountTransactionData.setRefNo(uuid.toString());
                     transRefNo.add(uuid.toString());
 
-                    //todo: new transactions will be saved in a new transaction collection
+                    // todo: new transactions will be saved in a new transaction collection
                     paramsForTransactionInsertion.add(new Object[] { savingsAccountData.getId(), savingsAccountData.getOfficeId(),
                             savingsAccountTransactionData.isReversed(), savingsAccountTransactionData.getTransactionType().getId(),
                             savingsAccountTransactionData.getTransactionDate(), savingsAccountTransactionData.getAmount(),
@@ -224,7 +224,7 @@ public class SavingsSchedularInterestPoster {
                             savingsAccountTransactionData.getOverdraftAmount(), currentDate });
                 } else {
                     // Existing rows are updated in place with fresh derived balances and flags.
-                    //todo: also pickup the existing transactions
+                    // todo: also pickup the existing transactions
                     paramsForTransactionUpdate.add(new Object[] { savingsAccountTransactionData.isReversed(),
                             savingsAccountTransactionData.getAmount(), savingsAccountTransactionData.getOverdraftAmount(),
                             savingsAccountTransactionData.getBalanceEndDate(), savingsAccountTransactionData.getBalanceNumberOfDays(),
@@ -282,9 +282,9 @@ public class SavingsSchedularInterestPoster {
     }
 
     private boolean isSynapseEnabled() {
-        return fineractProperties != null && synapseInterestPostingOutboxWriter != null
-                && fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isEnabled()
-                && configurationDomainService != null && configurationDomainService.isSynapseInterestPostingEnabled();
+        return fineractProperties != null && synapseInterestPostingOutboxWriter != null && fineractProperties.getSynapse() != null
+                && fineractProperties.getSynapse().isEnabled() && configurationDomainService != null
+                && configurationDomainService.isSynapseInterestPostingEnabled();
     }
 
     private void executeCursorUpdates(List<AccountCursorUpdate> cursorUpdates, Long userId) {

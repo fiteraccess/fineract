@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -32,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
@@ -79,8 +79,7 @@ class SynapseInterestTransactionApplierTest {
 
     @BeforeEach
     void setBusinessDate() {
-        ThreadLocalContextUtil.setBusinessDates(
-                new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 3, 20))));
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 3, 20))));
     }
 
     @AfterEach
@@ -94,8 +93,8 @@ class SynapseInterestTransactionApplierTest {
         when(transactionRepository.findByRefNo("trace-1")).thenReturn(Collections.emptyList());
 
         SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
-        ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"),
-                LocalDate.of(2026, 3, 20), null, "trace-1");
+        ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"), LocalDate.of(2026, 3, 20), null,
+                "trace-1");
 
         assertThat(result.alreadyExists()).isFalse();
         assertThat(result.transaction().getTypeOf()).isEqualTo(SavingsAccountTransactionType.INTEREST_POSTING.getValue());
@@ -111,8 +110,8 @@ class SynapseInterestTransactionApplierTest {
         when(transactionRepository.findByRefNo("trace-2")).thenReturn(Collections.emptyList());
 
         SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
-        ReplayResult result = service.replay(account, "OVERDRAFT_INTEREST", new BigDecimal("50.00"),
-                LocalDate.of(2026, 3, 20), new BigDecimal("300.00"), "trace-2");
+        ReplayResult result = service.replay(account, "OVERDRAFT_INTEREST", new BigDecimal("50.00"), LocalDate.of(2026, 3, 20),
+                new BigDecimal("300.00"), "trace-2");
 
         assertThat(result.alreadyExists()).isFalse();
         assertThat(result.transaction().getTypeOf()).isEqualTo(SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue());
@@ -126,8 +125,7 @@ class SynapseInterestTransactionApplierTest {
         when(transactionRepository.findByRefNo("trace-3")).thenReturn(Collections.emptyList());
 
         SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
-        ReplayResult result = service.replay(account, "WITHHOLD_TAX", new BigDecimal("25.00"),
-                LocalDate.of(2026, 3, 20), null, "trace-3");
+        ReplayResult result = service.replay(account, "WITHHOLD_TAX", new BigDecimal("25.00"), LocalDate.of(2026, 3, 20), null, "trace-3");
 
         assertThat(result.alreadyExists()).isFalse();
         assertThat(result.transaction().getTypeOf()).isEqualTo(SavingsAccountTransactionType.WITHHOLD_TAX.getValue());
@@ -143,8 +141,8 @@ class SynapseInterestTransactionApplierTest {
         when(transactionRepository.findByRefNo("trace-dup")).thenReturn(List.of(existingTx));
 
         SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
-        ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"),
-                LocalDate.of(2026, 3, 20), null, "trace-dup");
+        ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"), LocalDate.of(2026, 3, 20), null,
+                "trace-dup");
 
         assertThat(result.alreadyExists()).isTrue();
         assertThat(result.transaction()).isSameAs(existingTx);
@@ -158,10 +156,9 @@ class SynapseInterestTransactionApplierTest {
 
         SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
 
-        assertThatThrownBy(() -> service.replay(account, "INVALID_TYPE", new BigDecimal("10.00"),
-                LocalDate.of(2026, 3, 20), null, "trace-bad"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("INVALID_TYPE");
+        assertThatThrownBy(
+                () -> service.replay(account, "INVALID_TYPE", new BigDecimal("10.00"), LocalDate.of(2026, 3, 20), null, "trace-bad"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("INVALID_TYPE");
     }
 
     private static SavingsAccount buildAccount(Long id, BigDecimal balance) throws Exception {

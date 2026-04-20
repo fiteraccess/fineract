@@ -36,4 +36,3 @@ public class SynapsePostingResult {
     private String status;
     private String correlationId;
 }
-

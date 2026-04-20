@@ -28,7 +28,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
-import sun.misc.Unsafe;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
@@ -51,6 +50,7 @@ import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTran
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import sun.misc.Unsafe;
 
 class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
 
@@ -168,15 +168,15 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         return account;
     }
 
-
     @SuppressWarnings("restriction")
     private SavingsAccountWritePlatformServiceJpaRepositoryImpl createServiceWithReflection() throws Exception {
         Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         Unsafe unsafe = (Unsafe) unsafeField.get(null);
-        SavingsAccountWritePlatformServiceJpaRepositoryImpl svc =
-                (SavingsAccountWritePlatformServiceJpaRepositoryImpl) unsafe.allocateInstance(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class);
-        setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "interestPostingReplayServiceProvider", replayServiceProvider);
+        SavingsAccountWritePlatformServiceJpaRepositoryImpl svc = (SavingsAccountWritePlatformServiceJpaRepositoryImpl) unsafe
+                .allocateInstance(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class);
+        setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "interestPostingReplayServiceProvider",
+                replayServiceProvider);
         setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "savingAccountAssembler", assembler);
         setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "savingsAccountTransactionRepository", txRepo);
         setField(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class, svc, "savingAccountRepositoryWrapper", accountRepo);

@@ -48,7 +48,8 @@ class SynapseInterestPostingOutboxWriterTest {
     private final SynapseInstructionMapper mapper = new SynapseInstructionMapper();
     private final SynapseOutboxRepository outboxRepository = mock(SynapseOutboxRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-    private final SynapseInterestPostingOutboxWriter service = new SynapseInterestPostingOutboxWriter(mapper, outboxRepository, objectMapper);
+    private final SynapseInterestPostingOutboxWriter service = new SynapseInterestPostingOutboxWriter(mapper, outboxRepository,
+            objectMapper);
 
     private static final LocalDate POSTING_DATE = LocalDate.of(2026, 3, 20);
     private static final LocalDate INTEREST_POSTED_TILL = LocalDate.of(2026, 3, 20);
@@ -85,15 +86,14 @@ class SynapseInterestPostingOutboxWriterTest {
         assertThat(result.getFailed()).isEqualTo(0);
         assertThat(result.getCursorUpdates()).hasSize(2);
         assertThat(result.getCursorUpdates()).extracting(AccountCursorUpdate::getAccountId).containsExactly(1L, 2L);
-        assertThat(result.getCursorUpdates()).extracting(AccountCursorUpdate::getInterestPostedTillDate)
-                .containsExactly(LAST_CALC_DATE, LAST_CALC_DATE);
+        assertThat(result.getCursorUpdates()).extracting(AccountCursorUpdate::getInterestPostedTillDate).containsExactly(LAST_CALC_DATE,
+                LAST_CALC_DATE);
     }
 
     @SuppressWarnings("unchecked")
     @Test
     void multipleInstructionsForAccountAllWrittenToOutbox() {
-        SavingsAccountData acct = buildAccountWithTwoTx(1L, 10L, "NGN",
-                new BigDecimal("100.00"), new BigDecimal("10.00"));
+        SavingsAccountData acct = buildAccountWithTwoTx(1L, 10L, "NGN", new BigDecimal("100.00"), new BigDecimal("10.00"));
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
 
@@ -128,9 +128,8 @@ class SynapseInterestPostingOutboxWriterTest {
 
     @Test
     void cursorFallsBackToLastCalcDateWhenInterestPostedTillDateIsNull() {
-        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(
-                new CurrencyData("NGN"), null, null, null, null, null, null, null, null, null,
-                null, null, null, LocalDate.of(2026, 3, 15), null, null);
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, LocalDate.of(2026, 3, 15), null, null);
         SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
 
         SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
@@ -160,10 +159,8 @@ class SynapseInterestPostingOutboxWriterTest {
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().longValue(),
                 SavingsAccountTransactionType.INTEREST_POSTING.getCode(),
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().toString());
-        SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(
-                99L, txType, null, 1L, "SA-1", POSTING_DATE, null,
-                new BigDecimal("75.00"), null, null, false, null,
-                false, null, null, POSTING_DATE);
+        SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(99L, txType, null, 1L, "SA-1", POSTING_DATE, null,
+                new BigDecimal("75.00"), null, null, false, null, false, null, null, POSTING_DATE);
         tx.reverse();
         acct.setSavingsAccountTransactionData(tx);
 
@@ -198,64 +195,52 @@ class SynapseInterestPostingOutboxWriterTest {
     // --- account builders ---
 
     private static SavingsAccountData buildAccountWithInterestTx(Long id, Long officeId, String currencyCode, BigDecimal amount) {
-        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(
-                new CurrencyData(currencyCode), null, null, null, null, null, null, null, null, null,
-                null, null, null, LAST_CALC_DATE, null, INTEREST_POSTED_TILL);
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData(currencyCode), null, null, null, null, null,
+                null, null, null, null, null, null, null, LAST_CALC_DATE, null, INTEREST_POSTED_TILL);
         SavingsAccountData account = buildAccountWithSummary(id, officeId, currencyCode, summary);
         SavingsAccountTransactionEnumData txType = new SavingsAccountTransactionEnumData(
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().longValue(),
                 SavingsAccountTransactionType.INTEREST_POSTING.getCode(),
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().toString());
-        SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(
-                null, txType, null, id, "SA-" + id, POSTING_DATE, null,
+        SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(null, txType, null, id, "SA-" + id, POSTING_DATE, null,
                 amount, null, null, false, null, false, null, null, POSTING_DATE);
         account.setSavingsAccountTransactionData(tx);
         return account;
     }
 
-    private static SavingsAccountData buildAccountWithTwoTx(Long id, Long officeId, String currencyCode,
-            BigDecimal interestAmount, BigDecimal taxAmount) {
-        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(
-                new CurrencyData(currencyCode), null, null, null, null, null, null, null, null, null,
-                null, null, null, LAST_CALC_DATE, null, INTEREST_POSTED_TILL);
+    private static SavingsAccountData buildAccountWithTwoTx(Long id, Long officeId, String currencyCode, BigDecimal interestAmount,
+            BigDecimal taxAmount) {
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData(currencyCode), null, null, null, null, null,
+                null, null, null, null, null, null, null, LAST_CALC_DATE, null, INTEREST_POSTED_TILL);
         SavingsAccountData account = buildAccountWithSummary(id, officeId, currencyCode, summary);
         SavingsAccountTransactionEnumData interestType = new SavingsAccountTransactionEnumData(
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().longValue(),
                 SavingsAccountTransactionType.INTEREST_POSTING.getCode(),
                 SavingsAccountTransactionType.INTEREST_POSTING.getValue().toString());
-        SavingsAccountTransactionData interestTx = SavingsAccountTransactionData.create(
-                null, interestType, null, id, "SA-" + id, POSTING_DATE, null,
-                interestAmount, null, null, false, null, false, null, null, POSTING_DATE);
+        SavingsAccountTransactionData interestTx = SavingsAccountTransactionData.create(null, interestType, null, id, "SA-" + id,
+                POSTING_DATE, null, interestAmount, null, null, false, null, false, null, null, POSTING_DATE);
         account.setSavingsAccountTransactionData(interestTx);
         SavingsAccountTransactionEnumData taxType = new SavingsAccountTransactionEnumData(
-                SavingsAccountTransactionType.WITHHOLD_TAX.getValue().longValue(),
-                SavingsAccountTransactionType.WITHHOLD_TAX.getCode(),
+                SavingsAccountTransactionType.WITHHOLD_TAX.getValue().longValue(), SavingsAccountTransactionType.WITHHOLD_TAX.getCode(),
                 SavingsAccountTransactionType.WITHHOLD_TAX.getValue().toString());
-        SavingsAccountTransactionData taxTx = SavingsAccountTransactionData.create(
-                null, taxType, null, id, "SA-" + id, POSTING_DATE, null,
+        SavingsAccountTransactionData taxTx = SavingsAccountTransactionData.create(null, taxType, null, id, "SA-" + id, POSTING_DATE, null,
                 taxAmount, null, null, false, null, false, null, null, POSTING_DATE);
         account.setSavingsAccountTransactionData(taxTx);
         return account;
     }
 
     private static SavingsAccountData buildAccountNoTx(Long id, Long officeId, String currencyCode) {
-        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(
-                new CurrencyData(currencyCode), null, null, null, null, null, null, null, null, null,
-                null, null, null, LAST_CALC_DATE, null, INTEREST_POSTED_TILL);
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData(currencyCode), null, null, null, null, null,
+                null, null, null, null, null, null, null, LAST_CALC_DATE, null, INTEREST_POSTED_TILL);
         return buildAccountWithSummary(id, officeId, currencyCode, summary);
     }
 
     private static SavingsAccountData buildAccountWithSummary(Long id, Long officeId, String currencyCode,
             SavingsAccountSummaryData summary) {
         CurrencyData currency = new CurrencyData(currencyCode);
-        SavingsAccountData account = SavingsAccountData.instance(id, "SA-" + id, null, "EXT-" + id,
-                null, null, null, null, null, null, null, null,
-                null, null, null, null, currency, null,
-                null, null, null, null,
-                null, null, null, false, summary, false,
-                null, null, false, null, false, null,
-                null, null, null, false, null,
-                null, false, null, null, null, null);
+        SavingsAccountData account = SavingsAccountData.instance(id, "SA-" + id, null, "EXT-" + id, null, null, null, null, null, null,
+                null, null, null, null, null, null, currency, null, null, null, null, null, null, null, null, false, summary, false, null,
+                null, false, null, false, null, null, null, null, false, null, null, false, null, null, null, null);
         ClientData client = new ClientData();
         client.setOfficeId(officeId);
         account.setClientData(client);

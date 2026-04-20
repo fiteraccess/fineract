@@ -99,8 +99,7 @@ class SynapseInstructionMapperTest {
         SavingsAccountData account = buildAccount(500L, 50L, null, "NGN");
         SavingsAccountTransactionData tx = buildTx(SavingsAccountTransactionType.DEPOSIT, new BigDecimal("1000.00"));
 
-        assertThatThrownBy(() -> mapper.map(account, tx, Operation.POST, "batch-5"))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> mapper.map(account, tx, Operation.POST, "batch-5")).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported transaction type");
     }
 
@@ -109,9 +108,8 @@ class SynapseInstructionMapperTest {
         SavingsAccountData account = buildAccount(600L, 60L, null, "NGN");
         SavingsAccountTransactionEnumData txType = txEnumData(SavingsAccountTransactionType.INTEREST_POSTING);
         // Use importInstance which sets the transactionDate field (same path as production interest posting)
-        SavingsAccountTransactionData tx = SavingsAccountTransactionData.importInstance(
-                new BigDecimal("50.00"), LocalDate.of(2026, 3, 15), null, null, null, null, null, null, null,
-                600L, txType, null, null, null);
+        SavingsAccountTransactionData tx = SavingsAccountTransactionData.importInstance(new BigDecimal("50.00"), LocalDate.of(2026, 3, 15),
+                null, null, null, null, null, null, null, 600L, txType, null, null, null);
 
         SynapseTransactionInstruction result = mapper.map(account, tx, Operation.POST, "batch-6");
 
@@ -133,14 +131,9 @@ class SynapseInstructionMapperTest {
 
     private static SavingsAccountData buildAccount(Long id, Long officeId, String externalId, String currencyCode) {
         CurrencyData currency = new CurrencyData(currencyCode);
-        SavingsAccountData account = SavingsAccountData.instance(id, "SA-" + id, null, externalId,
-                null, null, null, null, null, null, null, null,
-                null, null, null, null, currency, null,
-                null, null, null, null,
-                null, null, null, false, null, false,
-                null, null, false, null, false, null,
-                null, null, null, false, null,
-                null, false, null, null, null, null);
+        SavingsAccountData account = SavingsAccountData.instance(id, "SA-" + id, null, externalId, null, null, null, null, null, null, null,
+                null, null, null, null, null, currency, null, null, null, null, null, null, null, null, false, null, false, null, null,
+                false, null, false, null, null, null, null, false, null, null, false, null, null, null, null);
         ClientData client = new ClientData();
         client.setOfficeId(officeId);
         account.setClientData(client);
@@ -149,13 +142,11 @@ class SynapseInstructionMapperTest {
 
     private static SavingsAccountTransactionData buildTx(SavingsAccountTransactionType type, BigDecimal amount) {
         SavingsAccountTransactionEnumData txType = txEnumData(type);
-        return SavingsAccountTransactionData.create(null, txType, null, null, null,
-                LocalDate.of(2026, 3, 20), null, amount, null, null, false, null,
-                false, null, null, LocalDate.of(2026, 3, 20));
+        return SavingsAccountTransactionData.create(null, txType, null, null, null, LocalDate.of(2026, 3, 20), null, amount, null, null,
+                false, null, false, null, null, LocalDate.of(2026, 3, 20));
     }
 
     private static SavingsAccountTransactionEnumData txEnumData(SavingsAccountTransactionType type) {
         return new SavingsAccountTransactionEnumData(type.getValue().longValue(), type.getCode(), type.getValue().toString());
     }
 }
-

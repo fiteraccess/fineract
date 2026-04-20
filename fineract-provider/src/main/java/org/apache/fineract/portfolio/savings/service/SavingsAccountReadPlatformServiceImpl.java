@@ -259,8 +259,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
 
     @Override
     public SavingsAccountData retrieveSavingsDataForInterestPosting(final Long accountId) {
-        String sql = "select " + this.savingAccountMapperForInterestPosting.schema()
-                + "where sa.id = ? "
+        String sql = "select " + this.savingAccountMapperForInterestPosting.schema() + "where sa.id = ? "
                 + "order by tr.transaction_date, tr." + CREATED_DATE_DB_FIELD + ", tr.created_date, tr.id";
 
         List<SavingsAccountData> results = this.jdbcTemplate.query(sql, this.savingAccountMapperForInterestPosting,

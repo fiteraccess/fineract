@@ -28,8 +28,8 @@ import lombok.Setter;
 /**
  * Represents a single row in the {@code synapse_outbox} table.
  * <p>
- * Task-type agnostic — the {@code payload} field is opaque JSON whose structure
- * is defined by the corresponding {@code SynapseTaskHandler}.
+ * Task-type agnostic — the {@code payload} field is opaque JSON whose structure is defined by the corresponding
+ * {@code SynapseTaskHandler}.
  */
 @Getter
 @Setter

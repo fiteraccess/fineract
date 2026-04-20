@@ -66,22 +66,21 @@ public class SynapseOutboxDispatchConfig {
     }
 
     @Bean
-    public SynapseOutboxTasklet synapseOutboxTasklet(SynapseOutboxRepository outboxRepository,
-            List<SynapseTaskHandler> handlers, CircuitBreakerRegistry circuitBreakerRegistry,
-            FineractProperties fineractProperties, ThreadPoolTaskExecutor synapseOutboxExecutor) {
+    public SynapseOutboxTasklet synapseOutboxTasklet(SynapseOutboxRepository outboxRepository, List<SynapseTaskHandler> handlers,
+            CircuitBreakerRegistry circuitBreakerRegistry, FineractProperties fineractProperties,
+            ThreadPoolTaskExecutor synapseOutboxExecutor) {
         return new SynapseOutboxTasklet(outboxRepository, handlers, circuitBreakerRegistry, fineractProperties, synapseOutboxExecutor);
     }
 
     @Bean
     protected Step dispatchSynapseOutboxStep(SynapseOutboxTasklet synapseOutboxTasklet) {
-        return new StepBuilder(JobName.DISPATCH_SYNAPSE_OUTBOX.name(), jobRepository)
-                .tasklet(synapseOutboxTasklet, transactionManager).build();
+        return new StepBuilder(JobName.DISPATCH_SYNAPSE_OUTBOX.name(), jobRepository).tasklet(synapseOutboxTasklet, transactionManager)
+                .build();
     }
 
     @Bean
     public Job dispatchSynapseOutboxJob(SynapseOutboxTasklet synapseOutboxTasklet) {
-        return new JobBuilder(JobName.DISPATCH_SYNAPSE_OUTBOX.name(), jobRepository)
-                .start(dispatchSynapseOutboxStep(synapseOutboxTasklet))
+        return new JobBuilder(JobName.DISPATCH_SYNAPSE_OUTBOX.name(), jobRepository).start(dispatchSynapseOutboxStep(synapseOutboxTasklet))
                 .incrementer(new RunIdIncrementer()).build();
     }
 }

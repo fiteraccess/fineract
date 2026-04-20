@@ -28,4 +28,3 @@ public class SynapsePostingException extends RuntimeException {
         super(message, cause);
     }
 }
-
