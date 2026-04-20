@@ -91,8 +91,7 @@ jobs:
           # Initialize failure flag
           FAILED=0
 
-          # Create necessary directories
-          mkdir -p "allure-results-shard-${{ matrix.shard_index }}"
+          # Create merged results directory
           mkdir -p "allure-results-merged"
 
           # Read feature files from the shard file
@@ -106,16 +105,12 @@ jobs:
             # Skip empty lines
             [ -z "$feature_file" ] && continue
 
-            # Create a safe filename for the results
-            safe_name=$(echo "$feature_file" | tr '/' '-' | tr ' ' '_')
-
             echo "::group::Testing feature: $feature_file"
 
-            # Run tests with individual allure results directory
+            # Run tests using the default allure results directory so allureReport picks them up
             if ! ./gradlew --no-daemon --console=plain \
               :fineract-e2e-tests-runner:cucumber \
               -Pcucumber.features="$feature_file" \
-              -Dallure.results.directory="allure-results-shard-${{ matrix.shard_index }}/$safe_name" \
               allureReport; then
 
               echo "::error::Test failed for $feature_file"
@@ -124,9 +119,9 @@ jobs:
 
             echo "::endgroup::"
 
-            # Copy the results to a merged directory
-            if [ -d "allure-results-shard-${{ matrix.shard_index }}/$safe_name" ]; then
-              cp -r "allure-results-shard-${{ matrix.shard_index }}/$safe_name/." "allure-results-merged/" || true
+            # Copy the results from the Gradle default location into the merged directory
+            if [ -d "fineract-e2e-tests-runner/build/allure-results" ]; then
+              cp -r "fineract-e2e-tests-runner/build/allure-results/." "allure-results-merged/" || true
             fi
           done < "feature_shard_${{ matrix.shard_index }}.txt"
 
@@ -150,7 +145,6 @@ jobs:
         with:
           name: allure-results-shard-${{ matrix.shard_index }}
           path: |
-            allure-results-shard-${{ matrix.shard_index }}
             allure-results-merged
             **/build/allure-results
             **/build/reports/tests/test

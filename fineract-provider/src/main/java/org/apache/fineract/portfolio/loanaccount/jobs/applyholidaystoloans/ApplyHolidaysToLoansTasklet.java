@@ -125,7 +125,7 @@ public class ApplyHolidaysToLoansTasklet implements Tasklet {
         final DefaultScheduledDateGenerator scheduledDateGenerator = new DefaultScheduledDateGenerator();
         ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, holiday.getFromDate());
         final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         // first repayment's from date is same as disbursement date.
         LocalDate tmpFromDate = loan.getDisbursementDate();
@@ -158,7 +158,7 @@ public class ApplyHolidaysToLoansTasklet implements Tasklet {
         final DefaultScheduledDateGenerator scheduledDateGenerator = new DefaultScheduledDateGenerator();
         ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, holiday.getFromDate());
         final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         // first repayment's from date is same as disbursement date.
         LocalDate tmpFromDate = loan.getDisbursementDate();

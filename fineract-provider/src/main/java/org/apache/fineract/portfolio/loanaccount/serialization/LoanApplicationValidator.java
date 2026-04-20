@@ -1604,7 +1604,7 @@ public final class LoanApplicationValidator {
          */
         // TODO: is this condition necessary?
         if (loan.getFixedEmiAmount() != null) {
-            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             Integer minimumNoOfRepayments = productConfig.getMinNumberOfRepayments();
             Integer maximumNoOfRepayments = productConfig.getMaxNumberOfRepayments();
             Integer actualNumberOfRepayments = loan.getLoanRepaymentScheduleInstallmentsSize();
@@ -2077,7 +2077,7 @@ public final class LoanApplicationValidator {
                         loan.getSubmittedOnDate());
             }
 
-            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             if (loan.isMultiDisburmentLoan()) {
                 validateLoanMultiDisbursementDate(element, expectedDisbursementDate, principal, loan);
 
@@ -2177,7 +2177,7 @@ public final class LoanApplicationValidator {
     }
 
     public BigDecimal getOverAppliedMax(Loan loan) {
-        return getOverAppliedMax(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+        return getOverAppliedMax(loan, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     public BigDecimal getOverAppliedMax(Loan loan, CacheableLoanProductConfig productConfig) {

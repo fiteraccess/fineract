@@ -101,7 +101,7 @@ public class InternalProgressiveLoanApiResource implements InitializingBean {
             throw new IllegalArgumentException("The loan is not progressive.");
         }
         ProgressiveLoanInterestScheduleModel model = reprocessTransactionsAndGetModel(loan,
-                cacheableLoanProductConfigService.getConfig(loanId));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         return writePlatformService.writeInterestScheduleModel(loan, model);
     }

@@ -277,7 +277,7 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             if (loan.isProgressiveSchedule()) {
                 final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
                 loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             }
             reprocessLoanTransactionsService.reprocessTransactions(loan);
             loanLifecycleStateMachine.determineAndTransition(loan, transactionDate);
@@ -805,7 +805,7 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             log.warn("Adding charge to Loan: {} is not allowed. Loan Account is Charged-off", loanId);
             return;
         }
-        final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (productConfig.getOverdueInstallmentPenaltyChargeId() == null) {
             return;
         }
@@ -850,7 +850,7 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
                 if (loan.isProgressiveSchedule()) {
                     final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
                     loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                            cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                            cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
                 }
                 reprocessLoanTransactionsService.reprocessTransactions(loan);
                 loan = loanAccountService.saveAndFlushLoanWithDataIntegrityViolationChecks(loan);
@@ -878,7 +878,7 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             if (loan.isProgressiveSchedule()) {
                 final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
                 loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             }
             reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(loanChargeAdjustmentTransaction));
         } else {
@@ -1435,7 +1435,7 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else if (loan.isProgressiveSchedule()) {
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
         // Waive of charges whose due date falls after latest 'repayment' transaction don't require entire loan schedule
         // to be reprocessed.

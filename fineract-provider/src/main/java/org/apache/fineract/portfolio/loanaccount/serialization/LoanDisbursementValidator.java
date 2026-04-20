@@ -43,7 +43,7 @@ public final class LoanDisbursementValidator {
         final BigDecimal totalCapitalizedIncomeAdjustment = MathUtil.nullToZero(loan.getSummary().getTotalCapitalizedIncomeAdjustment());
         final BigDecimal netCapitalizedIncome = totalCapitalizedIncome.subtract(totalCapitalizedIncomeAdjustment);
 
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (productConfig.isDisallowExpectedDisbursements() && productConfig.isAllowApprovedDisbursedAmountsOverApplied()) {
             validateOverMaximumAmount(loan, totalDisbursed, netCapitalizedIncome);
         } else {
@@ -61,7 +61,7 @@ public final class LoanDisbursementValidator {
     }
 
     public void validateOverMaximumAmount(final Loan loan, final BigDecimal totalDisbursed, final BigDecimal capitalizedIncome) {
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         final BigDecimal maxDisbursedAmount = loanApplicationValidator.getOverAppliedMax(loan, productConfig);
         if (totalDisbursed.add(capitalizedIncome).compareTo(maxDisbursedAmount) > 0) {
             final String errorMessage = String.format(

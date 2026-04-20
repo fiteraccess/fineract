@@ -83,7 +83,7 @@ public class LoanPointInTimeServiceImpl implements LoanPointInTimeService {
             if (needsScheduleRegeneration) {
                 ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null, null);
                 loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
                 recalculateSummaryForInstallmentsUpToDate(loan, date);
             } else if (!loan.isClosed()) {
                 recalculateSummaryForInstallmentsUpToDate(loan, date);

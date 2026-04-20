@@ -93,7 +93,7 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setDueDaysForRepaymentEvent(null);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanSummary loanSummary = Mockito.mock(LoanSummary.class);
         MonetaryCurrency currency = Mockito.mock(MonetaryCurrency.class);
         Money money = Mockito.mock(Money.class);
@@ -127,7 +127,7 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setDueDaysForRepaymentEvent(null);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays
                 .asList(new LoanRepaymentScheduleInstallment(loanForProcessing, 1, LocalDate.now(ZoneId.systemDefault()),
                         loanInstallmentRepaymentDueDateAfter5Days, BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0),
@@ -155,7 +155,7 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         // Loan Product setting overrides global settings
         productConfig.setDueDaysForRepaymentEvent(1);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanSummary loanSummary = Mockito.mock(LoanSummary.class);
         MonetaryCurrency currency = Mockito.mock(MonetaryCurrency.class);
         Money money = Mockito.mock(Money.class);

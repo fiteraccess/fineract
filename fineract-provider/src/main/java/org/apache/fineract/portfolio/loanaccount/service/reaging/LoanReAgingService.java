@@ -182,7 +182,7 @@ public class LoanReAgingService {
         if (loan.isProgressiveSchedule()) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
         reverseReAgeTransaction(reAgeTransaction, command);
         loanTransactionRepository.saveAndFlush(reAgeTransaction);
@@ -212,7 +212,7 @@ public class LoanReAgingService {
                         .equals(reAgeTransaction.getLoanReAgeParameter().getInterestHandlingType())) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             if (withPostTransactionChecks) {
                 reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(reAgeTransaction));
             } else {

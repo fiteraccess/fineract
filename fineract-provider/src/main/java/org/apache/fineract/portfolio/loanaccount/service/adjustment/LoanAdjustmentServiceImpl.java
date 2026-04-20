@@ -346,12 +346,12 @@ public class LoanAdjustmentServiceImpl implements LoanAdjustmentService {
 
         if (newTransactionDetail.isRepaymentLikeType() || newTransactionDetail.isWaiver()) {
             loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, newTransactionDetail, transactionForAdjustment,
-                    scheduleGeneratorDTO, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    scheduleGeneratorDTO, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
 
         if (transactionForAdjustment.getTypeOf().equals(LoanTransactionType.CAPITALIZED_INCOME)) {
             loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
     }
 

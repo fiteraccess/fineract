@@ -798,7 +798,7 @@ public class LoanScheduleAssembler {
     }
 
     public void assempleVariableScheduleFrom(final Loan loan, final String json) {
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         this.variableLoanScheduleFromApiJsonValidator.validateSchedule(json, loan, productConfig);
 
         List<LoanTermVariations> variations = loan.getLoanTermVariations();
@@ -932,7 +932,7 @@ public class LoanScheduleAssembler {
             baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("variable.schedule.modify.date.can.not.be.due.date",
                     overlappings);
         }
-        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
 
         CacheableLoanProductVariableInstallmentConfig installmentConfig = loanProductConfig.getLoanProductVariableInstallmentConfig();
         final CalendarInstance loanCalendarInstance = calendarInstanceRepository.findCalendarInstanceByEntityId(loan.getId(),
@@ -975,7 +975,7 @@ public class LoanScheduleAssembler {
         final LocalDate recalculateFrom = null;
         ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
         loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                cacheableLoanProductConfigService.getConfig(loan.getId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
 
     }
@@ -1064,7 +1064,7 @@ public class LoanScheduleAssembler {
 
     private void extractLoanTermVariations(final Loan loan, final String json, final List<LoanTermVariations> loanTermVariations) {
         final JsonElement element = this.fromApiJsonHelper.parse(json);
-        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
 
         if (loanProductConfig.isAllowVariableInstallments()) {
             if (element.isJsonObject() && this.fromApiJsonHelper.parameterExists(LoanApiConstants.exceptionParamName, element)) {
@@ -1224,7 +1224,7 @@ public class LoanScheduleAssembler {
     }
 
     public void updateProductRelatedDetails(LoanProductRelatedDetail productRelatedDetail, Loan loan) {
-        CacheableLoanProductConfig config = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig config = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         updateProductRelatedDetails(productRelatedDetail, config);
     }
 
@@ -1464,7 +1464,7 @@ public class LoanScheduleAssembler {
         }
 
         if (loanProductRelatedDetail.isEnableDownPayment()) {
-            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             Boolean enableAutoRepaymentForDownPayment = productConfig.isEnableAutoRepaymentForDownPayment();
             if (this.fromApiJsonHelper.parameterExists(LoanProductConstants.ENABLE_AUTO_REPAYMENT_DOWN_PAYMENT, command.parsedJson())) {
                 if (command.isChangeInBooleanParameterNamed(LoanProductConstants.ENABLE_AUTO_REPAYMENT_DOWN_PAYMENT,
@@ -1559,7 +1559,7 @@ public class LoanScheduleAssembler {
             if (actualChanges.containsKey(LoanApiConstants.approvedLoanAmountParameterName)
                     || actualChanges.containsKey("recalculateLoanSchedule") || actualChanges.containsKey("expectedDisbursementDate")) {
                 loanScheduleService.regenerateRepaymentSchedule(loan, loanUtilService.buildScheduleGeneratorDTO(loan, null),
-                        cacheableLoanProductConfigService.getConfig(loanId));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
                 loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
             }
         }

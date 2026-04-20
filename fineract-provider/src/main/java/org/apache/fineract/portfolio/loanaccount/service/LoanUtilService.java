@@ -222,7 +222,7 @@ public class LoanUtilService implements ILoanUtilService {
             floatingRateDTO = new FloatingRateDTO(isFloatingInterestRate, loan.getDisbursementDate(), interestRateDiff,
                     baseLendingRatePeriods);
 
-            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             BigDecimal productDifferential = productConfig.getFloatingRateDifferential();
             if (productDifferential != null) {
                 floatingRateDTO.addInterestRateDiff(productDifferential);

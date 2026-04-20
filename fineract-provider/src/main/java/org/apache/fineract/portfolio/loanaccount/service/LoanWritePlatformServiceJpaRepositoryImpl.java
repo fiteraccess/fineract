@@ -326,7 +326,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         loanTransactionValidator.validateDisbursement(command, isAccountTransfer, loanId);
 
         Loan loan = loanAssembler.assembleFrom(loanId);
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
 
         if (productConfig.isDisallowExpectedDisbursements()) {
             List<LoanDisbursementDetails> filteredList = loan.getDisbursementDetails().stream()
@@ -566,7 +566,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else {
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
 
         loan.updateSummaryWithTotalFeeChargesDueAtDisbursement(loan.deriveSumTotalOfChargesDueAtDisbursement());
@@ -613,7 +613,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
 
     private void createAndSaveLoanScheduleArchive(final Loan loan, ScheduleGeneratorDTO scheduleGeneratorDTO) {
         LoanRescheduleRequest loanRescheduleRequest = null;
-        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         LoanScheduleModel loanScheduleModel = loanMapper.regenerateScheduleModel(scheduleGeneratorDTO, loan, loanProductConfig);
         List<LoanRepaymentScheduleInstallment> installments = retrieveRepaymentScheduleFromModel(loanScheduleModel);
         this.loanScheduleHistoryWritePlatformService.createAndSaveLoanScheduleArchive(installments, loan, loanRescheduleRequest);
@@ -745,7 +745,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
 
             // validate ActualDisbursement Date Against Expected Disbursement
             // Date
-            CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             if (loanProductConfig.isSyncExpectedWithDisbursementDate()) {
                 syncExpectedDateWithActualDisbursementDate(loan, actualDisbursementDate);
             }
@@ -1014,7 +1014,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else if (loan.isProgressiveSchedule()) {
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
         loan.addLoanTransaction(newInterestPaymentWaiverTransaction);
         reprocessLoanTransactionsService.reprocessTransactions(loan);
@@ -1326,7 +1326,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         if (loan.isInterestBearing() && loan.isInterestRecalculationEnabled() && loan.isProgressiveSchedule()) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
 
         // Store the Loan Transaction Relation
@@ -1968,7 +1968,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
                 if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
                     ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
                     loanScheduleService.recalculateScheduleFromLastTransaction(loan, scheduleGeneratorDTO, existingTransactionIds,
-                            existingReversedTransactionIds, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                            existingReversedTransactionIds, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
                     createAndSaveLoanScheduleArchive(loan, scheduleGeneratorDTO);
                 } else if (rescheduleBasedOnMeetingDates != null && rescheduleBasedOnMeetingDates) {
                     updateLoanRepaymentScheduleDates(loan, calendar.getRecurrence(), isHolidayEnabled, holidays, workingDays,
@@ -1991,7 +1991,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
 
     private void removeLoanCycle(final Loan loan) {
         final List<Loan> loansToUpdate;
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (loan.isGroupLoan()) {
             if (productConfig.isIncludeInBorrowerCycle()) {
                 loansToUpdate = this.loanRepositoryWrapper.getGroupLoansToUpdateLoanCounter(loan.getCurrentLoanCounter(), loan.getGroupId(),
@@ -2062,12 +2062,12 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
     private void updateLoanCounter(final Loan loan, final List<Loan> loansToUpdateForLoanCounter, Integer newLoanCounter,
             Integer newLoanProductCounter) {
 
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         final boolean includeInBorrowerCycle = productConfig.isIncludeInBorrowerCycle();
         for (final Loan loanToUpdate : loansToUpdateForLoanCounter) {
             // Update client loan counter if loan product includeInBorrowerCycle
             // is true
-            CacheableLoanProductConfig loanToUpdateConfig = cacheableLoanProductConfigService.getConfig(loanToUpdate.getProductId());
+            CacheableLoanProductConfig loanToUpdateConfig = cacheableLoanProductConfigService.getProductConfig(loanToUpdate.getProductId());
             if (loanToUpdateConfig.isIncludeInBorrowerCycle()) {
                 Integer currentLoanCounter = loanToUpdate.getCurrentLoanCounter() == null ? 1 : loanToUpdate.getCurrentLoanCounter();
                 if (newLoanCounter > currentLoanCounter) {
@@ -2249,7 +2249,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         }
         final Map<String, Object> actualChanges = new LinkedHashMap<>();
         LocalDate expectedDisbursementDate = loan.getExpectedDisbursedOnLocalDate();
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (!productConfig.isMultiDisburseLoan()) {
             final String errorMessage = "loan.product.does.not.support.multiple.disbursals";
             throw new LoanMultiDisbursementException(errorMessage);
@@ -2301,7 +2301,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         } else {
             loan.getLoanProductRelatedDetail().setPrincipal(loan.getPrincipalAmountForRepaymentSchedule());
 
-            final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             if (loan.isCumulativeSchedule() && loan.isInterestBearingAndInterestRecalculationEnabled()) {
                 loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
             } else if (loan.isProgressiveSchedule()) {
@@ -2370,7 +2370,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
             LocalDate recalculateFrom = loan.fetchInterestRecalculateFromDate();
             ScheduleGeneratorDTO generatorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
             loanScheduleService.recalculateScheduleFromLastTransaction(loan, generatorDTO, existingTransactionIds,
-                    existingReversedTransactionIds, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    existingReversedTransactionIds, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             loanAccrualsProcessingService.reprocessExistingAccruals(loan, true);
             if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
                 loanAccrualsProcessingService.processIncomePostingAndAccruals(loan, true);
@@ -2382,7 +2382,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
             businessEventNotifierService.notifyPostBusinessEvent(new LoanInterestRecalculationBusinessEvent(loan));
         } else {
             loanScheduleService.recalculateScheduleFromLastTransaction(loan, null, existingTransactionIds, existingReversedTransactionIds,
-                    true, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    true, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             loanBalanceService.updateLoanSummaryDerivedFields(loan);
             loan = saveAndFlushLoanWithDataIntegrityViolationChecks(loan);
             businessEventNotifierService.notifyPostBusinessEvent(new LoanInterestRecalculationBusinessEvent(loan));
@@ -2426,7 +2426,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         BigDecimal emiAmount = command.bigDecimalValueOfParameterNamed(LoanApiConstants.fixedEmiAmountParameterName);
 
         boolean isEmiAmountChanged = false;
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if ((productConfig.isMultiDisburseLoan() || productConfig.isCanDefineInstallmentAmount()) && emiAmount != null
                 && emiAmount.compareTo(loan.retriveLastEmiAmount()) != 0) {
             if (productConfig.isMultiDisburseLoan()) {
@@ -2849,7 +2849,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else if (loan.isProgressiveSchedule()) {
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
 
         reprocessLoanTransactionsService.reprocessTransactions(loan);
@@ -3029,7 +3029,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
                 loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
             } else if (loan.isProgressiveSchedule()) {
                 loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             }
             loan.addLoanTransaction(interestRefundTxn);
             reprocessLoanTransactionsService.reprocessTransactions(loan);
@@ -3140,7 +3140,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
                     loan.getLoanRepaymentScheduleDetail().getPrincipal().getAmount());
             loan.getLoanRepaymentScheduleDetail().setPrincipal(loan.getApprovedPrincipal());
             // Remove All the Disbursement Details If the Loan Product is disabled and exists one
-            CacheableLoanProductConfig undoProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig undoProductConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             if (undoProductConfig.isDisallowExpectedDisbursements() && !loan.getDisbursementDetails().isEmpty()) {
                 for (LoanDisbursementDetails disbursementDetail : loan.getAllDisbursementDetails()) {
                     disbursementDetail.reverse();
@@ -3158,7 +3158,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
                 // uses expected date.
 
                 loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
                 if (isDisbursedAmountChanged) {
                     loan.updateSummaryWithTotalFeeChargesDueAtDisbursement(loan.deriveSumTotalOfChargesDueAtDisbursement());
                 }
@@ -3277,7 +3277,8 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         if (loan.isInterestBearingAndInterestRecalculationEnabled()
                 && DateUtils.isBeforeBusinessDate(loanTransaction.getTransactionDate())) {
             if (loan.isProgressiveSchedule()) {
-                loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                loanScheduleService.regenerateRepaymentSchedule(loan,
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             }
             loan.addLoanTransaction(loanTransaction);
             reprocessLoanTransactionsService.reprocessTransactions(loan);
@@ -3295,7 +3296,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
 
     private void closeDisbursements(final Loan loan, final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         if (loan.isDisbursementAllowed() && loan.atLeastOnceDisbursed()) {
-            final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             loan.getLoanRepaymentScheduleDetail().setPrincipal(loan.getDisbursedAmount());
             loan.removeDisbursementDetail();
             if (loan.isCumulativeSchedule()) {
@@ -3405,7 +3406,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
 
         loan.getLoanRepaymentScheduleDetail().setPrincipal(loan.getPrincipalAmountForRepaymentSchedule());
 
-        final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        final CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (loan.isCumulativeSchedule() && loan.isInterestBearingAndInterestRecalculationEnabled()) {
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else if (loan.isProgressiveSchedule()) {
@@ -3445,7 +3446,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
                         || DateUtils.isAfter(loanTermVariations.getTermApplicableFrom(), lastTransactionDate));
         reverseExistingTransactionsTillLastDisbursal(loan, lastDisbursalTransaction);
         loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan, scheduleGeneratorDTO,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         actualChanges.put("undolastdisbursal", "true");
         actualChanges.put("disbursedAmount", loan.getDisbursedAmount());
         loanLifecycleStateMachine.determineAndTransition(loan, loan.getLastUserTransactionDate());
@@ -3456,7 +3457,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
     private void waiveInterest(final Loan loan, final LoanTransaction waiveInterestTransaction,
             final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, waiveInterestTransaction, null,
-                scheduleGeneratorDTO, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                scheduleGeneratorDTO, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     private void undoWrittenOff(final Loan loan) {
@@ -3468,7 +3469,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
         if (loan.isProgressiveSchedule()) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
         reprocessLoanTransactionsService.reprocessTransactions(loan);
     }

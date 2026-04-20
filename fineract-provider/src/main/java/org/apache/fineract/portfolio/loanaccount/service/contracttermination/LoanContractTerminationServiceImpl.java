@@ -95,7 +95,7 @@ public class LoanContractTerminationServiceImpl {
         changes.put(LoanApiConstants.subStatusAttributeName, loan.getLoanSubStatus().getCode());
 
         if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(contractTermination));
             loan.addLoanTransaction(contractTermination);
         } else {
@@ -163,7 +163,7 @@ public class LoanContractTerminationServiceImpl {
             loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
         } else if (loan.isProgressiveSchedule()) {
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
 
         reprocessLoanTransactionsService.reprocessTransactions(loan);

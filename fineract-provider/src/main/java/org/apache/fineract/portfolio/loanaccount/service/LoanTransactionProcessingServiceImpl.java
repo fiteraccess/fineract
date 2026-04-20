@@ -144,7 +144,7 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
         final MathContext mc = MoneyHelper.getMathContext();
 
         final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(generatorDTO, loan,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = getTransactionProcessor(
                 loan.getTransactionProcessingStrategyCode());
@@ -162,7 +162,7 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
 
             final InterestMethod interestMethod = loan.getLoanRepaymentScheduleDetail().getInterestMethod();
             final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
             final LoanScheduleGenerator loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory()
                     .create(loanApplicationTerms.getLoanScheduleType(), interestMethod);
