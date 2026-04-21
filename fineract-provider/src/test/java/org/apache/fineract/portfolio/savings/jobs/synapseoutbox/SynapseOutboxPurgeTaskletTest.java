@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.repeat.RepeatStatus;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +38,12 @@ class SynapseOutboxPurgeTaskletTest {
 
     @Mock
     private SynapseOutboxRepository outboxRepository;
+
+    @Mock
+    private StepContribution stepContribution;
+
+    @Mock
+    private ChunkContext chunkContext;
 
     private SynapseOutboxPurgeTasklet createTasklet(int retentionDays) {
         FineractProperties props = new FineractProperties();
@@ -51,7 +59,7 @@ class SynapseOutboxPurgeTaskletTest {
         when(outboxRepository.purgeOldSentEntries(retentionDays)).thenReturn(10);
 
         SynapseOutboxPurgeTasklet tasklet = createTasklet(retentionDays);
-        RepeatStatus status = tasklet.execute(null, null);
+        RepeatStatus status = tasklet.execute(stepContribution, chunkContext);
 
         verify(outboxRepository).purgeOldSentEntries(retentionDays);
         assertThat(status).isEqualTo(RepeatStatus.FINISHED);
@@ -65,7 +73,7 @@ class SynapseOutboxPurgeTaskletTest {
         when(outboxRepository.purgeOldSentEntries(30)).thenReturn(0);
 
         SynapseOutboxPurgeTasklet tasklet = new SynapseOutboxPurgeTasklet(outboxRepository, props);
-        RepeatStatus status = tasklet.execute(null, null);
+        RepeatStatus status = tasklet.execute(stepContribution, chunkContext);
 
         verify(outboxRepository).purgeOldSentEntries(30);
         assertThat(status).isEqualTo(RepeatStatus.FINISHED);
