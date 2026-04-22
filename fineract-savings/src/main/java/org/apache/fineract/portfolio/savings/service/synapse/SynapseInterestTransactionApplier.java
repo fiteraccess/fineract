@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
@@ -110,7 +112,9 @@ public class SynapseInterestTransactionApplier {
     private SavingsAccountTransactionType resolveTransactionType(String transactionType) {
         SavingsAccountTransactionType type = TRANSACTION_TYPES.get(transactionType);
         if (type == null) {
-            throw new IllegalArgumentException("Unsupported replay transaction type: " + transactionType);
+            throw new PlatformApiDataValidationException(
+                    List.of(ApiParameterError.parameterError("error.msg.savings.replay.transactionType.invalid",
+                            "Unsupported replay transaction type: " + transactionType, "transactionType", transactionType)));
         }
         return type;
     }

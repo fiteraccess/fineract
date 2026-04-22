@@ -1114,9 +1114,11 @@ public class GroupSavingsIntegrationTest {
                     .build();
 
             final ResponseSpecification errorResponse = new ResponseSpecBuilder().build();
+            final RequestSpecification errorRequest = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+            errorRequest.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
 
             ArrayList<HashMap> error = (ArrayList<HashMap>) this.guarantorHelper.createGuarantorWithError(loanID, guarantorJSON,
-                    this.requestSpec, errorResponse);
+                    errorRequest, errorResponse);
             // Verify we got an error response (status code may be 403 or 404 depending on environment)
             Assertions.assertNotNull(error, "Should return error for client ID used with GROUP type");
 

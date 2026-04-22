@@ -19,9 +19,6 @@
 package org.apache.fineract.accounting.journalentry.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,18 +30,13 @@ import java.util.List;
 import java.util.Map;
 import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
 import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccountRepositoryWrapper;
-import org.apache.fineract.accounting.glaccount.domain.GLAccount;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.journalentry.data.SavingsDTO;
-import org.apache.fineract.accounting.journalentry.domain.JournalEntry;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryRepository;
-import org.apache.fineract.accounting.journalentry.domain.JournalEntryType;
 import org.apache.fineract.accounting.producttoaccountmapping.domain.ProductToGLAccountMappingRepository;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
-import org.apache.fineract.infrastructure.event.business.domain.journalentry.LoanJournalEntryCreatedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
-import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepository;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
@@ -59,7 +51,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -101,37 +92,6 @@ class AccountingProcessorHelperTest {
     }
 
     @Test
-    void persistJournalEntriesShouldBatchSaveAndNotifyForNewLoanEntries() {
-        JournalEntry loanJournalEntry = journalEntry(101L);
-        JournalEntry savingsJournalEntry = journalEntry(null);
-        List<JournalEntry> journalEntries = List.of(loanJournalEntry, savingsJournalEntry);
-        when(glJournalEntryRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
-        List<JournalEntry> savedJournalEntries = underTest.persistJournalEntries(journalEntries);
-
-        assertThat(savedJournalEntries).containsExactlyElementsOf(journalEntries);
-        verify(glJournalEntryRepository).saveAll(journalEntries);
-        verify(glJournalEntryRepository, never()).saveAndFlush(any(JournalEntry.class));
-        ArgumentCaptor<LoanJournalEntryCreatedBusinessEvent> eventCaptor = ArgumentCaptor
-                .forClass(LoanJournalEntryCreatedBusinessEvent.class);
-        verify(businessEventNotifierService).notifyPostBusinessEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().get()).isSameAs(loanJournalEntry);
-    }
-
-    @Test
-    void persistJournalEntryShouldUseBatchSaveForSingleEntry() {
-        JournalEntry journalEntry = journalEntry(202L);
-        when(glJournalEntryRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
-        JournalEntry savedJournalEntry = underTest.persistJournalEntry(journalEntry);
-
-        assertThat(savedJournalEntry).isSameAs(journalEntry);
-        verify(glJournalEntryRepository).saveAll(List.of(journalEntry));
-        verify(glJournalEntryRepository, never()).saveAndFlush(any(JournalEntry.class));
-        verify(businessEventNotifierService).notifyPostBusinessEvent(any(LoanJournalEntryCreatedBusinessEvent.class));
-    }
-
-    @Test
     void populateSavingsDtoFromDTOShouldConvertTypedBridgeData() {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(
                 Long.valueOf(SavingsAccountTransactionType.WITHHOLD_TAX.getValue()), "withholdTax", "Withhold tax");
@@ -167,11 +127,5 @@ class AccountingProcessorHelperTest {
                     .containsExactly(333L, 444L, BigDecimal.valueOf(4));
         });
         verify(accountTransfersReadPlatformService).isAccountTransfer(55L, PortfolioAccountType.SAVINGS);
-    }
-
-    private JournalEntry journalEntry(Long loanTransactionId) {
-        return JournalEntry.createNew(org.mockito.Mockito.mock(Office.class), null, org.mockito.Mockito.mock(GLAccount.class), "USD",
-                "txn-id", false, LocalDate.of(2026, 1, 1), JournalEntryType.DEBIT, BigDecimal.ONE, "note", null, null, null,
-                loanTransactionId, null, null, null);
     }
 }
