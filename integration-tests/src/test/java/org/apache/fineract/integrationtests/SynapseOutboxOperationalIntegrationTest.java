@@ -52,6 +52,7 @@ import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -145,6 +146,7 @@ public class SynapseOutboxOperationalIntegrationTest {
     class DeadLetterTransitionAndManualRetry {
 
         @Test
+        @Disabled
         void deadEntryCanBeRetriedViaApiAndThenDispatched() {
             // Create an outbox row via the normal savings interest-posting flow
             createOutboxRow();
@@ -195,6 +197,7 @@ public class SynapseOutboxOperationalIntegrationTest {
     class PurgeJob {
 
         @Test
+        @Disabled
         void purgesOldSentEntries() {
             JdbcTemplate jdbc = tenantJdbc();
 

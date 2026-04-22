@@ -99,4 +99,10 @@ public class InvestorAccountingHelper {
         return this.glAccountRepository.getReferenceById(glAccountId);
     }
 
+    public GLAccount getLinkedGLAccountForChargeOffReason(final Long loanProductId, final Long chargeOffReasonId) {
+        final Long glAccountId = this.glAccountResolver.resolveGLAccountIdForChargeOffReason(loanProductId,
+                PortfolioProductType.LOAN.getValue(), chargeOffReasonId);
+        return glAccountId != null ? this.glAccountRepository.getReferenceById(glAccountId) : null;
+    }
+
 }

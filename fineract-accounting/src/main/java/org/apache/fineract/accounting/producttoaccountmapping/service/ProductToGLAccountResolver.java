@@ -77,6 +77,16 @@ public class ProductToGLAccountResolver {
         return accountMapping.getGlAccount().getId();
     }
 
+    @Cacheable(value = "productGLMappings", key = "'resolve:chargeOffReason:' + #productId + ':' + #productType + ':' + #chargeOffReasonId")
+    public Long resolveGLAccountIdForChargeOffReason(final Long productId, final int productType, final Long chargeOffReasonId) {
+        if (chargeOffReasonId == null) {
+            return null;
+        }
+        final ProductToGLAccountMapping mapping = this.accountMappingRepository.findChargeOffReasonMapping(productId, productType,
+                chargeOffReasonId);
+        return mapping != null ? mapping.getGlAccount().getId() : null;
+    }
+
     @Cacheable(value = "productGLMappings", key = "'resolve:charge:' + #productId + ':' + #productType + ':' + #accountMappingTypeId + ':' + #chargeId")
     public Long resolveGLAccountIdForCharge(final Long productId, final int productType, final int accountMappingTypeId,
             final Long chargeId) {

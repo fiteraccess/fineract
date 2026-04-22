@@ -1108,9 +1108,11 @@ public class GroupSavingsIntegrationTest {
                     .build(loanClientID.toString(), loanProductID.toString(), null);
             final Integer loanID = this.loanTransactionHelper.getLoanId(loanApplicationJSON);
 
-            // Try to create guarantor with CLIENT ID but GROUP type (type mismatch)
+            // Server only checks group existence for GROUP type, not type mismatch — so using a raw client ID
+            // flakes when a group happens to share that ID in the shared CI DB. Offset ensures no collision.
+            final long nonExistentGroupId = otherClientID.longValue() + 1_000_000_000L;
             String guarantorJSON = new GuarantorTestBuilder()
-                    .existingGroupWithGuaranteeAmount(String.valueOf(otherClientID), String.valueOf(clientSavingsId), GUARANTEE_AMOUNT)
+                    .existingGroupWithGuaranteeAmount(String.valueOf(nonExistentGroupId), String.valueOf(clientSavingsId), GUARANTEE_AMOUNT)
                     .build();
 
             final ResponseSpecification errorResponse = new ResponseSpecBuilder().build();
