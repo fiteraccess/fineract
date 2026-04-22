@@ -31,12 +31,12 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.api.StatefulConnection;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.apache.fineract.organisation.office.domain.Office;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -85,7 +85,8 @@ public class RedisCacheConfig {
 
         LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder clientConfigBuilder = LettucePoolingClientConfiguration
                 .builder().poolConfig((GenericObjectPoolConfig<StatefulConnection<?, ?>>) poolConfig).clientOptions(clientOptions)
-                .commandTimeout(Duration.ofSeconds(2)).shutdownTimeout(Duration.ofSeconds(2));
+                .commandTimeout(Duration.ofSeconds(redis.getCommandTimeoutSeconds()))
+                .shutdownTimeout(Duration.ofSeconds(redis.getShutdownTimeoutSeconds()));
 
         // Enable SSL/TLS for AWS ElastiCache and other managed Redis services that require encryption
         if (redis.isSsl()) {
@@ -96,8 +97,8 @@ public class RedisCacheConfig {
     }
 
     @Bean("redisCacheManagerWithFallback")
-    public FallbackToCacheManagerProxy redisCacheManagerWithFallback(@Qualifier("ehCacheManager") CacheManager ehCacheManager,
-            FineractProperties fineractProperties, LettuceConnectionFactory redisConnectionFactory) {
+    public FallbackToCacheManagerProxy redisCacheManagerWithFallback(FineractProperties fineractProperties,
+            LettuceConnectionFactory redisConnectionFactory) {
         long ttl = fineractProperties.getCache().getRedis().getDefaultTtlSeconds();
 
         // Restrict Jackson polymorphic deserialization to trusted packages only.
@@ -120,6 +121,7 @@ public class RedisCacheConfig {
         // Jackson cannot deserialize it. Since authorities are recomputed from the roles collection
         // (which IS serialized), we tell Jackson to skip this property entirely for Redis caching.
         redisObjectMapper.addMixIn(org.apache.fineract.useradministration.domain.AppUser.class, AppUserCacheMixin.class);
+        redisObjectMapper.addMixIn(org.apache.fineract.organisation.office.domain.Office.class, OfficeCacheMixin.class);
 
         // Custom type resolver that includes final types like Long and String.
         // The default NON_FINAL skips final classes, causing Long to serialize as plain "42"
@@ -143,7 +145,7 @@ public class RedisCacheConfig {
         TenantAwareRedisCacheManager redisCacheManager = new TenantAwareRedisCacheManager(
                 RedisCacheWriter.nonLockingRedisCacheWriter(redisConnectionFactory), redisCacheConfig);
 
-        return new FallbackToCacheManagerProxy(redisCacheManager, ehCacheManager.getCacheNames());
+        return new FallbackToCacheManagerProxy(redisCacheManager);
     }
 
     /**
@@ -155,5 +157,18 @@ public class RedisCacheConfig {
 
         @JsonIgnore
         abstract Collection<GrantedAuthority> getAuthorities();
+    }
+
+    /**
+     * Jackson mixin for Office Redis serialization. Breaks the bidirectional {@code parent}/{@code children} cycle that
+     * otherwise causes infinite recursion during cache writes.
+     */
+    abstract static class OfficeCacheMixin {
+
+        @JsonIgnore
+        abstract List<Office> getChildren();
+
+        @JsonIgnore
+        abstract Office getParent();
     }
 }

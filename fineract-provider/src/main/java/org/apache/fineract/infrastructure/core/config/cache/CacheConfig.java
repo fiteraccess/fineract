@@ -41,6 +41,7 @@ import org.reflections.scanners.Scanners;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.jcache.JCacheCacheManager;
 import org.springframework.cache.support.NoOpCacheManager;
@@ -58,7 +59,11 @@ public class CacheConfig {
     @Autowired
     private FineractProperties fineractProperties;
 
+    // Ehcache beans only load when Redis is not the active cache backend. With Redis enabled, the
+    // RuntimeDelegatingCacheManager routes all @Cacheable traffic to Redis and the ehcache machinery
+    // is unused — so we skip loading it entirely to avoid accidental parallel cache populations.
     @Bean
+    @ConditionalOnProperty(name = "fineract.cache.redis.enabled", havingValue = "false", matchIfMissing = true)
     public TransactionBoundCacheManager defaultCacheManager(JCacheCacheManager ehCacheManager) {
         SpecifiedCacheSupportingCacheManager cacheManager = new SpecifiedCacheSupportingCacheManager();
         cacheManager.setNoOpCacheManager(new NoOpCacheManager());
@@ -69,6 +74,7 @@ public class CacheConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "fineract.cache.redis.enabled", havingValue = "false", matchIfMissing = true)
     public JCacheCacheManager ehCacheManager() {
         JCacheCacheManager jCacheCacheManager = new JCacheCacheManager();
         jCacheCacheManager.setCacheManager(getInternalEhCacheManager());

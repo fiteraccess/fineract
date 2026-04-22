@@ -23,14 +23,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.cache.CacheApiConstants;
 import org.apache.fineract.infrastructure.cache.CacheEnumerations;
 import org.apache.fineract.infrastructure.cache.data.CacheData;
 import org.apache.fineract.infrastructure.cache.domain.CacheType;
-import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -46,16 +45,19 @@ import org.springframework.stereotype.Component;
  * database on startup and allow user to switch implementation through UI/API
  */
 @Component(value = "runtimeDelegatingCacheManager")
-@RequiredArgsConstructor
 @Slf4j
 public class RuntimeDelegatingCacheManager implements CacheManager, InitializingBean {
 
+    @Autowired(required = false)
     @Qualifier("ehCacheManager")
-    private final CacheManager ehCacheManager;
+    private CacheManager ehCacheManager;
 
+    @Autowired(required = false)
     @Qualifier("defaultCacheManager")
-    private final CacheManager defaultCacheManager;
+    private CacheManager defaultCacheManager;
+
     private CacheManager currentCacheManager;
+    private final NoOpCacheManager noOpCacheManager = new NoOpCacheManager();
 
     @Autowired(required = false)
     @Qualifier("redisCacheManagerWithFallback")
@@ -65,33 +67,58 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
     @Qualifier("ehCacheMaintenanceManager")
     private CacheManager ehCacheMaintenanceManager;
 
-    @Autowired
-    private ConfigurationDomainService configurationDomainService;
+    public RuntimeDelegatingCacheManager() {}
+
+    // Test-only constructor preserving the previous two-arg signature used by existing unit tests.
+    RuntimeDelegatingCacheManager(CacheManager ehCacheManager, CacheManager defaultCacheManager) {
+        this.ehCacheManager = ehCacheManager;
+        this.defaultCacheManager = defaultCacheManager;
+    }
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        currentCacheManager = defaultCacheManager;
-        restorePersistedCacheMode();
+        currentCacheManager = resolveDefaultManager();
+        bootstrapCacheMode();
     }
 
-    private void restorePersistedCacheMode() {
-        try {
-            if (configurationDomainService.isDistributedCacheEnabled() && redisCacheManager != null) {
-                log.info("Restoring persisted cache mode: MULTI_NODE");
-                switchToCache(CacheType.MULTI_NODE);
-            } else if (configurationDomainService.isEhcacheEnabled()) {
-                log.info("Restoring persisted cache mode: SINGLE_NODE");
-                switchToCache(CacheType.SINGLE_NODE);
-            }
-        } catch (Exception e) {
-            log.warn("Could not restore cache mode from DB, starting with NO_CACHE: {}", e.getMessage());
+    private CacheManager resolveDefaultManager() {
+        return defaultCacheManager != null ? defaultCacheManager : noOpCacheManager;
+    }
+
+    /**
+     * Choose an initial cache mode based on which cache managers Spring has wired in.
+     *
+     * <p>
+     * The per-tenant cache setting in {@code c_cache} is intentionally <em>not</em> consulted here: {@code c_cache} is
+     * a tenant-scoped table, but this method runs at bean initialization with no tenant context, so hitting the DB from
+     * here queries an arbitrary DataSource (typically the wrong one) and fails with "relation c_cache does not exist".
+     * </p>
+     *
+     * <p>
+     * The per-tenant DB setting is still honored — {@code TenantAwareTenantIdentifierFilter} and
+     * {@code TenantAwareBasicAuthenticationFilter} invoke {@code switchToCache(...)} on each authenticated request
+     * under the correct tenant context. This bootstrap only provides a sensible default so that cache-dependent
+     * components (e.g. warming jobs, scheduled tasks) have something usable before the first request arrives.
+     * </p>
+     */
+    private void bootstrapCacheMode() {
+        if (redisCacheManager != null) {
+            log.info("Bootstrapping cache mode: MULTI_NODE (Redis enabled)");
+            switchToCache(CacheType.MULTI_NODE);
+        } else if (ehCacheManager != null) {
+            log.info("Bootstrapping cache mode: SINGLE_NODE (ehcache enabled, Redis disabled)");
+            switchToCache(CacheType.SINGLE_NODE);
+        } else {
+            log.info("Bootstrapping cache mode: NO_CACHE (no cache managers configured)");
         }
     }
 
     @Override
     public Cache getCache(final String name) {
-        log.debug("RuntimeDelegatingCacheManager.getCache('{}') using: {}", name, currentCacheManager.getClass().getSimpleName());
-        return currentCacheManager.getCache(name);
+        Cache cache = currentCacheManager.getCache(name);
+        log.debug("RuntimeDelegatingCacheManager.getCache('{}') delegate={} resolved={}", name,
+                currentCacheManager.getClass().getSimpleName(), cache != null);
+        return cache;
     }
 
     @Override
@@ -101,9 +128,9 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
 
     public Collection<CacheData> retrieveAll() {
 
-        final boolean noCacheEnabled = currentCacheManager == defaultCacheManager;
-        final boolean ehCacheEnabled = currentCacheManager == ehCacheManager;
-        final boolean multiNodeEnabled = currentCacheManager == redisCacheManager;
+        final boolean noCacheEnabled = currentCacheManager == defaultCacheManager || currentCacheManager == noOpCacheManager;
+        final boolean ehCacheEnabled = ehCacheManager != null && currentCacheManager == ehCacheManager;
+        final boolean multiNodeEnabled = redisCacheManager != null && currentCacheManager == redisCacheManager;
 
         final EnumOptionData noCacheType = CacheEnumerations.cacheType(CacheType.NO_CACHE);
         final EnumOptionData singleNodeCacheType = CacheEnumerations.cacheType(CacheType.SINGLE_NODE);
@@ -117,7 +144,7 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
     }
 
     public boolean isCachingEnabled() {
-        return currentCacheManager != defaultCacheManager;
+        return currentCacheManager != defaultCacheManager && currentCacheManager != noOpCacheManager;
     }
 
     public Map<String, Object> switchToCache(final CacheType toCacheType) {
@@ -129,12 +156,18 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
                 log.warn("Invalid cache type used");
             }
             case NO_CACHE -> {
-                if (currentCacheManager != defaultCacheManager) {
+                CacheManager target = resolveDefaultManager();
+                if (currentCacheManager != target) {
                     changes.put(CacheApiConstants.CACHE_TYPE_PARAMETER, toCacheType.getValue());
                 }
-                currentCacheManager = defaultCacheManager;
+                currentCacheManager = target;
             }
             case SINGLE_NODE -> {
+                if (ehCacheManager == null) {
+                    throw new GeneralPlatformDomainRuleException("error.msg.cache.single.node.not.available",
+                            "Cannot switch to SINGLE_NODE cache: ehcache is disabled because the server is running in Redis-only mode "
+                                    + "(fineract.cache.redis.enabled=true). Only NO_CACHE and MULTI_NODE are available.");
+                }
                 if (currentCacheManager != ehCacheManager) {
                     changes.put(CacheApiConstants.CACHE_TYPE_PARAMETER, toCacheType.getValue());
                     clearEhCache();
@@ -147,7 +180,9 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
             }
             case MULTI_NODE -> {
                 if (redisCacheManager == null) {
-                    throw new UnsupportedOperationException("Multi-node cache requires Redis. Set fineract.cache.redis.enabled=true");
+                    throw new GeneralPlatformDomainRuleException("error.msg.cache.multi.node.not.available",
+                            "Cannot switch to MULTI_NODE cache: Redis is disabled "
+                                    + "(fineract.cache.redis.enabled=false). Only NO_CACHE and SINGLE_NODE are available.");
                 }
                 if (currentCacheManager != redisCacheManager) {
                     changes.put(CacheApiConstants.CACHE_TYPE_PARAMETER, toCacheType.getValue());
@@ -166,7 +201,9 @@ public class RuntimeDelegatingCacheManager implements CacheManager, Initializing
             return;
         }
 
-        clearEhCacheManager(ehCacheManager);
+        if (ehCacheManager != null) {
+            clearEhCacheManager(ehCacheManager);
+        }
     }
 
     private void clearEhCacheManager(CacheManager cacheManager) {

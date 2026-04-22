@@ -19,73 +19,55 @@
 package org.apache.fineract.infrastructure.cache.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
-import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 import org.springframework.cache.support.SimpleCacheManager;
 
-@ExtendWith(MockitoExtension.class)
 class RuntimeDelegatingCacheManagerTest {
 
-    @Mock
-    private ConfigurationDomainService configurationDomainService;
-
     @Test
-    void afterPropertiesSet_shouldRestoreSingleNodeModeFromDb() throws Exception {
+    void afterPropertiesSet_shouldBootstrapToSingleNodeWhenOnlyEhCachePresent() throws Exception {
         SimpleCacheManager ehCache = createCacheManager("testCache");
         SimpleCacheManager defaultCm = createCacheManager("configByName");
 
         RuntimeDelegatingCacheManager manager = new RuntimeDelegatingCacheManager(ehCache, defaultCm);
-        injectConfigService(manager);
-
-        when(configurationDomainService.isDistributedCacheEnabled()).thenReturn(false);
-        when(configurationDomainService.isEhcacheEnabled()).thenReturn(true);
 
         manager.afterPropertiesSet();
 
         Cache cache = manager.getCache("testCache");
         assertThat(cache).isNotNull();
         assertThat(cache.getName()).isEqualTo("testCache");
+        assertThat(manager.isCachingEnabled()).isTrue();
     }
 
     @Test
-    void afterPropertiesSet_shouldDefaultToNoCacheWhenDbFails() throws Exception {
-        SimpleCacheManager ehCache = createCacheManager("testCache");
+    void afterPropertiesSet_shouldBootstrapToNoCacheWhenEhCacheMissing() throws Exception {
         SimpleCacheManager defaultCm = createCacheManager("configByName");
 
-        RuntimeDelegatingCacheManager manager = new RuntimeDelegatingCacheManager(ehCache, defaultCm);
-        injectConfigService(manager);
-
-        when(configurationDomainService.isDistributedCacheEnabled()).thenThrow(new RuntimeException("DB down"));
+        RuntimeDelegatingCacheManager manager = new RuntimeDelegatingCacheManager(null, defaultCm);
 
         manager.afterPropertiesSet();
 
-        // Should still be in NO_CACHE mode (default) — app doesn't crash
         assertThat(manager.getCacheNames()).contains("configByName");
+        assertThat(manager.isCachingEnabled()).isFalse();
     }
 
     @Test
-    void afterPropertiesSet_shouldRestoreMultiNodeModeWhenAvailable() throws Exception {
+    void afterPropertiesSet_shouldBootstrapToMultiNodeWhenRedisPresent() throws Exception {
         SimpleCacheManager ehCache = createCacheManager("testCache");
         SimpleCacheManager defaultCm = createCacheManager("configByName");
-        SimpleCacheManager twoLevel = createCacheManager("testCache", "l2Cache");
+        SimpleCacheManager redis = createCacheManager("testCache", "l2Cache");
 
         RuntimeDelegatingCacheManager manager = new RuntimeDelegatingCacheManager(ehCache, defaultCm);
-        injectConfigService(manager);
-        injectTwoLevelManager(manager, twoLevel);
-
-        when(configurationDomainService.isDistributedCacheEnabled()).thenReturn(true);
+        injectRedisManager(manager, redis);
 
         manager.afterPropertiesSet();
 
         assertThat(manager.getCacheNames()).contains("testCache", "l2Cache");
+        assertThat(manager.isCachingEnabled()).isTrue();
     }
 
     private SimpleCacheManager createCacheManager(String... cacheNames) {
@@ -95,45 +77,9 @@ class RuntimeDelegatingCacheManagerTest {
         return cm;
     }
 
-    private void injectConfigService(RuntimeDelegatingCacheManager manager) throws Exception {
-        java.lang.reflect.Field field = RuntimeDelegatingCacheManager.class.getDeclaredField("configurationDomainService");
-        field.setAccessible(true);
-        field.set(manager, configurationDomainService);
-    }
-
-    @Test
-    void isCachingEnabled_shouldReturnFalseInNoCacheMode() throws Exception {
-        SimpleCacheManager ehCache = createCacheManager("testCache");
-        SimpleCacheManager defaultCm = createCacheManager("configByName");
-
-        RuntimeDelegatingCacheManager manager = new RuntimeDelegatingCacheManager(ehCache, defaultCm);
-        injectConfigService(manager);
-        when(configurationDomainService.isDistributedCacheEnabled()).thenReturn(false);
-        when(configurationDomainService.isEhcacheEnabled()).thenReturn(false);
-
-        manager.afterPropertiesSet();
-
-        assertThat(manager.isCachingEnabled()).isFalse();
-    }
-
-    @Test
-    void isCachingEnabled_shouldReturnTrueInSingleNodeMode() throws Exception {
-        SimpleCacheManager ehCache = createCacheManager("testCache");
-        SimpleCacheManager defaultCm = createCacheManager("configByName");
-
-        RuntimeDelegatingCacheManager manager = new RuntimeDelegatingCacheManager(ehCache, defaultCm);
-        injectConfigService(manager);
-        when(configurationDomainService.isDistributedCacheEnabled()).thenReturn(false);
-        when(configurationDomainService.isEhcacheEnabled()).thenReturn(true);
-
-        manager.afterPropertiesSet();
-
-        assertThat(manager.isCachingEnabled()).isTrue();
-    }
-
-    private void injectTwoLevelManager(RuntimeDelegatingCacheManager manager, CacheManager twoLevel) throws Exception {
+    private void injectRedisManager(RuntimeDelegatingCacheManager manager, CacheManager redis) throws Exception {
         java.lang.reflect.Field field = RuntimeDelegatingCacheManager.class.getDeclaredField("redisCacheManager");
         field.setAccessible(true);
-        field.set(manager, twoLevel);
+        field.set(manager, redis);
     }
 }
