@@ -71,6 +71,8 @@ import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundEx
 import org.apache.fineract.portfolio.loanproduct.serialization.LoanProductDataValidator;
 import org.apache.fineract.portfolio.rate.domain.Rate;
 import org.apache.fineract.portfolio.rate.domain.RateRepositoryWrapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.annotation.Transactional;
@@ -102,6 +104,8 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
 
     @Transactional
     @Override
+    @Caching(evict = { @CacheEvict(value = "loanProducts", allEntries = true), @CacheEvict(value = "loanProductById", allEntries = true),
+            @CacheEvict(value = "productGLMappings", allEntries = true), @CacheEvict(value = "loanProductConfig", allEntries = true) })
     public CommandProcessingResult createLoanProduct(final JsonCommand command) {
 
         try {
@@ -186,6 +190,8 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
 
     @Transactional
     @Override
+    @Caching(evict = { @CacheEvict(value = "loanProducts", allEntries = true), @CacheEvict(value = "loanProductById", allEntries = true),
+            @CacheEvict(value = "productGLMappings", allEntries = true), @CacheEvict(value = "loanProductConfig", allEntries = true) })
     public CommandProcessingResult updateLoanProduct(final Long loanProductId, final JsonCommand command) {
 
         try {

@@ -19,7 +19,10 @@
 package org.apache.fineract.infrastructure.core.service;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.Map;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.domain.FineractContext;
@@ -76,12 +79,12 @@ public final class ThreadLocalContextUtil {
     // Map is not serializable, but Hashmap is
     public static HashMap<BusinessDateType, LocalDate> getBusinessDates() {
         Assert.notNull(businessDateContext.get(), "Business dates cannot be null!");
-        return businessDateContext.get();
+        return new HashMap<>(businessDateContext.get());
     }
 
     public static void setBusinessDates(HashMap<BusinessDateType, LocalDate> dates) {
         Assert.notNull(dates, "Business dates cannot be null!");
-        businessDateContext.set(dates);
+        businessDateContext.set(normalizeBusinessDates(dates));
     }
 
     public static LocalDate getBusinessDateByType(BusinessDateType businessDateType) {
@@ -126,4 +129,44 @@ public final class ThreadLocalContextUtil {
         actionContext.remove();
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private static HashMap<BusinessDateType, LocalDate> normalizeBusinessDates(HashMap<BusinessDateType, LocalDate> dates) {
+        HashMap<BusinessDateType, LocalDate> normalizedDates = new HashMap<>(dates.size());
+        for (Map.Entry entry : dates.entrySet()) {
+            BusinessDateType businessDateType = normalizeBusinessDateType(entry.getKey());
+            LocalDate localDate = normalizeLocalDate(entry.getValue());
+            if (businessDateType != null && localDate != null) {
+                normalizedDates.put(businessDateType, localDate);
+            }
+        }
+        return normalizedDates;
+    }
+
+    private static BusinessDateType normalizeBusinessDateType(Object businessDateType) {
+        if (businessDateType instanceof BusinessDateType type) {
+            return type;
+        }
+        if (businessDateType instanceof String type) {
+            try {
+                return BusinessDateType.valueOf(type);
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static LocalDate normalizeLocalDate(Object localDate) {
+        if (localDate instanceof LocalDate date) {
+            return date;
+        }
+        if (localDate instanceof String date) {
+            try {
+                return LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
+            } catch (DateTimeParseException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
 }

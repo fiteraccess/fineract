@@ -25,6 +25,7 @@ import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.portfolio.self.registration.SelfServiceApiConstants;
 import org.apache.fineract.useradministration.data.RoleData;
 import org.apache.fineract.useradministration.exception.RoleNotFoundException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -40,6 +41,7 @@ public class RoleReadPlatformServiceImpl implements RoleReadPlatformService {
     }
 
     @Override
+    @Cacheable(value = "roles", key = "'roles'")
     public Collection<RoleData> retrieveAll() {
         final String sql = "select " + this.roleRowMapper.schema() + " order by r.id";
 
@@ -62,6 +64,7 @@ public class RoleReadPlatformServiceImpl implements RoleReadPlatformService {
     }
 
     @Override
+    @Cacheable(value = "roles", key = "'role:' + #id")
     public RoleData retrieveOne(final Long id) {
         try {
             final String sql = "select " + this.roleRowMapper.schema() + " where r.id=?";

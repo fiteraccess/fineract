@@ -52,6 +52,9 @@ import org.springframework.context.annotation.Configuration;
 public class CacheConfig {
 
     public static final String CONFIG_BY_NAME_CACHE_NAME = "configByName";
+    public static final String GL_CLOSURES_BY_OFFICE_ID_CACHE_NAME = "glClosuresByOfficeId";
+    public static final String PAYMENT_TYPES_BY_ID_CACHE_NAME = "paymentTypesById";
+    public static final String SAVINGS_PRODUCT_TO_GL_ACCOUNTS_CACHE_NAME = "savingsProductToGLAccounts";
     @Autowired
     private FineractProperties fineractProperties;
 
@@ -60,7 +63,8 @@ public class CacheConfig {
         SpecifiedCacheSupportingCacheManager cacheManager = new SpecifiedCacheSupportingCacheManager();
         cacheManager.setNoOpCacheManager(new NoOpCacheManager());
         cacheManager.setDelegateCacheManager(ehCacheManager);
-        cacheManager.setSupportedCaches(CONFIG_BY_NAME_CACHE_NAME);
+        cacheManager.setSupportedCaches(CONFIG_BY_NAME_CACHE_NAME, GL_CLOSURES_BY_OFFICE_ID_CACHE_NAME, PAYMENT_TYPES_BY_ID_CACHE_NAME,
+                SAVINGS_PRODUCT_TO_GL_ACCOUNTS_CACHE_NAME);
         return new TransactionBoundCacheManager(cacheManager);
     }
 

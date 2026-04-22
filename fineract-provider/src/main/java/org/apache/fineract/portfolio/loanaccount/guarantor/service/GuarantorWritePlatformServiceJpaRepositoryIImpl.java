@@ -53,6 +53,7 @@ import org.apache.fineract.portfolio.loanaccount.guarantor.exception.DuplicateGu
 import org.apache.fineract.portfolio.loanaccount.guarantor.exception.GuarantorNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.exception.InvalidGuarantorException;
 import org.apache.fineract.portfolio.loanaccount.guarantor.serialization.GuarantorCommandFromApiJsonDeserializer;
+import org.apache.fineract.portfolio.loanproduct.service.LoanProductConfigProvider;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.slf4j.Logger;
@@ -79,6 +80,7 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
     private final SavingsAccountAssembler savingsAccountAssembler;
     private final AccountAssociationsRepository accountAssociationsRepository;
     private final GuarantorDomainService guarantorDomainService;
+    private final LoanProductConfigProvider loanProductConfigProvider;
 
     @Autowired
     public GuarantorWritePlatformServiceJpaRepositoryIImpl(final LoanRepositoryWrapper loanRepositoryWrapper,
@@ -86,7 +88,8 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
             final StaffRepositoryWrapper staffRepositoryWrapper, final GroupRepositoryWrapper groupRepositoryWrapper,
             final GuarantorCommandFromApiJsonDeserializer fromApiJsonDeserializer,
             final CodeValueRepositoryWrapper codeValueRepositoryWrapper, final SavingsAccountAssembler savingsAccountAssembler,
-            final AccountAssociationsRepository accountAssociationsRepository, final GuarantorDomainService guarantorDomainService) {
+            final AccountAssociationsRepository accountAssociationsRepository, final GuarantorDomainService guarantorDomainService,
+            final LoanProductConfigProvider loanProductConfigProvider) {
         this.loanRepositoryWrapper = loanRepositoryWrapper;
         this.clientRepositoryWrapper = clientRepositoryWrapper;
         this.groupRepositoryWrapper = groupRepositoryWrapper;
@@ -97,6 +100,7 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
         this.savingsAccountAssembler = savingsAccountAssembler;
         this.accountAssociationsRepository = accountAssociationsRepository;
         this.guarantorDomainService = guarantorDomainService;
+        this.loanProductConfigProvider = loanProductConfigProvider;
     }
 
     @Override
@@ -126,8 +130,8 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                 GuarantorFundingDetails fundingDetails = new GuarantorFundingDetails(accountAssociations,
                         GuarantorFundStatusType.ACTIVE.getValue(), guarantorCommand.getAmount());
                 guarantorFundingDetails.add(fundingDetails);
-                if (loan.isDisbursed()
-                        || (loan.isApproved() && (loan.getGuaranteeAmount() != null || loan.loanProduct().isHoldGuaranteeFunds()))) {
+                if (loan.isDisbursed() || (loan.isApproved() && (loan.getGuaranteeAmount() != null
+                        || loanProductConfigProvider.getProductConfig(loan.getProductId()).isHoldGuaranteeFunds()))) {
                     this.guarantorDomainService.assignGuarantor(fundingDetails, DateUtils.getBusinessLocalDate());
                     loan.updateGuaranteeAmount(fundingDetails.getAmount());
                 }

@@ -105,6 +105,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSum
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
 import org.apache.fineract.portfolio.savings.exception.InsufficientAccountBalanceException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
+import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -141,6 +142,7 @@ public class InteropServiceImpl implements InteropService {
 
     private final DefaultToApiJsonSerializer<LoanAccountData> toApiJsonSerializer;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
+    private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
 
     private static final class KycMapper implements RowMapper<InteropKycData> {
 
@@ -195,7 +197,8 @@ public class InteropServiceImpl implements InteropService {
     @Override
     @Transactional
     public InteropAccountData getAccountDetails(@NonNull String accountId) {
-        return InteropAccountData.build(validateAndGetSavingAccount(accountId));
+        SavingsAccount account = validateAndGetSavingAccount(accountId);
+        return InteropAccountData.build(account, cacheableSavingsProductConfigService.getSavingsProduct(account.productId()));
     }
 
     @NonNull

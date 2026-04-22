@@ -29,9 +29,12 @@ import org.apache.fineract.infrastructure.cache.domain.PlatformCache;
 import org.apache.fineract.infrastructure.cache.domain.PlatformCacheRepository;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.configuration.data.GlobalConfigurationPropertyData;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.core.config.cache.CacheConfig;
 import org.apache.fineract.useradministration.domain.Permission;
 import org.apache.fineract.useradministration.domain.PermissionRepository;
 import org.apache.fineract.useradministration.exception.PermissionNotFoundException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +46,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     private final PermissionRepository permissionRepository;
     private final GlobalConfigurationRepositoryWrapper globalConfigurationRepository;
     private final PlatformCacheRepository cacheTypeRepository;
+    private final FineractProperties fineractProperties;
 
     @Override
     public boolean isMakerCheckerEnabledForTask(final String taskPermissionCode) {
@@ -130,6 +134,11 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
         return this.cacheTypeRepository.findById(1L).map(PlatformCache::isEhcacheEnabled).orElseThrow();
     }
 
+    @Override
+    public boolean isDistributedCacheEnabled() {
+        return this.cacheTypeRepository.findById(1L).map(PlatformCache::isDistributedCacheEnabled).orElseThrow();
+    }
+
     @Transactional
     @Override
     public void updateCache(final CacheType cacheType) {
@@ -175,6 +184,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('|isSavingsInterestPostingAtCurrentPeriodEnd')")
     public boolean isSavingsInterestPostingAtCurrentPeriodEnd() {
         final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
                 GlobalConfigurationConstants.SAVINGS_INTEREST_POSTING_CURRENT_PERIOD_END);
@@ -182,6 +192,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('|retrieveFinancialYearBeginningMonth')")
     public Integer retrieveFinancialYearBeginningMonth() {
         final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
                 GlobalConfigurationConstants.FINANCIAL_YEAR_BEGINNING_MONTH);
@@ -362,6 +373,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('|retrievePivotDateConfig')")
     public boolean retrievePivotDateConfig() {
         final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
                 GlobalConfigurationConstants.ALLOW_BACKDATED_TRANSACTION_BEFORE_INTEREST_POSTING);
@@ -377,6 +389,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('|retrieveRelaxingDaysConfigForPivotDate')")
     public Long retrieveRelaxingDaysConfigForPivotDate() {
         final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
                 GlobalConfigurationConstants.ALLOW_BACKDATED_TRANSACTION_BEFORE_INTEREST_POSTING_DATE_FOR_DAYS);
@@ -563,5 +576,13 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     @Override
     public boolean isForcePasswordResetOnFirstLoginEnabled() {
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.FORCE_PASSWORD_RESET_ON_FIRST_LOGIN).isEnabled();
+    }
+
+    @Override
+    public boolean isSynapseInterestPostingEnabled() {
+        if (fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isForceEnabled()) {
+            return true;
+        }
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING).isEnabled();
     }
 }

@@ -32,9 +32,11 @@ import org.apache.fineract.infrastructure.configuration.domain.GlobalConfigurati
 import org.apache.fineract.infrastructure.configuration.domain.GlobalConfigurationRepositoryWrapper;
 import org.apache.fineract.infrastructure.configuration.service.MoneyHelperInitializationService;
 import org.apache.fineract.infrastructure.core.boot.FineractProfiles;
+import org.apache.fineract.infrastructure.core.config.cache.CacheConfig;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -66,6 +68,7 @@ public class InternalConfigurationsApiResource implements InitializingBean {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
+    @CacheEvict(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, allEntries = true)
     public Response updateGlobalConfiguration(@PathParam("configName") String configName, @PathParam("configValue") Long configValue) {
         log.warn("------------------------------------------------------------");
         log.warn("                                                            ");

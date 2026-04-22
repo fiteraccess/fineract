@@ -47,6 +47,8 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariations;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanTermVariationsRepository;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.transaction.annotation.Transactional;
 
 @AllArgsConstructor
@@ -58,6 +60,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
     private final LoanAssembler loanAssembler;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final LoanScheduleService loanScheduleService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public CommandProcessingResult createInterestPause(final ExternalId loanExternalId, final String startDateString,
@@ -66,7 +69,8 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         final LocalDate endDate = parseDate(endDateString, dateFormat, locale);
         final Loan loan = loanAssembler.assembleFrom(loanExternalId, false);
 
-        return processInterestPause(loan, startDate, endDate, dateFormat, locale);
+        return processInterestPause(loan, startDate, endDate, dateFormat, locale,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     @Override
@@ -76,7 +80,8 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         final LocalDate endDate = parseDate(endDateString, dateFormat, locale);
         final Loan loan = loanAssembler.assembleFrom(loanId, false);
 
-        return processInterestPause(loan, startDate, endDate, dateFormat, locale);
+        return processInterestPause(loan, startDate, endDate, dateFormat, locale,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     @Override
@@ -114,7 +119,8 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         loanTermVariationsRepository.delete(variation);
         loan.getLoanTermVariations().remove(variation);
 
-        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan);
+        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         businessEventNotifierService.notifyPostBusinessEvent(new LoanScheduleVariationsDeletedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
@@ -141,7 +147,8 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
 
         LoanTermVariations updatedVariation = loanTermVariationsRepository.save(variation);
 
-        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan);
+        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         businessEventNotifierService.notifyPostBusinessEvent(new LoanScheduleVariationsAddedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
@@ -151,7 +158,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
     }
 
     private CommandProcessingResult processInterestPause(final Loan loan, final LocalDate startDate, final LocalDate endDate,
-            String dateFormat, String locale) {
+            String dateFormat, String locale, CacheableLoanProductConfig productConfig) {
         validateActiveLoan(loan);
         validateInterestPauseDates(loan, startDate, endDate, dateFormat, locale, null);
 
@@ -161,7 +168,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         final LoanTermVariations savedVariation = loanTermVariationsRepository.saveAndFlush(variation);
         loan.getLoanTermVariations().add(savedVariation);
 
-        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan);
+        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan, productConfig);
 
         businessEventNotifierService.notifyPostBusinessEvent(new LoanScheduleVariationsAddedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));

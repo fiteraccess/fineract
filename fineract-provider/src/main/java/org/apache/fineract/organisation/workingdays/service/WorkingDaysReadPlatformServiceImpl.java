@@ -29,6 +29,7 @@ import org.apache.fineract.organisation.workingdays.data.WorkingDaysData;
 import org.apache.fineract.organisation.workingdays.domain.RepaymentRescheduleType;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysEnumerations;
 import org.apache.fineract.organisation.workingdays.exception.WorkingDaysNotFoundException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -72,6 +73,7 @@ public class WorkingDaysReadPlatformServiceImpl implements WorkingDaysReadPlatfo
     }
 
     @Override
+    @Cacheable(value = "workingDays", key = "'working_day'")
     public WorkingDaysData retrieve() {
         // Check whether template is enabled or not?
         try {

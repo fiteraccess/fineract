@@ -49,6 +49,9 @@ import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeChargePaymentDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTaxDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTransactionDTO;
 import org.apache.fineract.portfolio.savings.domain.interest.EndOfDayBalance;
 import org.apache.fineract.portfolio.savings.domain.interest.SavingsAccountTransactionDetailsForPostingPeriod;
 import org.apache.fineract.portfolio.savings.service.SavingsEnumerations;
@@ -447,6 +450,10 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return this.refNo;
     }
 
+    public void setRefNo(final String refNo) {
+        this.refNo = refNo;
+    }
+
     public PaymentDetail getPaymentDetail() {
         return this.paymentDetail;
     }
@@ -600,6 +607,26 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
     public boolean hasNotAmount(final Money amountToCheck) {
         final Money transactionAmount = getAmount(amountToCheck.getCurrency());
         return transactionAmount.isNotEqualTo(amountToCheck);
+    }
+
+    public SavingsAccountingBridgeTransactionDTO toAccountingBridgeDTO(final String currencyCode) {
+        final SavingsAccountTransactionEnumData transactionType = SavingsEnumerations.transactionType(this.typeOf);
+        final List<SavingsAccountingBridgeChargePaymentDTO> savingsChargesPaidData = new ArrayList<>();
+        for (final SavingsAccountChargePaidBy chargePaidBy : this.savingsAccountChargesPaid) {
+            savingsChargesPaidData.add(new SavingsAccountingBridgeChargePaymentDTO(
+                    chargePaidBy.getSavingsAccountCharge().getCharge().getId(), chargePaidBy.getSavingsAccountCharge().getId(),
+                    chargePaidBy.getSavingsAccountCharge().getCharge().isPenalty(), chargePaidBy.getAmount()));
+        }
+        final List<SavingsAccountingBridgeTaxDTO> taxData = new ArrayList<>();
+        for (final SavingsAccountTransactionTaxDetails taxDetails : this.taxDetails) {
+            taxData.add(new SavingsAccountingBridgeTaxDTO(taxDetails.getAmount(),
+                    taxDetails.getTaxComponent().getDebitAccount() == null ? null : taxDetails.getTaxComponent().getDebitAccount().getId(),
+                    taxDetails.getTaxComponent().getCreditAccount() == null ? null
+                            : taxDetails.getTaxComponent().getCreditAccount().getId()));
+        }
+        return new SavingsAccountingBridgeTransactionDTO(getId(), this.office.getId(), transactionType, isReversed(), getTransactionDate(),
+                currencyCode, this.amount, this.overdraftAmount,
+                this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData);
     }
 
     public Map<String, Object> toMapData(final String currencyCode) {

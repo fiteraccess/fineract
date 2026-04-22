@@ -30,6 +30,7 @@ import org.apache.fineract.organisation.workingdays.data.WorkingDaysUpdateReques
 import org.apache.fineract.organisation.workingdays.data.WorkingDaysUpdateRequestValidator;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -40,6 +41,7 @@ public class WorkingDaysWritePlatformServiceJpaRepositoryImpl implements Working
 
     @Transactional
     @Override
+    @CacheEvict(value = "workingDays", allEntries = true)
     public Map<String, Object> updateWorkingDays(WorkingDaysUpdateRequest request) {
         String recurrence = "";
         RRule rrule = null;

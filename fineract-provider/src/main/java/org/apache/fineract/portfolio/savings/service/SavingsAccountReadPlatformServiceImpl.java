@@ -257,6 +257,21 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         return savingsAccountDataList;
     }
 
+    @Override
+    public SavingsAccountData retrieveSavingsDataForInterestPosting(final Long accountId) {
+        String sql = "select " + this.savingAccountMapperForInterestPosting.schema() + "where sa.id = ? "
+                + "order by tr.transaction_date, tr." + CREATED_DATE_DB_FIELD + ", tr.created_date, tr.id";
+
+        List<SavingsAccountData> results = this.jdbcTemplate.query(sql, this.savingAccountMapperForInterestPosting,
+                new Object[] { accountId });
+        if (results.isEmpty()) {
+            return null;
+        }
+        SavingsAccountData account = results.get(0);
+        this.savingAccountAssembler.assembleSavings(account);
+        return account;
+    }
+
     private static final class SavingAccountMapperForInterestPosting implements ResultSetExtractor<List<SavingsAccountData>> {
 
         private final String schemaSql;

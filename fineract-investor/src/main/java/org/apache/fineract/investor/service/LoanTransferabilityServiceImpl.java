@@ -50,7 +50,7 @@ public class LoanTransferabilityServiceImpl implements LoanTransferabilityServic
     }
 
     private boolean shouldValidateTransferable(final Loan loan, final ExternalAssetOwnerTransfer externalAssetOwnerTransfer) {
-        if (!delayedSettlementAttributeService.isEnabled(loan.getLoanProduct().getId())) {
+        if (!delayedSettlementAttributeService.isEnabled(loan.getProductId())) {
             // When delayed settlement is disabled, asset is directly sold to investor. Need to validate.
             return true;
         }

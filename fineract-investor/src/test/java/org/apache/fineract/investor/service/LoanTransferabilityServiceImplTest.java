@@ -29,7 +29,6 @@ import org.apache.fineract.investor.data.ExternalTransferSubStatus;
 import org.apache.fineract.investor.domain.ExternalAssetOwnerTransfer;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -57,13 +56,11 @@ public class LoanTransferabilityServiceImplTest {
         // given
         TestContext testContext = new TestContext();
 
-        LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
-        when(loanProduct.getId()).thenReturn(LOAN_PRODUCT_ID);
         LoanSummary loanSummary = Mockito.mock(LoanSummary.class);
         when(loanSummary.getTotalOutstanding()).thenReturn(loanOutstandingAmount);
 
         Loan loan = Mockito.mock(Loan.class);
-        when(loan.getLoanProduct()).thenReturn(loanProduct);
+        when(loan.getProductId()).thenReturn(LOAN_PRODUCT_ID);
         when(loan.getSummary()).thenReturn(loanSummary);
         when(testContext.delayedSettlementAttributeService.isEnabled(LOAN_PRODUCT_ID)).thenReturn(false);
 
@@ -84,13 +81,11 @@ public class LoanTransferabilityServiceImplTest {
         // given
         TestContext testContext = new TestContext();
 
-        LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
-        when(loanProduct.getId()).thenReturn(LOAN_PRODUCT_ID);
         LoanSummary loanSummary = Mockito.mock(LoanSummary.class);
         when(loanSummary.getTotalOutstanding()).thenReturn(loanOutstandingAmount);
 
         Loan loan = Mockito.mock(Loan.class);
-        when(loan.getLoanProduct()).thenReturn(loanProduct);
+        when(loan.getProductId()).thenReturn(LOAN_PRODUCT_ID);
         when(loan.getSummary()).thenReturn(loanSummary);
         when(testContext.delayedSettlementAttributeService.isEnabled(LOAN_PRODUCT_ID)).thenReturn(true);
 
@@ -109,11 +104,8 @@ public class LoanTransferabilityServiceImplTest {
         // given
         TestContext testContext = new TestContext();
 
-        LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
-        when(loanProduct.getId()).thenReturn(LOAN_PRODUCT_ID);
-
         Loan loan = Mockito.mock(Loan.class);
-        when(loan.getLoanProduct()).thenReturn(loanProduct);
+        when(loan.getProductId()).thenReturn(LOAN_PRODUCT_ID);
         when(testContext.delayedSettlementAttributeService.isEnabled(LOAN_PRODUCT_ID)).thenReturn(true);
 
         ExternalAssetOwnerTransfer externalAssetOwnerTransfer = new ExternalAssetOwnerTransfer();

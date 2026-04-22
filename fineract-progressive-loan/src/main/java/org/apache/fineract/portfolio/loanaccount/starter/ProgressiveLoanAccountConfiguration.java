@@ -42,6 +42,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanTransactionValidator;
 import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanTransactionValidatorImpl;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationEventPublisher;
@@ -59,11 +60,12 @@ public class ProgressiveLoanAccountConfiguration {
             ExternalIdFactory externalIdFactory, LoanCapitalizedIncomeBalanceRepository capitalizedIncomeBalanceRepository,
             ReprocessLoanTransactionsService reprocessLoanTransactionsService, LoanBalanceService loanBalanceService,
             LoanLifecycleStateMachine loanLifecycleStateMachine, BusinessEventNotifierService businessEventNotifierService,
-            CodeValueRepository codeValueRepository, LoanScheduleService loanScheduleService, ApplicationEventPublisher eventPublisher) {
+            CodeValueRepository codeValueRepository, LoanScheduleService loanScheduleService, ApplicationEventPublisher eventPublisher,
+            CacheableLoanProductConfigService cacheableLoanProductConfigService) {
         return new CapitalizedIncomeWritePlatformServiceImpl(loanTransactionValidator, loanAssembler, loanTransactionRepository,
                 paymentDetailWritePlatformService, journalEntryPoster, externalIdFactory, capitalizedIncomeBalanceRepository,
                 reprocessLoanTransactionsService, loanBalanceService, loanLifecycleStateMachine, businessEventNotifierService,
-                codeValueRepository, loanScheduleService, eventPublisher);
+                codeValueRepository, loanScheduleService, eventPublisher, cacheableLoanProductConfigService);
     }
 
     @Bean

@@ -112,6 +112,54 @@ public final class SavingsAccountSummary {
                 .minus(totalOverdraftInterestDerived).minus(totalWithholdTax).getAmount();
     }
 
+    /**
+     * Incrementally updates the summary fields based on a single transaction in O(1) time. This avoids iterating over
+     * all historical transactions. The method computes the delta for the given transaction and applies it to the
+     * current summary state.
+     *
+     * @param currency
+     *            the account currency
+     * @param wrapper
+     *            the summary wrapper used to compute the delta
+     * @param transaction
+     *            the single transaction to process
+     */
+    public void updateSummaryWithTransaction(final MonetaryCurrency currency, final SavingsAccountTransactionSummaryWrapper wrapper,
+            final SavingsAccountTransaction transaction) {
+        final SavingsAccountSummaryDelta delta = wrapper.computeIncrementalDelta(currency, transaction);
+        if (delta == null || delta.isZero()) {
+            return;
+        }
+        applyDelta(currency, delta);
+
+        // Update interest posted till date if this is an interest posting or overdraft interest transaction
+        if ((transaction.isInterestPostingAndNotReversed() || transaction.isOverdraftInterestAndNotReversed())
+                && !transaction.isReversalTransaction()) {
+            setInterestPostedTillDate(transaction.getTransactionDate());
+        }
+    }
+
+    /**
+     * Applies a pre-computed delta to the summary fields. All arithmetic is done using {@link Money} to ensure correct
+     * currency handling.
+     */
+    private void applyDelta(final MonetaryCurrency currency, final SavingsAccountSummaryDelta delta) {
+        this.totalDeposits = Money.of(currency, this.totalDeposits).plus(delta.getTotalDeposits()).getAmount();
+        this.totalWithdrawals = Money.of(currency, this.totalWithdrawals).plus(delta.getTotalWithdrawals()).getAmount();
+        this.totalInterestPosted = Money.of(currency, this.totalInterestPosted).plus(delta.getTotalInterestPosted()).getAmount();
+        this.totalWithdrawalFees = Money.of(currency, this.totalWithdrawalFees).plus(delta.getTotalWithdrawalFees()).getAmount();
+        this.totalAnnualFees = Money.of(currency, this.totalAnnualFees).plus(delta.getTotalAnnualFees()).getAmount();
+        this.totalFeeCharge = Money.of(currency, this.totalFeeCharge).plus(delta.getTotalFeeCharge()).getAmount();
+        this.totalPenaltyCharge = Money.of(currency, this.totalPenaltyCharge).plus(delta.getTotalPenaltyCharge()).getAmount();
+        this.totalFeeChargesWaived = Money.of(currency, this.totalFeeChargesWaived).plus(delta.getTotalFeeChargesWaived()).getAmount();
+        this.totalPenaltyChargesWaived = Money.of(currency, this.totalPenaltyChargesWaived).plus(delta.getTotalPenaltyChargesWaived())
+                .getAmount();
+        this.totalOverdraftInterestDerived = Money.of(currency, this.totalOverdraftInterestDerived)
+                .plus(delta.getTotalOverdraftInterestDerived()).getAmount();
+        this.totalWithholdTax = Money.of(currency, this.totalWithholdTax).plus(delta.getTotalWithholdTax()).getAmount();
+        this.accountBalance = Money.of(currency, this.accountBalance).plus(delta.getAccountBalance()).getAmount();
+    }
+
     public void updateSummaryWithPivotConfig(final MonetaryCurrency currency, final SavingsAccountTransactionSummaryWrapper wrapper,
             final SavingsAccountTransaction transaction, final List<SavingsAccountTransaction> savingsAccountTransactions) {
 
@@ -287,6 +335,10 @@ public final class SavingsAccountSummary {
         return this.lastInterestCalculationDate;
     }
 
+    public void setLastInterestCalculationDate(final LocalDate date) {
+        this.lastInterestCalculationDate = date;
+    }
+
     public void setInterestPostedTillDate(final LocalDate date) {
         this.interestPostedTillDate = date;
     }
@@ -307,16 +359,32 @@ public final class SavingsAccountSummary {
         return this.totalWithdrawals;
     }
 
+    public void setTotalWithdrawals(BigDecimal totalWithdrawals) {
+        this.totalWithdrawals = totalWithdrawals;
+    }
+
     public BigDecimal getTotalDeposits() {
         return this.totalDeposits;
+    }
+
+    public void setTotalDeposits(BigDecimal totalDeposits) {
+        this.totalDeposits = totalDeposits;
     }
 
     public BigDecimal getTotalWithdrawalFees() {
         return this.totalWithdrawalFees;
     }
 
+    public void setTotalWithdrawalFees(BigDecimal totalWithdrawalFees) {
+        this.totalWithdrawalFees = totalWithdrawalFees;
+    }
+
     public BigDecimal getTotalFeeCharge() {
         return this.totalFeeCharge;
+    }
+
+    public void setTotalFeeCharge(BigDecimal totalFeeCharge) {
+        this.totalFeeCharge = totalFeeCharge;
     }
 
     public BigDecimal getTotalPenaltyCharge() {

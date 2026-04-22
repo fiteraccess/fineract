@@ -52,6 +52,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanSchedul
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper;
 import org.apache.fineract.portfolio.loanproduct.calc.data.ProgressiveLoanInterestScheduleModel;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.ObjectUtils;
@@ -65,6 +66,7 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
     private final LoanTermVariationsMapper loanMapper;
     private final InterestScheduleModelRepositoryWrapper modelRepository;
     private final LoanTransactionService loanTransactionService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public boolean canProcessLatestTransactionOnly(Loan loan, LoanTransaction loanTransaction,
@@ -141,7 +143,8 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
 
         final MathContext mc = MoneyHelper.getMathContext();
 
-        final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(generatorDTO, loan);
+        final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(generatorDTO, loan,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = getTransactionProcessor(
                 loan.getTransactionProcessingStrategyCode());
@@ -158,7 +161,8 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
             final MathContext mc = MoneyHelper.getMathContext();
 
             final InterestMethod interestMethod = loan.getLoanRepaymentScheduleDetail().getInterestMethod();
-            final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan);
+            final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
             final LoanScheduleGenerator loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory()
                     .create(loanApplicationTerms.getLoanScheduleType(), interestMethod);

@@ -41,6 +41,7 @@ import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterExc
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -67,7 +68,7 @@ public class VariableLoanScheduleFromApiJsonValidator {
         this.fromApiJsonHelper = fromApiJsonHelper;
     }
 
-    public void validateSchedule(final String json, final Loan loan) {
+    public void validateSchedule(final String json, final Loan loan, final CacheableLoanProductConfig productConfig) {
         if (StringUtils.isBlank(json)) {
             throw new InvalidJsonException();
         }
@@ -85,7 +86,7 @@ public class VariableLoanScheduleFromApiJsonValidator {
         }
 
         final JsonElement element = this.fromApiJsonHelper.parse(json);
-        if (loan.loanProduct().isAllowVariabeInstallments()) {
+        if (productConfig.isAllowVariableInstallments()) {
             if (element.isJsonObject() && this.fromApiJsonHelper.parameterExists(LoanApiConstants.exceptionParamName, element)) {
                 final JsonObject topLevelJsonElement = element.getAsJsonObject();
                 final String dateFormat = this.fromApiJsonHelper.extractDateFormatParameter(topLevelJsonElement);

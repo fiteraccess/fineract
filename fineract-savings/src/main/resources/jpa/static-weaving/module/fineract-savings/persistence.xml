@@ -109,6 +109,7 @@
         <class>org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionTaxDetails</class>
         <class>org.apache.fineract.portfolio.savings.domain.SavingsOfficerAssignmentHistory</class>
         <class>org.apache.fineract.portfolio.savings.domain.SavingsProduct</class>
+        <class>org.apache.fineract.portfolio.savings.domain.SavingsAccountDailyBalance</class>
 
         <!-- Charge Module Entities -->
         <class>org.apache.fineract.portfolio.charge.domain.Charge</class>

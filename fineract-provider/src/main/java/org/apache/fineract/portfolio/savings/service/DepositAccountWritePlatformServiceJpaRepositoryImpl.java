@@ -53,7 +53,6 @@ import org.apache.fineract.infrastructure.core.exception.PlatformServiceUnavaila
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
-import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.organisation.office.domain.Office;
@@ -91,6 +90,7 @@ import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.data.DepositAccountTransactionDataValidator;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeDataValidator;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountDomainService;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransaction;
@@ -105,6 +105,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrap
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
 import org.apache.fineract.portfolio.savings.exception.DepositAccountTransactionNotAllowedException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountTransactionNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
@@ -123,7 +124,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
     private final DepositAccountTransactionDataValidator depositAccountTransactionDataValidator;
     private final SavingsAccountChargeDataValidator savingsAccountChargeDataValidator;
     private final PaymentDetailWritePlatformService paymentDetailWritePlatformService;
-    private final ApplicationCurrencyRepositoryWrapper applicationCurrencyRepositoryWrapper;
     private final JournalEntryWritePlatformService journalEntryWritePlatformService;
     private final DepositAccountDomainService depositAccountDomainService;
     private final NoteRepository noteRepository;
@@ -132,12 +132,12 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
     private final SavingsAccountChargeRepositoryWrapper savingsAccountChargeRepository;
     private final AccountAssociationsReadPlatformService accountAssociationsReadPlatformService;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-    private final DepositAccountReadPlatformService depositAccountReadPlatformService;
     private final CalendarInstanceRepository calendarInstanceRepository;
     private final ConfigurationDomainService configurationDomainService;
     private final HolidayRepositoryWrapper holidayRepository;
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository;
+    private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
 
     @Transactional
     @Override
@@ -907,10 +907,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
         final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
         final LocalDate postInterestOnDate = null;
-        final Set<Long> existingTransactionIds = new HashSet<>();
-        final Set<Long> existingReversedTransactionIds = new HashSet<>();
-        updateExistingTransactionsDetails(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
-
         final SavingsAccountTransaction newTransferTransaction = SavingsAccountTransaction.initiateTransfer(savingsAccount,
                 savingsAccount.office(), transferDate);
         savingsAccount.addTransaction(newTransferTransaction);
@@ -924,7 +920,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         this.savingsAccountTransactionRepository.save(newTransferTransaction);
         this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
 
-        postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
+        postJournalEntriesForTransaction(savingsAccount, newTransferTransaction);
 
         return newTransferTransaction;
     }
@@ -940,10 +936,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
         final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
 
-        final Set<Long> existingTransactionIds = new HashSet<>();
-        final Set<Long> existingReversedTransactionIds = new HashSet<>();
-        updateExistingTransactionsDetails(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
-
         final SavingsAccountTransaction withdrawtransferTransaction = SavingsAccountTransaction.withdrawTransfer(savingsAccount,
                 savingsAccount.office(), transferDate);
         savingsAccount.addTransaction(withdrawtransferTransaction);
@@ -958,7 +950,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         this.savingsAccountTransactionRepository.save(withdrawtransferTransaction);
         this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
 
-        postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
+        postJournalEntriesForTransaction(savingsAccount, withdrawtransferTransaction);
 
         return withdrawtransferTransaction;
     }
@@ -981,10 +973,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
         final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
 
-        final Set<Long> existingTransactionIds = new HashSet<>();
-        final Set<Long> existingReversedTransactionIds = new HashSet<>();
-        updateExistingTransactionsDetails(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
-
         final SavingsAccountTransaction acceptTransferTransaction = SavingsAccountTransaction.approveTransfer(savingsAccount,
                 acceptedInOffice, transferDate);
         savingsAccount.addTransaction(acceptTransferTransaction);
@@ -1002,7 +990,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         this.savingsAccountTransactionRepository.save(acceptTransferTransaction);
         this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
 
-        postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds);
+        postJournalEntriesForTransaction(savingsAccount, acceptTransferTransaction);
 
         return acceptTransferTransaction;
     }
@@ -1358,6 +1346,12 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds);
     }
 
+    private void postJournalEntriesForTransaction(final SavingsAccount account, final SavingsAccountTransaction transaction) {
+        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account,
+                List.of(transaction), false);
+        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
+    }
+
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,
             Set<Long> existingReversedTransactionIds) {
         existingTransactionIds.addAll(account.findExistingTransactionIds());
@@ -1368,8 +1362,10 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
             final Set<Long> existingReversedTransactionIds) {
 
         boolean isAccountTransfer = false;
-        final Map<String, Object> accountingBridgeData = savingsAccount.deriveAccountingBridgeData(savingsAccount.getCurrency().getCode(),
-                existingTransactionIds, existingReversedTransactionIds, isAccountTransfer, false);
+        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(savingsAccount,
+                SavingsAccountingBridgeDataHelper.findNewTransactions(savingsAccount, existingTransactionIds,
+                        existingReversedTransactionIds, false),
+                isAccountTransfer);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
     }
 

@@ -185,11 +185,11 @@ public class RecurringDepositAccount extends SavingsAccount {
         BigDecimal recurringAmount = getRecurringDetail().mandatoryRecommendedDepositAmount();
         Integer numberOfDepositPeriods = depositScheduleInstallments().size();
         if (this.accountTermAndPreClosure.depositPeriod() != null && recurringAmount != null && numberOfDepositPeriods != null) {
-            BigDecimal depositAmount = Money.of(product.currency(), recurringAmount).multipliedBy(numberOfDepositPeriods)
+            BigDecimal depositAmount = Money.of(this.getCurrency(), recurringAmount).multipliedBy(numberOfDepositPeriods)
                     .plus(this.minRequiredOpeningBalance).getAmount();
             accountTermAndPreClosure.updateDepositAmount(depositAmount);
         } else if (accountTermAndPreClosure.depositAmount() == null) {
-            accountTermAndPreClosure.updateDepositAmount(Money.zero(product.currency()).getAmount());
+            accountTermAndPreClosure.updateDepositAmount(Money.zero(this.getCurrency()).getAmount());
         }
     }
 
@@ -1094,11 +1094,10 @@ public class RecurringDepositAccount extends SavingsAccount {
         return this.accountTermAndPreClosure.isTransferToSavingsOnClosure();
     }
 
-    public RecurringDepositAccount reInvest(BigDecimal depositAmount) {
+    public RecurringDepositAccount reInvest(BigDecimal depositAmount, SavingsProduct product) {
 
         final DepositAccountTermAndPreClosure newAccountTermAndPreClosure = this.accountTermAndPreClosure.copy(depositAmount);
         final DepositAccountRecurringDetail recurringDetail = this.recurringDetail.copy();
-        final SavingsProduct product = this.product;
         final InterestRateChart productChart = product.applicableChart(getClosedOnDate());
         final DepositAccountInterestRateChart newChart = DepositAccountInterestRateChart.from(productChart);
         final String accountNumber = null;
@@ -1255,6 +1254,13 @@ public class RecurringDepositAccount extends SavingsAccount {
     public void loadLazyCollections() {
         this.depositScheduleInstallments.size();
         super.loadLazyCollections();
+        this.chart.getId();
+    }
+
+    @Override
+    public void loadLazyCollectionsLightweight() {
+        this.depositScheduleInstallments.size();
+        super.loadLazyCollectionsLightweight();
         this.chart.getId();
     }
 

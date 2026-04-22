@@ -82,6 +82,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
 import org.apache.fineract.portfolio.loanaccount.service.schedule.LoanScheduleComponent;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -101,6 +102,7 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
     private final PlatformSecurityContext platformSecurityContext;
     @Qualifier("loanRescheduleRequestDataValidator")
     private final LoanRescheduleRequestDataValidator loanRescheduleRequestDataValidator;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final LoanRescheduleRequestRepository loanRescheduleRequestRepository;
     private final LoanRepaymentScheduleHistoryRepository loanRepaymentScheduleHistoryRepository;
     private final LoanScheduleHistoryWritePlatformService loanScheduleHistoryWritePlatformService;
@@ -138,7 +140,8 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
 
             // validate the request in the JsonCommand object passed as
             // parameter
-            this.loanRescheduleRequestDataValidator.validateForCreateAction(jsonCommand, loan);
+            this.loanRescheduleRequestDataValidator.validateForCreateAction(jsonCommand, loan,
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
             // get the reschedule reason code value id from the JsonCommand
             // object
@@ -357,7 +360,7 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
                     .createLoanScheduleArchive(loan.getRepaymentScheduleInstallments(), loan, loanRescheduleRequest);
 
             final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO,
-                    loan);
+                    loan, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
             LocalDate rescheduleFromDate = null;
             List<LoanTermVariations> activeLoanTermVariations = loan.getActiveLoanTermVariations();

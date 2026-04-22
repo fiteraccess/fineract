@@ -31,6 +31,8 @@ import org.apache.fineract.infrastructure.event.business.service.BusinessEventNo
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -40,6 +42,7 @@ public class CheckLoanRepaymentOverdueBusinessStep implements LoanCOBBusinessSte
 
     private final ConfigurationDomainService configurationDomainService;
     private final BusinessEventNotifierService businessEventNotifierService;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public Loan execute(Loan loan) {
@@ -48,9 +51,10 @@ public class CheckLoanRepaymentOverdueBusinessStep implements LoanCOBBusinessSte
         if (!nonDisbursedStatuses.contains(loan.getStatus()) && loan.getSummary().getTotalOutstanding().compareTo(BigDecimal.ZERO) > 0) {
             log.debug("start processing loan repayment overdue business step for loan with Id [{}]", loan.getId());
             Long numberOfDaysAfterDueDateToRaiseEvent = configurationDomainService.retrieveRepaymentOverdueDays();
-            if (loan.getLoanProduct().getOverDueDaysForRepaymentEvent() != null) {
-                if (loan.getLoanProduct().getOverDueDaysForRepaymentEvent() > 0) {
-                    numberOfDaysAfterDueDateToRaiseEvent = loan.getLoanProduct().getOverDueDaysForRepaymentEvent().longValue();
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
+            if (productConfig.getOverDueDaysForRepaymentEvent() != null) {
+                if (productConfig.getOverDueDaysForRepaymentEvent() > 0) {
+                    numberOfDaysAfterDueDateToRaiseEvent = productConfig.getOverDueDaysForRepaymentEvent().longValue();
                 }
             }
             final LocalDate currentDate = DateUtils.getBusinessLocalDate();

@@ -91,6 +91,8 @@ public class FineractProperties {
 
     private RetryProperties retry;
 
+    private FineractSynapseProperties synapse;
+
     @Getter
     @Setter
     public static class FineractTenantProperties {
@@ -597,6 +599,22 @@ public class FineractProperties {
 
     @Getter
     @Setter
+    public static class FineractRedisProperties {
+
+        private boolean enabled;
+        private String host;
+        private int port;
+        private String password;
+        private int database;
+        private long defaultTtlSeconds;
+        private int poolMinIdle = 2;
+        private int poolMaxIdle = 8;
+        private int poolMaxActive = 16;
+        private boolean ssl = false;
+    }
+
+    @Getter
+    @Setter
     public static class FineractModulesProperties {
 
         private FineractInvestorModuleProperties investor;
@@ -662,6 +680,7 @@ public class FineractProperties {
 
         private FineractCacheDetails defaultTemplate;
         private Map<String, FineractCacheDetails> customTemplates = new HashMap<>();
+        private FineractRedisProperties redis;
     }
 
     @Getter
@@ -708,5 +727,24 @@ public class FineractProperties {
         private List<String> allowedHeaders;
         private List<String> exposedHeaders;
         private boolean allowCredentials;
+    }
+
+    @Getter
+    @Setter
+    public static class FineractSynapseProperties {
+
+        private boolean enabled;
+        private boolean forceEnabled;
+        private String baseUrl;
+        private String batchEndpoint;
+        private long connectTimeoutMs;
+        private long readTimeoutMs;
+        private int retryMaxAttempts;
+        private long retryBackoffMs;
+        private String apiKey;
+        private int outboxPageSize = 200;
+        private int outboxThreadPoolSize = 4;
+        private int outboxRetentionDays = 30;
+        private int outboxStaleDispatchedMinutes = 5;
     }
 }

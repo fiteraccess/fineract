@@ -168,7 +168,7 @@ public class SavingsAccountChargeAssembler {
         final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
                 .resource(SAVINGS_ACCOUNT_RESOURCE_NAME);
-        boolean isOneWithdrawalPresent = false;
+
         boolean isOneAnnualPresent = false;
         for (SavingsAccountCharge charge : charges) {
             if (!charge.hasCurrencyCodeOf(productCurrencyCode)) {

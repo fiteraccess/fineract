@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.account.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -38,23 +39,23 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 @Getter
 public class AccountTransferTransaction extends AbstractPersistableCustom<Long> {
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_transfer_details_id", nullable = true)
     private AccountTransferDetails accountTransferDetails;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "from_savings_transaction_id", nullable = true)
     private SavingsAccountTransaction fromSavingsTransaction;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "to_savings_transaction_id", nullable = true)
     private SavingsAccountTransaction toSavingsTransaction;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "to_loan_transaction_id", nullable = true)
     private LoanTransaction toLoanTransaction;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "from_loan_transaction_id", nullable = true)
     private LoanTransaction fromLoanTransaction;
 

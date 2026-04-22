@@ -108,6 +108,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
 import org.apache.fineract.portfolio.savings.domain.interest.SavingsAccountTransactionDetailsForPostingPeriod;
 import org.apache.fineract.portfolio.savings.exception.InsufficientAccountBalanceException;
@@ -164,6 +165,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @JoinColumn(name = "product_id", nullable = false)
     protected SavingsProduct product;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "field_officer_id", insertable = false, updatable = false)
+    protected Long savingsOfficerId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "field_officer_id", nullable = true)
     protected Staff savingsOfficer;
@@ -180,12 +185,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "submittedon_date", nullable = true)
     protected LocalDate submittedOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "submittedon_userid", insertable = false, updatable = false)
+    protected Long submittedByUserId;
+
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "submittedon_userid", nullable = true)
     protected AppUser submittedBy;
 
     @Column(name = "rejectedon_date")
     protected LocalDate rejectedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "rejectedon_userid", insertable = false, updatable = false)
+    protected Long rejectedByUserId;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "rejectedon_userid", nullable = true)
@@ -194,12 +207,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "withdrawnon_date")
     protected LocalDate withdrawnOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "withdrawnon_userid", insertable = false, updatable = false)
+    protected Long withdrawnByUserId;
+
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "withdrawnon_userid", nullable = true)
     protected AppUser withdrawnBy;
 
     @Column(name = "approvedon_date")
     protected LocalDate approvedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "approvedon_userid", insertable = false, updatable = false)
+    protected Long approvedByUserId;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "approvedon_userid", nullable = true)
@@ -208,12 +229,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "activatedon_date", nullable = true)
     protected LocalDate activatedOnDate;
 
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "activatedon_userid", insertable = false, updatable = false)
+    protected Long activatedByUserId;
+
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "activatedon_userid", nullable = true)
     protected AppUser activatedBy;
 
     @Column(name = "closedon_date")
     protected LocalDate closedOnDate;
+
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "closedon_userid", insertable = false, updatable = false)
+    protected Long closedByUserId;
 
     @ManyToOne(optional = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "closedon_userid", nullable = true)
@@ -334,7 +363,15 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "withhold_tax", nullable = false)
     protected boolean withHoldTax;
 
-    @ManyToOne
+    /** ID column mapping to avoid lazy load when only ID is needed */
+    @Column(name = "tax_group_id", insertable = false, updatable = false)
+    private Long taxGroupId;
+
+    /**
+     * TaxGroup entity reference. Changed to LAZY to avoid unnecessary JOINs. Use {@link #taxGroupId()} when only the ID
+     * is needed.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tax_group_id")
     private TaxGroup taxGroup;
 
@@ -407,7 +444,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.client = client;
         this.group = group;
         this.product = product;
+        // Store Staff entity and denormalized ID
         this.savingsOfficer = savingsOfficer;
+        this.savingsOfficerId = savingsOfficer != null ? savingsOfficer.getId() : null;
         if (StringUtils.isBlank(accountNo)) {
             this.accountNumber = new RandomPasswordGenerator(19).generate();
             this.accountNumberRequiresAutoGeneration = true;
@@ -420,7 +459,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.status = status.getValue();
         this.accountType = accountType.getValue();
         this.submittedOnDate = submittedOnDate;
+        // Store AppUser entity and denormalized ID
         this.submittedBy = submittedBy;
+        this.submittedByUserId = submittedBy != null ? submittedBy.getId() : null;
         this.nominalAnnualInterestRate = nominalAnnualInterestRate;
         this.interestCompoundingPeriodType = interestCompoundingPeriodType.getValue();
         this.interestPostingPeriodType = interestPostingPeriodType.getValue();
@@ -451,7 +492,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.minBalanceForInterestCalculation = product.minBalanceForInterestCalculation();
         // this.savingsOfficerHistory = null;
         this.withHoldTax = withHoldTax;
-        this.taxGroup = product.getTaxGroup();
+        // Store TaxGroup entity and denormalized ID
+        TaxGroup productTaxGroup = product.getTaxGroup();
+        this.taxGroup = productTaxGroup;
+        this.taxGroupId = productTaxGroup != null ? productTaxGroup.getId() : null;
     }
 
     /**
@@ -512,9 +556,32 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return identifiers;
     }
 
+    /**
+     * Posts calculated interest to the savings account for each posting period up to the given date.
+     *
+     * High-level flow: 1. CALCULATE: Compute interest for all posting periods using the account's interest rate,
+     * compounding, and balance history (via {@code calculateInterestUsing}). 2. INITIALIZE: Set up a running total of
+     * interest posted, determine if withholding tax applies, and collect any existing withhold tax transactions. 3.
+     * ITERATE PERIODS: For each posting period whose posting date <= interestPostingUpToDate: a. FIRST-TIME POSTING (no
+     * existing transaction for that date): - Create an interest posting transaction (or overdraft interest if earned
+     * amount is negative). - Optionally create a withholding tax transaction on the earned interest. b. CORRECTION (an
+     * existing posting transaction exists but the amount has changed): - Reverse the old posting transaction (and its
+     * withhold tax transaction if any). - Optionally create a reversal record for audit trail (when postReversals is
+     * true). - Create a new posting transaction with the recalculated amount. - Re-apply withholding tax if it was
+     * previously applied. 4. RECALCULATE BALANCES: If any transactions were created or corrected, recalculate the
+     * account's running balances and summary totals.
+     *
+     * Key concepts: - "backdatedTxnsAllowedTill": When true, uses a pivot-date-based strategy for finding and adding
+     * transactions, enabling support for backdated transaction processing. - Positive interest earned → standard
+     * interest posting transaction. - Negative interest earned → overdraft interest transaction (amount is negated to
+     * store as positive). - Withholding tax is deducted from interest at posting time when the account's tax group is
+     * configured.
+     */
     public void postInterest(final MathContext mc, final LocalDate interestPostingUpToDate, final boolean isInterestTransfer,
             final boolean isSavingsInterestPostingAtCurrentPeriodEnd, final Integer financialYearBeginningMonth,
             final LocalDate postInterestOnDate, final boolean backdatedTxnsAllowedTill, final boolean postReversals) {
+
+        // Step 1: Calculate interest for all posting periods based on the account's balance history and interest rate
         final List<PostingPeriod> postingPeriods = calculateInterestUsing(mc, interestPostingUpToDate, isInterestTransfer,
                 isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill,
                 postReversals);
@@ -522,12 +589,15 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             return;
         }
 
+        // Step 2: Initialize running total of interest posted so far.
+        // For backdated mode, start from the already-posted total; otherwise start from zero.
         Money interestPostedToDate = Money.zero(this.currency);
 
         if (backdatedTxnsAllowedTill) {
             interestPostedToDate = Money.of(this.currency, this.summary.getTotalInterestPosted());
         }
 
+        // Determine if withholding tax should be applied and collect existing withhold transactions
         boolean recalucateDailyBalanceDetails = false;
         boolean applyWithHoldTax = isWithHoldTaxApplicableForInterestPosting();
         final List<SavingsAccountTransaction> withholdTransactions = new ArrayList<>();
@@ -538,21 +608,27 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             withholdTransactions.addAll(findWithHoldTransactions());
         }
 
+        // Step 3: Iterate through each posting period and create/correct interest posting transactions
         for (final PostingPeriod interestPostingPeriod : postingPeriods) {
             final LocalDate interestPostingTransactionDate = interestPostingPeriod.dateOfPostingTransaction();
             final Money interestEarnedToBePostedForPeriod = interestPostingPeriod.getInterestEarned();
 
+            // Only post interest for periods on or before the cutoff date
             if (!DateUtils.isAfter(interestPostingTransactionDate, interestPostingUpToDate)) {
                 interestPostedToDate = interestPostedToDate.plus(interestEarnedToBePostedForPeriod);
 
+                // Look for an existing interest posting transaction on this date
                 SavingsAccountTransaction postingTransaction = null;
                 if (backdatedTxnsAllowedTill) {
                     postingTransaction = findInterestPostingSavingsTransactionWithPivotConfig(interestPostingTransactionDate);
                 } else {
                     postingTransaction = findInterestPostingTransactionFor(interestPostingTransactionDate);
                 }
+
+                // --- Case A: No existing posting → create a new interest posting transaction ---
                 if (postingTransaction == null) {
                     SavingsAccountTransaction newPostingTransaction;
+                    // Positive interest → standard interest posting; negative → overdraft interest
                     if (interestEarnedToBePostedForPeriod.isGreaterThanOrEqualTo(Money.zero(currency))) {
 
                         newPostingTransaction = SavingsAccountTransaction.interestPosting(this, office(), interestPostingTransactionDate,
@@ -566,12 +642,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                     } else {
                         addTransaction(newPostingTransaction);
                     }
+                    // Apply withholding tax on the interest if applicable
                     if (applyWithHoldTax) {
                         createWithHoldTransaction(interestEarnedToBePostedForPeriod.getAmount(), interestPostingTransactionDate,
                                 backdatedTxnsAllowedTill);
                     }
                     recalucateDailyBalanceDetails = true;
                 } else {
+                    // --- Case B: Existing posting found → check if the amount has changed and correct if needed ---
                     boolean correctionRequired = false;
                     if (postingTransaction.isInterestPostingAndNotReversed()) {
                         correctionRequired = postingTransaction.hasNotAmount(interestEarnedToBePostedForPeriod);
@@ -579,18 +657,21 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                         correctionRequired = postingTransaction.hasNotAmount(interestEarnedToBePostedForPeriod.negated());
                     }
                     if (correctionRequired) {
+                        // Reverse the old posting and optionally create a reversal record for audit
                         boolean applyWithHoldTaxForOldTransaction = false;
                         postingTransaction.reverse();
                         SavingsAccountTransaction reversal = null;
                         if (postReversals) {
                             reversal = SavingsAccountTransaction.reversal(postingTransaction);
                         }
+                        // Also reverse any associated withhold tax transaction
                         final SavingsAccountTransaction withholdTransaction = findTransactionFor(interestPostingTransactionDate,
                                 withholdTransactions);
                         if (withholdTransaction != null) {
                             withholdTransaction.reverse();
                             applyWithHoldTaxForOldTransaction = true;
                         }
+                        // Create a corrected posting transaction with the recalculated amount
                         SavingsAccountTransaction newPostingTransaction;
                         if (interestEarnedToBePostedForPeriod.isGreaterThanOrEqualTo(Money.zero(currency))) {
                             newPostingTransaction = SavingsAccountTransaction.interestPosting(this, office(),
@@ -612,6 +693,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                                 addTransaction(reversal);
                             }
                         }
+                        // Re-apply withholding tax if it was on the old transaction
                         if (applyWithHoldTaxForOldTransaction) {
                             createWithHoldTransaction(interestEarnedToBePostedForPeriod.getAmount(), interestPostingTransactionDate,
                                     backdatedTxnsAllowedTill);
@@ -804,38 +886,71 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     }
 
     /**
-     * All interest calculation based on END-OF-DAY-BALANCE.
+     * Calculates interest for this savings account based on END-OF-DAY-BALANCE methodology.
      *
-     * Interest calculation is performed on-the-fly over all account transactions.
+     * <p>
+     * High-level flow:
+     * </p>
+     * <ol>
+     * <li><b>Recalculate daily balances</b> — Walk through all transactions to compute the running balance at the end
+     * of each day. This ensures derived balance fields are accurate before interest calculation begins.</li>
+     * <li><b>Resolve configuration</b> — Load the account's interest calculation settings: posting frequency
+     * (Monthly/Quarterly/Annually), compounding frequency (Daily/Monthly), day-count convention (360/365/Actual),
+     * calculation type (Daily Balance/Average Daily Balance), and the nominal annual interest rate.</li>
+     * <li><b>Determine posting period intervals</b> — Split the date range (from interest start date to
+     * {@code upToInterestCalculationDate}) into discrete time intervals based on the posting period type and any manual
+     * posting dates.</li>
+     * <li><b>Build PostingPeriod objects</b> — For each interval, gather the non-interest transactions, compute
+     * end-of-day balances, and calculate the interest earned. Each period's closing balance feeds into the next
+     * period's opening balance.</li>
+     * <li><b>Apply compounding across periods</b> — A final pass applies cross-period compounding
+     * (interest-on-interest) and updates the account summary with the calculated totals.</li>
+     * </ol>
      *
-     *
-     * 1. Calculate Interest From Beginning Of Account 1a. determine the 'crediting' periods that exist for this savings
-     * acccount 1b. determine the 'compounding' periods that exist within each 'crediting' period calculate the amount
-     * of interest due at the end of each 'crediting' period check if an existing 'interest posting' transaction exists
-     * for date and matches the amount posted
-     *
+     * @param mc
+     *            MathContext for precision control
+     * @param upToInterestCalculationDate
+     *            Calculate interest up to (and including) this date
      * @param isInterestTransfer
-     *            TODO
+     *            Whether interest is being transferred to another account
+     * @param isSavingsInterestPostingAtCurrentPeriodEnd
+     *            Whether to post at end of current period
+     * @param financialYearBeginningMonth
+     *            Month number (1-12) when the financial year starts
+     * @param postInterestOnDate
+     *            Optional specific date to post interest on
+     * @param backdatedTxnsAllowedTill
+     *            If true, uses pivot-date-based transaction retrieval
+     * @param postReversals
+     *            If true, creates explicit reversal transaction records
+     * @return List of {@link PostingPeriod} objects, each containing the calculated interest for its interval
      */
-
     public List<PostingPeriod> calculateInterestUsing(final MathContext mc, final LocalDate upToInterestCalculationDate,
             boolean isInterestTransfer, final boolean isSavingsInterestPostingAtCurrentPeriodEnd, final Integer financialYearBeginningMonth,
             final LocalDate postInterestOnDate, final boolean backdatedTxnsAllowedTill, final boolean postReversals) {
 
-        // no openingBalance concept supported yet but probably will to allow for migrations.
-        // Check global configurations and 'pivot' date is null
+        // Step 1: Determine the opening account balance.
+        // In backdated mode, use the stored running balance at the pivot date;
+        // otherwise start from zero (no migration/opening balance support yet).
         Money openingAccountBalance = backdatedTxnsAllowedTill ? Money.of(this.currency, this.summary.getRunningBalanceOnPivotDate())
                 : Money.zero(this.currency);
 
-        // update existing transactions so derived balance fields are correct.
+        // Step 2: Recalculate the running balance on every transaction so that
+        // derived fields (running balance, cumulative totals) are accurate before
+        // we use them for interest calculation.
         recalculateDailyBalances(openingAccountBalance, upToInterestCalculationDate, backdatedTxnsAllowedTill, postReversals);
 
+        // Step 3: Only proceed if the account has a non-zero interest rate configured
+        // (either normal interest or overdraft interest).
         final List<PostingPeriod> allPostingPeriods = new ArrayList<>();
         if (hasInterestCalculation() || hasOverdraftInterestCalculation()) {
-            // 1. default to calculate interest based on entire history OR
-            // 2. determine latest 'posting period' and find interest credited to that period
-
-            // A generate list of EndOfDayBalances (not including interest postings)
+            // =====================================================================================
+            // RESOLVE INTEREST CALCULATION CONFIGURATION
+            // These enums define HOW and WHEN interest is calculated and posted:
+            // - postingPeriodType: How often interest is posted (e.g., Monthly, Quarterly, Annually)
+            // - compoundingPeriodType: How often interest is compounded (e.g., Daily, Monthly)
+            // - daysInYearType: Day-count convention for annualizing the rate (e.g., 360, 365, Actual)
+            // =====================================================================================
             final SavingsPostingInterestPeriodType postingPeriodType = SavingsPostingInterestPeriodType
                     .fromInt(this.interestPostingPeriodType);
 
@@ -844,6 +959,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
             final SavingsInterestCalculationDaysInYearType daysInYearType = SavingsInterestCalculationDaysInYearType
                     .fromInt(this.interestCalculationDaysInYearType);
+
+            // =====================================================================================
+            // COLLECT MANUAL POSTING DATES
+            // "postedAsOnDates" are dates where interest was manually posted by a user (as opposed
+            // to system-scheduled posting). These dates act as additional period boundaries when
+            // splitting the timeline into posting intervals.
+            // =====================================================================================
             List<LocalDate> postedAsOnDates = null;
             if (backdatedTxnsAllowedTill) {
                 postedAsOnDates = getManualPostingDatesWithPivotConfig();
@@ -853,10 +975,23 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             if (postInterestOnDate != null) {
                 postedAsOnDates.add(postInterestOnDate);
             }
+
+            // =====================================================================================
+            // DETERMINE POSTING PERIOD INTERVALS
+            // Splits the full interest calculation date range into discrete time intervals based on
+            // the posting period type (e.g., monthly), financial year start, and any manual posting
+            // dates. Each interval will have its interest calculated independently.
+            // =====================================================================================
             final List<LocalDateInterval> postingPeriodIntervals = this.savingsHelper.determineInterestPostingPeriods(
                     getStartInterestCalculationDate(), upToInterestCalculationDate, postingPeriodType, financialYearBeginningMonth,
                     postedAsOnDates);
 
+            // =====================================================================================
+            // DETERMINE THE STARTING BALANCE FOR THE FIRST PERIOD
+            // If a custom startInterestCalculationDate is set (different from activation date),
+            // look up the last transaction before that date to get the running balance.
+            // Otherwise, start from zero (i.e., interest is calculated from account activation).
+            // =====================================================================================
             Money periodStartingBalance;
             if (this.startInterestCalculationDate != null && !this.getStartInterestCalculationDate().equals(this.getActivationDate())) {
                 LocalDate startInterestCalculationDate = this.startInterestCalculationDate;
@@ -876,6 +1011,16 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                 periodStartingBalance = Money.zero(this.currency);
             }
 
+            // =====================================================================================
+            // GATHER INTEREST CALCULATION PARAMETERS
+            // - interestCalculationType: Daily Balance or Average Daily Balance
+            // - interestRateAsFraction: Annual nominal rate converted to a decimal (e.g., 5% → 0.05)
+            // - overdraftInterestRateAsFraction: Separate rate applied when account is overdrawn
+            // - interestPostTransactions: IDs of existing interest posting transactions (to exclude
+            // them from balance calculations so interest isn't compounded on itself incorrectly)
+            // - minBalanceForInterestCalculation: Minimum balance required to earn interest
+            // - minOverdraftForInterestCalculation: Minimum overdraft amount to incur overdraft interest
+            // =====================================================================================
             final SavingsInterestCalculationType interestCalculationType = SavingsInterestCalculationType
                     .fromInt(this.interestCalculationType);
             final BigDecimal interestRateAsFraction = getEffectiveInterestRateAsFraction(mc, upToInterestCalculationDate);
@@ -884,14 +1029,27 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             final Money minBalanceForInterestCalculation = Money.of(getCurrency(), minBalanceForInterestCalculation());
             final Money minOverdraftForInterestCalculation = Money.of(getCurrency(), this.minOverdraftForInterestCalculation);
 
+            // =====================================================================================
+            // BUILD A PostingPeriod FOR EACH INTERVAL
+            // For each time interval:
+            // 1. Check if this is a user-initiated (manual) posting period
+            // 2. Retrieve all non-interest-posting transactions (deposits, withdrawals, fees, etc.)
+            // that fall within this period — these determine the daily balances
+            // 3. Create a PostingPeriod object that encapsulates the interval, its transactions,
+            // and all the calculation parameters. The PostingPeriod computes end-of-day balances
+            // and the interest earned for the period.
+            // 4. The closing balance of one period becomes the opening balance of the next
+            // =====================================================================================
             for (final LocalDateInterval periodInterval : postingPeriodIntervals) {
 
+                // A period is "user posting" if a manual posting date falls on the day after the period ends
                 boolean isUserPosting = false;
                 if (postedAsOnDates.contains(periodInterval.endDate().plusDays(1))) {
                     isUserPosting = true;
                 }
 
                 PostingPeriod postingPeriod = null;
+                // Retrieve transactions excluding interest postings — only real account activity
                 List<SavingsAccountTransaction> orderedNonInterestPostingTransactions = null;
                 if (backdatedTxnsAllowedTill) {
                     orderedNonInterestPostingTransactions = retreiveOrderedNonInterestPostingSavingsTransactionsWithPivotConfig();
@@ -899,26 +1057,42 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                     orderedNonInterestPostingTransactions = retreiveOrderedNonInterestPostingTransactions();
                 }
 
+                // Convert to lightweight DTOs used by the PostingPeriod calculation engine
                 List<SavingsAccountTransactionDetailsForPostingPeriod> savingsAccountTransactionDetailsForPostingPeriod = toSavingsAccountTransactionDetailsForPostingPeriodList(
                         orderedNonInterestPostingTransactions);
 
+                // Create the PostingPeriod — this internally computes daily balances and interest earned
                 postingPeriod = PostingPeriod.createFrom(periodInterval, periodStartingBalance,
                         savingsAccountTransactionDetailsForPostingPeriod, this.currency, compoundingPeriodType, interestCalculationType,
                         interestRateAsFraction, daysInYearType.getValue(), upToInterestCalculationDate, interestPostTransactions,
                         isInterestTransfer, minBalanceForInterestCalculation, isSavingsInterestPostingAtCurrentPeriodEnd,
                         overdraftInterestRateAsFraction, minOverdraftForInterestCalculation, isUserPosting, financialYearBeginningMonth);
 
+                // Chain periods: closing balance of this period → opening balance of the next
                 periodStartingBalance = postingPeriod.closingBalance();
 
                 allPostingPeriods.add(postingPeriod);
             }
 
+            // =====================================================================================
+            // CALCULATE COMPOUND INTEREST ACROSS ALL PERIODS
+            // After all PostingPeriods are built, this pass applies compounding logic across periods
+            // (e.g., interest earned in period 1 is added to the balance for period 2's calculation).
+            // Also respects the "locked-in until" date and interest transfer settings.
+            // =====================================================================================
             this.savingsHelper.calculateInterestForAllPostingPeriods(this.currency, allPostingPeriods, getLockedInUntilDate(),
                     isTransferInterestToOtherAccount());
 
+            // Update the account summary with totals derived from all posting periods
             this.summary.updateFromInterestPeriodSummaries(this.currency, allPostingPeriods);
         }
 
+        // =====================================================================================
+        // FINAL SUMMARY UPDATE
+        // Recalculate the account-level summary (total deposits, withdrawals, interest, fees,
+        // charges, etc.) from all transactions. This ensures the summary is consistent after
+        // any interest posting changes.
+        // =====================================================================================
         if (backdatedTxnsAllowedTill) {
             this.summary.updateSummaryWithPivotConfig(this.currency, this.savingsAccountTransactionSummaryWrapper, null,
                     this.savingsAccountTransactions);
@@ -1883,39 +2057,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         }
     }
 
-    public Map<String, Object> deriveAccountingBridgeData(final String currencyCode, final Set<Long> existingTransactionIds,
+    public SavingsAccountingBridgeDTO deriveAccountingBridgeData(final String currencyCode, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, boolean isAccountTransfer, final boolean backdatedTxnsAllowedTill) {
-
-        final Map<String, Object> accountingBridgeData = new LinkedHashMap<>();
-        accountingBridgeData.put("savingsId", getId());
-        accountingBridgeData.put("savingsProductId", productId());
-        accountingBridgeData.put("currencyCode", currencyCode);
-        accountingBridgeData.put("officeId", officeId());
-        accountingBridgeData.put("cashBasedAccountingEnabled", isCashBasedAccountingEnabledOnSavingsProduct());
-        accountingBridgeData.put("accrualBasedAccountingEnabled", isAccrualBasedAccountingEnabledOnSavingsProduct());
-        accountingBridgeData.put("isAccountTransfer", isAccountTransfer);
-
-        final List<Map<String, Object>> newSavingsTransactions = new ArrayList<>();
-
-        List<SavingsAccountTransaction> trans = null;
-
-        if (backdatedTxnsAllowedTill) {
-            trans = getSavingsAccountTransactionsWithPivotConfig();
-        } else {
-            trans = getTransactions();
-        }
-
-        // Adding new transactions to the array
-        for (final SavingsAccountTransaction transaction : trans) {
-            if (transaction.isReversed() && !existingReversedTransactionIds.contains(transaction.getId())) {
-                newSavingsTransactions.add(transaction.toMapData(currencyCode));
-            } else if (!existingTransactionIds.contains(transaction.getId())) {
-                newSavingsTransactions.add(transaction.toMapData(currencyCode));
-            }
-        }
-
-        accountingBridgeData.put("newSavingsTransactions", newSavingsTransactions);
-        return accountingBridgeData;
+        return SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(this, SavingsAccountingBridgeDataHelper.findNewTransactions(this,
+                existingTransactionIds, existingReversedTransactionIds, backdatedTxnsAllowedTill), isAccountTransfer);
     }
 
     public Collection<Long> findExistingTransactionIds() {
@@ -1974,10 +2119,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     public void update(final SavingsProduct product) {
         this.product = product;
         this.minBalanceForInterestCalculation = product.minBalanceForInterestCalculation();
+        TaxGroup productTaxGroup = product.getTaxGroup();
+        this.taxGroup = productTaxGroup;
+        this.taxGroupId = productTaxGroup != null ? productTaxGroup.getId() : null;
     }
 
+    /**
+     * Updates the savings officer and the denormalized ID field.
+     *
+     * @param savingsOfficer
+     *            the new savings officer
+     */
     public void update(final Staff savingsOfficer) {
         this.savingsOfficer = savingsOfficer;
+        this.savingsOfficerId = savingsOfficer != null ? savingsOfficer.getId() : null;
     }
 
     public void updateAccountNo(final String newAccountNo) {
@@ -1995,14 +2150,6 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public SavingsProduct savingsProduct() {
         return this.product;
-    }
-
-    private Boolean isCashBasedAccountingEnabledOnSavingsProduct() {
-        return this.product.isCashBasedAccountingEnabled();
-    }
-
-    private Boolean isAccrualBasedAccountingEnabledOnSavingsProduct() {
-        return this.product.isAccrualBasedAccountingEnabled();
     }
 
     public Long officeId() {
@@ -2029,6 +2176,24 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.savingsOfficer;
     }
 
+    /**
+     * Returns the Savings Officer (Staff) ID without triggering a lazy load of the Staff entity.
+     *
+     * @return the savings officer ID, or null if no officer is assigned
+     */
+    public Long savingsOfficerId() {
+        return this.savingsOfficerId;
+    }
+
+    /**
+     * Returns the Tax Group ID without triggering a lazy load of the TaxGroup entity.
+     *
+     * @return the tax group ID, or null if no tax group is assigned
+     */
+    public Long taxGroupId() {
+        return this.taxGroupId;
+    }
+
     public Boolean getEnforceMinRequiredBalance() {
         return this.enforceMinRequiredBalance;
     }
@@ -2039,10 +2204,12 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public void unassignSavingsOfficer() {
         this.savingsOfficer = null;
+        this.savingsOfficerId = null;
     }
 
     public void assignSavingsOfficer(final Staff fieldOfficer) {
         this.savingsOfficer = fieldOfficer;
+        this.savingsOfficerId = fieldOfficer != null ? fieldOfficer.getId() : null;
     }
 
     public Long clientId() {
@@ -2081,15 +2248,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return id;
     }
 
+    /**
+     * Checks if the savings account has the specified savings officer assigned. Uses the denormalized savingsOfficerId
+     * to avoid lazy loading the Staff entity.
+     *
+     * @param fromSavingsOfficer
+     *            the staff to compare against
+     * @return true if the savings account has the specified savings officer
+     */
     public boolean hasSavingsOfficer(final Staff fromSavingsOfficer) {
-
-        boolean matchesCurrentSavingsOfficer = false;
-        if (this.savingsOfficer != null) {
-            matchesCurrentSavingsOfficer = this.savingsOfficer.identifiedBy(fromSavingsOfficer);
+        if (this.savingsOfficerId != null) {
+            return fromSavingsOfficer != null && this.savingsOfficerId.equals(fromSavingsOfficer.getId());
         } else {
-            matchesCurrentSavingsOfficer = fromSavingsOfficer == null;
+            return fromSavingsOfficer == null;
         }
-        return matchesCurrentSavingsOfficer;
     }
 
     public void reassignSavingsOfficer(final Staff newSavingsOfficer, final LocalDate assignmentDate) {
@@ -2110,11 +2282,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         } else if (DateUtils.isDateInTheFuture(assignmentDate)) {
             final String errorMessage = "The Savings Officer assignment date (" + assignmentDate + ") cannot be in the future.";
             throw new SavingsOfficerAssignmentDateException("cannot.be.a.future.date", errorMessage, assignmentDate);
-        } else if (latestHistoryRecord != null && this.savingsOfficer.identifiedBy(newSavingsOfficer)) {
+        } else if (latestHistoryRecord != null && this.savingsOfficerId != null
+                && this.savingsOfficerId.equals(newSavingsOfficer.getId())) {
+            // Use savingsOfficerId to avoid lazy load for comparison
             latestHistoryRecord.setStartDate(assignmentDate);
         } else if (latestHistoryRecord != null && latestHistoryRecord.matchesStartDateOf(assignmentDate)) {
             latestHistoryRecord.setSavingsOfficer(newSavingsOfficer);
             this.savingsOfficer = newSavingsOfficer;
+            this.savingsOfficerId = newSavingsOfficer != null ? newSavingsOfficer.getId() : null;
         } else if (latestHistoryRecord != null && latestHistoryRecord.isBeforeStartDate(assignmentDate)) {
             final String errorMessage = "Savings account with identifier " + getId() + " was already assigned before date "
                     + assignmentDate;
@@ -2127,6 +2302,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                 latestHistoryRecord.setEndDate(assignmentDate);
             }
             this.savingsOfficer = newSavingsOfficer;
+            this.savingsOfficerId = newSavingsOfficer != null ? newSavingsOfficer.getId() : null;
             if (isNotSubmittedAndPendingApproval()) {
                 final SavingsOfficerAssignmentHistory savingsOfficerAssignmentHistory = SavingsOfficerAssignmentHistory.createNew(this,
                         this.savingsOfficer, assignmentDate);
@@ -2288,6 +2464,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.approvedOnDate = approvedOn;
         this.approvedBy = currentUser;
+        this.approvedByUserId = currentUser != null ? currentUser.getId() : null;
         actualChanges.put(SavingsApiConstants.localeParamName, command.locale());
         actualChanges.put(SavingsApiConstants.dateFormatParamName, command.dateFormat());
         actualChanges.put(SavingsApiConstants.approvedOnDateParamName, approvedOnDateChange);
@@ -2352,12 +2529,16 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.approvedOnDate = null;
         this.approvedBy = null;
+        this.approvedByUserId = null;
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = null;
         this.closedBy = null;
+        this.closedByUserId = null;
         actualChanges.put(SavingsApiConstants.approvedOnDateParamName, "");
 
         // FIXME - kw - support field officer history for savings accounts
@@ -2518,10 +2699,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = rejectedOn;
         this.rejectedBy = currentUser;
+        this.rejectedByUserId = currentUser != null ? currentUser.getId() : null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = rejectedOn;
         this.closedBy = currentUser;
+        this.closedByUserId = currentUser != null ? currentUser.getId() : null;
 
         actualChanges.put(SavingsApiConstants.localeParamName, command.locale());
         actualChanges.put(SavingsApiConstants.dateFormatParamName, command.dateFormat());
@@ -2579,10 +2763,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = withdrawnOn;
         this.withdrawnBy = currentUser;
+        this.withdrawnByUserId = currentUser != null ? currentUser.getId() : null;
         this.closedOnDate = withdrawnOn;
         this.closedBy = currentUser;
+        this.closedByUserId = currentUser != null ? currentUser.getId() : null;
 
         actualChanges.put(SavingsApiConstants.localeParamName, command.locale());
         actualChanges.put(SavingsApiConstants.dateFormatParamName, command.dateFormat());
@@ -2644,12 +2831,16 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = null;
         this.closedBy = null;
+        this.closedByUserId = null;
         this.activatedOnDate = activationDate;
         this.activatedBy = currentUser;
+        this.activatedByUserId = currentUser != null ? currentUser.getId() : null;
         this.lockedInUntilDate = calculateDateAccountIsLockedUntil(getActivationDate());
 
         /*
@@ -2721,14 +2912,19 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.status = SavingsAccountStatusType.ACTIVE.getValue();
         this.approvedOnDate = appliedonDate;
         this.approvedBy = appliedBy;
+        this.approvedByUserId = appliedBy != null ? appliedBy.getId() : null;
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = null;
         this.closedBy = null;
+        this.closedByUserId = null;
         this.activatedOnDate = appliedonDate;
         this.activatedBy = appliedBy;
+        this.activatedByUserId = appliedBy != null ? appliedBy.getId() : null;
         this.lockedInUntilDate = calculateDateAccountIsLockedUntil(getActivationDate());
     }
 
@@ -2820,10 +3016,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         this.rejectedOnDate = null;
         this.rejectedBy = null;
+        this.rejectedByUserId = null;
         this.withdrawnOnDate = null;
         this.withdrawnBy = null;
+        this.withdrawnByUserId = null;
         this.closedOnDate = closedDate;
         this.closedBy = currentUser;
+        this.closedByUserId = currentUser != null ? currentUser.getId() : null;
 
         return actualChanges;
     }
@@ -3460,6 +3659,11 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         SavingsAccountTransaction withholdTransaction = findTransactionFor(interestPostingUpToDate, withholdTransactions);
         final BigDecimal totalInterestPosted = this.savingsAccountTransactionSummaryWrapper.calculateTotalInterestPosted(this.currency,
                 this.transactions);
+        // totalInterestPosted can be null when getAmountDefaultedToNullIfZero() returns null for zero interest;
+        // guard against NPE in createWithHoldTransaction / updateWithHoldTransaction
+        if (totalInterestPosted == null) {
+            return recalucateDailyBalance;
+        }
         if (withholdTransaction == null && this.withHoldTax()) {
             boolean isWithholdTaxAdded = createWithHoldTransaction(totalInterestPosted, interestPostingUpToDate, backdatedTxnsAllowedTill);
             recalucateDailyBalance = recalucateDailyBalance || isWithholdTaxAdded;
@@ -3491,11 +3695,23 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.sub_status = SavingsAccountSubStatusEnum.DORMANT.getValue();
     }
 
+    /**
+     * Resets the sub_status to NONE if the account is currently INACTIVE or DORMANT. Called when a new transaction is
+     * made on the account, which reactivates it from inactive/dormant state.
+     */
+    public void resetSubStatusOnTransaction() {
+        if (this.sub_status.equals(SavingsAccountSubStatusEnum.INACTIVE.getValue())
+                || this.sub_status.equals(SavingsAccountSubStatusEnum.DORMANT.getValue())) {
+            this.sub_status = SavingsAccountSubStatusEnum.NONE.getValue();
+        }
+    }
+
     public void escheat(AppUser appUser) {
         this.status = SavingsAccountStatusType.CLOSED.getValue();
         this.sub_status = SavingsAccountSubStatusEnum.ESCHEAT.getValue();
         this.closedOnDate = DateUtils.getBusinessLocalDate();
         this.closedBy = appUser;
+        this.closedByUserId = appUser != null ? appUser.getId() : null;
         boolean postInterestAsOnDate = false;
         boolean postReversals = false;
         LocalDate transactionDate = DateUtils.getBusinessLocalDate();
@@ -3509,6 +3725,19 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public void loadLazyCollections() {
         transactions.size();
+        charges.size();
+        savingsOfficerHistory.size();
+        if (group != null) {
+            Office dummyOffice = group.getOffice();
+        } // Ensure lazy loading of group if set
+    }
+
+    /**
+     * Lightweight loading path that loads account metadata (charges, officer history, group) WITHOUT loading the full
+     * transaction history. This enables O(1) account loading for operations that don't need transaction history, such
+     * as balance inquiries and account status checks.
+     */
+    public void loadLazyCollectionsLightweight() {
         charges.size();
         savingsOfficerHistory.size();
         if (group != null) {

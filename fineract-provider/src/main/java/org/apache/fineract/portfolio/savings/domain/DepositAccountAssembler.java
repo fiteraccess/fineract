@@ -314,10 +314,6 @@ public class DepositAccountAssembler {
                 throw new UnsupportedParameterException(Arrays.asList(withHoldTaxParamName));
             }
         }
-        Integer depositRolloverId = null;
-        if (command.parameterExists(maturityInstructionIdParamName)) {
-            depositRolloverId = command.integerValueOfParameterNamed(maturityInstructionIdParamName);
-        }
 
         SavingsAccount account = null;
         if (depositAccountType.isFixedDeposit()) {

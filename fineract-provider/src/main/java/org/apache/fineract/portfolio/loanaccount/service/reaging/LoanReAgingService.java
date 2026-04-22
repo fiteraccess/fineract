@@ -75,6 +75,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanRepaymentScheduleSe
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.note.domain.Note;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.springframework.stereotype.Service;
@@ -100,6 +101,7 @@ public class LoanReAgingService {
     private final LoanRepaymentScheduleService loanRepaymentScheduleService;
     private final LoanReadPlatformService loanReadPlatformService;
     private final LoanCapitalizedIncomeBalanceRepository loanCapitalizedIncomeBalanceRepository;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     public CommandProcessingResult reAge(final Long loanId, final JsonCommand command) {
         final Loan loan = loanAssembler.assembleFrom(loanId);
@@ -179,7 +181,8 @@ public class LoanReAgingService {
         }
         if (loan.isProgressiveSchedule()) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
-            loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+            loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
         reverseReAgeTransaction(reAgeTransaction, command);
         loanTransactionRepository.saveAndFlush(reAgeTransaction);
@@ -208,7 +211,8 @@ public class LoanReAgingService {
                 || LoanReAgeInterestHandlingType.EQUAL_AMORTIZATION_PAYABLE_INTEREST
                         .equals(reAgeTransaction.getLoanReAgeParameter().getInterestHandlingType())) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
-            loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
+            loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             if (withPostTransactionChecks) {
                 reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(reAgeTransaction));
             } else {

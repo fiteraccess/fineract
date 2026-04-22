@@ -47,6 +47,7 @@ import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanApplicationValidator;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanScheduleValidator;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +64,7 @@ public class LoanScheduleCalculationPlatformServiceImpl implements LoanScheduleC
     private final LoanUtilService loanUtilService;
     private final LoanRepositoryWrapper loanRepository;
     private final LoanTermVariationsMapper loanTermVariationsMapper;
+    private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
 
     @Override
     public LoanScheduleModel calculateLoanSchedule(final JsonQuery query, Boolean validateParams) {
@@ -93,7 +95,7 @@ public class LoanScheduleCalculationPlatformServiceImpl implements LoanScheduleC
             return;
         }
 
-        if (loan.loanProduct().isMultiDisburseLoan()) {
+        if (loan.isMultiDisburmentLoan()) {
             BigDecimal disbursedAmount = loan.getDisbursedAmount();
             BigDecimal principalRepaid = loan.getSummary().getTotalPrincipalRepaid();
             BigDecimal principalWrittenOff = loan.getSummary().getTotalPrincipalWrittenOff();
@@ -203,7 +205,8 @@ public class LoanScheduleCalculationPlatformServiceImpl implements LoanScheduleC
 
     private LoanApplicationTerms constructLoanApplicationTerms(final Loan loan) {
         final ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, null);
-        return loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan);
+        return loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     private Loan fetchLoan(final Long accountId) {

@@ -47,6 +47,7 @@ import org.apache.fineract.infrastructure.codes.mapper.CodeValueMapper;
 import org.apache.fineract.portfolio.PortfolioProductType;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -58,6 +59,7 @@ public class ProductToGLAccountMappingReadPlatformServiceImpl implements Product
     private final CodeValueMapper codeValueMapper;
 
     @Override
+    @Cacheable(value = "productGLMappings", key = "'glm:LOAN:' + #loanProductId + ':' + #accountingType")
     public Map<String, Object> fetchAccountMappingDetailsForLoanProduct(final Long loanProductId, final Integer accountingType) {
 
         final Map<String, Object> accountMappingDetails = new LinkedHashMap<>(8);
@@ -185,6 +187,7 @@ public class ProductToGLAccountMappingReadPlatformServiceImpl implements Product
     }
 
     @Override
+    @Cacheable(value = "productGLMappings", key = "'glm:SAVINGS:' + #savingsProductId + ':' + #accountingType")
     public Map<String, Object> fetchAccountMappingDetailsForSavingsProduct(final Long savingsProductId, final Integer accountingType) {
 
         final List<ProductToGLAccountMapping> mappings = productToGLAccountMappingRepository.findAllRegularMappings(savingsProductId,

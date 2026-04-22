@@ -32,6 +32,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanSchedul
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleType;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanMapper;
 import org.apache.fineract.portfolio.loanaccount.service.schedule.LoanScheduleComponent;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 
 @RequiredArgsConstructor
 public class LoanScheduleService {
@@ -47,8 +48,9 @@ public class LoanScheduleService {
     /**
      * Ability to regenerate the repayment schedule based on the loans current details/state.
      */
-    public void regenerateRepaymentSchedule(final Loan loan, final ScheduleGeneratorDTO scheduleGeneratorDTO) {
-        final LoanScheduleModel loanScheduleModel = loanMapper.regenerateScheduleModel(scheduleGeneratorDTO, loan);
+    public void regenerateRepaymentSchedule(final Loan loan, final ScheduleGeneratorDTO scheduleGeneratorDTO,
+            final CacheableLoanProductConfig productConfig) {
+        final LoanScheduleModel loanScheduleModel = loanMapper.regenerateScheduleModel(scheduleGeneratorDTO, loan, productConfig);
         if (loanScheduleModel == null) {
             return;
         }
@@ -61,22 +63,26 @@ public class LoanScheduleService {
         }
     }
 
-    public void regenerateScheduleWithReprocessingTransactions(final Loan loan, final ScheduleGeneratorDTO generatorDTO) {
+    public void regenerateScheduleWithReprocessingTransactions(final Loan loan, final ScheduleGeneratorDTO generatorDTO,
+            final CacheableLoanProductConfig productConfig) {
         if (loan.isInterestBearingAndInterestRecalculationEnabled() && !loan.isChargedOff()) {
             regenerateRepaymentScheduleWithInterestRecalculation(loan, generatorDTO);
         } else {
-            regenerateRepaymentSchedule(loan, generatorDTO);
+            regenerateRepaymentSchedule(loan, generatorDTO, productConfig);
         }
         reprocessLoanTransactionsService.reprocessTransactions(loan);
     }
 
     public void recalculateScheduleFromLastTransaction(final Loan loan, final ScheduleGeneratorDTO generatorDTO,
-            final List<Long> existingTransactionIds, final List<Long> existingReversedTransactionIds) {
-        recalculateScheduleFromLastTransaction(loan, generatorDTO, existingTransactionIds, existingReversedTransactionIds, false);
+            final List<Long> existingTransactionIds, final List<Long> existingReversedTransactionIds,
+            final CacheableLoanProductConfig productConfig) {
+        recalculateScheduleFromLastTransaction(loan, generatorDTO, existingTransactionIds, existingReversedTransactionIds, false,
+                productConfig);
     }
 
     public void recalculateScheduleFromLastTransaction(final Loan loan, final ScheduleGeneratorDTO generatorDTO,
-            final List<Long> existingTransactionIds, final List<Long> existingReversedTransactionIds, boolean skipTransactionIdCollecting) {
+            final List<Long> existingTransactionIds, final List<Long> existingReversedTransactionIds, boolean skipTransactionIdCollecting,
+            final CacheableLoanProductConfig productConfig) {
         if (!skipTransactionIdCollecting) {
             existingTransactionIds.addAll(loanTransactionRepository.findTransactionIdsByLoan(loan));
             existingReversedTransactionIds.addAll(loanTransactionRepository.findReversedTransactionIdsByLoan(loan));
@@ -85,7 +91,7 @@ public class LoanScheduleService {
             if (loan.isInterestBearingAndInterestRecalculationEnabled() && !loan.isChargedOff()) {
                 regenerateRepaymentScheduleWithInterestRecalculation(loan, generatorDTO);
             } else {
-                regenerateRepaymentSchedule(loan, generatorDTO);
+                regenerateRepaymentSchedule(loan, generatorDTO, productConfig);
             }
             reprocessLoanTransactionsService.reprocessTransactions(loan);
         } else {
@@ -131,13 +137,13 @@ public class LoanScheduleService {
         reprocessLoanTransactionsService.reprocessTransactions(loan);
     }
 
-    public void regenerateScheduleWithReprocessingTransactions(Loan loan) {
+    public void regenerateScheduleWithReprocessingTransactions(Loan loan, final CacheableLoanProductConfig productConfig) {
         ScheduleGeneratorDTO generatorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
-        regenerateScheduleWithReprocessingTransactions(loan, generatorDTO);
+        regenerateScheduleWithReprocessingTransactions(loan, generatorDTO, productConfig);
     }
 
-    public void regenerateRepaymentSchedule(final Loan loan) {
+    public void regenerateRepaymentSchedule(final Loan loan, final CacheableLoanProductConfig productConfig) {
         ScheduleGeneratorDTO generatorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
-        regenerateRepaymentSchedule(loan, generatorDTO);
+        regenerateRepaymentSchedule(loan, generatorDTO, productConfig);
     }
 }

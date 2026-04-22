@@ -61,8 +61,9 @@ public class OfficeWritePlatformServiceJpaRepositoryImpl implements OfficeWriteP
     @Transactional
     @Override
     @Caching(evict = {
-            @CacheEvict(value = "offices", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#root.target.context.authenticatedUser().getOffice().getHierarchy()+'of')"),
-            @CacheEvict(value = "officesForDropdown", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#root.target.context.authenticatedUser().getOffice().getHierarchy()+'ofd')") })
+            @CacheEvict(value = "offices", key = "#root.target.context.authenticatedUser().getOffice().getHierarchy() + ':offices'"),
+            @CacheEvict(value = "officesForDropdown", key = "#root.target.context.authenticatedUser().getOffice().getHierarchy() + ':offices_for_dropdown'"),
+            @CacheEvict(value = "officesById", allEntries = true) })
     public CommandProcessingResult createOffice(final JsonCommand command) {
 
         try {
@@ -103,9 +104,9 @@ public class OfficeWritePlatformServiceJpaRepositoryImpl implements OfficeWriteP
     @Transactional
     @Override
     @Caching(evict = {
-            @CacheEvict(value = "offices", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#root.target.context.authenticatedUser().getOffice().getHierarchy()+'of')"),
-            @CacheEvict(value = "officesForDropdown", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#root.target.context.authenticatedUser().getOffice().getHierarchy()+'ofd')"),
-            @CacheEvict(value = "officesById", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#officeId)") })
+            @CacheEvict(value = "offices", key = "#root.target.context.authenticatedUser().getOffice().getHierarchy() + ':offices'"),
+            @CacheEvict(value = "officesForDropdown", key = "#root.target.context.authenticatedUser().getOffice().getHierarchy() + ':offices_for_dropdown'"),
+            @CacheEvict(value = "officesById", key = "#officeId") })
     public CommandProcessingResult updateOffice(final Long officeId, final JsonCommand command) {
 
         try {

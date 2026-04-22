@@ -82,6 +82,7 @@ public final class GlobalConfigurationConstants {
     public static final String ENABLE_ORIGINATOR_CREATION_DURING_LOAN_APPLICATION = "enable-originator-creation-during-loan-application";
     public static final String PASSWORD_REUSE_CHECK_HISTORY_COUNT = "password-reuse-check-history-count";
     public static final String FORCE_PASSWORD_RESET_ON_FIRST_LOGIN = "force-password-reset-on-first-login";
+    public static final String ENABLE_SYNAPSE_INTEREST_POSTING = "enable-synapse-interest-posting";
 
     private GlobalConfigurationConstants() {}
 }

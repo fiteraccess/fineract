@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.fineract.organisation.workingdays.exception.WorkingDaysNotFoundException;
 import org.apache.fineract.organisation.workingdays.service.WorkingDaysUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -40,6 +41,7 @@ public class WorkingDaysRepositoryWrapper {
         this.repository = repository;
     }
 
+    @Cacheable(value = "workingDays", key = "'entity'")
     public WorkingDays findOne() {
         final List<WorkingDays> workingDaysList = this.repository.findAll();
 
@@ -61,6 +63,7 @@ public class WorkingDaysRepositoryWrapper {
         this.repository.delete(workingDays);
     }
 
+    @Cacheable(value = "workingDays", key = "'isWorkingDay:' + #transactionDate")
     public boolean isWorkingDay(LocalDate transactionDate) {
         final WorkingDays workingDays = findOne();
         return WorkingDaysUtil.isWorkingDay(workingDays, transactionDate);

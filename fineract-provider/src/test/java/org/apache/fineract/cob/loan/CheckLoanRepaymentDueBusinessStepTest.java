@@ -45,7 +45,8 @@ import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
+import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,8 @@ public class CheckLoanRepaymentDueBusinessStepTest {
     private ConfigurationDomainService configurationDomainService;
     @Mock
     private BusinessEventNotifierService businessEventNotifierService;
+    @Mock
+    private CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private CheckLoanRepaymentDueBusinessStep underTest;
 
     @BeforeEach
@@ -70,7 +73,8 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         ThreadLocalContextUtil.setActionContext(ActionContext.DEFAULT);
         ThreadLocalContextUtil
                 .setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.now(ZoneId.systemDefault()))));
-        underTest = new CheckLoanRepaymentDueBusinessStep(configurationDomainService, businessEventNotifierService);
+        underTest = new CheckLoanRepaymentDueBusinessStep(configurationDomainService, businessEventNotifierService,
+                cacheableLoanProductConfigService);
     }
 
     @AfterEach
@@ -85,15 +89,17 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         when(configurationDomainService.retrieveRepaymentDueDays()).thenReturn(1L);
         LocalDate loanInstallmentRepaymentDueDate = DateUtils.getBusinessLocalDate().plusDays(1);
         Loan loanForProcessing = Mockito.mock(Loan.class);
-        LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
+        Long productId = 1L;
+        when(loanForProcessing.getProductId()).thenReturn(productId);
+        CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
+        productConfig.setDueDaysForRepaymentEvent(null);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanSummary loanSummary = Mockito.mock(LoanSummary.class);
         MonetaryCurrency currency = Mockito.mock(MonetaryCurrency.class);
         Money money = Mockito.mock(Money.class);
         LoanRepaymentScheduleInstallment repaymentInstallment = Mockito.mock(LoanRepaymentScheduleInstallment.class);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays.asList(repaymentInstallment);
         when(repaymentInstallment.getDueDate()).thenReturn(loanInstallmentRepaymentDueDate);
-        when(loanForProcessing.getLoanProduct()).thenReturn(loanProduct);
-        when(loanProduct.getDueDaysForRepaymentEvent()).thenReturn(null);
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(loanRepaymentScheduleInstallments);
         when(loanForProcessing.getSummary()).thenReturn(loanSummary);
         when(loanForProcessing.getSummary().getTotalOutstanding()).thenReturn(BigDecimal.ONE);
@@ -117,13 +123,15 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         when(configurationDomainService.retrieveRepaymentDueDays()).thenReturn(1L);
         LocalDate loanInstallmentRepaymentDueDateAfter5Days = DateUtils.getBusinessLocalDate().plusDays(5);
         Loan loanForProcessing = Mockito.mock(Loan.class);
-        LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
+        Long productId = 1L;
+        when(loanForProcessing.getProductId()).thenReturn(productId);
+        CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
+        productConfig.setDueDaysForRepaymentEvent(null);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays
                 .asList(new LoanRepaymentScheduleInstallment(loanForProcessing, 1, LocalDate.now(ZoneId.systemDefault()),
                         loanInstallmentRepaymentDueDateAfter5Days, BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0),
                         BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0), false, new HashSet<>(), BigDecimal.valueOf(0.0)));
-        when(loanForProcessing.getLoanProduct()).thenReturn(loanProduct);
-        when(loanProduct.getDueDaysForRepaymentEvent()).thenReturn(null);
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(loanRepaymentScheduleInstallments);
 
         // when
@@ -142,16 +150,18 @@ public class CheckLoanRepaymentDueBusinessStepTest {
         when(configurationDomainService.retrieveRepaymentDueDays()).thenReturn(2L);
         LocalDate loanInstallmentRepaymentDueDate = DateUtils.getBusinessLocalDate().plusDays(1);
         Loan loanForProcessing = Mockito.mock(Loan.class);
-        LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
+        Long productId = 1L;
+        when(loanForProcessing.getProductId()).thenReturn(productId);
+        CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
+        // Loan Product setting overrides global settings
+        productConfig.setDueDaysForRepaymentEvent(1);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanSummary loanSummary = Mockito.mock(LoanSummary.class);
         MonetaryCurrency currency = Mockito.mock(MonetaryCurrency.class);
         Money money = Mockito.mock(Money.class);
         LoanRepaymentScheduleInstallment repaymentInstallment = Mockito.mock(LoanRepaymentScheduleInstallment.class);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays.asList(repaymentInstallment);
         when(repaymentInstallment.getDueDate()).thenReturn(loanInstallmentRepaymentDueDate);
-        when(loanForProcessing.getLoanProduct()).thenReturn(loanProduct);
-        // Loan Product setting overrides global settings
-        when(loanProduct.getDueDaysForRepaymentEvent()).thenReturn(1);
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(loanRepaymentScheduleInstallments);
         when(loanForProcessing.getSummary()).thenReturn(loanSummary);
         when(loanForProcessing.getSummary().getTotalOutstanding()).thenReturn(BigDecimal.ONE);

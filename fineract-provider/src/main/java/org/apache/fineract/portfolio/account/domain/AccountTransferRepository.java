@@ -28,15 +28,42 @@ import org.springframework.data.repository.query.Param;
 public interface AccountTransferRepository
         extends JpaRepository<AccountTransferTransaction, Long>, JpaSpecificationExecutor<AccountTransferTransaction> {
 
-    @Query("select att from AccountTransferTransaction att where att.accountTransferDetails.fromLoanAccount.id= :accountNumber and att.reversed=false")
+    @Query("""
+            select att from AccountTransferTransaction att
+            join fetch att.accountTransferDetails
+            left join fetch att.fromSavingsTransaction
+            left join fetch att.toSavingsTransaction
+            left join fetch att.toLoanTransaction
+            left join fetch att.fromLoanTransaction
+            where att.accountTransferDetails.fromLoanAccount.id = :accountNumber and att.reversed = false
+            """)
     List<AccountTransferTransaction> findByFromLoanId(@Param("accountNumber") Long accountNumber);
 
-    @Query("select att from AccountTransferTransaction att where (att.accountTransferDetails.fromLoanAccount.id= :accountNumber or att.accountTransferDetails.toLoanAccount.id=:accountNumber) and att.reversed=false order by att.id desc")
+    @Query("""
+            select att from AccountTransferTransaction att
+            join fetch att.accountTransferDetails
+            left join fetch att.fromSavingsTransaction
+            left join fetch att.toSavingsTransaction
+            left join fetch att.toLoanTransaction
+            left join fetch att.fromLoanTransaction
+            where (att.accountTransferDetails.fromLoanAccount.id = :accountNumber
+                or att.accountTransferDetails.toLoanAccount.id = :accountNumber)
+                and att.reversed = false
+            order by att.id desc
+            """)
     List<AccountTransferTransaction> findAllByLoanId(@Param("accountNumber") Long accountNumber);
 
     @Query("select att from AccountTransferTransaction att where att.toLoanTransaction.id= :loanTransactionId and att.reversed=false")
     AccountTransferTransaction findByToLoanTransactionId(@Param("loanTransactionId") Long loanTransactionId);
 
-    @Query("select att from AccountTransferTransaction att where att.fromLoanTransaction.id IN :loanTransactions and att.reversed=false")
+    @Query("""
+            select att from AccountTransferTransaction att
+            join fetch att.accountTransferDetails
+            left join fetch att.fromSavingsTransaction
+            left join fetch att.toSavingsTransaction
+            left join fetch att.toLoanTransaction
+            left join fetch att.fromLoanTransaction
+            where att.fromLoanTransaction.id in :loanTransactions and att.reversed = false
+            """)
     List<AccountTransferTransaction> findByFromLoanTransactions(@Param("loanTransactions") Collection<Long> loanTransactions);
 }

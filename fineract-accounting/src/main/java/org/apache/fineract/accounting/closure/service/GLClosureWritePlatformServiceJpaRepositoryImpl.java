@@ -39,6 +39,7 @@ import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.NonTransientDataAccessException;
 import org.springframework.orm.jpa.JpaSystemException;
@@ -56,6 +57,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
+    @CacheEvict(value = "glClosures", allEntries = true)
     public CommandProcessingResult createGLClosure(final JsonCommand command) {
         try {
             final GLClosureCommand closureCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
@@ -91,6 +93,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
+    @CacheEvict(value = "glClosures", allEntries = true)
     public CommandProcessingResult updateGLClosure(final Long glClosureId, final JsonCommand command) {
         final GLClosureCommand closureCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
         closureCommand.validateForUpdate();
@@ -111,6 +114,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
+    @CacheEvict(value = "glClosures", allEntries = true)
     public CommandProcessingResult deleteGLClosure(final Long glClosureId) {
         final GLClosure glClosure = this.glClosureRepository.findById(glClosureId)
                 .orElseThrow(() -> new GLClosureNotFoundException(glClosureId));

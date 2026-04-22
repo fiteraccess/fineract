@@ -31,6 +31,12 @@ public class FloatingRateDTO {
     private BigDecimal actualInterestRateDiff;
     private final Collection<FloatingRatePeriodData> baseLendingRatePeriods;
 
+    /**
+     * Pre-computed applicable rates for floating rate loans. This is populated by the service layer to avoid loading
+     * the LoanProduct entity in the Loan domain object.
+     */
+    private Collection<FloatingRatePeriodData> applicableRates;
+
     public FloatingRateDTO(final boolean isFloatingInterestRate, final LocalDate startDate, final BigDecimal interestRateDiff,
             final Collection<FloatingRatePeriodData> baseLendingRatePeriods) {
         this.isFloatingInterestRate = isFloatingInterestRate;
@@ -74,6 +80,26 @@ public class FloatingRateDTO {
 
     public void resetInterestRateDiff() {
         this.interestRateDiff = this.actualInterestRateDiff;
+    }
+
+    /**
+     * Gets the pre-computed applicable rates for floating rate loans.
+     *
+     * @return the applicable rates, or null if not set
+     */
+    public Collection<FloatingRatePeriodData> getApplicableRates() {
+        return this.applicableRates;
+    }
+
+    /**
+     * Sets the pre-computed applicable rates for floating rate loans. This should be called by the service layer before
+     * passing the DTO to the Loan entity.
+     *
+     * @param applicableRates
+     *            the applicable rates
+     */
+    public void setApplicableRates(final Collection<FloatingRatePeriodData> applicableRates) {
+        this.applicableRates = applicableRates;
     }
 
 }

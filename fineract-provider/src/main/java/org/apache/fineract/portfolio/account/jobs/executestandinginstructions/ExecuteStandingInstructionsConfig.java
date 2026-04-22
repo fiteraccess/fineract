@@ -65,6 +65,6 @@ public class ExecuteStandingInstructionsConfig {
     @Bean
     public ExecuteStandingInstructionsTasklet executeStandingInstructionsTasklet() {
         return new ExecuteStandingInstructionsTasklet(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator,
-                accountTransfersWritePlatformService);
+                accountTransfersWritePlatformService, transactionManager);
     }
 }

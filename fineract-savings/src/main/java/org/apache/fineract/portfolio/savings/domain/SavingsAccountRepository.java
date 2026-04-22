@@ -19,9 +19,11 @@
 package org.apache.fineract.portfolio.savings.domain;
 
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.apache.fineract.cob.data.COBIdAndLastClosedBusinessDate;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.portfolio.savings.data.SavingsAccrualData;
@@ -30,6 +32,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,6 +63,13 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
 
     @Query("select sa from SavingsAccount sa where sa.id = :accountId and sa.depositType = :depositAccountTypeId")
     SavingsAccount findByIdAndDepositAccountType(@Param("accountId") Long accountId,
+            @Param("depositAccountTypeId") Integer depositAccountTypeId);
+
+    @Query("SELECT DISTINCT sa FROM SavingsAccount sa LEFT JOIN FETCH sa.charges LEFT JOIN FETCH sa.savingsOfficerHistory LEFT JOIN FETCH sa.product LEFT JOIN FETCH sa.group WHERE sa.id = :id")
+    Optional<SavingsAccount> findByIdWithLightweightCollections(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT sa FROM SavingsAccount sa LEFT JOIN FETCH sa.charges LEFT JOIN FETCH sa.savingsOfficerHistory LEFT JOIN FETCH sa.product LEFT JOIN FETCH sa.group WHERE sa.id = :accountId and sa.depositType = :depositAccountTypeId")
+    Optional<SavingsAccount> findByIdAndDepositAccountTypeWithLightweightCollections(@Param("accountId") Long accountId,
             @Param("depositAccountTypeId") Integer depositAccountTypeId);
 
     @Query("select sa from SavingsAccount sa where sa.accountNumber = :accountNumber and sa.status in (100, 200, 300, 303, 304) ")
@@ -147,4 +157,40 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
             ORDER BY sa.lastClosedBusinessDate ASC
             """)
     List<COBIdAndLastClosedBusinessDate> findAllSavingsIdsOldestCobProcessed();
+
+    /**
+     * O(1) direct update of summary fields and sub_status, bypassing Hibernate cascade/orphan-removal checks on the
+     * transactions collection. Uses optimistic locking via the version column. Returns 1 if the update succeeded, 0 if
+     * the version has changed (concurrent modification).
+     */
+    @Modifying
+    @Query("""
+            UPDATE SavingsAccount sa SET
+                sa.summary.totalDeposits = :totalDeposits,
+                sa.summary.totalWithdrawals = :totalWithdrawals,
+                sa.summary.totalInterestPosted = :totalInterestPosted,
+                sa.summary.totalWithdrawalFees = :totalWithdrawalFees,
+                sa.summary.totalFeeCharge = :totalFeeCharge,
+                sa.summary.totalPenaltyCharge = :totalPenaltyCharge,
+                sa.summary.totalAnnualFees = :totalAnnualFees,
+                sa.summary.accountBalance = :accountBalance,
+                sa.summary.totalOverdraftInterestDerived = :totalOverdraftInterestDerived,
+                sa.summary.totalWithholdTax = :totalWithholdTax,
+                sa.summary.totalInterestEarned = :totalInterestEarned,
+                sa.summary.lastInterestCalculationDate = :lastInterestCalculationDate,
+                sa.summary.interestPostedTillDate = :interestPostedTillDate,
+                sa.sub_status = :subStatus,
+                sa.version = sa.version + 1
+            WHERE sa.id = :id AND sa.version = :version
+            """)
+    int updateSummaryDirect(@Param("id") Long id, @Param("totalDeposits") BigDecimal totalDeposits,
+            @Param("totalWithdrawals") BigDecimal totalWithdrawals, @Param("totalInterestPosted") BigDecimal totalInterestPosted,
+            @Param("totalWithdrawalFees") BigDecimal totalWithdrawalFees, @Param("totalFeeCharge") BigDecimal totalFeeCharge,
+            @Param("totalPenaltyCharge") BigDecimal totalPenaltyCharge, @Param("totalAnnualFees") BigDecimal totalAnnualFees,
+            @Param("accountBalance") BigDecimal accountBalance,
+            @Param("totalOverdraftInterestDerived") BigDecimal totalOverdraftInterestDerived,
+            @Param("totalWithholdTax") BigDecimal totalWithholdTax, @Param("totalInterestEarned") BigDecimal totalInterestEarned,
+            @Param("lastInterestCalculationDate") LocalDate lastInterestCalculationDate,
+            @Param("interestPostedTillDate") LocalDate interestPostedTillDate, @Param("subStatus") Integer subStatus,
+            @Param("version") int version);
 }

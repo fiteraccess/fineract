@@ -25,12 +25,14 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.configuration.domain.GlobalConfigurationProperty;
 import org.apache.fineract.infrastructure.configuration.domain.GlobalConfigurationRepositoryWrapper;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
+import org.apache.fineract.infrastructure.core.config.cache.CacheConfig;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.NonTransientDataAccessException;
 import org.springframework.orm.jpa.JpaSystemException;
@@ -51,6 +53,7 @@ public class GlobalConfigurationWritePlatformServiceJpaRepositoryImpl implements
 
     @Transactional
     @Override
+    @CacheEvict(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, allEntries = true)
     public CommandProcessingResult update(final Long configId, final JsonCommand command) {
         try {
             this.globalConfigurationDataValidator.validateForUpdate(command);
@@ -76,6 +79,7 @@ public class GlobalConfigurationWritePlatformServiceJpaRepositoryImpl implements
 
     @Transactional
     @Override
+    @CacheEvict(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, allEntries = true)
     public void addSurveyConfig(final String name) {
         try {
             final GlobalConfigurationProperty ppi = GlobalConfigurationProperty.newSurveyConfiguration(name);

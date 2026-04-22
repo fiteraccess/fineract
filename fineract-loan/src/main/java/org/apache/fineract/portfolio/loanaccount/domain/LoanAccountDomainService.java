@@ -20,6 +20,7 @@ package org.apache.fineract.portfolio.loanaccount.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +47,8 @@ public interface LoanAccountDomainService {
             PaymentDetail paymentDetail, String noteText, ExternalId txnExternalId, boolean isLoanToLoanTransfer);
 
     void reverseTransfer(LoanTransaction loanTransaction);
+
+    void reverseTransfers(Collection<LoanTransaction> loanTransactions);
 
     LoanTransaction makeChargePayment(Loan loan, Long chargeId, LocalDate transactionDate, BigDecimal transactionAmount,
             PaymentDetail paymentDetail, String noteText, ExternalId txnExternalId, Integer transactionType, Integer installmentNumber);

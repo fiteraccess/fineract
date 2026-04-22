@@ -344,6 +344,18 @@ public class SavingsAccountAssembler {
         return loadTransactionsToSavingsAccount(account, backdatedTxnsAllowedTill);
     }
 
+    /**
+     * Lightweight assembly for O(1) transaction processing. Loads account metadata, charges, and officer history
+     * WITHOUT loading the transaction history collection. This avoids the O(N) cost of initializing the transactions
+     * lazy proxy upfront. If a code path later needs transactions (e.g., legacy fallback for withdrawal fees),
+     * Hibernate will lazy-load them on demand within the active transaction context.
+     */
+    public SavingsAccount assembleFromLightweight(final Long savingsId) {
+        SavingsAccount account = this.savingsAccountRepository.findOneWithNotFoundDetectionLightweight(savingsId);
+        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        return account;
+    }
+
     public SavingsAccount loadTransactionsToSavingsAccount(final SavingsAccount account, final boolean backdatedTxnsAllowedTill) {
         List<SavingsAccountTransaction> savingsAccountTransactions = null;
         if (backdatedTxnsAllowedTill) {

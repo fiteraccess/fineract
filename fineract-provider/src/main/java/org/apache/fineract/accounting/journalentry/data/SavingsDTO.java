@@ -22,6 +22,7 @@ import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.fineract.organisation.office.domain.Office;
 
 @AllArgsConstructor
 @Getter
@@ -35,4 +36,5 @@ public class SavingsDTO {
     private boolean cashBasedAccountingEnabled;
     private boolean accrualBasedAccountingEnabled;
     private List<SavingsTransactionDTO> newSavingsTransactions;
+    private Office office;
 }

@@ -52,6 +52,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.Loa
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleType;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanDownPaymentTransactionValidator;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanRefundValidator;
+import org.apache.fineract.portfolio.loanproduct.data.CacheableLoanProductConfig;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
 import org.junit.jupiter.api.AfterEach;
@@ -193,7 +194,9 @@ public class LoanDownPaymentHandlerServiceImplTest {
         when(loanTransactionRepository.saveAndFlush(any(LoanTransaction.class))).thenReturn(loanTransaction);
 
         // when
-        final LoanTransaction actual = underTest.handleDownPayment(scheduleGeneratorDTO, command, disbursement, loanForProcessing);
+        final CacheableLoanProductConfig productConfig = Mockito.mock(CacheableLoanProductConfig.class);
+        final LoanTransaction actual = underTest.handleDownPayment(scheduleGeneratorDTO, command, disbursement, loanForProcessing,
+                productConfig);
 
         // then
         assertNotNull(actual);
@@ -244,7 +247,8 @@ public class LoanDownPaymentHandlerServiceImplTest {
         doNothing().when(businessEventNotifierService).notifyPreBusinessEvent(any(LoanTransactionDownPaymentPreBusinessEvent.class));
 
         // when
-        LoanTransaction actual = underTest.handleDownPayment(scheduleGeneratorDTO, command, disbursement, loanForProcessing);
+        final CacheableLoanProductConfig productConfig = Mockito.mock(CacheableLoanProductConfig.class);
+        LoanTransaction actual = underTest.handleDownPayment(scheduleGeneratorDTO, command, disbursement, loanForProcessing, productConfig);
 
         // then
         assertNull(actual);

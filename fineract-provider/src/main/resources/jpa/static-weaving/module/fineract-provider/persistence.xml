@@ -260,6 +260,7 @@
         <class>org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionTaxDetails</class>
         <class>org.apache.fineract.portfolio.savings.domain.SavingsOfficerAssignmentHistory</class>
         <class>org.apache.fineract.portfolio.savings.domain.SavingsProduct</class>
+        <class>org.apache.fineract.portfolio.savings.domain.SavingsAccountDailyBalance</class>
 
         <!-- Progressive Loan Module Entities -->
         <class>org.apache.fineract.portfolio.loanaccount.domain.LoanCapitalizedIncomeBalance</class>

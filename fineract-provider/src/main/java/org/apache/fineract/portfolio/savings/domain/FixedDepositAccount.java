@@ -795,10 +795,9 @@ public class FixedDepositAccount extends SavingsAccount {
         return this.accountTermAndPreClosure.getTransferToSavingsAccountId();
     }
 
-    public FixedDepositAccount reInvest(BigDecimal depositAmount, ExternalId externalId) {
+    public FixedDepositAccount reInvest(BigDecimal depositAmount, ExternalId externalId, SavingsProduct product) {
 
         final DepositAccountTermAndPreClosure newAccountTermAndPreClosure = this.accountTermAndPreClosure.copy(depositAmount);
-        final SavingsProduct product = this.product;
         final InterestRateChart productChart = product.applicableChart(getClosedOnDate());
         final DepositAccountInterestRateChart newChart = DepositAccountInterestRateChart.from(productChart);
 
@@ -867,6 +866,12 @@ public class FixedDepositAccount extends SavingsAccount {
     @Override
     public void loadLazyCollections() {
         super.loadLazyCollections();
+        this.chart.getId();
+    }
+
+    @Override
+    public void loadLazyCollectionsLightweight() {
+        super.loadLazyCollectionsLightweight();
         this.chart.getId();
     }
 

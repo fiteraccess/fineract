@@ -35,6 +35,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryType;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
@@ -42,6 +44,9 @@ import org.apache.fineract.infrastructure.security.service.PlatformSecurityConte
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Isolation;
@@ -62,6 +67,11 @@ public class SavingsSchedularInterestPoster {
     private final List<SavingsAccountData> savingsAccountDataList = new ArrayList<>();
     private Collection<SavingsAccountData> savingAccounts;
     private boolean backdatedTxnsAllowedTill;
+
+    // Optional Synapse dependencies — injected via setter only when synapse is enabled
+    private SynapseInterestPostingOutboxWriter synapseInterestPostingOutboxWriter;
+    private FineractProperties fineractProperties;
+    private ConfigurationDomainService configurationDomainService;
 
     @Transactional(isolation = Isolation.READ_UNCOMMITTED, rollbackFor = Exception.class)
     public void postInterest() throws JobExecutionException {
@@ -109,7 +119,7 @@ public class SavingsSchedularInterestPoster {
             for (SavingsAccountTransactionData savingsAccountTransactionData : savingsAccountTransactionDataList) {
                 if (savingsAccountTransactionData.getId() == null && !MathUtil.isZero(savingsAccountTransactionData.getAmount())) {
                     final String key = savingsAccountTransactionData.getRefNo();
-                    final Boolean isOverdraft = savingsAccountTransactionData.getIsOverdraft();
+
                     final SavingsAccountTransactionData dataFromFetch = savingsAccountTransactionDataHashMap.get(key);
                     savingsAccountTransactionData.setId(dataFromFetch.getId());
                     if (savingsAccountData.getGlAccountIdForSavingsControl() != 0
@@ -160,18 +170,30 @@ public class SavingsSchedularInterestPoster {
 
     @SuppressWarnings("unused")
     private void batchUpdate(final List<SavingsAccountData> savingsAccountDataList) throws DataAccessException {
+        if (isSynapseEnabled()) {
+            LocalDate currentDate = DateUtils.getBusinessLocalDate();
+            Long userId = platformSecurityContext.authenticatedUser().getId();
+            SynapsePostResult result = synapseInterestPostingOutboxWriter.postInterestBatch(savingsAccountDataList, currentDate);
+            executeCursorUpdates(result.getCursorUpdates(), userId);
+            log.debug("Synapse batch complete: accepted={}, failed={}", result.getAccepted(), result.getFailed());
+            return;
+        }
+
         String queryForSavingsUpdate = batchQueryForSavingsSummaryUpdate();
         String queryForTransactionInsertion = batchQueryForTransactionInsertion();
         String queryForTransactionUpdate = batchQueryForTransactionsUpdate();
+        // Build one parameter list per SQL statement, then execute each statement in bulk.
         List<Object[]> paramsForTransactionInsertion = new ArrayList<>();
         List<Object[]> paramsForSavingsSummary = new ArrayList<>();
         List<Object[]> paramsForTransactionUpdate = new ArrayList<>();
+        // Track the ref numbers of newly inserted rows so they can be fetched back with their ids.
         List<String> transRefNo = new ArrayList<>();
         LocalDate currentDate = DateUtils.getBusinessLocalDate();
         Long userId = platformSecurityContext.authenticatedUser().getId();
         for (SavingsAccountData savingsAccountData : savingsAccountDataList) {
             OffsetDateTime auditTime = DateUtils.getAuditOffsetDateTime();
             SavingsAccountSummaryData savingsAccountSummaryData = savingsAccountData.getSummary();
+            // Each account contributes one summary update.
             paramsForSavingsSummary.add(new Object[] { savingsAccountSummaryData.getTotalDeposits(),
                     savingsAccountSummaryData.getTotalWithdrawals(), savingsAccountSummaryData.getTotalInterestEarned(),
                     savingsAccountSummaryData.getTotalInterestPosted(), savingsAccountSummaryData.getTotalWithdrawalFees(),
@@ -185,9 +207,13 @@ public class SavingsSchedularInterestPoster {
             List<SavingsAccountTransactionData> savingsAccountTransactionDataList = savingsAccountData.getSavingsAccountTransactionData();
             for (SavingsAccountTransactionData savingsAccountTransactionData : savingsAccountTransactionDataList) {
                 if (savingsAccountTransactionData.getId() == null && !MathUtil.isZero(savingsAccountTransactionData.getAmount())) {
+                    // New transactions have no database id yet. Give each one a temporary ref
+                    // so the inserted row can be found again after the batch insert.
                     UUID uuid = UUID.randomUUID();
                     savingsAccountTransactionData.setRefNo(uuid.toString());
                     transRefNo.add(uuid.toString());
+
+                    // todo: new transactions will be saved in a new transaction collection
                     paramsForTransactionInsertion.add(new Object[] { savingsAccountData.getId(), savingsAccountData.getOfficeId(),
                             savingsAccountTransactionData.isReversed(), savingsAccountTransactionData.getTransactionType().getId(),
                             savingsAccountTransactionData.getTransactionDate(), savingsAccountTransactionData.getAmount(),
@@ -197,6 +223,8 @@ public class SavingsSchedularInterestPoster {
                             savingsAccountTransactionData.getRefNo(), savingsAccountTransactionData.isReversalTransaction(),
                             savingsAccountTransactionData.getOverdraftAmount(), currentDate });
                 } else {
+                    // Existing rows are updated in place with fresh derived balances and flags.
+                    // todo: also pickup the existing transactions
                     paramsForTransactionUpdate.add(new Object[] { savingsAccountTransactionData.isReversed(),
                             savingsAccountTransactionData.getAmount(), savingsAccountTransactionData.getOverdraftAmount(),
                             savingsAccountTransactionData.getBalanceEndDate(), savingsAccountTransactionData.getBalanceNumberOfDays(),
@@ -205,14 +233,17 @@ public class SavingsSchedularInterestPoster {
                             savingsAccountTransactionData.getId() });
                 }
             }
+            // Keep the processed transactions on the account object for the journal-entry step.
             savingsAccountData.setUpdatedTransactions(savingsAccountTransactionDataList);
         }
 
         if (transRefNo.size() > 0) {
+            // Persist summaries first, then insert new transactions, then refresh existing ones.
             this.jdbcTemplate.batchUpdate(queryForSavingsUpdate, paramsForSavingsSummary);
             this.jdbcTemplate.batchUpdate(queryForTransactionInsertion, paramsForTransactionInsertion);
             this.jdbcTemplate.batchUpdate(queryForTransactionUpdate, paramsForTransactionUpdate);
             log.debug("`Total No Of Interest Posting:` {}", transRefNo.size());
+            // Read back the newly inserted rows to obtain the ids assigned by the database.
             List<SavingsAccountTransactionData> savingsAccountTransactionDataList = fetchTransactionsFromIds(transRefNo);
             if (savingsAccountDataList != null) {
                 log.debug("Fetched Transactions from DB: {}", savingsAccountTransactionDataList.size());
@@ -223,6 +254,7 @@ public class SavingsSchedularInterestPoster {
                 final String key = savingsAccountTransactionData.getRefNo();
                 savingsAccountTransactionMap.put(key, savingsAccountTransactionData);
             }
+            // Journal entries are created last, because they need the real savings-transaction ids.
             batchUpdateJournalEntries(savingsAccountDataList, savingsAccountTransactionMap);
         }
 
@@ -247,5 +279,29 @@ public class SavingsSchedularInterestPoster {
         return "UPDATE m_savings_account_transaction "
                 + "SET is_reversed=?, amount=?, overdraft_amount_derived=?, balance_end_date_derived=?, balance_number_of_days_derived=?, running_balance_derived=?, cumulative_balance_derived=?, is_reversal=?, "
                 + LAST_MODIFIED_DATE_DB_FIELD + " = ?, " + LAST_MODIFIED_BY_DB_FIELD + " = ? " + "WHERE id=?";
+    }
+
+    private boolean isSynapseEnabled() {
+        return fineractProperties != null && synapseInterestPostingOutboxWriter != null && fineractProperties.getSynapse() != null
+                && fineractProperties.getSynapse().isEnabled() && configurationDomainService != null
+                && configurationDomainService.isSynapseInterestPostingEnabled();
+    }
+
+    private void executeCursorUpdates(List<AccountCursorUpdate> cursorUpdates, Long userId) {
+        if (cursorUpdates.isEmpty()) {
+            return;
+        }
+        OffsetDateTime auditTime = DateUtils.getAuditOffsetDateTime();
+        List<Object[]> params = new ArrayList<>();
+        for (AccountCursorUpdate cursor : cursorUpdates) {
+            params.add(new Object[] { cursor.getInterestPostedTillDate(), cursor.getLastInterestCalculationDate(), auditTime, userId,
+                    cursor.getAccountId() });
+        }
+        this.jdbcTemplate.batchUpdate(batchQueryForPostingCursorUpdate(), params);
+    }
+
+    private String batchQueryForPostingCursorUpdate() {
+        return "UPDATE m_savings_account SET interest_posted_till_date = ?, last_interest_calculation_date = ?, "
+                + LAST_MODIFIED_DATE_DB_FIELD + " = ?, " + LAST_MODIFIED_BY_DB_FIELD + " = ? WHERE id = ?";
     }
 }

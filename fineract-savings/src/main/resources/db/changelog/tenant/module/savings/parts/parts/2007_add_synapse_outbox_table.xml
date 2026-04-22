@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet author="fineract" id="synapse-outbox-1">
+        <createTable tableName="synapse_outbox">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="trace_id" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_synapse_outbox_trace_id"/>
+            </column>
+            <column name="batch_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="task_type" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="office_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="payload" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(16)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempts" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_attempts" type="INT" defaultValueNumeric="3">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error_detail" type="TEXT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="${current_datetime}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dispatched_at" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+            <column name="completed_at" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet author="fineract" id="synapse-outbox-2">
+        <createIndex tableName="synapse_outbox" indexName="idx_synapse_outbox_status_task_type">
+            <column name="status"/>
+            <column name="task_type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="fineract" id="synapse-outbox-3">
+        <createIndex tableName="synapse_outbox" indexName="idx_synapse_outbox_batch_id">
+            <column name="batch_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="fineract" id="synapse-outbox-4">
+        <createIndex tableName="synapse_outbox" indexName="idx_synapse_outbox_account_id">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -18,12 +18,13 @@
  */
 package org.apache.fineract.portfolio.account.jobs.executestandinginstructions;
 
+import static org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.exception.AbstractPlatformServiceUnavailableException;
@@ -49,22 +50,63 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
-@RequiredArgsConstructor
 public class ExecuteStandingInstructionsTasklet implements Tasklet {
+
+    private static final int DEFAULT_BATCH_SIZE = 100;
 
     private final StandingInstructionReadPlatformService standingInstructionReadPlatformService;
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
+    private final PlatformTransactionManager transactionManager;
+    private final int batchSize;
+
+    public ExecuteStandingInstructionsTasklet(StandingInstructionReadPlatformService standingInstructionReadPlatformService,
+            JdbcTemplate jdbcTemplate, DatabaseSpecificSQLGenerator sqlGenerator,
+            AccountTransfersWritePlatformService accountTransfersWritePlatformService, PlatformTransactionManager transactionManager) {
+        this(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator, accountTransfersWritePlatformService, transactionManager,
+                DEFAULT_BATCH_SIZE);
+    }
+
+    ExecuteStandingInstructionsTasklet(StandingInstructionReadPlatformService standingInstructionReadPlatformService,
+            JdbcTemplate jdbcTemplate, DatabaseSpecificSQLGenerator sqlGenerator,
+            AccountTransfersWritePlatformService accountTransfersWritePlatformService, PlatformTransactionManager transactionManager,
+            int batchSize) {
+        this.standingInstructionReadPlatformService = standingInstructionReadPlatformService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.sqlGenerator = sqlGenerator;
+        this.accountTransfersWritePlatformService = accountTransfersWritePlatformService;
+        this.transactionManager = transactionManager;
+        this.batchSize = Math.max(1, batchSize);
+    }
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         Collection<StandingInstructionData> instructionData = standingInstructionReadPlatformService
                 .retrieveAll(StandingInstructionStatus.ACTIVE.getValue());
+        List<StandingInstructionData> instructions = new ArrayList<>(instructionData);
         List<Throwable> errors = new ArrayList<>();
-        for (StandingInstructionData data : instructionData) {
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(PROPAGATION_REQUIRES_NEW);
+
+        for (int index = 0; index < instructions.size(); index += batchSize) {
+            List<StandingInstructionData> batch = instructions.subList(index, Math.min(index + batchSize, instructions.size()));
+            transactionTemplate.executeWithoutResult(status -> batch.forEach(data -> processInstruction(errors, data)));
+        }
+
+        if (!errors.isEmpty()) {
+            throw new JobExecutionException(errors);
+        }
+        return RepeatStatus.FINISHED;
+    }
+
+    private void processInstruction(final List<Throwable> errors, final StandingInstructionData data) {
+        try {
             boolean isDueForTransfer = false;
             AccountTransferRecurrenceType recurrenceType = data.getRecurrenceType();
             StandingInstructionType instructionType = data.getInstructionType();
@@ -118,11 +160,10 @@ public class ExecuteStandingInstructionsTasklet implements Tasklet {
                 }
 
             }
+        } catch (Exception e) {
+            errors.add(new Exception("Unhandled System Exception while processing standing Instruction id" + data.getId(), e));
+            log.error("Unhandled exception while processing standing instruction {}", data.getId(), e);
         }
-        if (!errors.isEmpty()) {
-            throw new JobExecutionException(errors);
-        }
-        return RepeatStatus.FINISHED;
     }
 
     private boolean transferAmount(final List<Throwable> errors, final AccountTransferDTO accountTransferDTO, final Long instructionId) {
