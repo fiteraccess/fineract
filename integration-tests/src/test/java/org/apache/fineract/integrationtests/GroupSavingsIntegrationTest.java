@@ -1059,11 +1059,9 @@ public class GroupSavingsIntegrationTest {
                 .existingGroupWithGuaranteeAmount(String.valueOf(invalidGroupId), "1", GUARANTEE_AMOUNT).build();
 
         final ResponseSpecification errorResponse = new ResponseSpecBuilder().build();
-        final RequestSpecification errorRequest = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        errorRequest.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
 
-        ArrayList<HashMap> error = (ArrayList<HashMap>) this.guarantorHelper.createGuarantorWithError(loanID, guarantorJSON, errorRequest,
-                errorResponse);
+        ArrayList<HashMap> error = (ArrayList<HashMap>) this.guarantorHelper.createGuarantorWithError(loanID, guarantorJSON,
+                this.requestSpec, errorResponse);
         // Verify we got an error response (status code may be 403 or 404 depending on environment)
         Assertions.assertNotNull(error, "Should return error for invalid group ID");
 
@@ -1116,11 +1114,9 @@ public class GroupSavingsIntegrationTest {
                     .build();
 
             final ResponseSpecification errorResponse = new ResponseSpecBuilder().build();
-            final RequestSpecification errorRequest = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-            errorRequest.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
 
             ArrayList<HashMap> error = (ArrayList<HashMap>) this.guarantorHelper.createGuarantorWithError(loanID, guarantorJSON,
-                    errorRequest, errorResponse);
+                    this.requestSpec, errorResponse);
             // Verify we got an error response (status code may be 403 or 404 depending on environment)
             Assertions.assertNotNull(error, "Should return error for client ID used with GROUP type");
 
@@ -1172,11 +1168,9 @@ public class GroupSavingsIntegrationTest {
 
         // Try to add the SAME group guarantor again - should fail with duplicate error
         final ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(403).build();
-        final RequestSpecification errorRequest = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        errorRequest.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
 
-        ArrayList<HashMap> error = (ArrayList<HashMap>) this.guarantorHelper.createGuarantorWithError(loanID, guarantorJSON, errorRequest,
-                errorResponse);
+        ArrayList<HashMap> error = (ArrayList<HashMap>) this.guarantorHelper.createGuarantorWithError(loanID, guarantorJSON,
+                this.requestSpec, errorResponse);
         Assertions.assertNotNull(error, "Should return error for duplicate group guarantor");
 
         // Verify error message contains group information

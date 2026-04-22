@@ -498,7 +498,7 @@ public class SavingsConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    @ConditionalOnMissingBean(SynapseInterestTransactionApplier.class)
     public SynapseInterestTransactionApplier interestPostingReplayService(SavingsAccountTransactionRepository transactionRepository,
             SavingsAccountTransactionSummaryWrapper summaryWrapper) {
         return new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);

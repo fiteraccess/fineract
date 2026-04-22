@@ -1620,16 +1620,20 @@ public class AccountingProcessorHelper {
         if (journalEntries.isEmpty()) {
             return List.of();
         }
-        List<JournalEntry> loanJournalEntriesToNotify = journalEntries.stream()
-                .filter(journalEntry -> journalEntry.isNew() && journalEntry.getLoanTransactionId() != null).toList();
-        List<JournalEntry> savedJournalEntries = this.glJournalEntryRepository.saveAll(journalEntries);
-        loanJournalEntriesToNotify.forEach(journalEntry -> businessEventNotifierService
-                .notifyPostBusinessEvent(new LoanJournalEntryCreatedBusinessEvent(journalEntry)));
+        final List<JournalEntry> savedJournalEntries = new ArrayList<>(journalEntries.size());
+        for (JournalEntry journalEntry : journalEntries) {
+            savedJournalEntries.add(persistJournalEntry(journalEntry));
+        }
         return savedJournalEntries;
     }
 
     public JournalEntry persistJournalEntry(JournalEntry journalEntry) {
-        return persistJournalEntries(List.of(journalEntry)).get(0);
+        boolean isNew = journalEntry.isNew();
+        JournalEntry savedJournalEntry = this.glJournalEntryRepository.saveAndFlush(journalEntry);
+        if (isNew && journalEntry.getLoanTransactionId() != null) {
+            businessEventNotifierService.notifyPostBusinessEvent(new LoanJournalEntryCreatedBusinessEvent(savedJournalEntry));
+        }
+        return savedJournalEntry;
     }
 
     private void createJournalEntriesForLoanChargesInternal(final Office office, final String currencyCode, final int accountMappingTypeId,
