@@ -36,11 +36,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.organisation.office.domain.Office;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheWriter;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -94,6 +96,25 @@ public class RedisCacheConfig {
         }
 
         return new LettuceConnectionFactory(config, clientConfigBuilder.build());
+    }
+
+    // Fail-fast boot check: if Redis is enabled but unreachable, abort startup so deployers notice the
+    // missing dependency immediately. FallbackToCacheManagerProxy still handles post-boot transient blips.
+    @Bean
+    public InitializingBean redisConnectionValidator(LettuceConnectionFactory redisConnectionFactory,
+            FineractProperties fineractProperties) {
+        return () -> {
+            FineractProperties.FineractRedisProperties redis = fineractProperties.getCache().getRedis();
+            try (RedisConnection connection = redisConnectionFactory.getConnection()) {
+                String response = connection.ping();
+                if (!"PONG".equalsIgnoreCase(response)) {
+                    throw new IllegalStateException("Redis PING returned unexpected response: " + response);
+                }
+            } catch (RuntimeException e) {
+                throw new IllegalStateException("Redis is enabled (fineract.cache.redis.enabled=true) but the server at " + redis.getHost()
+                        + ":" + redis.getPort() + " is unreachable — aborting startup.", e);
+            }
+        };
     }
 
     @Bean("redisCacheManagerWithFallback")

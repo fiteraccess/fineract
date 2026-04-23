@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.cache.jcache.JCacheCacheManager;
+import org.springframework.cache.CacheManager;
 
 class CacheConfigTest {
 
@@ -30,7 +30,7 @@ class CacheConfigTest {
     void defaultCacheManagerShouldSupportPaymentTypesByIdCache() {
         CacheConfig cacheConfig = new CacheConfig();
 
-        TransactionBoundCacheManager cacheManager = cacheConfig.defaultCacheManager(mock(JCacheCacheManager.class));
+        TransactionBoundCacheManager cacheManager = cacheConfig.defaultCacheManager(mock(CacheManager.class));
 
         assertThat(cacheManager.getCacheNames()).contains(CacheConfig.PAYMENT_TYPES_BY_ID_CACHE_NAME);
     }
