@@ -50,7 +50,6 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.exception.DepositAccountTransactionNotAllowedException;
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
-import org.apache.fineract.portfolio.savings.service.DailyBalanceSnapshotService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -67,9 +66,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final BalanceValidationService balanceValidationService;
-    private final DailyBalanceSnapshotService dailyBalanceSnapshotService;
     private final EntityManager entityManager;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
 
     @Autowired
     public SavingsAccountDomainServiceJpa(final SavingsAccountRepositoryWrapper savingsAccountRepository,
@@ -78,8 +77,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final ConfigurationDomainService configurationDomainService, final PlatformSecurityContext context,
             final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository,
             final BusinessEventNotifierService businessEventNotifierService, final BalanceValidationService balanceValidationService,
-            final DailyBalanceSnapshotService dailyBalanceSnapshotService, final EntityManager entityManager,
-            CacheableSavingsProductConfigService cacheableSavingsProductConfigService) {
+            final EntityManager entityManager, CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
+            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository) {
         this.savingsAccountRepository = savingsAccountRepository;
         this.savingsAccountTransactionRepository = savingsAccountTransactionRepository;
         this.journalEntryWritePlatformService = journalEntryWritePlatformService;
@@ -88,9 +87,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         this.depositAccountOnHoldTransactionRepository = depositAccountOnHoldTransactionRepository;
         this.businessEventNotifierService = businessEventNotifierService;
         this.balanceValidationService = balanceValidationService;
-        this.dailyBalanceSnapshotService = dailyBalanceSnapshotService;
         this.entityManager = entityManager;
         this.cacheableSavingsProductConfigService = cacheableSavingsProductConfigService;
+        this.savingsDailyBalanceSyncRepository = savingsDailyBalanceSyncRepository;
     }
 
     @Transactional
@@ -279,8 +278,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountSummary s = account.getSummary();
         final BigDecimal newTotalWithdrawals = (s.getTotalWithdrawals() != null ? s.getTotalWithdrawals() : BigDecimal.ZERO)
                 .add(transactionAmount);
-        final BigDecimal newAccountBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
+        // Posted balance — what m_savings_account.account_balance holds. Used for the JPQL summary update only.
+        final BigDecimal newPostedBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
                 .subtract(transactionAmount).subtract(totalFeeAmount);
+        // Available balance — posted minus active holds. Matches what recalculateDailyBalances would write
+        // (it walks the timeline treating hold txns as debits). Used for setRunningBalance on the new txns
+        // so the snapshot derived from running_balance_derived is hold-aware. See plan §10.2.
+        final BigDecimal currentHold = (account.getOnHoldFunds() != null ? account.getOnHoldFunds() : BigDecimal.ZERO)
+                .add(account.getSavingsHoldAmount() != null ? account.getSavingsHoldAmount() : BigDecimal.ZERO);
+        final BigDecimal newAvailableBalance = newPostedBalance.subtract(currentHold);
         final BigDecimal newTotalWithdrawalFees = (s.getTotalWithdrawalFees() != null ? s.getTotalWithdrawalFees() : BigDecimal.ZERO)
                 .add(totalFeeAmount);
         final BigDecimal newTotalFeeCharge = (s.getTotalFeeCharge() != null ? s.getTotalFeeCharge() : BigDecimal.ZERO).add(totalFeeAmount);
@@ -291,30 +297,30 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 || currentSubStatus.equals(SavingsAccountSubStatusEnum.DORMANT.getValue()))) ? SavingsAccountSubStatusEnum.NONE.getValue()
                         : currentSubStatus;
 
-        // Set running balance on the withdrawal transaction
-        withdrawal.setRunningBalance(Money.of(account.getCurrency(), newAccountBalance));
+        // Set running balance on the withdrawal transaction (available balance — hold-aware)
+        withdrawal.setRunningBalance(Money.of(account.getCurrency(), newAvailableBalance));
 
         // Save withdrawal transaction with explicit flush to generate ID via IDENTITY strategy INSERT.
         // Must happen BEFORE entering COMMIT flush mode so the INSERT is not deferred.
         this.savingsAccountTransactionRepository.saveAndFlush(withdrawal);
 
-        // Save fee transactions and set running balance
+        // Save fee transactions and set running balance (available balance — hold-aware)
         for (SavingsAccountTransaction feeTransaction : feeTransactions) {
-            feeTransaction.setRunningBalance(Money.of(account.getCurrency(), newAccountBalance));
+            feeTransaction.setRunningBalance(Money.of(account.getCurrency(), newAvailableBalance));
             this.savingsAccountTransactionRepository.saveAndFlush(feeTransaction);
         }
 
         final FlushModeType originalFlushMode = this.entityManager.getFlushMode();
         this.entityManager.setFlushMode(FlushModeType.COMMIT);
         try {
-            // Update daily balance snapshot for O(1) interest calculation
-            this.dailyBalanceSnapshotService.updateSnapshot(account.getId(), transactionDate, newAccountBalance);
+            // Snapshot table is now maintained by SavingsDailyBalanceSyncService (hourly batch) — no synchronous write
+            // here.
 
             // O(1) direct update of summary + sub_status via JPQL, using locally computed values
             // Keep existing lastInterestCalculationDate — no interest calculation is done in the optimized path
             this.savingsAccountRepository.updateSummaryDirectFromValues(account.getId(), s.getTotalDeposits(), newTotalWithdrawals,
                     s.getTotalInterestPosted(), newTotalWithdrawalFees, newTotalFeeCharge, s.getTotalPenaltyCharge(),
-                    s.getTotalAnnualFees(), newAccountBalance, s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
+                    s.getTotalAnnualFees(), newPostedBalance, s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
                     s.getTotalInterestEarned(), s.getLastInterestCalculationDate(), s.getInterestPostedTillDate(), newSubStatus,
                     account.getVersion());
 
@@ -322,7 +328,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             s.setTotalWithdrawals(newTotalWithdrawals);
             s.setTotalWithdrawalFees(newTotalWithdrawalFees);
             s.setTotalFeeCharge(newTotalFeeCharge);
-            s.setAccountBalance(newAccountBalance);
+            s.setAccountBalance(newPostedBalance);
             account.sub_status = newSubStatus;
             account.version++;
         } finally {
@@ -489,8 +495,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // Calculate new summary values locally — do NOT mutate account.getSummary() to avoid dirtying the entity
         final SavingsAccountSummary s = account.getSummary();
         final BigDecimal newTotalDeposits = (s.getTotalDeposits() != null ? s.getTotalDeposits() : BigDecimal.ZERO).add(transactionAmount);
-        final BigDecimal newAccountBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
+        // Posted balance — what m_savings_account.account_balance holds. Used for the JPQL summary update only.
+        final BigDecimal newPostedBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
                 .add(transactionAmount);
+        // Available balance — posted minus active holds. Matches what recalculateDailyBalances would write
+        // (it walks the timeline treating hold txns as debits). Used for setRunningBalance on the new txn
+        // so the snapshot derived from running_balance_derived is hold-aware. See plan §10.2.
+        final BigDecimal currentHold = (account.getOnHoldFunds() != null ? account.getOnHoldFunds() : BigDecimal.ZERO)
+                .add(account.getSavingsHoldAmount() != null ? account.getSavingsHoldAmount() : BigDecimal.ZERO);
+        final BigDecimal newAvailableBalance = newPostedBalance.subtract(currentHold);
 
         // Compute sub_status locally: reset to NONE if INACTIVE or DORMANT
         final Integer currentSubStatus = account.getSubStatus();
@@ -498,8 +511,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 || currentSubStatus.equals(SavingsAccountSubStatusEnum.DORMANT.getValue()))) ? SavingsAccountSubStatusEnum.NONE.getValue()
                         : currentSubStatus;
 
-        // Set running balance on the transaction using locally computed balance
-        deposit.setRunningBalance(Money.of(account.getCurrency(), newAccountBalance));
+        // Set running balance on the transaction (available balance — hold-aware)
+        deposit.setRunningBalance(Money.of(account.getCurrency(), newAvailableBalance));
 
         // Save transaction with explicit flush to generate ID via IDENTITY strategy INSERT.
         // Must happen BEFORE entering COMMIT flush mode so the INSERT is not deferred.
@@ -508,21 +521,21 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final FlushModeType originalFlushMode = this.entityManager.getFlushMode();
         this.entityManager.setFlushMode(FlushModeType.COMMIT);
         try {
-            // Update daily balance snapshot for O(1) interest calculation
-            this.dailyBalanceSnapshotService.updateSnapshot(account.getId(), transactionDate, newAccountBalance);
+            // Snapshot table is now maintained by SavingsDailyBalanceSyncService (hourly batch) — no synchronous write
+            // here.
 
             // O(1) direct update of summary + sub_status via JPQL, using locally computed values
             // Keep existing lastInterestCalculationDate — no interest calculation is done in the optimized path
             this.savingsAccountRepository.updateSummaryDirectFromValues(account.getId(), newTotalDeposits, s.getTotalWithdrawals(),
                     s.getTotalInterestPosted(), s.getTotalWithdrawalFees(), s.getTotalFeeCharge(), s.getTotalPenaltyCharge(),
-                    s.getTotalAnnualFees(), newAccountBalance, s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
+                    s.getTotalAnnualFees(), newPostedBalance, s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
                     s.getTotalInterestEarned(), s.getLastInterestCalculationDate(), s.getInterestPostedTillDate(), newSubStatus,
                     account.getVersion());
 
             // Sync in-memory entity state with DB to prevent stale version on subsequent flush
             // (e.g., when activate() calls saveAndFlush after this optimized deposit path)
             s.setTotalDeposits(newTotalDeposits);
-            s.setAccountBalance(newAccountBalance);
+            s.setAccountBalance(newPostedBalance);
             account.sub_status = newSubStatus;
             account.version++;
         } finally {
@@ -717,6 +730,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             if (postReversals) {
                 newTransactions.add(reversal);
             }
+            // Mark (account, txnDate) dirty so the next SA_DSYNC drain refreshes/deletes the snapshot row.
+            // Pass-1 alone is insufficient when reversing the last non-reversed txn for a date — without a dirty
+            // marker the snapshot would remain at its pre-reversal value forever. See plan §5.
+            this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
         }
 
         boolean isInterestTransfer = false;

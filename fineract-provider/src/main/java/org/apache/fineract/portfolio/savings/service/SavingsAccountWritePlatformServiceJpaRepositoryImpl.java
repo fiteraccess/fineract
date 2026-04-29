@@ -123,6 +123,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
+import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.apache.fineract.portfolio.savings.exception.PostInterestAsOnDateException;
 import org.apache.fineract.portfolio.savings.exception.PostInterestAsOnDateException.PostInterestAsOnExceptionType;
 import org.apache.fineract.portfolio.savings.exception.PostInterestClosingDateException;
@@ -181,6 +182,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider;
     private final JdbcTemplate jdbcTemplate;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
 
     @Transactional
     @Override
@@ -768,6 +770,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             throwValidationForActiveStatus(SavingsApiConstants.undoTransactionAction);
         }
         account.undoTransaction(transactionId);
+        // Mark this (account, date) dirty so the hourly sync job (or the next interest tasklet's syncNow())
+        // will refresh / delete the snapshot row. running_balance_derived is rewritten by the cascading recalculate
+        // below; the snapshot table needs the dirty signal because reversal can leave a date with no
+        // remaining non-reversed txns. See plan §5.
+        this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
 
         // undoing transaction is withdrawal then undo withdrawal fee
         // transaction if any
@@ -861,6 +868,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final MathContext mc = new MathContext(10, MoneyHelper.getRoundingMode());
         account.undoTransaction(transactionId);
+        // Same dirty-enqueue rationale as undoTransaction (plan §5): reversing a txn can leave the date with no
+        // remaining non-reversed txns, which the watermark scan can't detect on its own.
+        this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
 
         // for undo withdrawal fee
         final SavingsAccountTransaction nextSavingsAccountTransaction = this.savingsAccountTransactionRepository

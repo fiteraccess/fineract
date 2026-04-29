@@ -35,4 +35,8 @@
   <include file="parts/2010_add_next_attempt_at_to_synapse_outbox.xml" relativeToChangelogFile="true" />
   <include file="parts/2011_add_synapse_outbox_purge_job.xml" relativeToChangelogFile="true" />
   <include file="parts/2012_add_synapse_interest_posting_config.xml" relativeToChangelogFile="true" />
+  <include file="parts/2013_add_savings_daily_balance_sync_state.xml" relativeToChangelogFile="true" />
+  <include file="parts/2014_add_savings_daily_balance_dirty.xml" relativeToChangelogFile="true" />
+  <include file="parts/2015_add_index_sat_lastmodified.xml" relativeToChangelogFile="true" />
+  <include file="parts/2016_tune_autovacuum_savings_daily_balance.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

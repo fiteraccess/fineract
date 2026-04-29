@@ -37,6 +37,8 @@ import org.apache.fineract.infrastructure.core.domain.FineractContext;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
+import org.apache.fineract.portfolio.savings.service.SavingsDailyBalanceSyncService;
+import org.apache.fineract.portfolio.savings.service.SavingsDailyBalanceSyncService.SyncResult;
 import org.apache.fineract.portfolio.savings.service.SavingsSchedularInterestPosterTask;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
@@ -59,9 +61,21 @@ public class PostInterestForSavingTasklet implements Tasklet {
     private final ApplicationContext applicationContext;
     @Qualifier(TaskExecutorConstant.CONFIGURABLE_TASK_EXECUTOR_BEAN_NAME)
     private final ThreadPoolTaskExecutor taskExecutor;
+    private final SavingsDailyBalanceSyncService savingsDailyBalanceSyncService;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+        // Bring the snapshot table current before we read it. Pass 1 + Pass 2 of the sync subsystem; bounded SQL.
+        // See plan §6.3.
+        try {
+            SyncResult syncResult = savingsDailyBalanceSyncService.syncNow();
+            log.info("Pre-interest savings daily balance sync: upserted={}, drained={}, from={}, to={}", syncResult.upserted(),
+                    syncResult.drained(), syncResult.from(), syncResult.to());
+        } catch (RuntimeException ex) {
+            // Don't fail the whole interest job if the sync hits a transient DB error — the hourly job will catch up.
+            log.warn("Pre-interest savings daily balance sync failed; proceeding with possibly-stale snapshots", ex);
+        }
+
         final Queue<List<SavingsAccountData>> queue = new ArrayDeque<>();
         final int threadPoolSize = Integer.parseInt((String) chunkContext.getStepContext().getJobParameters().get("thread-pool-size"));
         taskExecutor.setCorePoolSize(threadPoolSize);

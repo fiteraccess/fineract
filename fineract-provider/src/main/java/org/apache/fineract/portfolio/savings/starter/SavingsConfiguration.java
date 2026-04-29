@@ -92,6 +92,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeReposito
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
@@ -388,7 +389,8 @@ public class SavingsConfiguration {
             ErrorHandler errorHandler, ObjectProvider<SynapseInterestTransactionApplier> interestPostingReplayServiceProvider,
             SavingsAccountReadPlatformService savingsAccountReadPlatformService,
             ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider, JdbcTemplate jdbcTemplate,
-            CacheableSavingsProductConfigService cacheableSavingsProductConfigService) {
+            CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
+            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -397,7 +399,8 @@ public class SavingsConfiguration {
                 depositAccountOnHoldTransactionRepository, entityDatatableChecksWritePlatformService, appuserRepository,
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
-                synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService);
+                synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
+                savingsDailyBalanceSyncRepository);
     }
 
     @Bean

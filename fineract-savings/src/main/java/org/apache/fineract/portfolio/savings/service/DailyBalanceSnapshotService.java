@@ -24,7 +24,13 @@ import java.time.LocalDate;
 /**
  * Service for maintaining daily balance snapshots for savings accounts. Supports O(1) snapshot updates for current-day
  * transactions and O(days_with_snapshots) updates for backdated transactions.
+ *
+ * @deprecated Replaced by {@link org.apache.fineract.portfolio.savings.service.SavingsDailyBalanceSyncService}, which
+ *             derives snapshots from {@code m_savings_account_transaction.running_balance_derived} on an hourly batch.
+ *             Synchronous callers no longer maintain the snapshot table; this interface is kept only to allow staged
+ *             removal across releases. New code MUST NOT depend on it.
  */
+@Deprecated(forRemoval = true)
 public interface DailyBalanceSnapshotService {
 
     /**
@@ -37,7 +43,10 @@ public interface DailyBalanceSnapshotService {
      *            the date of the transaction (typically today for optimized path)
      * @param newAccountBalance
      *            the account balance after the transaction
+     * @deprecated see {@link DailyBalanceSnapshotService} class-level Javadoc; use
+     *             {@link org.apache.fineract.portfolio.savings.service.SavingsDailyBalanceSyncService#syncNow()}.
      */
+    @Deprecated(forRemoval = true)
     void updateSnapshot(Long savingsAccountId, LocalDate transactionDate, BigDecimal newAccountBalance);
 
     /**
@@ -52,6 +61,9 @@ public interface DailyBalanceSnapshotService {
      *            the balance change (positive for deposits, negative for withdrawals)
      * @param newBalanceOnDate
      *            the new end-of-day balance on the backdated date
+     * @deprecated see {@link DailyBalanceSnapshotService} class-level Javadoc; use
+     *             {@link org.apache.fineract.portfolio.savings.service.SavingsDailyBalanceSyncService#syncNow()}.
      */
+    @Deprecated(forRemoval = true)
     void handleBackdatedTransaction(Long savingsAccountId, LocalDate backdatedDate, BigDecimal delta, BigDecimal newBalanceOnDate);
 }
