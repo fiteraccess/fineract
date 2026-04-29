@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
@@ -148,7 +149,86 @@ public class SynapseChargePostingIntegrationTest {
         }
     }
 
+    @Nested
+    class ReplayChargePosting {
+
+        @SuppressWarnings("unchecked")
+        @Test
+        void appliesChargeAndDecreasesBalance() {
+            Account[] gl = createCashBasedGlAccounts();
+            int[] ids = createActiveSavingsWithDepositAndChargeReturningIds(gl);
+            int savingsId = ids[0];
+            int savingsAccountChargeId = ids[1];
+
+            Integer txnId = replayCharge(savingsId, "100.00", (long) savingsAccountChargeId, null);
+
+            assertEquals(900.0f, balanceOf(savingsId), 0.01f);
+            assertTrue((Boolean) transactionType(savingsId, txnId).get("feeDeduction"));
+        }
+    }
+
+    @Nested
+    class ReplayIdempotency {
+
+        @Test
+        void sameTraceIdReturnsSameTransactionAndDoesNotDoublePost() {
+            Account[] gl = createCashBasedGlAccounts();
+            int[] ids = createActiveSavingsWithDepositAndChargeReturningIds(gl);
+            int savingsId = ids[0];
+            int savingsAccountChargeId = ids[1];
+            String traceId = UUID.randomUUID().toString();
+
+            Integer firstTxnId = replayCharge(savingsId, "100.00", (long) savingsAccountChargeId, traceId);
+            Integer secondTxnId = replayCharge(savingsId, "100.00", (long) savingsAccountChargeId, traceId);
+
+            assertEquals(firstTxnId, secondTxnId);
+            assertEquals(900.0f, balanceOf(savingsId), 0.01f);
+        }
+    }
+
     // -- helpers ----------------------------------------------------------------
+
+    private Integer replayCharge(Integer savingsId, String amount, Long savingsAccountChargeId, String traceId) {
+        if (traceId == null) {
+            traceId = UUID.randomUUID().toString();
+        }
+        String json = SavingsAccountHelper.buildReplayChargePostingJson(amount, DATE, savingsAccountChargeId, traceId);
+        return new SavingsAccountHelper(requestSpec, responseSpec).replayChargePosting(savingsId, json);
+    }
+
+    @SuppressWarnings("unchecked")
+    private HashMap transactionType(Integer savingsId, Integer txnId) {
+        HashMap txn = new SavingsAccountHelper(requestSpec, responseSpec).getTransactionDetails(savingsId, txnId);
+        return (HashMap) txn.get("transactionType");
+    }
+
+    private int[] createActiveSavingsWithDepositAndChargeReturningIds(Account[] gl) {
+        globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING,
+                new PutGlobalConfigurationsRequest().enabled(true));
+        globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
+                new PutGlobalConfigurationsRequest().enabled(true));
+        BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
+                LocalDate.of(2023, 1, 2));
+
+        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
+        Integer productId = SavingsProductHelper.createSavingsProduct(
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
+                        .withInterestPostingPeriodTypeAsDaily()
+                        .withInterestCalculationPeriodTypeAsDailyBalance()
+                        .withAccountingRuleAsCashBased(gl).build(),
+                requestSpec, responseSpec);
+        SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
+        Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
+        sh.approveSavingsOnDate(savingsId, DATE);
+        sh.activateSavingsAccount(savingsId, DATE);
+        sh.depositToSavingsAccount(savingsId, "1000", DATE, CommonConstants.RESPONSE_RESOURCE_ID);
+
+        Integer chargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
+                ChargesHelper.getSavingsSpecifiedDueDateJSON());
+        Integer savingsAccountChargeId = sh.addChargesForSavingsWithDueDate(savingsId, chargeId, DATE, 100);
+        synapse.resetRequests();
+        return new int[] { savingsId, savingsAccountChargeId };
+    }
 
     private Integer createSavingsWithChargeInBusinessDateContext(boolean enableSynapse) {
         try {

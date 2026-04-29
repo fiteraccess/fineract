@@ -133,6 +133,7 @@ import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllow
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
@@ -183,6 +184,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final JdbcTemplate jdbcTemplate;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
     private final ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider;
+    private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
 
     @Transactional
     @Override
@@ -2047,6 +2049,36 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         //    the same entity in its persistence context with a stale version
         this.savingAccountRepositoryWrapper.updateSummaryDirectAndDetach(account);
 
+        postJournalEntriesForTransaction(account, result.transaction(), false);
+
+        return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId)
+                .withOfficeId(account.officeId()).withClientId(account.clientId()).build();
+    }
+
+    @Override
+    public CommandProcessingResult replayChargePosting(final Long savingsId, final JsonCommand command) {
+        final SynapseChargeTransactionApplier replayService = chargePostingReplayServiceProvider.getIfAvailable();
+        if (replayService == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
+            throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
+                    "Synapse integration is not enabled. Cannot replay charge posting.");
+        }
+
+        final LocalDate txDate = command.localDateValueOfParameterNamed("transactionDate");
+        final BigDecimal txAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
+        final Long savingsAccountChargeId = command.longValueOfParameterNamed("savingsAccountChargeId");
+        final String traceId = command.stringValueOfParameterNamed("traceId");
+
+        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
+
+        final SynapseChargeTransactionApplier.ReplayResult result = replayService.replay(
+                account, txAmount, txDate, savingsAccountChargeId, traceId);
+
+        if (result.alreadyExists()) {
+            return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId).build();
+        }
+
+        this.savingsAccountTransactionRepository.saveAndFlush(result.transaction());
+        this.savingAccountRepositoryWrapper.updateSummaryDirectAndDetach(account);
         postJournalEntriesForTransaction(account, result.transaction(), false);
 
         return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId)
