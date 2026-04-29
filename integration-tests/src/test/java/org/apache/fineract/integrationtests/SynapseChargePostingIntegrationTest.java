@@ -38,8 +38,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.apache.fineract.integrationtests.support.TenantJdbcSupport;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 public class SynapseChargePostingIntegrationTest {
 
@@ -285,18 +285,6 @@ public class SynapseChargePostingIntegrationTest {
     }
 
     private JdbcTemplate tenantJdbc() {
-        String host = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_HOSTNAME", "localhost");
-        String port = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_PORT", "5432");
-        String dbName = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_NAME", "fineract_default");
-        String url = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_URL", "jdbc:postgresql://" + host + ":" + port + "/" + dbName);
-        String user = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_UID", "postgres");
-        String pwd = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_PWD", "postgres");
-
-        DriverManagerDataSource ds = new DriverManagerDataSource();
-        ds.setDriverClassName("org.postgresql.Driver");
-        ds.setUrl(url);
-        ds.setUsername(user);
-        ds.setPassword(pwd);
-        return new JdbcTemplate(ds);
+        return TenantJdbcSupport.tenantJdbc();
     }
 }
