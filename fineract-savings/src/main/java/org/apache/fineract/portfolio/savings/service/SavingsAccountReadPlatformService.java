@@ -69,10 +69,11 @@ public interface SavingsAccountReadPlatformService {
             Long maxSavingsId);
 
     /**
-     * Loads a single savings account with all its transactions, ready for interest calculation.
-     * Uses the same mapper as the batch interest-posting loader.
+     * Loads a single savings account with all its transactions, ready for interest calculation. Uses the same mapper as
+     * the batch interest-posting loader.
      *
-     * @param accountId the savings account ID
+     * @param accountId
+     *            the savings account ID
      * @return the account data with transactions, or {@code null} if not found
      */
     SavingsAccountData retrieveSavingsDataForInterestPosting(Long accountId);

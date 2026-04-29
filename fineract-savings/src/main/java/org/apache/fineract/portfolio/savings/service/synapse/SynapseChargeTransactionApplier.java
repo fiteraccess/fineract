@@ -44,8 +44,8 @@ public class SynapseChargeTransactionApplier {
     public record ReplayResult(SavingsAccountTransaction transaction, boolean alreadyExists) {
     }
 
-    public ReplayResult replay(SavingsAccount account, BigDecimal transactionAmount, LocalDate transactionDate,
-            Long savingsAccountChargeId, String traceId) {
+    public ReplayResult replay(SavingsAccount account, BigDecimal transactionAmount, LocalDate transactionDate, Long savingsAccountChargeId,
+            String traceId) {
 
         // 1. Deduplicate on traceId
         List<SavingsAccountTransaction> existing = transactionRepository.findByRefNo(traceId);
@@ -77,9 +77,7 @@ public class SynapseChargeTransactionApplier {
     }
 
     private SavingsAccountCharge findCharge(SavingsAccount account, Long savingsAccountChargeId) {
-        return account.charges().stream()
-                .filter(c -> c.getId().equals(savingsAccountChargeId))
-                .findFirst()
+        return account.charges().stream().filter(c -> c.getId().equals(savingsAccountChargeId)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "SavingsAccountCharge not found: " + savingsAccountChargeId + " on account " + account.getId()));
     }

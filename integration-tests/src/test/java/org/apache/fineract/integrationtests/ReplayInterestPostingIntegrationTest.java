@@ -60,14 +60,11 @@ import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntryHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsTestLifecycleExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
-
 
 //@ExtendWith({ SavingsTestLifecycleExtension.class })
 public class ReplayInterestPostingIntegrationTest {
@@ -75,9 +72,7 @@ public class ReplayInterestPostingIntegrationTest {
     private static final String DATE = "10 April 2022";
 
     @RegisterExtension
-    static WireMockExtension synapse = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(18089))
-            .build();
+    static WireMockExtension synapse = WireMockExtension.newInstance().options(wireMockConfig().port(18089)).build();
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
@@ -94,9 +89,7 @@ public class ReplayInterestPostingIntegrationTest {
                 new PutGlobalConfigurationsRequest().enabled(true));
 
         synapse.stubFor(WireMock.post(WireMock.urlEqualTo("/api/v1/proxy/savings/interest-postings:batch"))
-                .willReturn(WireMock.aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
+                .willReturn(WireMock.aResponse().withStatus(200).withHeader("Content-Type", "application/json")
                         .withBody("{\"batchId\":\"stub\",\"accepted\":999,\"failed\":0,\"results\":[]}")));
     }
 
@@ -131,8 +124,7 @@ public class ReplayInterestPostingIntegrationTest {
 
             Integer txnId = replayPosting(savingsId, "50.00", "INTEREST_POSTING", null);
 
-            ArrayList<HashMap> entries = new JournalEntryHelper(requestSpec, responseSpec)
-                    .getJournalEntriesByTransactionId("S" + txnId);
+            ArrayList<HashMap> entries = new JournalEntryHelper(requestSpec, responseSpec).getJournalEntriesByTransactionId("S" + txnId);
             boolean expenseDebited = false;
             boolean liabilityCredited = false;
             for (Map<String, Object> entry : entries) {
@@ -212,8 +204,8 @@ public class ReplayInterestPostingIntegrationTest {
 
             ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(500).build();
             SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
-            String json = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", DATE, "INVALID_TYPE",
-                    UUID.randomUUID().toString(), null);
+            String json = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", DATE, "INVALID_TYPE", UUID.randomUUID().toString(),
+                    null);
             errorHelper.replayInterestPosting(savingsId, json);
         }
     }
@@ -266,14 +258,12 @@ public class ReplayInterestPostingIntegrationTest {
 
                 String activationDate = "01 January 2022";
                 LocalDate postingDate = LocalDate.of(2022, 2, 2);
-                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
-                        LocalDate.of(2022, 1, 1));
+                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2022, 1, 1));
 
                 Account[] gl = createCashBasedGlAccounts();
                 Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, activationDate);
                 Integer productId = SavingsProductHelper.createSavingsProduct(
-                        new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
-                                .withInterestPostingPeriodTypeAsDaily()
+                        new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
                                 .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
                         requestSpec, responseSpec);
                 SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
@@ -330,14 +320,12 @@ public class ReplayInterestPostingIntegrationTest {
 
                 String activationDate = "01 January 2022";
                 LocalDate postingDate = LocalDate.of(2022, 2, 2);
-                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
-                        LocalDate.of(2022, 1, 1));
+                BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2022, 1, 1));
 
                 Account[] gl = createCashBasedGlAccounts();
                 Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, activationDate);
                 Integer productId = SavingsProductHelper.createSavingsProduct(
-                        new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
-                                .withInterestPostingPeriodTypeAsDaily()
+                        new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
                                 .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
                         requestSpec, responseSpec);
                 SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
@@ -372,9 +360,7 @@ public class ReplayInterestPostingIntegrationTest {
                     Number amount = (Number) instruction.get("amount");
                     String txType = (String) instruction.get("transactionType");
                     String txDateStr = formatTransactionDate(instruction.get("transactionDate"));
-                    String overdraftAmt = instruction.get("overdraftAmount") != null
-                            ? instruction.get("overdraftAmount").toString()
-                            : null;
+                    String overdraftAmt = instruction.get("overdraftAmount") != null ? instruction.get("overdraftAmount").toString() : null;
 
                     String json = SavingsAccountHelper.buildReplayInterestPostingJson(amount.toString(), txDateStr, txType, traceId,
                             overdraftAmt);
@@ -385,8 +371,7 @@ public class ReplayInterestPostingIntegrationTest {
                 }
 
                 float balanceAfter = balanceOf(savingsId);
-                assertEquals(balanceBefore + totalReplayed, balanceAfter, 0.01f,
-                        "Balance should equal deposit + total replayed interest");
+                assertEquals(balanceBefore + totalReplayed, balanceAfter, 0.01f, "Balance should equal deposit + total replayed interest");
 
                 HashMap details = sh.getSavingsDetails(savingsId);
                 ArrayList<HashMap<String, Object>> transactions = (ArrayList<HashMap<String, Object>>) details.get("transactions");
@@ -417,8 +402,7 @@ public class ReplayInterestPostingIntegrationTest {
 
     private Account[] createCashBasedGlAccounts() {
         AccountHelper ah = new AccountHelper(requestSpec, responseSpec);
-        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(), ah.createIncomeAccount(),
-                ah.createExpenseAccount() };
+        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(), ah.createIncomeAccount(), ah.createExpenseAccount() };
     }
 
     private Integer createActiveSavingsWithDeposit(Account[] gl, String depositAmount) {
@@ -454,11 +438,9 @@ public class ReplayInterestPostingIntegrationTest {
         Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
         Integer taxComponentId = TaxComponentHelper.createTaxComponent(requestSpec, responseSpec, "10", null);
         Integer taxGroupId = TaxGroupHelper.createTaxGroup(requestSpec, responseSpec, Arrays.asList(taxComponentId));
-        Integer productId = SavingsProductHelper.createSavingsProduct(
-                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
-                        .withInterestCalculationPeriodTypeAsDailyBalance().withWithHoldTax(String.valueOf(taxGroupId))
-                        .withAccountingRuleAsCashBased(gl).build(),
-                requestSpec, responseSpec);
+        Integer productId = SavingsProductHelper.createSavingsProduct(new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
+                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance()
+                .withWithHoldTax(String.valueOf(taxGroupId)).withAccountingRuleAsCashBased(gl).build(), requestSpec, responseSpec);
         SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
         Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
         sh.approveSavingsOnDate(savingsId, DATE);
@@ -491,6 +473,5 @@ public class ReplayInterestPostingIntegrationTest {
         HashMap txn = new SavingsAccountHelper(requestSpec, responseSpec).getTransactionDetails(savingsId, txnId);
         return ((Number) txn.get("amount")).floatValue();
     }
-
 
 }

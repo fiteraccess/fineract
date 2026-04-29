@@ -36,22 +36,11 @@ public class SynapseInstructionMapper {
         TransactionType txType = resolveTransactionType(tx.getTransactionType());
         Direction direction = resolveDirection(txType);
 
-        return SynapseTransactionInstruction.builder()
-                .traceId(UUID.randomUUID().toString())
-                .savingsAccountId(account.getId())
-                .officeId(account.officeId())
-                .externalId(account.getExternalId())
-                .transactionType(txType)
-                .direction(direction)
-                .operation(operation)
-                .amount(tx.getAmount())
-                .overdraftAmount(tx.getOverdraftAmount())
-                .transactionDate(tx.getTransactionDate())
-                .currencyCode(account.getCurrency().getCode())
-                .refNo(tx.getRefNo())
-                .originalTransactionId(tx.getOriginalTransactionId())
-                .batchId(batchId)
-                .build();
+        return SynapseTransactionInstruction.builder().traceId(UUID.randomUUID().toString()).savingsAccountId(account.getId())
+                .officeId(account.officeId()).externalId(account.getExternalId()).transactionType(txType).direction(direction)
+                .operation(operation).amount(tx.getAmount()).overdraftAmount(tx.getOverdraftAmount())
+                .transactionDate(tx.getTransactionDate()).currencyCode(account.getCurrency().getCode()).refNo(tx.getRefNo())
+                .originalTransactionId(tx.getOriginalTransactionId()).batchId(batchId).build();
     }
 
     private TransactionType resolveTransactionType(SavingsAccountTransactionEnumData txType) {
@@ -71,21 +60,10 @@ public class SynapseInstructionMapper {
             String description, BigDecimal amount, LocalDate transactionDate, String currencyCode, String batchId) {
         Direction direction = resolveDirection(TransactionType.SAVINGS_CHARGE);
 
-        return SynapseTransactionInstruction.builder()
-                .traceId(UUID.randomUUID().toString())
-                .savingsAccountChargeId(savingsAccountChargeId)
-                .savingsAccountId(savingsAccountId)
-                .officeId(officeId)
-                .externalId(externalId)
-                .transactionType(TransactionType.SAVINGS_CHARGE)
-                .direction(direction)
-                .operation(Operation.POST)
-                .amount(amount)
-                .description(description)
-                .transactionDate(transactionDate)
-                .currencyCode(currencyCode)
-                .batchId(batchId)
-                .build();
+        return SynapseTransactionInstruction.builder().traceId(UUID.randomUUID().toString()).savingsAccountChargeId(savingsAccountChargeId)
+                .savingsAccountId(savingsAccountId).officeId(officeId).externalId(externalId)
+                .transactionType(TransactionType.SAVINGS_CHARGE).direction(direction).operation(Operation.POST).amount(amount)
+                .description(description).transactionDate(transactionDate).currencyCode(currencyCode).batchId(batchId).build();
     }
 
     private Direction resolveDirection(TransactionType txType) {
@@ -95,4 +73,3 @@ public class SynapseInstructionMapper {
         };
     }
 }
-

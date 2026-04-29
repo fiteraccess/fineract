@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
@@ -85,8 +84,7 @@ class SynapseChargeTransactionApplierTest {
 
     @BeforeEach
     void setUp() {
-        ThreadLocalContextUtil.setBusinessDates(
-                new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 3, 20))));
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 3, 20))));
         applier = new SynapseChargeTransactionApplier(transactionRepository, summaryWrapper);
     }
 
@@ -104,8 +102,7 @@ class SynapseChargeTransactionApplierTest {
             SavingsAccountCharge charge = addCharge(account, 10L);
             when(transactionRepository.findByRefNo("trace-c1")).thenReturn(Collections.emptyList());
 
-            ReplayResult result = applier.replay(account, new BigDecimal("75.00"),
-                    LocalDate.of(2026, 3, 20), 10L, "trace-c1");
+            ReplayResult result = applier.replay(account, new BigDecimal("75.00"), LocalDate.of(2026, 3, 20), 10L, "trace-c1");
 
             assertThat(result.alreadyExists()).isFalse();
             assertThat(result.transaction().getTypeOf()).isEqualTo(SavingsAccountTransactionType.PAY_CHARGE.getValue());
@@ -114,8 +111,7 @@ class SynapseChargeTransactionApplierTest {
             assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("925.00");
             assertThat(result.transaction().getRunningBalance()).isEqualByComparingTo("925.00");
             assertThat(result.transaction().getSavingsAccountChargesPaid()).hasSize(1);
-            assertThat(result.transaction().getSavingsAccountChargesPaid().iterator().next().getSavingsAccountCharge())
-                    .isSameAs(charge);
+            assertThat(result.transaction().getSavingsAccountChargesPaid().iterator().next().getSavingsAccountCharge()).isSameAs(charge);
         }
     }
 
@@ -126,12 +122,11 @@ class SynapseChargeTransactionApplierTest {
         void duplicateTraceId_returnsExistingTransaction() throws Exception {
             SavingsAccount account = buildAccount(2L, new BigDecimal("1000.00"));
             addCharge(account, 20L);
-            SavingsAccountTransaction existingTx = SavingsAccountTransaction.charge(account, account.office(),
-                    LocalDate.of(2026, 3, 19), Money.of(account.getCurrency(), new BigDecimal("50.00")));
+            SavingsAccountTransaction existingTx = SavingsAccountTransaction.charge(account, account.office(), LocalDate.of(2026, 3, 19),
+                    Money.of(account.getCurrency(), new BigDecimal("50.00")));
             when(transactionRepository.findByRefNo("trace-dup")).thenReturn(List.of(existingTx));
 
-            ReplayResult result = applier.replay(account, new BigDecimal("50.00"),
-                    LocalDate.of(2026, 3, 20), 20L, "trace-dup");
+            ReplayResult result = applier.replay(account, new BigDecimal("50.00"), LocalDate.of(2026, 3, 20), 20L, "trace-dup");
 
             assertThat(result.alreadyExists()).isTrue();
             assertThat(result.transaction()).isSameAs(existingTx);
@@ -148,10 +143,8 @@ class SynapseChargeTransactionApplierTest {
             addCharge(account, 30L);
             when(transactionRepository.findByRefNo("trace-bad")).thenReturn(Collections.emptyList());
 
-            assertThatThrownBy(() -> applier.replay(account, new BigDecimal("10.00"),
-                    LocalDate.of(2026, 3, 20), 999L, "trace-bad"))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("999");
+            assertThatThrownBy(() -> applier.replay(account, new BigDecimal("10.00"), LocalDate.of(2026, 3, 20), 999L, "trace-bad"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("999");
         }
     }
 

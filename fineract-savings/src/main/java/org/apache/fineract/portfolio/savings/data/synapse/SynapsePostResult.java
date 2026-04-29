@@ -23,9 +23,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * Result returned by {@code SynapseInterestPostingService.postInterestBatch()}.
- * Contains cursor updates for accounts whose Synapse instructions all succeeded
- * (plus zero-interest accounts that had no instructions to send).
+ * Result returned by {@code SynapseInterestPostingService.postInterestBatch()}. Contains cursor updates for accounts
+ * whose Synapse instructions all succeeded (plus zero-interest accounts that had no instructions to send).
  */
 @Getter
 @AllArgsConstructor
@@ -40,4 +39,3 @@ public class SynapsePostResult {
     /** Number of accounts that had at least one rejected instruction. */
     private final int failed;
 }
-

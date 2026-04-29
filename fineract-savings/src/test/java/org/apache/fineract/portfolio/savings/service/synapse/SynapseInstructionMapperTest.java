@@ -100,8 +100,7 @@ class SynapseInstructionMapperTest {
         SavingsAccountData account = buildAccount(500L, 50L, null, "NGN");
         SavingsAccountTransactionData tx = buildTx(SavingsAccountTransactionType.DEPOSIT, new BigDecimal("1000.00"));
 
-        assertThatThrownBy(() -> mapper.map(account, tx, Operation.POST, "batch-5"))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> mapper.map(account, tx, Operation.POST, "batch-5")).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported transaction type");
     }
 
@@ -110,9 +109,8 @@ class SynapseInstructionMapperTest {
         SavingsAccountData account = buildAccount(600L, 60L, null, "NGN");
         SavingsAccountTransactionEnumData txType = txEnumData(SavingsAccountTransactionType.INTEREST_POSTING);
         // Use importInstance which sets the transactionDate field (same path as production interest posting)
-        SavingsAccountTransactionData tx = SavingsAccountTransactionData.importInstance(
-                new BigDecimal("50.00"), LocalDate.of(2026, 3, 15), null, null, null, null, null, null, null,
-                600L, txType, null, null, null);
+        SavingsAccountTransactionData tx = SavingsAccountTransactionData.importInstance(new BigDecimal("50.00"), LocalDate.of(2026, 3, 15),
+                null, null, null, null, null, null, null, 600L, txType, null, null, null);
 
         SynapseTransactionInstruction result = mapper.map(account, tx, Operation.POST, "batch-6");
 
@@ -135,8 +133,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void setsDirectionToDebit() {
-            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1",
-                    "Outbound Transfer Fee", new BigDecimal("50.00"),
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1", "Outbound Transfer Fee", new BigDecimal("50.00"),
                     LocalDate.of(2026, 4, 1), "NGN", "batch-c1");
 
             assertThat(result.getDirection()).isEqualTo(Direction.DEBIT);
@@ -144,8 +141,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void setsOperationToPost() {
-            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1",
-                    "Stamp Duty", new BigDecimal("25.00"),
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1", "Stamp Duty", new BigDecimal("25.00"),
                     LocalDate.of(2026, 4, 1), "NGN", "batch-c2");
 
             assertThat(result.getOperation()).isEqualTo(Operation.POST);
@@ -153,8 +149,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void generatesNonNullTraceId() {
-            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1",
-                    "Outbound Transfer Fee", new BigDecimal("10.00"),
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 10L, "EXT-1", "Outbound Transfer Fee", new BigDecimal("10.00"),
                     LocalDate.of(2026, 4, 1), "NGN", "batch-c3");
 
             assertThat(UUID.fromString(result.getTraceId())).isNotNull();
@@ -162,18 +157,16 @@ class SynapseInstructionMapperTest {
 
         @Test
         void alwaysUseSavingsChargeTransactionType() {
-            SynapseTransactionInstruction result = mapper.mapCharge(99L, 42L, 7L, "EXT-42",
-                    "Outbound Transfer Fee", new BigDecimal("100.00"),
-                    LocalDate.of(2026, 4, 15), "USD", "batch-c4");
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 42L, 7L, "EXT-42", "Outbound Transfer Fee",
+                    new BigDecimal("100.00"), LocalDate.of(2026, 4, 15), "USD", "batch-c4");
 
             assertThat(result.getTransactionType()).isEqualTo(TransactionType.SAVINGS_CHARGE);
         }
 
         @Test
         void setsAllFieldsCorrectly() {
-            SynapseTransactionInstruction result = mapper.mapCharge(99L, 42L, 7L, "EXT-42",
-                    "Outbound Transfer Fee", new BigDecimal("100.00"),
-                    LocalDate.of(2026, 4, 15), "USD", "batch-c4");
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 42L, 7L, "EXT-42", "Outbound Transfer Fee",
+                    new BigDecimal("100.00"), LocalDate.of(2026, 4, 15), "USD", "batch-c4");
 
             assertThat(result.getSavingsAccountChargeId()).isEqualTo(99L);
             assertThat(result.getSavingsAccountId()).isEqualTo(42L);
@@ -193,8 +186,7 @@ class SynapseInstructionMapperTest {
 
         @Test
         void returnsDebitForSavingsCharge() {
-            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 1L, null,
-                    "Any Charge", BigDecimal.ONE,
+            SynapseTransactionInstruction result = mapper.mapCharge(99L, 1L, 1L, null, "Any Charge", BigDecimal.ONE,
                     LocalDate.of(2026, 4, 1), "NGN", "b");
 
             assertThat(result.getDirection()).isEqualTo(Direction.DEBIT);
@@ -215,14 +207,9 @@ class SynapseInstructionMapperTest {
 
     private static SavingsAccountData buildAccount(Long id, Long officeId, String externalId, String currencyCode) {
         CurrencyData currency = new CurrencyData(currencyCode);
-        SavingsAccountData account = SavingsAccountData.instance(id, "SA-" + id, null, externalId,
-                null, null, null, null, null, null, null, null,
-                null, null, null, null, currency, null,
-                null, null, null, null,
-                null, null, null, false, null, false,
-                null, null, false, null, false, null,
-                null, null, null, false, null,
-                null, false, null, null, null, null);
+        SavingsAccountData account = SavingsAccountData.instance(id, "SA-" + id, null, externalId, null, null, null, null, null, null, null,
+                null, null, null, null, null, currency, null, null, null, null, null, null, null, null, false, null, false, null, null,
+                false, null, false, null, null, null, null, false, null, null, false, null, null, null, null);
         ClientData client = new ClientData();
         client.setOfficeId(officeId);
         account.setClientData(client);
@@ -231,13 +218,11 @@ class SynapseInstructionMapperTest {
 
     private static SavingsAccountTransactionData buildTx(SavingsAccountTransactionType type, BigDecimal amount) {
         SavingsAccountTransactionEnumData txType = txEnumData(type);
-        return SavingsAccountTransactionData.create(null, txType, null, null, null,
-                LocalDate.of(2026, 3, 20), null, amount, null, null, false, null,
-                false, null, null, LocalDate.of(2026, 3, 20));
+        return SavingsAccountTransactionData.create(null, txType, null, null, null, LocalDate.of(2026, 3, 20), null, amount, null, null,
+                false, null, false, null, null, LocalDate.of(2026, 3, 20));
     }
 
     private static SavingsAccountTransactionEnumData txEnumData(SavingsAccountTransactionType type) {
         return new SavingsAccountTransactionEnumData(type.getValue().longValue(), type.getCode(), type.getValue().toString());
     }
 }
-

@@ -69,9 +69,8 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
     @BeforeEach
     void setUp() throws Exception {
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
-        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(
-                BusinessDateType.BUSINESS_DATE, BUSINESS_DATE,
-                BusinessDateType.COB_DATE, LocalDate.of(2026, 4, 17))));
+        ThreadLocalContextUtil.setBusinessDates(
+                new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, BUSINESS_DATE, BusinessDateType.COB_DATE, LocalDate.of(2026, 4, 17))));
 
         chargeRepository = mock(SavingsAccountChargeRepositoryWrapper.class);
         configurationDomainService = mock(ConfigurationDomainService.class);
@@ -96,10 +95,8 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
 
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
-            verify(outboxWriter).postCharge(
-                    eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
-                    eq("Outbound Transfer Fee"),
-                    eq(new BigDecimal("100.00")), eq(BUSINESS_DATE), eq(CURRENCY_CODE));
+            verify(outboxWriter).postCharge(eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
+                    eq("Outbound Transfer Fee"), eq(new BigDecimal("100.00")), eq(BUSINESS_DATE), eq(CURRENCY_CODE));
             verify(charge, never()).isNotFullyPaid();
         }
 
@@ -149,10 +146,8 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
 
             service.applyChargeDue(CHARGE_ID, ACCOUNT_ID);
 
-            verify(outboxWriter).postCharge(
-                    eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
-                    eq("Monthly Maintenance Fee"),
-                    eq(new BigDecimal("100.00")), eq(BUSINESS_DATE), eq(CURRENCY_CODE));
+            verify(outboxWriter).postCharge(eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID_VALUE),
+                    eq("Monthly Maintenance Fee"), eq(new BigDecimal("100.00")), eq(BUSINESS_DATE), eq(CURRENCY_CODE));
         }
 
         @Test
@@ -205,9 +200,8 @@ class SavingsAccountWritePlatformServiceApplyChargeDueTest {
         Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         Unsafe unsafe = (Unsafe) unsafeField.get(null);
-        SavingsAccountWritePlatformServiceJpaRepositoryImpl svc =
-                (SavingsAccountWritePlatformServiceJpaRepositoryImpl) unsafe.allocateInstance(
-                        SavingsAccountWritePlatformServiceJpaRepositoryImpl.class);
+        SavingsAccountWritePlatformServiceJpaRepositoryImpl svc = (SavingsAccountWritePlatformServiceJpaRepositoryImpl) unsafe
+                .allocateInstance(SavingsAccountWritePlatformServiceJpaRepositoryImpl.class);
         setField(svc, "savingsAccountChargeRepository", chargeRepository);
         setField(svc, "configurationDomainService", configurationDomainService);
         setField(svc, "synapseChargePostingOutboxWriterProvider", synapseChargePostingOutboxWriterProvider);

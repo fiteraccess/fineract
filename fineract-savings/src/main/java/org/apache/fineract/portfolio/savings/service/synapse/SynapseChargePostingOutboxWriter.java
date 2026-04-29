@@ -37,12 +37,12 @@ public class SynapseChargePostingOutboxWriter {
     private final SynapseOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
-    public void postCharge(Long savingsAccountChargeId, Long savingsAccountId, Long officeId, String externalId, String chargeName, BigDecimal amount,
-            LocalDate transactionDate, String currencyCode) {
+    public void postCharge(Long savingsAccountChargeId, Long savingsAccountId, Long officeId, String externalId, String chargeName,
+            BigDecimal amount, LocalDate transactionDate, String currencyCode) {
         String batchId = UUID.randomUUID().toString();
 
-        SynapseTransactionInstruction instruction = mapper.mapCharge(savingsAccountChargeId, savingsAccountId, officeId, externalId, chargeName, amount,
-                transactionDate, currencyCode, batchId);
+        SynapseTransactionInstruction instruction = mapper.mapCharge(savingsAccountChargeId, savingsAccountId, officeId, externalId,
+                chargeName, amount, transactionDate, currencyCode, batchId);
 
         String payload;
         try {
@@ -51,12 +51,8 @@ public class SynapseChargePostingOutboxWriter {
             throw new IllegalStateException("Failed to serialize charge instruction for traceId: " + instruction.getTraceId(), e);
         }
 
-        OutboxEntry entry = OutboxEntry.builder()
-                .traceId(instruction.getTraceId())
-                .accountId(savingsAccountId)
-                .officeId(officeId)
-                .payload(payload)
-                .build();
+        OutboxEntry entry = OutboxEntry.builder().traceId(instruction.getTraceId()).accountId(savingsAccountId).officeId(officeId)
+                .payload(payload).build();
 
         outboxRepository.insertBatch("CHARGE_POSTING", batchId, List.of(entry));
         log.debug("Batch {}: wrote charge instruction to outbox for account {}", batchId, savingsAccountId);

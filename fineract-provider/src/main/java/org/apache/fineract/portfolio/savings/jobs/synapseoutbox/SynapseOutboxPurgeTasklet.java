@@ -27,8 +27,7 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 
 /**
- * Purges old SENT entries from the {@code synapse_outbox} table based on
- * the configured retention period.
+ * Purges old SENT entries from the {@code synapse_outbox} table based on the configured retention period.
  */
 @Slf4j
 public class SynapseOutboxPurgeTasklet implements Tasklet {

@@ -47,9 +47,7 @@ public class SynapseChargePostingIntegrationTest {
     private static final String BATCH_URL = "/api/v1/proxy/savings/interest-postings:batch";
 
     @RegisterExtension
-    static WireMockExtension synapse = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(18089))
-            .build();
+    static WireMockExtension synapse = WireMockExtension.newInstance().options(wireMockConfig().port(18089)).build();
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
@@ -66,9 +64,7 @@ public class SynapseChargePostingIntegrationTest {
         tenantJdbc().update("DELETE FROM synapse_outbox WHERE status IN ('PENDING','FAILED')");
 
         synapse.stubFor(WireMock.post(WireMock.urlEqualTo(BATCH_URL))
-                .willReturn(WireMock.aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
+                .willReturn(WireMock.aResponse().withStatus(200).withHeader("Content-Type", "application/json")
                         .withBody("{\"batchId\":\"stub\",\"accepted\":999,\"failed\":0,\"results\":[]}")));
     }
 
@@ -107,10 +103,8 @@ public class SynapseChargePostingIntegrationTest {
 
             payDueCharges();
 
-            Map<String, Object> row = tenantJdbc().queryForMap(
-                    "SELECT batch_id, trace_id FROM synapse_outbox "
-                            + "WHERE task_type = 'CHARGE_POSTING' AND account_id = ? ORDER BY id DESC LIMIT 1",
-                    savingsId.longValue());
+            Map<String, Object> row = tenantJdbc().queryForMap("SELECT batch_id, trace_id FROM synapse_outbox "
+                    + "WHERE task_type = 'CHARGE_POSTING' AND account_id = ? ORDER BY id DESC LIMIT 1", savingsId.longValue());
 
             assertNotNull(row.get("batch_id"), "Outbox entry should have a batch_id");
             assertNotNull(row.get("trace_id"), "Outbox entry should have a trace_id");
@@ -140,12 +134,10 @@ public class SynapseChargePostingIntegrationTest {
             payDueCharges();
 
             List<Map<String, Object>> rows = tenantJdbc().queryForList(
-                    "SELECT id FROM synapse_outbox WHERE task_type = 'CHARGE_POSTING' AND account_id = ?",
-                    savingsId.longValue());
+                    "SELECT id FROM synapse_outbox WHERE task_type = 'CHARGE_POSTING' AND account_id = ?", savingsId.longValue());
             assertTrue(rows.isEmpty(), "No CHARGE_POSTING outbox entry expected when Synapse is disabled");
 
-            assertEquals(900.0f, balanceOf(savingsId), 0.01f,
-                    "Balance should be 900 (1000 - 100 charge) when applied directly");
+            assertEquals(900.0f, balanceOf(savingsId), 0.01f, "Balance should be 900 (1000 - 100 charge) when applied directly");
         }
     }
 
@@ -207,15 +199,12 @@ public class SynapseChargePostingIntegrationTest {
                 new PutGlobalConfigurationsRequest().enabled(true));
         globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                 new PutGlobalConfigurationsRequest().enabled(true));
-        BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
-                LocalDate.of(2023, 1, 2));
+        BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2023, 1, 2));
 
         Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
         Integer productId = SavingsProductHelper.createSavingsProduct(
-                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
-                        .withInterestPostingPeriodTypeAsDaily()
-                        .withInterestCalculationPeriodTypeAsDailyBalance()
-                        .withAccountingRuleAsCashBased(gl).build(),
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
+                        .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
                 requestSpec, responseSpec);
         SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
         Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
@@ -223,8 +212,7 @@ public class SynapseChargePostingIntegrationTest {
         sh.activateSavingsAccount(savingsId, DATE);
         sh.depositToSavingsAccount(savingsId, "1000", DATE, CommonConstants.RESPONSE_RESOURCE_ID);
 
-        Integer chargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                ChargesHelper.getSavingsSpecifiedDueDateJSON());
+        Integer chargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getSavingsSpecifiedDueDateJSON());
         Integer savingsAccountChargeId = sh.addChargesForSavingsWithDueDate(savingsId, chargeId, DATE, 100);
         synapse.resetRequests();
         return new int[] { savingsId, savingsAccountChargeId };
@@ -237,8 +225,7 @@ public class SynapseChargePostingIntegrationTest {
             globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
-                    LocalDate.of(2023, 1, 2));
+            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2023, 1, 2));
 
             Account[] gl = createCashBasedGlAccounts();
             return createActiveSavingsWithDepositAndCharge(gl, false);
@@ -255,16 +242,13 @@ public class SynapseChargePostingIntegrationTest {
                     new PutGlobalConfigurationsRequest().enabled(true));
             globalConfigHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
-                    LocalDate.of(2023, 1, 2));
+            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2023, 1, 2));
         }
 
         Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, DATE);
         Integer productId = SavingsProductHelper.createSavingsProduct(
-                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
-                        .withInterestPostingPeriodTypeAsDaily()
-                        .withInterestCalculationPeriodTypeAsDailyBalance()
-                        .withAccountingRuleAsCashBased(gl).build(),
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
+                        .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
                 requestSpec, responseSpec);
         SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
         Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", DATE);
@@ -272,8 +256,7 @@ public class SynapseChargePostingIntegrationTest {
         sh.activateSavingsAccount(savingsId, DATE);
         sh.depositToSavingsAccount(savingsId, "1000", DATE, CommonConstants.RESPONSE_RESOURCE_ID);
 
-        Integer chargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                ChargesHelper.getSavingsSpecifiedDueDateJSON());
+        Integer chargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getSavingsSpecifiedDueDateJSON());
         sh.addChargesForSavingsWithDueDate(savingsId, chargeId, DATE, 100);
         synapse.resetRequests();
         return savingsId;
@@ -293,22 +276,19 @@ public class SynapseChargePostingIntegrationTest {
 
     @SuppressWarnings("unchecked")
     private float balanceOf(Integer savingsId) {
-        return (Float) ((HashMap) new SavingsAccountHelper(requestSpec, responseSpec)
-                .getSavingsSummary(savingsId)).get("accountBalance");
+        return (Float) ((HashMap) new SavingsAccountHelper(requestSpec, responseSpec).getSavingsSummary(savingsId)).get("accountBalance");
     }
 
     private Account[] createCashBasedGlAccounts() {
         AccountHelper ah = new AccountHelper(requestSpec, responseSpec);
-        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(),
-                ah.createIncomeAccount(), ah.createExpenseAccount() };
+        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(), ah.createIncomeAccount(), ah.createExpenseAccount() };
     }
 
     private JdbcTemplate tenantJdbc() {
         String host = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_HOSTNAME", "localhost");
         String port = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_PORT", "5432");
         String dbName = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_NAME", "fineract_default");
-        String url = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_URL",
-                "jdbc:postgresql://" + host + ":" + port + "/" + dbName);
+        String url = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_URL", "jdbc:postgresql://" + host + ":" + port + "/" + dbName);
         String user = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_UID", "postgres");
         String pwd = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_PWD", "postgres");
 

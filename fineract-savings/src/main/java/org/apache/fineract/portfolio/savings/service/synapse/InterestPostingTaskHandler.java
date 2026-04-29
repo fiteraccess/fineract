@@ -49,12 +49,8 @@ public class InterestPostingTaskHandler implements SynapseTaskHandler {
     public void dispatch(OutboxEntry entry) {
         SynapseTransactionInstruction instruction = deserializePayload(entry);
 
-        SynapseInterestPostingBatch batch = SynapseInterestPostingBatch.builder()
-                .batchId(entry.getBatchId())
-                .postingDate(instruction.getTransactionDate())
-                .totalCount(1)
-                .transactions(List.of(instruction))
-                .build();
+        SynapseInterestPostingBatch batch = SynapseInterestPostingBatch.builder().batchId(entry.getBatchId())
+                .postingDate(instruction.getTransactionDate()).totalCount(1).transactions(List.of(instruction)).build();
 
         SynapseBatchPostingResponse response = client.postBatch(batch);
 
@@ -65,21 +61,17 @@ public class InterestPostingTaskHandler implements SynapseTaskHandler {
         try {
             return objectMapper.readValue(entry.getPayload(), SynapseTransactionInstruction.class);
         } catch (Exception e) {
-            throw new SynapsePostingException(
-                    "Failed to deserialize payload for outbox entry id=" + entry.getId(), e);
+            throw new SynapsePostingException("Failed to deserialize payload for outbox entry id=" + entry.getId(), e);
         }
     }
 
     private void validateResponse(SynapseBatchPostingResponse response, OutboxEntry entry) {
-        List<String> rejectedTraceIds = response.getResults().stream()
-                .filter(r -> !ACCEPTED_STATUS.equals(r.getStatus()))
-                .map(SynapsePostingResult::getTraceId)
-                .collect(Collectors.toList());
+        List<String> rejectedTraceIds = response.getResults().stream().filter(r -> !ACCEPTED_STATUS.equals(r.getStatus()))
+                .map(SynapsePostingResult::getTraceId).collect(Collectors.toList());
 
         if (!rejectedTraceIds.isEmpty()) {
             throw new SynapsePostingException(
-                    "Synapse rejected instructions for outbox entry id=" + entry.getId()
-                            + ", traceIds=" + rejectedTraceIds);
+                    "Synapse rejected instructions for outbox entry id=" + entry.getId() + ", traceIds=" + rejectedTraceIds);
         }
     }
 }

@@ -71,12 +71,10 @@ class SynapseTransactionClientTest {
     void successfulPostReturnsParsedResponse() throws Exception {
         SynapseInterestPostingBatch batch = buildBatch("batch-1");
 
-        SynapseBatchPostingResponse expectedResponse = new SynapseBatchPostingResponse(
-                "batch-1", 1, 0,
+        SynapseBatchPostingResponse expectedResponse = new SynapseBatchPostingResponse("batch-1", 1, 0,
                 List.of(new SynapsePostingResult("trace-1", "ACCEPTED", "corr-1")));
 
-        mockServer.expect(requestTo(FULL_URL))
-                .andExpect(method(HttpMethod.POST))
+        mockServer.expect(requestTo(FULL_URL)).andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andRespond(withSuccess(objectMapper.writeValueAsString(expectedResponse), MediaType.APPLICATION_JSON));
 
@@ -96,13 +94,10 @@ class SynapseTransactionClientTest {
     void httpServerErrorThrowsSynapsePostingException() {
         SynapseInterestPostingBatch batch = buildBatch("batch-2");
 
-        mockServer.expect(requestTo(FULL_URL))
-                .andExpect(method(HttpMethod.POST))
+        mockServer.expect(requestTo(FULL_URL)).andExpect(method(HttpMethod.POST))
                 .andRespond(withServerError().body("Internal Server Error"));
 
-        assertThatThrownBy(() -> client.postBatch(batch))
-                .isInstanceOf(SynapsePostingException.class)
-                .hasMessageContaining("HTTP 500");
+        assertThatThrownBy(() -> client.postBatch(batch)).isInstanceOf(SynapsePostingException.class).hasMessageContaining("HTTP 500");
         mockServer.verify();
     }
 
@@ -112,8 +107,7 @@ class SynapseTransactionClientTest {
 
         SynapseBatchPostingResponse response = new SynapseBatchPostingResponse("batch-3", 1, 0, List.of());
 
-        mockServer.expect(requestTo(FULL_URL))
-                .andExpect(method(HttpMethod.POST))
+        mockServer.expect(requestTo(FULL_URL)).andExpect(method(HttpMethod.POST))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"batchId\":\"batch-3\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"totalCount\":1")))
                 .andRespond(withSuccess(objectMapper.writeValueAsString(response), MediaType.APPLICATION_JSON));
@@ -127,8 +121,7 @@ class SynapseTransactionClientTest {
         SynapseInterestPostingBatch batch = buildBatch("batch-auth");
         SynapseBatchPostingResponse response = new SynapseBatchPostingResponse("batch-auth", 1, 0, List.of());
 
-        mockServer.expect(requestTo(FULL_URL))
-                .andExpect(method(HttpMethod.POST))
+        mockServer.expect(requestTo(FULL_URL)).andExpect(method(HttpMethod.POST))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
                 .andRespond(withSuccess(objectMapper.writeValueAsString(response), MediaType.APPLICATION_JSON));
 
@@ -137,25 +130,12 @@ class SynapseTransactionClientTest {
     }
 
     private static SynapseInterestPostingBatch buildBatch(String batchId) {
-        SynapseTransactionInstruction instruction = SynapseTransactionInstruction.builder()
-                .traceId("trace-1")
-                .savingsAccountId(100L)
-                .officeId(10L)
-                .transactionType(SynapseTransactionInstruction.TransactionType.INTEREST_POSTING)
-                .direction(SynapseTransactionInstruction.Direction.CREDIT)
-                .operation(SynapseTransactionInstruction.Operation.POST)
-                .amount(new BigDecimal("250.00"))
-                .transactionDate(LocalDate.of(2026, 3, 20))
-                .currencyCode("NGN")
-                .batchId(batchId)
-                .build();
+        SynapseTransactionInstruction instruction = SynapseTransactionInstruction.builder().traceId("trace-1").savingsAccountId(100L)
+                .officeId(10L).transactionType(SynapseTransactionInstruction.TransactionType.INTEREST_POSTING)
+                .direction(SynapseTransactionInstruction.Direction.CREDIT).operation(SynapseTransactionInstruction.Operation.POST)
+                .amount(new BigDecimal("250.00")).transactionDate(LocalDate.of(2026, 3, 20)).currencyCode("NGN").batchId(batchId).build();
 
-        return SynapseInterestPostingBatch.builder()
-                .batchId(batchId)
-                .postingDate(LocalDate.of(2026, 3, 20))
-                .totalCount(1)
-                .transactions(List.of(instruction))
-                .build();
+        return SynapseInterestPostingBatch.builder().batchId(batchId).postingDate(LocalDate.of(2026, 3, 20)).totalCount(1)
+                .transactions(List.of(instruction)).build();
     }
 }
-

@@ -368,8 +368,7 @@ class SynapseOutboxTaskletTest {
         void setUp() {
             ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "Asia/Kolkata", null));
             ThreadLocalContextUtil.setActionContext(ActionContext.DEFAULT);
-            ThreadLocalContextUtil.setBusinessDates(
-                    new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 4, 12))));
+            ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 4, 12))));
             ThreadLocalContextUtil.setAuthToken("test-token");
             ThreadLocalContextUtil.setDataSourceContext("tenants");
 
@@ -392,9 +391,7 @@ class SynapseOutboxTaskletTest {
 
             when(handler.taskType()).thenReturn("INTEREST_POSTING");
             List<OutboxEntry> entries = List.of(entry(1L));
-            when(outboxRepository.claimPending("INTEREST_POSTING", PAGE_SIZE))
-                    .thenReturn(entries)
-                    .thenReturn(Collections.emptyList());
+            when(outboxRepository.claimPending("INTEREST_POSTING", PAGE_SIZE)).thenReturn(entries).thenReturn(Collections.emptyList());
             when(outboxRepository.getOutboxStats()).thenReturn(Map.of());
 
             AtomicReference<FineractContext> capturedContext = new AtomicReference<>();
@@ -408,8 +405,8 @@ class SynapseOutboxTaskletTest {
             synapse.setOutboxPageSize(PAGE_SIZE);
             synapse.setOutboxThreadPoolSize(2);
             props.setSynapse(synapse);
-            SynapseOutboxTasklet tasklet = new SynapseOutboxTasklet(
-                    outboxRepository, List.of(handler), CircuitBreakerRegistry.ofDefaults(), props, decoratedExecutor);
+            SynapseOutboxTasklet tasklet = new SynapseOutboxTasklet(outboxRepository, List.of(handler), CircuitBreakerRegistry.ofDefaults(),
+                    props, decoratedExecutor);
 
             tasklet.execute(null, null);
 

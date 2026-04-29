@@ -54,14 +54,13 @@ public class SynapseOutboxPurgeConfig {
 
     @Bean
     protected Step purgeSynapseOutboxStep(SynapseOutboxPurgeTasklet synapseOutboxPurgeTasklet) {
-        return new StepBuilder(JobName.PURGE_SYNAPSE_OUTBOX.name(), jobRepository)
-                .tasklet(synapseOutboxPurgeTasklet, transactionManager).build();
+        return new StepBuilder(JobName.PURGE_SYNAPSE_OUTBOX.name(), jobRepository).tasklet(synapseOutboxPurgeTasklet, transactionManager)
+                .build();
     }
 
     @Bean
     public Job purgeSynapseOutboxJob(SynapseOutboxPurgeTasklet synapseOutboxPurgeTasklet) {
-        return new JobBuilder(JobName.PURGE_SYNAPSE_OUTBOX.name(), jobRepository)
-                .start(purgeSynapseOutboxStep(synapseOutboxPurgeTasklet))
+        return new JobBuilder(JobName.PURGE_SYNAPSE_OUTBOX.name(), jobRepository).start(purgeSynapseOutboxStep(synapseOutboxPurgeTasklet))
                 .incrementer(new RunIdIncrementer()).build();
     }
 }

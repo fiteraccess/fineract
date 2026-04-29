@@ -97,50 +97,31 @@ class ChargePostingTaskHandlerTest {
         @Test
         void dispatch_throwsOnRejectedResponse() {
             OutboxEntry entry = buildEntry(validPayload());
-            SynapseBatchPostingResponse response = new SynapseBatchPostingResponse(
-                    "batch-1", 0, 1,
+            SynapseBatchPostingResponse response = new SynapseBatchPostingResponse("batch-1", 0, 1,
                     List.of(new SynapsePostingResult("trace-1", "REJECTED", null)));
             when(client.postBatch(any(SynapseInterestPostingBatch.class))).thenReturn(response);
 
-            assertThatThrownBy(() -> handler.dispatch(entry))
-                    .isInstanceOf(SynapsePostingException.class)
-                    .hasMessageContaining("rejected")
+            assertThatThrownBy(() -> handler.dispatch(entry)).isInstanceOf(SynapsePostingException.class).hasMessageContaining("rejected")
                     .hasMessageContaining("trace-1");
         }
 
         private void whenClientAccepts() {
-            SynapseBatchPostingResponse response = new SynapseBatchPostingResponse(
-                    "batch-1", 1, 0,
+            SynapseBatchPostingResponse response = new SynapseBatchPostingResponse("batch-1", 1, 0,
                     List.of(new SynapsePostingResult("trace-1", "ACCEPTED", null)));
             when(client.postBatch(any(SynapseInterestPostingBatch.class))).thenReturn(response);
         }
     }
 
     private static OutboxEntry buildEntry(String payload) {
-        return OutboxEntry.builder()
-                .id(1L)
-                .traceId("trace-1")
-                .batchId("batch-1")
-                .taskType("CHARGE_POSTING")
-                .accountId(100L)
-                .officeId(10L)
-                .payload(payload)
-                .build();
+        return OutboxEntry.builder().id(1L).traceId("trace-1").batchId("batch-1").taskType("CHARGE_POSTING").accountId(100L).officeId(10L)
+                .payload(payload).build();
     }
 
     private static String validPayload() {
-        SynapseTransactionInstruction instruction = SynapseTransactionInstruction.builder()
-                .traceId("trace-1")
-                .savingsAccountId(100L)
-                .officeId(10L)
-                .transactionType(SynapseTransactionInstruction.TransactionType.SAVINGS_CHARGE)
-                .direction(SynapseTransactionInstruction.Direction.DEBIT)
-                .operation(SynapseTransactionInstruction.Operation.POST)
-                .amount(new BigDecimal("50.00"))
-                .transactionDate(LocalDate.of(2026, 3, 20))
-                .currencyCode("NGN")
-                .batchId("batch-1")
-                .build();
+        SynapseTransactionInstruction instruction = SynapseTransactionInstruction.builder().traceId("trace-1").savingsAccountId(100L)
+                .officeId(10L).transactionType(SynapseTransactionInstruction.TransactionType.SAVINGS_CHARGE)
+                .direction(SynapseTransactionInstruction.Direction.DEBIT).operation(SynapseTransactionInstruction.Operation.POST)
+                .amount(new BigDecimal("50.00")).transactionDate(LocalDate.of(2026, 3, 20)).currencyCode("NGN").batchId("batch-1").build();
         try {
             return new ObjectMapper().registerModule(new JavaTimeModule()).writeValueAsString(instruction);
         } catch (Exception e) {

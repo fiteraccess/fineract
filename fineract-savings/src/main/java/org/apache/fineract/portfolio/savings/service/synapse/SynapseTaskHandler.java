@@ -23,10 +23,8 @@ import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 /**
  * Strategy interface for dispatching outbox entries to Synapse.
  * <p>
- * Each implementation handles exactly one {@link #taskType()} (e.g.
- * {@code INTEREST_POSTING}, {@code MONTHLY_CHARGE}).  The outbox dispatcher
- * discovers all registered handlers via Spring's {@code List<SynapseTaskHandler>}
- * injection.
+ * Each implementation handles exactly one {@link #taskType()} (e.g. {@code INTEREST_POSTING}, {@code MONTHLY_CHARGE}).
+ * The outbox dispatcher discovers all registered handlers via Spring's {@code List<SynapseTaskHandler>} injection.
  */
 public interface SynapseTaskHandler {
 
@@ -38,12 +36,12 @@ public interface SynapseTaskHandler {
     /**
      * Dispatch a single outbox entry to Synapse.
      * <p>
-     * Implementations should deserialize the entry's payload, build the
-     * appropriate Synapse request, and call the remote API. Errors should
-     * be propagated as {@link SynapsePostingException} so the circuit
-     * breaker can record them.
+     * Implementations should deserialize the entry's payload, build the appropriate Synapse request, and call the
+     * remote API. Errors should be propagated as {@link SynapsePostingException} so the circuit breaker can record
+     * them.
      *
-     * @param entry a claimed outbox row (status = DISPATCHED)
+     * @param entry
+     *            a claimed outbox row (status = DISPATCHED)
      */
     void dispatch(OutboxEntry entry);
 }

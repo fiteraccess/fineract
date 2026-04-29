@@ -57,8 +57,8 @@ public class SynapseTransactionClient {
                     SynapseBatchPostingResponse.class);
 
             SynapseBatchPostingResponse body = response.getBody();
-            log.debug("Batch {} response: accepted={}, failed={}", batch.getBatchId(),
-                    body != null ? body.getAccepted() : "null", body != null ? body.getFailed() : "null");
+            log.debug("Batch {} response: accepted={}, failed={}", batch.getBatchId(), body != null ? body.getAccepted() : "null",
+                    body != null ? body.getFailed() : "null");
             return body;
         } catch (RestClientResponseException e) {
             throw new SynapsePostingException(
@@ -68,4 +68,3 @@ public class SynapseTransactionClient {
         }
     }
 }
-

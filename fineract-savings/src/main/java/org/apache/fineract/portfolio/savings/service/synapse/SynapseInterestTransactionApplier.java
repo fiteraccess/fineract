@@ -57,12 +57,18 @@ public class SynapseInterestTransactionApplier {
     /**
      * Replays a single interest posting transaction from Synapse.
      *
-     * @param account the savings account to post against
-     * @param transactionType one of INTEREST_POSTING, OVERDRAFT_INTEREST, WITHHOLD_TAX
-     * @param transactionAmount the amount to post
-     * @param transactionDate the date of the transaction
-     * @param overdraftAmount the overdraft amount (only for OVERDRAFT_INTEREST)
-     * @param traceId the Synapse trace ID used for idempotency (stored in ref_no)
+     * @param account
+     *            the savings account to post against
+     * @param transactionType
+     *            one of INTEREST_POSTING, OVERDRAFT_INTEREST, WITHHOLD_TAX
+     * @param transactionAmount
+     *            the amount to post
+     * @param transactionDate
+     *            the date of the transaction
+     * @param overdraftAmount
+     *            the overdraft amount (only for OVERDRAFT_INTEREST)
+     * @param traceId
+     *            the Synapse trace ID used for idempotency (stored in ref_no)
      * @return a ReplayResult indicating whether the transaction was created or already existed
      */
     public ReplayResult replay(SavingsAccount account, String transactionType, BigDecimal transactionAmount, LocalDate transactionDate,
@@ -91,7 +97,7 @@ public class SynapseInterestTransactionApplier {
         }
 
         // 5. Update account balances incrementally (updates accountBalance, totalInterestPosted,
-        //    totalOverdraftInterestDerived, totalWithholdTax as appropriate)
+        // totalOverdraftInterestDerived, totalWithholdTax as appropriate)
         account.addTransaction(transaction);
         account.getSummary().updateSummaryWithTransaction(account.getCurrency(), summaryWrapper, transaction);
 

@@ -23,8 +23,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * Holds the cursor fields that must be advanced on {@code m_savings_account}
- * after a successful Synapse posting (or when an account has zero interest).
+ * Holds the cursor fields that must be advanced on {@code m_savings_account} after a successful Synapse posting (or
+ * when an account has zero interest).
  */
 @Getter
 @AllArgsConstructor
@@ -34,4 +34,3 @@ public class AccountCursorUpdate {
     private final LocalDate interestPostedTillDate;
     private final LocalDate lastInterestCalculationDate;
 }
-

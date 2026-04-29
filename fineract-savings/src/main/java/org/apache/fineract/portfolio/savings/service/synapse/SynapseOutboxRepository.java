@@ -34,7 +34,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
 /**
@@ -51,12 +50,9 @@ public class SynapseOutboxRepository {
             + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)";
 
     private static final String CLAIM_SQL = "UPDATE synapse_outbox SET status = 'DISPATCHED', "
-            + "dispatched_at = ?, attempts = attempts + 1 "
-            + "WHERE id IN ("
-            + "  SELECT id FROM synapse_outbox "
+            + "dispatched_at = ?, attempts = attempts + 1 " + "WHERE id IN (" + "  SELECT id FROM synapse_outbox "
             + "  WHERE status = 'PENDING' AND task_type = ? AND attempts < max_attempts "
-            + "  AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
-            + "  ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED"
+            + "  AND (next_attempt_at IS NULL OR next_attempt_at <= ?) " + "  ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED"
             + ") RETURNING id, trace_id, batch_id, task_type, account_id, office_id, "
             + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at";
 
@@ -111,9 +107,8 @@ public class SynapseOutboxRepository {
     }
 
     /**
-     * Claim up to {@code limit} PENDING rows for the given task type.
-     * Uses {@code FOR UPDATE SKIP LOCKED} to avoid contention.
-     * Claimed rows are atomically moved to DISPATCHED status.
+     * Claim up to {@code limit} PENDING rows for the given task type. Uses {@code FOR UPDATE SKIP LOCKED} to avoid
+     * contention. Claimed rows are atomically moved to DISPATCHED status.
      *
      * @return the claimed entries (status = DISPATCHED)
      */
@@ -151,8 +146,8 @@ public class SynapseOutboxRepository {
     private static final Duration RETRY_DEADLINE = Duration.ofHours(24);
 
     /**
-     * Mark a single row as FAILED (or DEAD if max attempts or retry deadline reached).
-     * Applies exponential backoff with ±20% jitter for the next retry attempt.
+     * Mark a single row as FAILED (or DEAD if max attempts or retry deadline reached). Applies exponential backoff with
+     * ±20% jitter for the next retry attempt.
      */
     public void markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
         boolean isDead = (currentAttempts + 1) >= maxAttempts || clock.instant().isAfter(createdAt.plus(RETRY_DEADLINE));
@@ -168,8 +163,8 @@ public class SynapseOutboxRepository {
     }
 
     /**
-     * Calculate the backoff delay in minutes for the given attempt number.
-     * Uses exponential backoff with ±20% jitter, capped at {@link #BACKOFF_MAX_MINUTES}.
+     * Calculate the backoff delay in minutes for the given attempt number. Uses exponential backoff with ±20% jitter,
+     * capped at {@link #BACKOFF_MAX_MINUTES}.
      */
     double calculateBackoffMinutes(int currentAttempts) {
         double delayMinutes = BACKOFF_BASE_MINUTES * Math.pow(BACKOFF_MULTIPLIER, currentAttempts);
@@ -197,8 +192,8 @@ public class SynapseOutboxRepository {
     }
 
     /**
-     * Reset rows back to PENDING without penalising the attempt count.
-     * Used when the circuit breaker is open — the entries themselves did not fail.
+     * Reset rows back to PENDING without penalising the attempt count. Used when the circuit breaker is open — the
+     * entries themselves did not fail.
      */
     public void resetToPending(List<Long> ids) {
         if (ids.isEmpty()) {
@@ -214,7 +209,8 @@ public class SynapseOutboxRepository {
     /**
      * Reset a DEAD outbox entry back to PENDING for manual retry.
      *
-     * @param id the outbox entry id
+     * @param id
+     *            the outbox entry id
      * @return the number of rows updated (1 if reset, 0 if not found or not DEAD)
      */
     public int retryDeadEntry(Long id) {
@@ -228,11 +224,11 @@ public class SynapseOutboxRepository {
     }
 
     /**
-     * Reclaim rows stuck in DISPATCHED status for longer than the given threshold.
-     * This handles entries left behind by crashed or interrupted runs.
-     * Safe because Synapse enforces trace_id idempotency.
+     * Reclaim rows stuck in DISPATCHED status for longer than the given threshold. This handles entries left behind by
+     * crashed or interrupted runs. Safe because Synapse enforces trace_id idempotency.
      *
-     * @param staleMinutes entries dispatched more than this many minutes ago are reclaimed
+     * @param staleMinutes
+     *            entries dispatched more than this many minutes ago are reclaimed
      * @return the number of reclaimed rows
      */
     public int reclaimStaleDispatched(int staleMinutes) {
@@ -247,7 +243,8 @@ public class SynapseOutboxRepository {
     /**
      * Delete SENT outbox entries older than the given retention period.
      *
-     * @param retentionDays number of days to retain completed entries
+     * @param retentionDays
+     *            number of days to retain completed entries
      * @return the number of deleted rows
      */
     public int purgeOldSentEntries(int retentionDays) {
@@ -261,22 +258,12 @@ public class SynapseOutboxRepository {
 
         @Override
         public OutboxEntry mapRow(ResultSet rs, int rowNum) throws SQLException {
-            return OutboxEntry.builder()
-                    .id(rs.getLong("id"))
-                    .traceId(rs.getString("trace_id"))
-                    .batchId(rs.getString("batch_id"))
-                    .taskType(rs.getString("task_type"))
-                    .accountId(rs.getLong("account_id"))
-                    .officeId(readNullableLong(rs, "office_id"))
-                    .payload(rs.getString("payload"))
-                    .status(rs.getString("status"))
-                    .attempts(rs.getInt("attempts"))
-                    .maxAttempts(rs.getInt("max_attempts"))
-                    .errorDetail(rs.getString("error_detail"))
-                    .createdAt(toInstant(rs.getTimestamp("created_at")))
-                    .dispatchedAt(toInstant(rs.getTimestamp("dispatched_at")))
-                    .completedAt(toInstant(rs.getTimestamp("completed_at")))
-                    .nextAttemptAt(toInstant(rs.getTimestamp("next_attempt_at")))
+            return OutboxEntry.builder().id(rs.getLong("id")).traceId(rs.getString("trace_id")).batchId(rs.getString("batch_id"))
+                    .taskType(rs.getString("task_type")).accountId(rs.getLong("account_id")).officeId(readNullableLong(rs, "office_id"))
+                    .payload(rs.getString("payload")).status(rs.getString("status")).attempts(rs.getInt("attempts"))
+                    .maxAttempts(rs.getInt("max_attempts")).errorDetail(rs.getString("error_detail"))
+                    .createdAt(toInstant(rs.getTimestamp("created_at"))).dispatchedAt(toInstant(rs.getTimestamp("dispatched_at")))
+                    .completedAt(toInstant(rs.getTimestamp("completed_at"))).nextAttemptAt(toInstant(rs.getTimestamp("next_attempt_at")))
                     .build();
         }
 

@@ -63,9 +63,7 @@ public class SynapseOutboxOperationalIntegrationTest {
     private static final String BATCH_URL = "/api/v1/proxy/savings/interest-postings:batch";
 
     @RegisterExtension
-    static WireMockExtension synapse = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(18089))
-            .build();
+    static WireMockExtension synapse = WireMockExtension.newInstance().options(wireMockConfig().port(18089)).build();
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
@@ -82,8 +80,7 @@ public class SynapseOutboxOperationalIntegrationTest {
         String host = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_HOSTNAME", "localhost");
         String port = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_PORT", "5432");
         String dbName = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_NAME", "fineract_default");
-        String url = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_URL",
-                "jdbc:postgresql://" + host + ":" + port + "/" + dbName);
+        String url = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_URL", "jdbc:postgresql://" + host + ":" + port + "/" + dbName);
         String user = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_UID", "postgres");
         String pwd = System.getenv().getOrDefault("FINERACT_DEFAULT_TENANTDB_PWD", "postgres");
 
@@ -105,16 +102,13 @@ public class SynapseOutboxOperationalIntegrationTest {
 
             String activationDate = "01 January 2022";
             LocalDate postingDate = LocalDate.of(2022, 2, 2);
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE,
-                    LocalDate.of(2022, 1, 1));
+            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2022, 1, 1));
 
             Account[] gl = createCashBasedGlAccounts();
             Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, activationDate);
             Integer productId = SavingsProductHelper.createSavingsProduct(
-                    new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
-                            .withInterestPostingPeriodTypeAsDaily()
-                            .withInterestCalculationPeriodTypeAsDailyBalance()
-                            .withAccountingRuleAsCashBased(gl).build(),
+                    new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsDaily()
+                            .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsCashBased(gl).build(),
                     requestSpec, responseSpec);
             SavingsAccountHelper sh = new SavingsAccountHelper(requestSpec, responseSpec);
             Integer savingsId = sh.applyForSavingsApplicationOnDate(clientId, productId, "INDIVIDUAL", activationDate);
@@ -136,22 +130,18 @@ public class SynapseOutboxOperationalIntegrationTest {
 
     private void stubSynapseOk() {
         synapse.stubFor(WireMock.post(WireMock.urlEqualTo(BATCH_URL))
-                .willReturn(WireMock.aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
+                .willReturn(WireMock.aResponse().withStatus(200).withHeader("Content-Type", "application/json")
                         .withBody("{\"batchId\":\"stub\",\"accepted\":999,\"failed\":0,\"results\":[]}")));
     }
 
     private void stubSynapse500() {
-        synapse.stubFor(WireMock.post(WireMock.urlEqualTo(BATCH_URL))
-                .willReturn(WireMock.aResponse().withStatus(500)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"error\":\"Internal Server Error\"}")));
+        synapse.stubFor(WireMock.post(WireMock.urlEqualTo(BATCH_URL)).willReturn(WireMock.aResponse().withStatus(500)
+                .withHeader("Content-Type", "application/json").withBody("{\"error\":\"Internal Server Error\"}")));
     }
 
     private Account[] createCashBasedGlAccounts() {
         AccountHelper ah = new AccountHelper(requestSpec, responseSpec);
-        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(),
-                ah.createIncomeAccount(), ah.createExpenseAccount() };
+        return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(), ah.createIncomeAccount(), ah.createExpenseAccount() };
     }
 
     @Nested
@@ -173,28 +163,24 @@ public class SynapseOutboxOperationalIntegrationTest {
             // Simulate exhausted retries: set status to DEAD and attempts to max
             // (The markFailed → DEAD transition is verified by unit tests; here we test the retry API end-to-end)
             jdbc.update("UPDATE synapse_outbox SET status = 'DEAD', attempts = ?, "
-                    + "error_detail = 'simulated max retries exhausted' WHERE id = ?",
-                    maxAttempts, outboxId);
+                    + "error_detail = 'simulated max retries exhausted' WHERE id = ?", maxAttempts, outboxId);
 
-            String statusAfterDead = jdbc.queryForObject(
-                    "SELECT status FROM synapse_outbox WHERE id = ?", String.class, outboxId);
+            String statusAfterDead = jdbc.queryForObject("SELECT status FROM synapse_outbox WHERE id = ?", String.class, outboxId);
             assertEquals("DEAD", statusAfterDead, "Entry should be DEAD after exhausting retries");
 
             // Test retry API resets the DEAD entry back to PENDING
             String retryUrl = "/fineract-provider/api/v1/synapse-outbox/" + outboxId + "/retry?" + Utils.TENANT_IDENTIFIER;
             Utils.performServerPost(requestSpec, responseSpec, retryUrl, "{}");
 
-            String statusAfterRetry = jdbc.queryForObject(
-                    "SELECT status FROM synapse_outbox WHERE id = ?", String.class, outboxId);
+            String statusAfterRetry = jdbc.queryForObject("SELECT status FROM synapse_outbox WHERE id = ?", String.class, outboxId);
             assertEquals("PENDING", statusAfterRetry, "Entry should be PENDING after manual retry");
 
-            int attemptsAfterRetry = jdbc.queryForObject(
-                    "SELECT attempts FROM synapse_outbox WHERE id = ?", Integer.class, outboxId);
+            int attemptsAfterRetry = jdbc.queryForObject("SELECT attempts FROM synapse_outbox WHERE id = ?", Integer.class, outboxId);
             assertEquals(0, attemptsAfterRetry, "Attempts should be reset to 0 after retry");
 
             // Neutralize any other PENDING entries so only our entry gets dispatched
-            jdbc.update("UPDATE synapse_outbox SET status = 'SENT', completed_at = NOW() "
-                    + "WHERE status = 'PENDING' AND id != ?", outboxId);
+            jdbc.update("UPDATE synapse_outbox SET status = 'SENT', completed_at = NOW() " + "WHERE status = 'PENDING' AND id != ?",
+                    outboxId);
 
             // Dispatch should now succeed
             synapse.resetAll();
@@ -203,8 +189,7 @@ public class SynapseOutboxOperationalIntegrationTest {
             SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
             schedulerJobHelper.executeAndAwaitJob("Dispatch Synapse Outbox");
 
-            String statusAfterDispatch = jdbc.queryForObject(
-                    "SELECT status FROM synapse_outbox WHERE id = ?", String.class, outboxId);
+            String statusAfterDispatch = jdbc.queryForObject("SELECT status FROM synapse_outbox WHERE id = ?", String.class, outboxId);
             assertEquals("SENT", statusAfterDispatch, "Entry should be SENT after successful dispatch");
         }
     }
@@ -220,19 +205,16 @@ public class SynapseOutboxOperationalIntegrationTest {
             Timestamp fortydaysAgo = Timestamp.from(Instant.now().minus(40, ChronoUnit.DAYS));
             jdbc.update("INSERT INTO synapse_outbox "
                     + "(trace_id, batch_id, task_type, account_id, payload, status, attempts, max_attempts, created_at, completed_at) "
-                    + "VALUES (?, ?, ?, ?, ?, 'SENT', 1, 20, ?, ?)",
-                    traceId, "purge-test-batch", "INTEREST_POSTING", 1L,
-                    "{}", fortydaysAgo, fortydaysAgo);
+                    + "VALUES (?, ?, ?, ?, ?, 'SENT', 1, 20, ?, ?)", traceId, "purge-test-batch", "INTEREST_POSTING", 1L, "{}",
+                    fortydaysAgo, fortydaysAgo);
 
-            Integer countBefore = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM synapse_outbox WHERE trace_id = ?", Integer.class, traceId);
+            Integer countBefore = jdbc.queryForObject("SELECT COUNT(*) FROM synapse_outbox WHERE trace_id = ?", Integer.class, traceId);
             assertEquals(1, countBefore, "Row should exist before purge");
 
             SchedulerJobHelper schedulerJobHelper = new SchedulerJobHelper(requestSpec);
             schedulerJobHelper.executeAndAwaitJob("Purge Synapse Outbox");
 
-            Integer countAfter = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM synapse_outbox WHERE trace_id = ?", Integer.class, traceId);
+            Integer countAfter = jdbc.queryForObject("SELECT COUNT(*) FROM synapse_outbox WHERE trace_id = ?", Integer.class, traceId);
             assertEquals(0, countAfter, "Row should be deleted after purge");
         }
     }

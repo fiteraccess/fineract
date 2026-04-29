@@ -205,9 +205,8 @@ public class SavingsAccountTransactionsApiResource {
 
         if (result == null) {
             //
-            throw new UnrecognizedQueryParamException("command", commandParam,
-                    new Object[] { "deposit", "withdrawal", SavingsApiConstants.COMMAND_HOLD_AMOUNT,
-                            "replayInterestPosting", "replayChargePosting" });
+            throw new UnrecognizedQueryParamException("command", commandParam, new Object[] { "deposit", "withdrawal",
+                    SavingsApiConstants.COMMAND_HOLD_AMOUNT, "replayInterestPosting", "replayChargePosting" });
         }
 
         return this.toApiJsonSerializer.serialize(result);

@@ -25,8 +25,8 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * Wraps a list of {@link SynapseTransactionInstruction}s into a single batch
- * payload for the Synapse batch interest-posting endpoint.
+ * Wraps a list of {@link SynapseTransactionInstruction}s into a single batch payload for the Synapse batch
+ * interest-posting endpoint.
  */
 @Getter
 @Builder
@@ -45,4 +45,3 @@ public class SynapseInterestPostingBatch {
     /** The individual posting instructions. */
     private final List<SynapseTransactionInstruction> transactions;
 }
-

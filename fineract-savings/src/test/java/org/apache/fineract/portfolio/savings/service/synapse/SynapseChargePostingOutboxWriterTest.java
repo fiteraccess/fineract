@@ -60,26 +60,17 @@ class SynapseChargePostingOutboxWriterTest {
         objectMapper = mock(ObjectMapper.class);
         writer = new SynapseChargePostingOutboxWriter(mapper, outboxRepository, objectMapper);
 
-        SynapseTransactionInstruction stubInstruction = SynapseTransactionInstruction.builder()
-                .traceId("trace-abc-123")
-                .savingsAccountId(ACCOUNT_ID)
-                .officeId(OFFICE_ID)
-                .externalId(EXTERNAL_ID)
+        SynapseTransactionInstruction stubInstruction = SynapseTransactionInstruction.builder().traceId("trace-abc-123")
+                .savingsAccountId(ACCOUNT_ID).officeId(OFFICE_ID).externalId(EXTERNAL_ID)
                 .transactionType(SynapseTransactionInstruction.TransactionType.SAVINGS_CHARGE)
-                .direction(SynapseTransactionInstruction.Direction.DEBIT)
-                .operation(SynapseTransactionInstruction.Operation.POST)
-                .amount(AMOUNT)
-                .description(CHARGE_NAME)
-                .transactionDate(TX_DATE)
-                .currencyCode(CURRENCY)
-                .batchId("batch-placeholder")
+                .direction(SynapseTransactionInstruction.Direction.DEBIT).operation(SynapseTransactionInstruction.Operation.POST)
+                .amount(AMOUNT).description(CHARGE_NAME).transactionDate(TX_DATE).currencyCode(CURRENCY).batchId("batch-placeholder")
                 .build();
 
-        when(mapper.mapCharge(eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID), eq(CHARGE_NAME),
-                eq(AMOUNT), eq(TX_DATE), eq(CURRENCY), anyString())).thenReturn(stubInstruction);
+        when(mapper.mapCharge(eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID), eq(CHARGE_NAME), eq(AMOUNT), eq(TX_DATE),
+                eq(CURRENCY), anyString())).thenReturn(stubInstruction);
 
-        when(objectMapper.writeValueAsString(any(SynapseTransactionInstruction.class)))
-                .thenReturn("{\"traceId\":\"trace-abc-123\"}");
+        when(objectMapper.writeValueAsString(any(SynapseTransactionInstruction.class))).thenReturn("{\"traceId\":\"trace-abc-123\"}");
     }
 
     @SuppressWarnings("unchecked")
@@ -119,15 +110,7 @@ class SynapseChargePostingOutboxWriterTest {
     void postCharge_passesCorrectFieldsToMapper() {
         writer.postCharge(CHARGE_ID, ACCOUNT_ID, OFFICE_ID, EXTERNAL_ID, CHARGE_NAME, AMOUNT, TX_DATE, CURRENCY);
 
-        verify(mapper).mapCharge(
-                eq(CHARGE_ID),
-                eq(ACCOUNT_ID),
-                eq(OFFICE_ID),
-                eq(EXTERNAL_ID),
-                eq(CHARGE_NAME),
-                eq(AMOUNT),
-                eq(TX_DATE),
-                eq(CURRENCY),
-                anyString());
+        verify(mapper).mapCharge(eq(CHARGE_ID), eq(ACCOUNT_ID), eq(OFFICE_ID), eq(EXTERNAL_ID), eq(CHARGE_NAME), eq(AMOUNT), eq(TX_DATE),
+                eq(CURRENCY), anyString());
     }
 }
