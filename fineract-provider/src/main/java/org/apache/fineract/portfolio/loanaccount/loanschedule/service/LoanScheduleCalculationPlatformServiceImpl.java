@@ -206,7 +206,7 @@ public class LoanScheduleCalculationPlatformServiceImpl implements LoanScheduleC
     private LoanApplicationTerms constructLoanApplicationTerms(final Loan loan) {
         final ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, null);
         return loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     private Loan fetchLoan(final Long accountId) {

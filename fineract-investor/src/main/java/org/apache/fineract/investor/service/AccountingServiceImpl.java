@@ -187,16 +187,8 @@ public class AccountingServiceImpl implements AccountingService {
         Map<GLAccount, BigDecimal> accountMap = new LinkedHashMap<>();
         // principal entry
         if (principalAmount != null && principalAmount.compareTo(BigDecimal.ZERO) > 0) {
-            AccountingConstants.AccrualAccountsForLoan accrualAccount = AccountingConstants.AccrualAccountsForLoan.LOAN_PORTFOLIO;
-            if (loan.isChargedOff()) {
-                if (loan.isFraud()) {
-                    accrualAccount = AccountingConstants.AccrualAccountsForLoan.CHARGE_OFF_FRAUD_EXPENSE;
-                } else {
-                    accrualAccount = AccountingConstants.AccrualAccountsForLoan.CHARGE_OFF_EXPENSE;
-                }
-            }
             totalDebitAmount = totalDebitAmount.add(principalAmount);
-            GLAccount account = this.helper.getLinkedGLAccountForLoanProduct(loanProductId, accrualAccount.getValue());
+            GLAccount account = resolvePrincipalGlAccount(loan, loanProductId);
             accountMap.put(account, principalAmount);
         }
         // interest entry
@@ -271,5 +263,24 @@ public class AccountingServiceImpl implements AccountingService {
 
     private boolean isOwnedByFinancialActivityAccount(JournalEntry journalEntry, FinancialActivityAccount financialActivityAccount) {
         return Objects.equals(financialActivityAccount.getGlAccount().getId(), journalEntry.getGlAccount().getId());
+    }
+
+    private GLAccount resolvePrincipalGlAccount(final Loan loan, final Long loanProductId) {
+        if (loan.isChargedOff()) {
+            // Mirrors AccrualBasedAccountingProcessorForLoan.createJournalEntriesForChargeOff: a per-reason GL mapping,
+            // when configured, wins over the fraud/non-fraud binary — so buyback posts to the same account as the
+            // original charge-off.
+            final GLAccount reasonMappedAccount = this.helper.getLinkedGLAccountForChargeOffReason(loanProductId,
+                    loan.fetchChargeOffReasonId());
+            if (reasonMappedAccount != null) {
+                return reasonMappedAccount;
+            }
+            final AccountingConstants.AccrualAccountsForLoan accrualAccount = loan.isFraud()
+                    ? AccountingConstants.AccrualAccountsForLoan.CHARGE_OFF_FRAUD_EXPENSE
+                    : AccountingConstants.AccrualAccountsForLoan.CHARGE_OFF_EXPENSE;
+            return this.helper.getLinkedGLAccountForLoanProduct(loanProductId, accrualAccount.getValue());
+        }
+        return this.helper.getLinkedGLAccountForLoanProduct(loanProductId,
+                AccountingConstants.AccrualAccountsForLoan.LOAN_PORTFOLIO.getValue());
     }
 }

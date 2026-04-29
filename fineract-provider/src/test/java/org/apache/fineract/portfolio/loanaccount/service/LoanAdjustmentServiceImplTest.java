@@ -241,7 +241,7 @@ class LoanAdjustmentServiceImplTest {
         // Mock cacheable product config
         when(loan.getProductId()).thenReturn(1L);
         CacheableLoanProductConfig productConfig = mock(CacheableLoanProductConfig.class);
-        when(cacheableLoanProductConfigService.getConfig(1L)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(1L)).thenReturn(productConfig);
 
         // Act
         underTest.adjustExistingTransaction(loan, newTransactionDetail, transactionForAdjustment, scheduleGeneratorDTO, reversalExternalId);
@@ -285,7 +285,7 @@ class LoanAdjustmentServiceImplTest {
         // Mock cacheable product config
         when(loan.getProductId()).thenReturn(1L);
         CacheableLoanProductConfig productConfig = mock(CacheableLoanProductConfig.class);
-        when(cacheableLoanProductConfigService.getConfig(1L)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(1L)).thenReturn(productConfig);
 
         // Act
         underTest.adjustExistingTransaction(loan, newTransactionDetail, transactionForAdjustment, scheduleGeneratorDTO, reversalExternalId);

@@ -875,7 +875,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
                 loanScheduleService.regenerateRepaymentScheduleWithInterestRecalculation(loan, scheduleGeneratorDTO);
             } else if (loan.isProgressiveSchedule()) {
                 loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             }
             loan.getLoanTransactions().add(refundTransaction);
             if (interestRefundTransaction != null) {
@@ -1033,14 +1033,14 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         loanChargeValidator.validateRepaymentTypeTransactionNotBeforeAChargeRefund(loan, repaymentTransaction, "created");
         loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, repaymentTransaction, null, scheduleGeneratorDTO,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     private void handleForeClosureTransactions(final Loan loan, final LoanTransaction repaymentTransaction,
             final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         loan.setLoanSubStatus(LoanSubStatus.FORECLOSED);
         loanDownPaymentHandlerService.handleRepaymentOrRecoveryOrWaiverTransaction(loan, repaymentTransaction, null, scheduleGeneratorDTO,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
 }

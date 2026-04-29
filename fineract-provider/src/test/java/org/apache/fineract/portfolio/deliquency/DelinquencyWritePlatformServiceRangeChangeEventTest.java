@@ -199,7 +199,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(1L);
         productConfig.setHasDelinquencyBucket(true);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
         when(repositoryBucket.findById(1L)).thenReturn(Optional.of(delinquencyBucket));
         when(loanForProcessing.isEnableInstallmentLevelDelinquency()).thenReturn(false);
         when(loanDelinquencyTagRepository.findByLoanAndLiftedOnDate(any(), any())).thenReturn(Optional.empty());
@@ -260,7 +260,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(1L);
         productConfig.setHasDelinquencyBucket(true);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
         when(repositoryBucket.findById(1L)).thenReturn(Optional.of(delinquencyBucket));
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loanForProcessing.isEnableInstallmentLevelDelinquency()).thenReturn(true);
@@ -310,7 +310,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(1L);
         productConfig.setHasDelinquencyBucket(true);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
         when(repositoryBucket.findById(1L)).thenReturn(Optional.of(delinquencyBucket));
         when(loanDelinquencyTagRepository.findByLoanAndLiftedOnDate(any(), any())).thenReturn(Optional.empty());
         when(loanDelinquencyDomainService.getLoanDelinquencyData(loanForProcessing, effectiveDelinquencyList))
@@ -338,7 +338,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(null);
         productConfig.setHasDelinquencyBucket(false);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
 
         // when
         underTest.applyDelinquencyTagToLoan(loanScheduleDelinquencyData, effectiveDelinquencyList);
@@ -398,7 +398,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(1L);
         productConfig.setHasDelinquencyBucket(true);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
         when(repositoryBucket.findById(1L)).thenReturn(Optional.of(delinquencyBucket));
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loanForProcessing.isEnableInstallmentLevelDelinquency()).thenReturn(true);
@@ -481,7 +481,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(1L);
         productConfig.setHasDelinquencyBucket(true);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
         when(repositoryBucket.findById(1L)).thenReturn(Optional.of(delinquencyBucket));
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loanForProcessing.isEnableInstallmentLevelDelinquency()).thenReturn(true);
@@ -579,7 +579,7 @@ public class DelinquencyWritePlatformServiceRangeChangeEventTest {
         productConfig.setDelinquencyBucketId(1L);
         productConfig.setHasDelinquencyBucket(true);
         when(loanForProcessing.getProductId()).thenReturn(1L);
-        when(loanProductConfigProvider.getConfig(1L)).thenReturn(productConfig);
+        when(loanProductConfigProvider.getProductConfig(1L)).thenReturn(productConfig);
         when(repositoryBucket.findById(1L)).thenReturn(Optional.of(delinquencyBucket));
         when(loanForProcessing.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loanForProcessing.isEnableInstallmentLevelDelinquency()).thenReturn(true);

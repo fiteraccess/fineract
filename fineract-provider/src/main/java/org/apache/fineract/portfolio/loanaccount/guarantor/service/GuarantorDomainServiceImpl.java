@@ -112,7 +112,7 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
 
     @Override
     public void validateGuarantorBusinessRules(Loan loan) {
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         BigDecimal principal = loan.getPrincipal().getAmount();
         if (productConfig.isHoldGuaranteeFunds()) {
             // Load full product for guarantee details (not on hot path)
@@ -322,7 +322,7 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
      *
      */
     private void holdGuarantorFunds(final Loan loan) {
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (productConfig.isHoldGuaranteeFunds()) {
             final List<Guarantor> existGuarantorList = this.guarantorRepository.findByLoan(loan);
             List<GuarantorFundingDetails> guarantorFundingDetailList = new ArrayList<>();

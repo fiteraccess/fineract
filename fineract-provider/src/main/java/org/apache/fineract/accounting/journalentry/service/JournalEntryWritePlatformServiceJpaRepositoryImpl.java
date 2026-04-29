@@ -357,16 +357,16 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
         if (journalEntries == null || journalEntries.isEmpty()) {
             return;
         }
-        final List<JournalEntry> reversalJournalEntries = new ArrayList<>();
+        // Persist reversals one-by-one: EclipseLink's multi-entity saveAll does not preserve list
+        // order when assigning IDENTITY IDs, which flips the downstream DESC-ordered query output.
         for (final JournalEntry journalEntry : journalEntries) {
-            reversalJournalEntries.add(JournalEntry.createNew(journalEntry.getOffice(), journalEntry.getPaymentDetail(),
+            helper.persistJournalEntry(JournalEntry.createNew(journalEntry.getOffice(), journalEntry.getPaymentDetail(),
                     journalEntry.getGlAccount(), journalEntry.getCurrencyCode(), transactionId, Boolean.FALSE, transactionDate,
                     journalEntry.isDebitEntry() ? JournalEntryType.CREDIT : JournalEntryType.DEBIT, journalEntry.getAmount(),
                     journalEntry.getDescription(), journalEntry.getEntityType(), journalEntry.getEntityId(),
                     journalEntry.getReferenceNumber(), journalEntry.getLoanTransactionId(), journalEntry.getSavingsTransactionId(),
                     journalEntry.getClientTransactionId(), journalEntry.getShareTransactionId()));
         }
-        helper.persistJournalEntries(reversalJournalEntries);
     }
 
     public String revertJournalEntry(final List<JournalEntry> journalEntries, String reversalComment) {

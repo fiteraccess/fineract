@@ -77,7 +77,7 @@ public class LoanReschedulePreviewPlatformServiceImpl implements LoanRescheduleP
         LocalDate rescheduleFromDate = null;
         List<LoanTermVariationsData> removeLoanTermVariationsData = new ArrayList<>();
         final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan,
-                cacheableLoanProductConfigService.getConfig(loan.getLoanProduct().getId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         LoanTermVariations dueDateVariationInCurrentRequest = loanRescheduleRequest.getDueDateTermVariationIfExists();
         if (dueDateVariationInCurrentRequest != null) {
             for (LoanTermVariationsData loanTermVariation : loanApplicationTerms.getLoanTermVariations().getDueDateVariation()) {

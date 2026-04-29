@@ -98,7 +98,8 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
         addClassificationCodeToTransaction(command, LoanTransactionApiConstants.CAPITALIZED_INCOME_CLASSIFICATION_CODE,
                 capitalizedIncomeTransaction);
         // Recalculate loan transactions
-        recalculateLoanTransactions(loan, capitalizedIncomeTransaction, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+        recalculateLoanTransactions(loan, capitalizedIncomeTransaction,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         // Update loan with capitalized income
         loan.addLoanTransaction(capitalizedIncomeTransaction);
         // Save and flush (PK is set)
@@ -152,7 +153,8 @@ public class CapitalizedIncomeWritePlatformServiceImpl implements CapitalizedInc
         capitalizedIncomeAdjustment.getLoanTransactionRelations().add(LoanTransactionRelation.linkToTransaction(capitalizedIncomeAdjustment,
                 capitalizedIncome.get(), LoanTransactionRelationTypeEnum.ADJUSTMENT));
         capitalizedIncomeAdjustment.setClassification(capitalizedIncome.get().getClassification());
-        recalculateLoanTransactions(loan, capitalizedIncomeAdjustment, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+        recalculateLoanTransactions(loan, capitalizedIncomeAdjustment,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         loan.addLoanTransaction(capitalizedIncomeAdjustment);
         LoanTransaction savedCapitalizedIncomeAdjustment = loanTransactionRepository.saveAndFlush(capitalizedIncomeAdjustment);
 

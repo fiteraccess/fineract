@@ -115,8 +115,9 @@ public class InternalCOBApiResource implements InitializingBean {
     @Path("loan-reprocess/{loanId}")
     @Transactional
     public void loanReprocess(@Context final UriInfo uriInfo, @PathParam("loanId") long loanId) {
-        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loanRepositoryWrapper.findOneWithNotFoundDetection(loanId),
-                cacheableLoanProductConfigService.getConfig(loanId));
+        Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
+        loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
 }

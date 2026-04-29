@@ -64,6 +64,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
@@ -121,7 +123,7 @@ class SynapseOutboxTaskletTest {
         void execute_noHandlers_returnsFinished() throws Exception {
             SynapseOutboxTasklet tasklet = createTasklet(Collections.emptyList());
 
-            RepeatStatus status = tasklet.execute(null, null);
+            RepeatStatus status = tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             assertThat(status).isEqualTo(RepeatStatus.FINISHED);
             verifyNoInteractions(outboxRepository);
@@ -133,7 +135,7 @@ class SynapseOutboxTaskletTest {
             when(outboxRepository.claimPending("INTEREST_POSTING", PAGE_SIZE)).thenReturn(Collections.emptyList());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
-            RepeatStatus status = tasklet.execute(null, null);
+            RepeatStatus status = tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             assertThat(status).isEqualTo(RepeatStatus.FINISHED);
             verify(outboxRepository, never()).markSent(any());
@@ -148,7 +150,7 @@ class SynapseOutboxTaskletTest {
                     .thenReturn(Collections.emptyList());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markSent(List.of(1L));
             verify(outboxRepository).markSent(List.of(2L));
@@ -170,7 +172,7 @@ class SynapseOutboxTaskletTest {
                     .doNothing()
                     .when(handler).dispatch(any());
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markSent(List.of(1L));
             verify(outboxRepository).markFailed(eq(2L), eq("posting failed"), eq(e2.getAttempts()), eq(e2.getMaxAttempts()),
@@ -189,12 +191,14 @@ class SynapseOutboxTaskletTest {
             when(mockRegistry.circuitBreaker("synapseOutbox")).thenReturn(mockCb);
 
             // First call succeeds, second throws CallNotPermittedException
-            doAnswer(inv -> { inv.<Runnable>getArgument(0).run(); return null; })
-                    .doThrow(mock(CallNotPermittedException.class))
+            doAnswer(inv -> {
+                inv.<Runnable>getArgument(0).run();
+                return null;
+            }).doThrow(mock(CallNotPermittedException.class))
                     .when(mockCb).executeRunnable(any());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler), mockRegistry);
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markSent(List.of(1L));
             verify(outboxRepository).resetToPending(List.of(2L, 3L));
@@ -212,7 +216,7 @@ class SynapseOutboxTaskletTest {
             doThrow(new RuntimeException("something broke")).when(handler).dispatch(any());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markFailed(eq(1L), eq("java.lang.RuntimeException: something broke"), eq(e1.getAttempts()),
                     eq(e1.getMaxAttempts()), eq(e1.getCreatedAt()));
@@ -230,7 +234,7 @@ class SynapseOutboxTaskletTest {
                     .thenReturn(Collections.emptyList());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markSent(List.of(1L));
             verify(outboxRepository).markSent(List.of(2L));
@@ -250,7 +254,7 @@ class SynapseOutboxTaskletTest {
             doThrow(mock(CallNotPermittedException.class)).when(mockCb).executeRunnable(any());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler), mockRegistry);
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).claimPending("INTEREST_POSTING", PAGE_SIZE);
             verify(outboxRepository).resetToPending(List.of(1L, 2L));
@@ -278,7 +282,7 @@ class SynapseOutboxTaskletTest {
 
             // pool size = 4, 2 handlers → round-robin: A, B, A, B
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handlerA, handlerB), CircuitBreakerRegistry.ofDefaults(), 4);
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository, atLeastOnce()).claimPending("TYPE_A", PAGE_SIZE);
             verify(outboxRepository, atLeastOnce()).claimPending("TYPE_B", PAGE_SIZE);
@@ -293,7 +297,7 @@ class SynapseOutboxTaskletTest {
                     .thenReturn(Collections.emptyList());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler), CircuitBreakerRegistry.ofDefaults(), 1);
-            RepeatStatus status = tasklet.execute(null, null);
+            RepeatStatus status = tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             assertThat(status).isEqualTo(RepeatStatus.FINISHED);
             verify(outboxRepository).markSent(List.of(1L));
@@ -314,7 +318,7 @@ class SynapseOutboxTaskletTest {
             when(outboxRepository.claimPending("INTEREST_POSTING", PAGE_SIZE)).thenReturn(Collections.emptyList());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).reclaimStaleDispatched(anyInt());
         }
@@ -340,19 +344,19 @@ class SynapseOutboxTaskletTest {
 
             when(outboxRepository.claimPending(eq("TYPE_A"), eq(PAGE_SIZE))).thenAnswer(inv -> {
                 startLatch.countDown();
-                startLatch.await(5, TimeUnit.SECONDS);
+                assertThat(startLatch.await(5, TimeUnit.SECONDS)).isTrue();
                 completedWorkers.incrementAndGet();
                 return Collections.emptyList();
             });
             when(outboxRepository.claimPending(eq("TYPE_B"), eq(PAGE_SIZE))).thenAnswer(inv -> {
                 startLatch.countDown();
-                startLatch.await(5, TimeUnit.SECONDS);
+                assertThat(startLatch.await(5, TimeUnit.SECONDS)).isTrue();
                 completedWorkers.incrementAndGet();
                 return Collections.emptyList();
             });
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handlerA, handlerB), CircuitBreakerRegistry.ofDefaults(), 2);
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             // By the time execute returns, both workers must have completed
             assertThat(completedWorkers.get()).isEqualTo(2);
@@ -408,7 +412,7 @@ class SynapseOutboxTaskletTest {
             SynapseOutboxTasklet tasklet = new SynapseOutboxTasklet(outboxRepository, List.of(handler), CircuitBreakerRegistry.ofDefaults(),
                     props, decoratedExecutor);
 
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             assertThat(capturedContext.get()).isNotNull();
             assertThat(capturedContext.get()).isEqualTo(expectedContext);
@@ -443,11 +447,14 @@ class SynapseOutboxTaskletTest {
 
             doAnswer(inv -> {
                 String handlerType = threadToHandler.get(Thread.currentThread().getName());
-                if ("TYPE_B".equals(handlerType) && handlerBCalls.incrementAndGet() > 1) {
-                    handlerBTripped.countDown();
-                    throw mock(CallNotPermittedException.class);
+                if ("TYPE_B".equals(handlerType)) {
+                    if (handlerBCalls.incrementAndGet() > 1) {
+                        handlerBTripped.countDown();
+                        throw mock(CallNotPermittedException.class);
+                    }
+                } else {
+                    assertThat(handlerBTripped.await(5, TimeUnit.SECONDS)).isTrue();
                 }
-                handlerBTripped.await(5, TimeUnit.SECONDS);
                 inv.<Runnable>getArgument(0).run();
                 return null;
             }).when(mockCb).executeRunnable(any());
@@ -463,7 +470,7 @@ class SynapseOutboxTaskletTest {
             }).thenReturn(Collections.emptyList());
 
             SynapseOutboxTasklet tasklet = createTasklet(List.of(handlerA, handlerB), mockRegistry, 2);
-            tasklet.execute(null, null);
+            tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             // Handler A: all 3 entries dispatched successfully
             verify(outboxRepository).markSent(List.of(1L));

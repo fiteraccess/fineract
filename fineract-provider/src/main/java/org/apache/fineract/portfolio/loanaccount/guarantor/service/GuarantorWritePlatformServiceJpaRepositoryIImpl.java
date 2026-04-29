@@ -131,7 +131,7 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                         GuarantorFundStatusType.ACTIVE.getValue(), guarantorCommand.getAmount());
                 guarantorFundingDetails.add(fundingDetails);
                 if (loan.isDisbursed() || (loan.isApproved() && (loan.getGuaranteeAmount() != null
-                        || loanProductConfigProvider.getConfig(loan.getProductId()).isHoldGuaranteeFunds()))) {
+                        || loanProductConfigProvider.getProductConfig(loan.getProductId()).isHoldGuaranteeFunds()))) {
                     this.guarantorDomainService.assignGuarantor(fundingDetails, DateUtils.getBusinessLocalDate());
                     loan.updateGuaranteeAmount(fundingDetails.getAmount());
                 }

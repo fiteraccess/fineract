@@ -149,7 +149,7 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
             // Account number regeneration (need loan id...)
             this.loanAssembler.accountNumberGeneration(command, loan);
             // Save interest recalculation calendar
-            CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig loanProductConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
 
             if (loanProductConfig.isInterestRecalculationEnabled()) {
                 createAndPersistCalendarInstanceForInterestRecalculation(loan);
@@ -638,7 +638,7 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
                 LocalDate recalculateFrom = null;
                 ScheduleGeneratorDTO scheduleGeneratorDTO = this.loanUtilService.buildScheduleGeneratorDTO(loan, recalculateFrom);
                 loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                        cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                        cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
                 loanAccrualsProcessingService.reprocessExistingAccruals(loan, false);
             }
 

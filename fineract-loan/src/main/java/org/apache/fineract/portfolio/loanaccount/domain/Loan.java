@@ -724,6 +724,13 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.loanProduct = loanProduct;
     }
 
+    public Long getProductId() {
+        if (this.productId != null) {
+            return this.productId;
+        }
+        return this.loanProduct != null ? this.loanProduct.getId() : null;
+    }
+
     public void updateFund(final Fund fund) {
         this.fundId = fund != null ? fund.getId() : null;
     }

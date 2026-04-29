@@ -95,7 +95,7 @@ public class ProgressiveLoanInterestRefundServiceImpl implements InterestRefundS
 
         final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
         loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
-                cacheableLoanProductConfigService.getConfig(loan.getId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         Pair<ChangedTransactionDetail, ProgressiveLoanInterestScheduleModel> reprocessResult = processor
                 .reprocessProgressiveLoanTransactions(loan.getDisbursementDate(), relatedRefundTransactionDate, transactionsToReprocess,

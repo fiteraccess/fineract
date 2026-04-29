@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
@@ -150,7 +151,7 @@ class SynapseInterestTransactionApplierTest {
     }
 
     @Test
-    void unknownTransactionType_throwsIllegalArgument() throws Exception {
+    void unknownTransactionType_throwsValidationException() throws Exception {
         SavingsAccount account = buildAccount(5L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-bad")).thenReturn(Collections.emptyList());
 
@@ -158,7 +159,8 @@ class SynapseInterestTransactionApplierTest {
 
         assertThatThrownBy(
                 () -> service.replay(account, "INVALID_TYPE", new BigDecimal("10.00"), LocalDate.of(2026, 3, 20), null, "trace-bad"))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("INVALID_TYPE");
+                .isInstanceOfSatisfying(PlatformApiDataValidationException.class, ex -> assertThat(ex.getErrors()).singleElement()
+                        .satisfies(err -> assertThat(err.getDefaultUserMessage()).contains("INVALID_TYPE")));
     }
 
     private static SavingsAccount buildAccount(Long id, BigDecimal balance) throws Exception {

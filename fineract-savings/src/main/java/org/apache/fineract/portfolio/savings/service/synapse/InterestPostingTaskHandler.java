@@ -28,11 +28,13 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingRes
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
 public class InterestPostingTaskHandler implements SynapseTaskHandler {
 
     private static final String ACCEPTED_STATUS = "ACCEPTED";

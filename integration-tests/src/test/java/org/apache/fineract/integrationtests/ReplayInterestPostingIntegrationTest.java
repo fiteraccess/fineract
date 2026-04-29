@@ -198,11 +198,11 @@ public class ReplayInterestPostingIntegrationTest {
     class InvalidTransactionType {
 
         @Test
-        void returnsServerError() {
+        void returnsBadRequest() {
             Account[] gl = createCashBasedGlAccounts();
             Integer savingsId = createActiveSavingsWithDeposit(gl, "1000");
 
-            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(500).build();
+            ResponseSpecification errorSpec = new ResponseSpecBuilder().expectStatusCode(400).build();
             SavingsAccountHelper errorHelper = new SavingsAccountHelper(requestSpec, errorSpec);
             String json = SavingsAccountHelper.buildReplayInterestPostingJson("50.00", DATE, "INVALID_TYPE", UUID.randomUUID().toString(),
                     null);

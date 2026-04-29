@@ -70,7 +70,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         final Loan loan = loanAssembler.assembleFrom(loanExternalId, false);
 
         return processInterestPause(loan, startDate, endDate, dateFormat, locale,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     @Override
@@ -81,7 +81,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         final Loan loan = loanAssembler.assembleFrom(loanId, false);
 
         return processInterestPause(loan, startDate, endDate, dateFormat, locale,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
     }
 
     @Override
@@ -120,7 +120,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         loan.getLoanTermVariations().remove(variation);
 
         loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         businessEventNotifierService.notifyPostBusinessEvent(new LoanScheduleVariationsDeletedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
@@ -148,7 +148,7 @@ public class InterestPauseWritePlatformServiceImpl implements InterestPauseWrite
         LoanTermVariations updatedVariation = loanTermVariationsRepository.save(variation);
 
         loanScheduleService.regenerateScheduleWithReprocessingTransactions(loan,
-                cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
         businessEventNotifierService.notifyPostBusinessEvent(new LoanScheduleVariationsAddedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));

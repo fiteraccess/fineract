@@ -90,6 +90,10 @@ class TellerWritePlatformServiceJpaImplTest {
 
     @BeforeEach
     void setUp() {
+        // Defensive reset: other tests on this JVM may leak a non-DEFAULT ActionContext (e.g. COB from
+        // JournalEntryAggregationTrackingTaskletTest — an upstream test without @AfterEach cleanup), which would
+        // otherwise route getBusinessLocalDate() to an uninitialised COB_DATE.
+        ThreadLocalContextUtil.reset();
         ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 1, 1))));
     }
 

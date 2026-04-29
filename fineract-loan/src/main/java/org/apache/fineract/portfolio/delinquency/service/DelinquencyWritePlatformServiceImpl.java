@@ -196,7 +196,7 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
                 .retrieveLoanDelinquencyActions(loan.getId());
         List<LoanDelinquencyActionData> effectiveDelinquencyList = delinquencyEffectivePauseHelper
                 .calculateEffectiveDelinquencyList(savedDelinquencyList);
-        final CacheableLoanProductConfig productConfig = loanProductConfigProvider.getConfig(loan.getProductId());
+        final CacheableLoanProductConfig productConfig = loanProductConfigProvider.getProductConfig(loan.getProductId());
         final DelinquencyBucket delinquencyBucket = productConfig.getDelinquencyBucketId() != null
                 ? repositoryBucket.findById(productConfig.getDelinquencyBucketId()).orElse(null)
                 : null;
@@ -224,7 +224,7 @@ public class DelinquencyWritePlatformServiceImpl implements DelinquencyWritePlat
     public void applyDelinquencyTagToLoan(LoanScheduleDelinquencyData loanDelinquencyData,
             List<LoanDelinquencyActionData> effectiveDelinquencyList) {
         final Loan loan = loanDelinquencyData.getLoan();
-        final CacheableLoanProductConfig productConfig = loanProductConfigProvider.getConfig(loan.getProductId());
+        final CacheableLoanProductConfig productConfig = loanProductConfigProvider.getProductConfig(loan.getProductId());
         final DelinquencyBucket delinquencyBucket = productConfig.getDelinquencyBucketId() != null
                 ? repositoryBucket.findById(productConfig.getDelinquencyBucketId()).orElse(null)
                 : null;

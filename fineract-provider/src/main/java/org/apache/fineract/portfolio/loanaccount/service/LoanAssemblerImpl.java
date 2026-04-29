@@ -378,7 +378,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
     }
 
     private void topUpLoanConfiguration(JsonElement element, Loan loan) {
-        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+        CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         if (productConfig.isCanUseForTopup() && loan.getClientId() != null) {
             final Boolean isTopUp = this.fromApiJsonHelper.extractBooleanNamed(LoanApiConstants.isTopup, element);
             if (null == isTopUp) {
@@ -453,10 +453,10 @@ public class LoanAssemblerImpl implements LoanAssembler {
         final String productIdParamName = "productId";
         final Long productId = command.longValueOfParameterNamed(productIdParamName);
         if (productId == null || productId.equals(loan.getProductId())) {
-            productConfig = this.cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            productConfig = this.cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
         } else {
             fullLoanProduct = this.loanProductRepositoryWrapper.findById(productId);
-            productConfig = this.cacheableLoanProductConfigService.getConfig(productId);
+            productConfig = this.cacheableLoanProductConfigService.getProductConfig(productId);
         }
 
         final Set<LoanCharge> existingCharges = loan.getActiveCharges();

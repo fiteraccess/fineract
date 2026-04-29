@@ -114,7 +114,7 @@ public class AccountNumberGeneratorTest {
         when(product.getShortName()).thenReturn("LP01");
         CacheableLoanProductConfig loanProductConfig = mock(CacheableLoanProductConfig.class);
         when(loanProductConfig.getShortName()).thenReturn("LP01");
-        when(cacheableLoanProductConfigService.getConfig(1L)).thenReturn(loanProductConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(1L)).thenReturn(loanProductConfig);
 
         AccountNumberFormat format = mock(AccountNumberFormat.class);
         when(format.getPrefixEnum()).thenReturn(null);

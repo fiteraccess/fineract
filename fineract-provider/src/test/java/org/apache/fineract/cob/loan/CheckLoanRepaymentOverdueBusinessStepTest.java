@@ -115,7 +115,7 @@ public class CheckLoanRepaymentOverdueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setOverDueDaysForRepaymentEvent(null);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanRepaymentScheduleInstallment repaymentInstallment = buildInstallment(loanForProcessing, currency, BigDecimal.valueOf(100),
                 BigDecimal.valueOf(0), BigDecimal.valueOf(0), BigDecimal.valueOf(0), BigDecimal.valueOf(100), -1);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays.asList(repaymentInstallment);
@@ -144,7 +144,7 @@ public class CheckLoanRepaymentOverdueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setOverDueDaysForRepaymentEvent(null);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays
                 .asList(new LoanRepaymentScheduleInstallment(loanForProcessing, 1, LocalDate.now(ZoneId.systemDefault()),
                         loanInstallmentRepaymentDueDateBefore5Days, BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0),
@@ -171,7 +171,7 @@ public class CheckLoanRepaymentOverdueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setOverDueDaysForRepaymentEvent(null);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanRepaymentScheduleInstallment repaymentInstallmentPaidOff = new LoanRepaymentScheduleInstallment(loanForProcessing, 1,
                 LocalDate.now(ZoneId.systemDefault()), loanInstallmentRepaymentDueDate, BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0),
                 BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0), false, new HashSet<>(), BigDecimal.valueOf(0.0));
@@ -204,7 +204,7 @@ public class CheckLoanRepaymentOverdueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setOverDueDaysForRepaymentEvent(1);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         LoanRepaymentScheduleInstallment repaymentInstallment = buildInstallment(loanForProcessing, currency, BigDecimal.valueOf(100),
                 BigDecimal.valueOf(0), BigDecimal.valueOf(0), BigDecimal.valueOf(0), BigDecimal.valueOf(100), -1);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays.asList(repaymentInstallment);
@@ -250,7 +250,7 @@ public class CheckLoanRepaymentOverdueBusinessStepTest {
         when(loanForProcessing.getProductId()).thenReturn(productId);
         CacheableLoanProductConfig productConfig = new CacheableLoanProductConfig();
         productConfig.setOverDueDaysForRepaymentEvent(1);
-        when(cacheableLoanProductConfigService.getConfig(productId)).thenReturn(productConfig);
+        when(cacheableLoanProductConfigService.getProductConfig(productId)).thenReturn(productConfig);
         List<LoanRepaymentScheduleInstallment> loanRepaymentScheduleInstallments = Arrays
                 .asList(new LoanRepaymentScheduleInstallment(loanForProcessing, 1, LocalDate.now(ZoneId.systemDefault()),
                         loanInstallmentRepaymentDueDateBefore5Days, BigDecimal.valueOf(0.0), BigDecimal.valueOf(0.0),

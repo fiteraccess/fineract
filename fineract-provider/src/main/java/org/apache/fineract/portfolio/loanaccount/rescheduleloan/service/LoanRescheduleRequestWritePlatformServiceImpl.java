@@ -141,7 +141,7 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
             // validate the request in the JsonCommand object passed as
             // parameter
             this.loanRescheduleRequestDataValidator.validateForCreateAction(jsonCommand, loan,
-                    cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
             // get the reschedule reason code value id from the JsonCommand
             // object
@@ -360,7 +360,7 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
                     .createLoanScheduleArchive(loan.getRepaymentScheduleInstallments(), loan, loanRescheduleRequest);
 
             final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO,
-                    loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+                    loan, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
 
             LocalDate rescheduleFromDate = null;
             List<LoanTermVariations> activeLoanTermVariations = loan.getActiveLoanTermVariations();

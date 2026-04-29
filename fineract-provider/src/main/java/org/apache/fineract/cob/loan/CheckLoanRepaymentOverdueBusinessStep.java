@@ -51,7 +51,7 @@ public class CheckLoanRepaymentOverdueBusinessStep implements LoanCOBBusinessSte
         if (!nonDisbursedStatuses.contains(loan.getStatus()) && loan.getSummary().getTotalOutstanding().compareTo(BigDecimal.ZERO) > 0) {
             log.debug("start processing loan repayment overdue business step for loan with Id [{}]", loan.getId());
             Long numberOfDaysAfterDueDateToRaiseEvent = configurationDomainService.retrieveRepaymentOverdueDays();
-            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getConfig(loan.getProductId());
+            CacheableLoanProductConfig productConfig = cacheableLoanProductConfigService.getProductConfig(loan.getProductId());
             if (productConfig.getOverDueDaysForRepaymentEvent() != null) {
                 if (productConfig.getOverDueDaysForRepaymentEvent() > 0) {
                     numberOfDaysAfterDueDateToRaiseEvent = productConfig.getOverDueDaysForRepaymentEvent().longValue();

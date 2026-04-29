@@ -38,5 +38,5 @@ public interface LoanProductConfigProvider {
      *            the loan product ID
      * @return the cached configuration DTO
      */
-    CacheableLoanProductConfig getConfig(Long productId);
+    CacheableLoanProductConfig getProductConfig(Long productId);
 }

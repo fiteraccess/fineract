@@ -124,7 +124,7 @@ public class LoanReAmortizationService {
         changes.put(LoanReAmortizationApiConstants.dateFormatParameterName, command.dateFormat());
 
         if (loan.isProgressiveSchedule()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loanId));
+            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
         }
         reverseReAmortizeTransaction(reAmortizeTransaction, command);
         loanTransactionRepository.saveAndFlush(reAmortizeTransaction);
@@ -241,7 +241,7 @@ public class LoanReAmortizationService {
     private void processReAmortizationTransaction(final Loan loan, final LoanTransaction reAmortizationTransaction,
             final boolean withPostTransactionChecks) {
         if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
-            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getConfig(loan.getProductId()));
+            loanScheduleService.regenerateRepaymentSchedule(loan, cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));
             if (withPostTransactionChecks) {
                 reprocessLoanTransactionsService.reprocessTransactions(loan, List.of(reAmortizationTransaction));
             } else {

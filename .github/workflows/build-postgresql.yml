@@ -1,6 +1,6 @@
 name: Fineract Cargo & Unit- & Integration tests - PostgreSQL
 
-on: [push, pull_request]
+on: [pull_request]
 
 permissions:
   contents: read
