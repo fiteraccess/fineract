@@ -169,7 +169,7 @@ public class SynapseOutboxRepository {
     double calculateBackoffMinutes(int currentAttempts) {
         double delayMinutes = BACKOFF_BASE_MINUTES * Math.pow(BACKOFF_MULTIPLIER, currentAttempts);
         delayMinutes = Math.min(delayMinutes, BACKOFF_MAX_MINUTES);
-        double jitter = 1.0 + (ThreadLocalRandom.current().nextDouble(-JITTER_FACTOR, JITTER_FACTOR));
+        double jitter = 1.0 + ThreadLocalRandom.current().nextDouble(-JITTER_FACTOR, JITTER_FACTOR);
         return delayMinutes * jitter;
     }
 
