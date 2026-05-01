@@ -2134,7 +2134,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         accountData = this.postInterest(accountData, postInterestAs, transactionDate, backdatedTxnsAllowedTill);
 
         // 4. Send to Synapse
-        LocalDate postingDate = DateUtils.getBusinessLocalDate();
         SynapsePostResult result = synapseService.postInterestForAccount(accountData);
 
         // 5. Persist cursor updates

@@ -123,11 +123,6 @@ public class SynapseOutboxOperationalIntegrationTest {
                         .withBody("{\"batchId\":\"stub\",\"accepted\":999,\"failed\":0,\"results\":[]}")));
     }
 
-    private void stubSynapse500() {
-        synapse.stubFor(WireMock.post(WireMock.urlEqualTo(BATCH_URL)).willReturn(WireMock.aResponse().withStatus(500)
-                .withHeader("Content-Type", "application/json").withBody("{\"error\":\"Internal Server Error\"}")));
-    }
-
     private Account[] createCashBasedGlAccounts() {
         AccountHelper ah = new AccountHelper(requestSpec, responseSpec);
         return new Account[] { ah.createAssetAccount(), ah.createLiabilityAccount(), ah.createIncomeAccount(), ah.createExpenseAccount() };
