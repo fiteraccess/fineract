@@ -35,5 +35,6 @@
   <include file="parts/2010_add_next_attempt_at_to_synapse_outbox.xml" relativeToChangelogFile="true" />
   <include file="parts/2011_add_synapse_outbox_purge_job.xml" relativeToChangelogFile="true" />
   <include file="parts/2012_add_synapse_interest_posting_config.xml" relativeToChangelogFile="true" />
-  <include file="parts/2013_add_replay_charge_posting_permission.xml" relativeToChangelogFile="true" />
+  <include file="parts/2013_add_replay_charge_posting_permission.xml" relativeToChangelogFile="true"/>
+  <include file="parts/2014_add_replay_dormancy_status_permission.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

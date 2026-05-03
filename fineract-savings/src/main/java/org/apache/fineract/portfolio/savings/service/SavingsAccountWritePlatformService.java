@@ -122,4 +122,6 @@ public interface SavingsAccountWritePlatformService {
     CommandProcessingResult replayInterestPosting(Long savingsId, JsonCommand command);
 
     CommandProcessingResult replayChargePosting(Long savingsId, JsonCommand command);
+
+    CommandProcessingResult replayDormancyStatus(Long savingsId, JsonCommand command);
 }

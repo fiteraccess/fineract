@@ -3723,6 +3723,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         this.summary.updateSummary(this.currency, this.savingsAccountTransactionSummaryWrapper, this.transactions);
     }
 
+    public void markEscheated(final AppUser appUser, final LocalDate effectiveDate) {
+        this.status = SavingsAccountStatusType.CLOSED.getValue();
+        this.sub_status = SavingsAccountSubStatusEnum.ESCHEAT.getValue();
+        this.closedOnDate = effectiveDate;
+        this.closedBy = appUser;
+        this.closedByUserId = appUser != null ? appUser.getId() : null;
+    }
+
     public void loadLazyCollections() {
         transactions.size();
         charges.size();

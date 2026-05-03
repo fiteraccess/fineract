@@ -149,6 +149,7 @@ import org.apache.fineract.portfolio.savings.service.synapse.DormancyStatusTaskH
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyPostingOutboxWriter;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyStateApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
@@ -396,7 +397,8 @@ public class SavingsConfiguration {
             CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
             ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider,
             ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider,
-            ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider) {
+            ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider,
+            ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -407,7 +409,7 @@ public class SavingsConfiguration {
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
                 synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
                 synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider,
-                synapseDormancyPostingOutboxWriterProvider);
+                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider);
     }
 
     @Bean
@@ -545,5 +547,14 @@ public class SavingsConfiguration {
     @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
     public DormancyStatusTaskHandler dormancyStatusTaskHandler(SynapseTransactionClient client, ObjectMapper objectMapper) {
         return new DormancyStatusTaskHandler(client, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseDormancyStateApplier synapseDormancyStateApplier(SavingsAccountTransactionRepository transactionRepository,
+            SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper, SavingsAccountTransactionSummaryWrapper summaryWrapper,
+            JournalEntryWritePlatformService journalEntryWritePlatformService, AppUserRepositoryWrapper appUserRepository) {
+        return new SynapseDormancyStateApplier(transactionRepository, savingsAccountRepositoryWrapper, journalEntryWritePlatformService,
+                appUserRepository, summaryWrapper);
     }
 }

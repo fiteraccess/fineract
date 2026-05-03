@@ -136,6 +136,7 @@ import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllow
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyPostingOutboxWriter;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyStateApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
@@ -188,6 +189,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider;
     private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
     private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
+    private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
 
     @Transactional
     @Override
@@ -2119,6 +2121,34 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId)
                 .withOfficeId(account.officeId()).withClientId(account.clientId()).build();
+    }
+
+    @Override
+    public CommandProcessingResult replayDormancyStatus(final Long savingsId, final JsonCommand command) {
+        final SynapseDormancyStateApplier applier = dormancyStateApplierProvider.getIfAvailable();
+        if (applier == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
+            throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
+                    "Synapse integration is not enabled. Cannot replay dormancy status.");
+        }
+
+        final String traceId = command.stringValueOfParameterNamed("traceId");
+        final SavingsAccountSubStatusEnum appliedSubStatus = SavingsAccountSubStatusEnum
+                .valueOf(command.stringValueOfParameterNamed("appliedSubStatus"));
+        final LocalDate effectiveDate = command.localDateValueOfParameterNamed("effectiveDate");
+        final BigDecimal escheatAmount = command.bigDecimalValueOfParameterNamed("escheatAmount");
+        final String currencyCode = command.stringValueOfParameterNamed("currencyCode");
+
+        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
+
+        final SynapseDormancyStateApplier.ApplyResult result = applier.apply(account, traceId, appliedSubStatus, effectiveDate,
+                escheatAmount, currencyCode);
+
+        final CommandProcessingResultBuilder builder = new CommandProcessingResultBuilder().withSavingsId(savingsId)
+                .withOfficeId(account.officeId()).withClientId(account.clientId());
+        if (result.escheatTransaction() != null) {
+            builder.withEntityId(result.escheatTransaction().getId());
+        }
+        return builder.build();
     }
 
     private CommandProcessingResult postInterestViaSynapse(Long savingsId, JsonCommand command,
