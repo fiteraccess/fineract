@@ -120,6 +120,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountCharge;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
@@ -134,6 +135,7 @@ import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmen
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
@@ -185,6 +187,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
     private final ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider;
     private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
+    private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
 
     @Transactional
     @Override
@@ -1728,6 +1731,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Override
     public void setSubStatusInactive(Long savingsId) {
+        if (isSynapseDormancyPostingEnabled()) {
+            final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+            synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.INACTIVE,
+                    DateUtils.getBusinessLocalDate(), inactiveTransitionReason(account));
+            return;
+        }
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
         final Set<Long> existingTransactionIds = new HashSet<>();
         final Set<Long> existingReversedTransactionIds = new HashSet<>();
@@ -1739,6 +1748,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Override
     public void setSubStatusDormant(Long savingsId) {
+        if (isSynapseDormancyPostingEnabled()) {
+            final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+            synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.DORMANT,
+                    DateUtils.getBusinessLocalDate(), dormantTransitionReason(account));
+            return;
+        }
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
         account.setSubStatusDormant();
         this.savingAccountRepositoryWrapper.saveAndFlush(account);
@@ -1746,6 +1761,13 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Override
     public void escheat(Long savingsId) {
+        if (isSynapseDormancyPostingEnabled()) {
+            // Journal entries (Dr SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY) post on the Synapse callback via SynapseDormancyStateApplier.
+            final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+            synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.ESCHEAT,
+                    DateUtils.getBusinessLocalDate(), escheatTransitionReason(account));
+            return;
+        }
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
         final Set<Long> existingTransactionIds = new HashSet<>();
         final Set<Long> existingReversedTransactionIds = new HashSet<>();
@@ -1753,6 +1775,26 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         account.escheat(appuserRepository.fetchSystemUser());
         this.savingAccountRepositoryWrapper.saveAndFlush(account);
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, false);
+    }
+
+    private boolean isSynapseDormancyPostingEnabled() {
+        return synapseDormancyPostingOutboxWriterProvider.getIfAvailable() != null
+                && configurationDomainService.isSynapseInterestPostingEnabled();
+    }
+
+    private String inactiveTransitionReason(SavingsAccount account) {
+        Long days = account.savingsProduct().getDaysToInactive();
+        return days == null ? "Threshold reached" : "Inactive threshold reached: " + days + " days";
+    }
+
+    private String dormantTransitionReason(SavingsAccount account) {
+        Long days = account.savingsProduct().getDaysToDormancy();
+        return days == null ? "Threshold reached" : "Dormant threshold reached: " + days + " days";
+    }
+
+    private String escheatTransitionReason(SavingsAccount account) {
+        Long days = account.savingsProduct().getDaysToEscheat();
+        return days == null ? "Threshold reached" : "Escheat threshold reached: " + days + " days";
     }
 
     private AppUser getAppUserIfPresent() {
