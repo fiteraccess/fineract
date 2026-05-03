@@ -493,7 +493,7 @@ public class SavingsConfiguration {
         FineractProperties.FineractSynapseProperties synapse = fineractProperties.getSynapse();
         RestTemplate restTemplate = restTemplateBuilder.connectTimeout(Duration.ofMillis(synapse.getConnectTimeoutMs()))
                 .readTimeout(Duration.ofMillis(synapse.getReadTimeoutMs())).build();
-        return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getBatchEndpoint(), synapse.getApiKey());
+        return new SynapseTransactionClient(restTemplate, synapse.getBaseUrl(), synapse.getApiKey());
     }
 
     @Bean

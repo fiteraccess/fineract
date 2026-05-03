@@ -24,32 +24,41 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadGateway;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 class SynapseTransactionClientTest {
 
     private static final String BASE_URL = "http://synapse:8080";
-    private static final String BATCH_ENDPOINT = "/api/v1/proxy/savings/interest-postings:batch";
-    private static final String FULL_URL = BASE_URL + BATCH_ENDPOINT;
+    private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
+    private static final String DORMANCY_ENDPOINT_PATH = "/v1/proxy/savings/dormancy-statuses";
+    private static final String FULL_URL = BASE_URL + BATCH_ENDPOINT_PATH;
 
     private MockRestServiceServer mockServer;
     private SynapseTransactionClient client;
@@ -64,7 +73,7 @@ class SynapseTransactionClientTest {
         restTemplate.setMessageConverters(List.of(new MappingJackson2HttpMessageConverter(objectMapper)));
 
         mockServer = MockRestServiceServer.createServer(restTemplate);
-        client = new SynapseTransactionClient(restTemplate, BASE_URL, BATCH_ENDPOINT, "Bearer test-token");
+        client = new SynapseTransactionClient(restTemplate, BASE_URL, "Bearer test-token");
     }
 
     @Test
@@ -127,6 +136,101 @@ class SynapseTransactionClientTest {
 
         client.postBatch(batch);
         mockServer.verify();
+    }
+
+    @Test
+    void constructorThrowsWhenApiKeyIsBlank() {
+        RestTemplate restTemplate = new RestTemplate();
+        assertThatThrownBy(() -> new SynapseTransactionClient(restTemplate, BASE_URL, "")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("fineract.synapse.api-key");
+    }
+
+    @Test
+    void constructorThrowsWhenApiKeyIsNull() {
+        RestTemplate restTemplate = new RestTemplate();
+        assertThatThrownBy(() -> new SynapseTransactionClient(restTemplate, BASE_URL, null)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("fineract.synapse.api-key");
+    }
+
+    @Test
+    void constructorThrowsWhenApiKeyIsWhitespaceOnly() {
+        RestTemplate restTemplate = new RestTemplate();
+        assertThatThrownBy(() -> new SynapseTransactionClient(restTemplate, BASE_URL, "   ")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("fineract.synapse.api-key");
+    }
+
+    @Nested
+    class PostDormancyStatus {
+
+        private static final String FULL_DORMANCY_URL = BASE_URL + DORMANCY_ENDPOINT_PATH;
+        private static final String TRACE_ID = "trace-dorm-1";
+
+        @Test
+        void postDormancyStatus_postsSingleInstructionToConfiguredEndpoint() throws Exception {
+            SynapseDormancyStatusInstruction instruction = buildInstruction(TRACE_ID);
+            SynapseDormancyStatusResponse expected = new SynapseDormancyStatusResponse(TRACE_ID, "ACCEPTED", "corr-1", null, null);
+
+            mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST))
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"traceId\":\"" + TRACE_ID + "\"")))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"savingsAccountId\":4242")))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"targetSubStatus\":\"INACTIVE\"")))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"effectiveDate\":[2026,4,30]")))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"currencyCode\":\"NGN\"")))
+                    .andRespond(withSuccess(objectMapper.writeValueAsString(expected), MediaType.APPLICATION_JSON));
+
+            SynapseDormancyStatusResponse result = client.postDormancyStatus(instruction);
+
+            assertThat(result.getTraceId()).isEqualTo(TRACE_ID);
+            assertThat(result.getStatus()).isEqualTo("ACCEPTED");
+            assertThat(result.getCorrelationId()).isEqualTo("corr-1");
+            mockServer.verify();
+        }
+
+        @Test
+        void postDormancyStatus_includesAuthorizationHeaderWhenApiKeyConfigured() throws Exception {
+            SynapseDormancyStatusInstruction instruction = buildInstruction(TRACE_ID);
+            SynapseDormancyStatusResponse expected = new SynapseDormancyStatusResponse(TRACE_ID, "ACCEPTED", null, null, null);
+
+            mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST))
+                    .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
+                    .andRespond(withSuccess(objectMapper.writeValueAsString(expected), MediaType.APPLICATION_JSON));
+
+            client.postDormancyStatus(instruction);
+            mockServer.verify();
+        }
+
+        @Test
+        void postDormancyStatus_wrapsRestClientResponseExceptionAsSynapsePostingException() {
+            SynapseDormancyStatusInstruction instruction = buildInstruction(TRACE_ID);
+
+            mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST)).andRespond(withBadGateway().body("upstream"));
+
+            assertThatThrownBy(() -> client.postDormancyStatus(instruction)).isInstanceOf(SynapsePostingException.class)
+                    .hasMessageContaining("traceId=" + TRACE_ID).hasMessageContaining("502")
+                    .hasCauseInstanceOf(RestClientResponseException.class);
+            mockServer.verify();
+        }
+
+        @Test
+        void postDormancyStatus_wrapsResourceAccessExceptionAsSynapsePostingException() {
+            SynapseDormancyStatusInstruction instruction = buildInstruction(TRACE_ID);
+
+            mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST)).andRespond(req -> {
+                throw new IOException("connection refused");
+            });
+
+            assertThatThrownBy(() -> client.postDormancyStatus(instruction)).isInstanceOf(SynapsePostingException.class)
+                    .hasMessageContaining("traceId=" + TRACE_ID).hasMessageContaining("connection error")
+                    .hasCauseInstanceOf(ResourceAccessException.class);
+            mockServer.verify();
+        }
+
+        private SynapseDormancyStatusInstruction buildInstruction(String traceId) {
+            return SynapseDormancyStatusInstruction.builder().traceId(traceId).savingsAccountId(4242L).clientId(77L).officeId(7L)
+                    .previousSubStatus(SavingsAccountSubStatusEnum.NONE).targetSubStatus(SavingsAccountSubStatusEnum.INACTIVE)
+                    .effectiveDate(LocalDate.of(2026, 4, 30)).transitionReason("Inactive 90 days").currencyCode("NGN").build();
+        }
     }
 
     private static SynapseInterestPostingBatch buildBatch(String batchId) {
