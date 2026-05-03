@@ -20,20 +20,28 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
+import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Direction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Operation;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.TransactionType;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -178,6 +186,92 @@ class SynapseInstructionMapperTest {
             assertThat(result.getTransactionDate()).isEqualTo(LocalDate.of(2026, 4, 15));
             assertThat(result.getCurrencyCode()).isEqualTo("USD");
             assertThat(result.getBatchId()).isEqualTo("batch-c4");
+        }
+    }
+
+    @Nested
+    class MapDormancyStatus {
+
+        private static final Long ACCOUNT_ID = 4242L;
+        private static final Long CLIENT_ID = 77L;
+        private static final Long OFFICE_ID = 7L;
+        private static final LocalDate EFFECTIVE = LocalDate.of(2026, 4, 30);
+        private static final String REASON = "Inactive 90 days";
+
+        @Test
+        void mapDormancyStatus_forInactive_populatesAllNineFields() {
+            SavingsAccount account = stubAccount(SavingsAccountSubStatusEnum.NONE.getValue(), "NGN");
+
+            SynapseDormancyStatusInstruction result = mapper.mapDormancyStatus(account, SavingsAccountSubStatusEnum.INACTIVE, EFFECTIVE,
+                    REASON);
+
+            assertThat(result.getTraceId()).isNotBlank();
+            assertThat(UUID.fromString(result.getTraceId())).isNotNull();
+            assertThat(result.getSavingsAccountId()).isEqualTo(ACCOUNT_ID);
+            assertThat(result.getClientId()).isEqualTo(CLIENT_ID);
+            assertThat(result.getOfficeId()).isEqualTo(OFFICE_ID);
+            assertThat(result.getPreviousSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.NONE);
+            assertThat(result.getTargetSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.INACTIVE);
+            assertThat(result.getEffectiveDate()).isEqualTo(EFFECTIVE);
+            assertThat(result.getTransitionReason()).isEqualTo(REASON);
+            assertThat(result.getCurrencyCode()).isEqualTo("NGN");
+        }
+
+        @Test
+        void mapDormancyStatus_forDormant_setsTargetSubStatus() {
+            SavingsAccount account = stubAccount(SavingsAccountSubStatusEnum.INACTIVE.getValue(), "NGN");
+
+            SynapseDormancyStatusInstruction result = mapper.mapDormancyStatus(account, SavingsAccountSubStatusEnum.DORMANT, EFFECTIVE,
+                    "Inactive 365 days");
+
+            assertThat(result.getPreviousSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.INACTIVE);
+            assertThat(result.getTargetSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.DORMANT);
+        }
+
+        @Test
+        void mapDormancyStatus_forEscheat_setsTargetSubStatus() {
+            SavingsAccount account = stubAccount(SavingsAccountSubStatusEnum.DORMANT.getValue(), "USD");
+
+            SynapseDormancyStatusInstruction result = mapper.mapDormancyStatus(account, SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE,
+                    "Dormant 5 years");
+
+            assertThat(result.getPreviousSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.DORMANT);
+            assertThat(result.getTargetSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.ESCHEAT);
+            assertThat(result.getCurrencyCode()).isEqualTo("USD");
+        }
+
+        @Test
+        void mapDormancyStatus_mintsFreshTraceIdPerCall() {
+            SavingsAccount account = stubAccount(SavingsAccountSubStatusEnum.NONE.getValue(), "NGN");
+
+            String traceId1 = mapper.mapDormancyStatus(account, SavingsAccountSubStatusEnum.INACTIVE, EFFECTIVE, REASON).getTraceId();
+            String traceId2 = mapper.mapDormancyStatus(account, SavingsAccountSubStatusEnum.INACTIVE, EFFECTIVE, REASON).getTraceId();
+
+            assertThat(traceId1).isNotEqualTo(traceId2);
+        }
+
+        @Test
+        void mapDormancyStatus_serialisesSubStatusAsEnumName() throws Exception {
+            SavingsAccount account = stubAccount(SavingsAccountSubStatusEnum.NONE.getValue(), "NGN");
+            SynapseDormancyStatusInstruction instruction = mapper.mapDormancyStatus(account, SavingsAccountSubStatusEnum.DORMANT, EFFECTIVE,
+                    REASON);
+
+            String json = new ObjectMapper().registerModule(new JavaTimeModule()).writeValueAsString(instruction);
+
+            assertThat(json).contains("\"previousSubStatus\":\"NONE\"");
+            assertThat(json).contains("\"targetSubStatus\":\"DORMANT\"");
+        }
+
+        private SavingsAccount stubAccount(Integer subStatus, String currencyCode) {
+            SavingsAccount account = mock(SavingsAccount.class);
+            MonetaryCurrency currency = mock(MonetaryCurrency.class);
+            when(currency.getCode()).thenReturn(currencyCode);
+            when(account.getId()).thenReturn(ACCOUNT_ID);
+            when(account.clientId()).thenReturn(CLIENT_ID);
+            when(account.officeId()).thenReturn(OFFICE_ID);
+            when(account.getSubStatus()).thenReturn(subStatus);
+            when(account.getCurrency()).thenReturn(currency);
+            return account;
         }
     }
 

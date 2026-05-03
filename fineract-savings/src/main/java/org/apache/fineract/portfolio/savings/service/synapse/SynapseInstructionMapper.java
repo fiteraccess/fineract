@@ -24,10 +24,13 @@ import java.util.UUID;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Direction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Operation;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.TransactionType;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 
 public class SynapseInstructionMapper {
 
@@ -64,6 +67,14 @@ public class SynapseInstructionMapper {
                 .savingsAccountId(savingsAccountId).officeId(officeId).externalId(externalId)
                 .transactionType(TransactionType.SAVINGS_CHARGE).direction(direction).operation(Operation.POST).amount(amount)
                 .description(description).transactionDate(transactionDate).currencyCode(currencyCode).batchId(batchId).build();
+    }
+
+    public SynapseDormancyStatusInstruction mapDormancyStatus(SavingsAccount account, SavingsAccountSubStatusEnum targetSubStatus,
+            LocalDate effectiveDate, String transitionReason) {
+        return SynapseDormancyStatusInstruction.builder().traceId(UUID.randomUUID().toString()).savingsAccountId(account.getId())
+                .clientId(account.clientId()).officeId(account.officeId())
+                .previousSubStatus(SavingsAccountSubStatusEnum.fromInt(account.getSubStatus())).targetSubStatus(targetSubStatus)
+                .effectiveDate(effectiveDate).transitionReason(transitionReason).currencyCode(account.getCurrency().getCode()).build();
     }
 
     private Direction resolveDirection(TransactionType txType) {
