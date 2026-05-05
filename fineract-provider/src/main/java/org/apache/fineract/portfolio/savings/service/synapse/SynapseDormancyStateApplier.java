@@ -111,6 +111,7 @@ public class SynapseDormancyStateApplier {
         SavingsAccountTransaction escheatTransaction = null;
         if (amount.isGreaterThanZero()) {
             escheatTransaction = SavingsAccountTransaction.escheat(account, effectiveDate, amount, traceId);
+            escheatTransaction = transactionRepository.saveAndFlush(escheatTransaction);
             account.addTransaction(escheatTransaction);
             account.getSummary().updateSummaryWithTransaction(account.getCurrency(), summaryWrapper, escheatTransaction);
             escheatTransaction.setRunningBalance(Money.of(account.getCurrency(), account.getSummary().getAccountBalance()));

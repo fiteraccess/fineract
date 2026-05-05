@@ -2138,7 +2138,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final BigDecimal escheatAmount = command.bigDecimalValueOfParameterNamed("escheatAmount");
         final String currencyCode = command.stringValueOfParameterNamed("currencyCode");
 
-        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
+        final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
 
         final SynapseDormancyStateApplier.ApplyResult result = applier.apply(account, traceId, appliedSubStatus, effectiveDate,
                 escheatAmount, currencyCode);

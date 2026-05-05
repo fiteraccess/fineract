@@ -21,7 +21,9 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -74,6 +76,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -202,7 +205,7 @@ class SynapseDormancyStateApplierTest {
             AppUser systemUser = mock(AppUser.class);
             when(transactionRepository.findByRefNo("trace-escheat-1")).thenReturn(Collections.emptyList());
             when(appUserRepository.fetchSystemUser()).thenReturn(systemUser);
-            stubSaveAssignsEscheatId(999L);
+            stubTxnSaveAssignsId(999L);
 
             ApplyResult result = applier.apply(account, "trace-escheat-1", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
                     ESCHEAT_AMOUNT, ACCOUNT_CURRENCY);
@@ -222,7 +225,17 @@ class SynapseDormancyStateApplierTest {
             assertThat(account.getTransactions()).containsExactly(result.escheatTransaction());
             assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo(ESCHEAT_AMOUNT);
             assertThat(result.escheatTransaction().getRunningBalance()).isEqualByComparingTo(ESCHEAT_AMOUNT);
-            verify(savingsAccountRepositoryWrapper, times(1)).saveAndFlush(account);
+
+            ArgumentCaptor<SavingsAccountTransaction> txnCaptor = ArgumentCaptor.forClass(SavingsAccountTransaction.class);
+            verify(transactionRepository, times(1)).saveAndFlush(txnCaptor.capture());
+            SavingsAccountTransaction savedTxn = txnCaptor.getValue();
+            assertThat(savedTxn.getTypeOf()).isEqualTo(SavingsAccountTransactionType.ESCHEAT.getValue());
+            assertThat(savedTxn.getRefNo()).isEqualTo("trace-escheat-1");
+
+            InOrder order = inOrder(transactionRepository, savingsAccountRepositoryWrapper, journalEntryWritePlatformService);
+            order.verify(transactionRepository).saveAndFlush(any(SavingsAccountTransaction.class));
+            order.verify(savingsAccountRepositoryWrapper).saveAndFlush(account);
+            order.verify(journalEntryWritePlatformService).createJournalEntriesForSavings(any(SavingsAccountingBridgeDTO.class));
 
             ArgumentCaptor<SavingsAccountingBridgeDTO> bridgeCaptor = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
             verify(journalEntryWritePlatformService, times(1)).createJournalEntriesForSavings(bridgeCaptor.capture());
@@ -246,10 +259,26 @@ class SynapseDormancyStateApplierTest {
         }
 
         @Test
+        void escheat_persistedTransactionIdIsPropagatedToBridge() throws Exception {
+            SavingsAccount account = buildEscheatableAccount(30L);
+            when(transactionRepository.findByRefNo("trace-id-prop")).thenReturn(Collections.emptyList());
+            when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
+            stubTxnSaveAssignsId(424242L);
+
+            applier.apply(account, "trace-id-prop", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT, ACCOUNT_CURRENCY);
+
+            ArgumentCaptor<SavingsAccountingBridgeDTO> bridgeCaptor = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
+            verify(journalEntryWritePlatformService).createJournalEntriesForSavings(bridgeCaptor.capture());
+            assertThat(bridgeCaptor.getValue().getNewSavingsTransactions()).hasSize(1);
+            assertThat(bridgeCaptor.getValue().getNewSavingsTransactions().get(0).getId()).isEqualTo(424242L);
+        }
+
+        @Test
         void escheat_currencyMismatch_usesAccountCurrencyOnBridge() throws Exception {
             SavingsAccount account = buildEscheatableAccount(11L);
             when(transactionRepository.findByRefNo("trace-escheat-mismatch")).thenReturn(Collections.emptyList());
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
+            stubTxnSaveAssignsId(111L);
 
             applier.apply(account, "trace-escheat-mismatch", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT, "EUR");
 
@@ -275,6 +304,7 @@ class SynapseDormancyStateApplierTest {
             assertThat(result.escheatTransaction()).isSameAs(existing);
             assertThat(account.getSubStatus()).isEqualTo(originalSubStatus);
             verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, appUserRepository);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
         }
 
         @Test
@@ -292,6 +322,7 @@ class SynapseDormancyStateApplierTest {
             assertThat(result.escheatTransaction()).isSameAs(existing);
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.ESCHEAT);
             verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, appUserRepository);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
         }
 
         @Test
@@ -302,6 +333,7 @@ class SynapseDormancyStateApplierTest {
                     Money.of(otherAccount.getCurrency(), ESCHEAT_AMOUNT), "trace-x");
             when(transactionRepository.findByRefNo("trace-x")).thenReturn(List.of(otherAccountEscheat));
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
+            stubTxnSaveAssignsId(131L);
 
             ApplyResult result = applier.apply(account, "trace-x", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
                     ACCOUNT_CURRENCY);
@@ -317,6 +349,7 @@ class SynapseDormancyStateApplierTest {
             setField(SavingsAccountTransaction.class, reversedEscheat, "reversed", true);
             when(transactionRepository.findByRefNo("trace-rev")).thenReturn(List.of(reversedEscheat));
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
+            stubTxnSaveAssignsId(141L);
 
             ApplyResult result = applier.apply(account, "trace-rev", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
                     ACCOUNT_CURRENCY);
@@ -332,6 +365,7 @@ class SynapseDormancyStateApplierTest {
             setField(SavingsAccountTransaction.class, chargeTxn, "refNo", "trace-charge");
             when(transactionRepository.findByRefNo("trace-charge")).thenReturn(List.of(chargeTxn));
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
+            stubTxnSaveAssignsId(151L);
 
             ApplyResult result = applier.apply(account, "trace-charge", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
                     ACCOUNT_CURRENCY);
@@ -359,6 +393,7 @@ class SynapseDormancyStateApplierTest {
             assertThat(account.getTransactions()).isEmpty();
             assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo(BigDecimal.ZERO);
             verify(savingsAccountRepositoryWrapper).saveAndFlush(account);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
             verifyNoInteractions(journalEntryWritePlatformService);
         }
 
@@ -388,6 +423,7 @@ class SynapseDormancyStateApplierTest {
             assertThat(account.getStatus()).isEqualTo(originalStatus);
             assertThat(account.getSubStatus()).isEqualTo(originalSubStatus);
             verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, appUserRepository);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
         }
 
         @Test
@@ -408,6 +444,7 @@ class SynapseDormancyStateApplierTest {
             verifyNoInteractions(savingsAccountRepositoryWrapper);
             verifyNoInteractions(journalEntryWritePlatformService);
             verifyNoInteractions(appUserRepository);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
             assertThat(account.getStatus()).isNotEqualTo(SavingsAccountStatusType.CLOSED);
         }
 
@@ -419,6 +456,7 @@ class SynapseDormancyStateApplierTest {
             account.getTransactions().add(sameDayCharge);
             when(transactionRepository.findByRefNo("trace-equal-date")).thenReturn(Collections.emptyList());
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
+            stubTxnSaveAssignsId(231L);
 
             ApplyResult result = applier.apply(account, "trace-equal-date", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
                     ESCHEAT_AMOUNT, ACCOUNT_CURRENCY);
@@ -441,6 +479,7 @@ class SynapseDormancyStateApplierTest {
             verifyNoInteractions(savingsAccountRepositoryWrapper);
             verifyNoInteractions(journalEntryWritePlatformService);
             verifyNoInteractions(appUserRepository);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
         }
 
         @Test
@@ -458,6 +497,7 @@ class SynapseDormancyStateApplierTest {
             verifyNoInteractions(savingsAccountRepositoryWrapper);
             verifyNoInteractions(journalEntryWritePlatformService);
             verifyNoInteractions(appUserRepository);
+            verify(transactionRepository, never()).saveAndFlush(any(SavingsAccountTransaction.class));
         }
 
         private void assertEscheatProceeded(SavingsAccount account, ApplyResult result, SavingsAccountTransaction priorTxn,
@@ -471,6 +511,7 @@ class SynapseDormancyStateApplierTest {
             assertThat(result.escheatTransaction().getAmount()).isEqualByComparingTo(ESCHEAT_AMOUNT);
             assertThat(account.getStatus()).isEqualTo(SavingsAccountStatusType.CLOSED);
             assertThat(account.getSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.ESCHEAT.getValue());
+            verify(transactionRepository).saveAndFlush(any(SavingsAccountTransaction.class));
             verify(savingsAccountRepositoryWrapper).saveAndFlush(account);
 
             ArgumentCaptor<SavingsAccountingBridgeDTO> bridgeCaptor = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
@@ -556,18 +597,14 @@ class SynapseDormancyStateApplierTest {
         return product;
     }
 
-    private void stubSaveAssignsEscheatId(Long assignedId) {
-        doAnswer(invocation -> {
-            SavingsAccount saved = invocation.getArgument(0);
-            for (SavingsAccountTransaction tx : saved.getTransactions()) {
-                if (SavingsAccountTransactionType.ESCHEAT.getValue().equals(tx.getTypeOf())) {
-                    Field f = AbstractPersistableCustom.class.getDeclaredField("id");
-                    f.setAccessible(true);
-                    f.set(tx, assignedId);
-                }
-            }
-            return saved;
-        }).when(savingsAccountRepositoryWrapper).saveAndFlush(any(SavingsAccount.class));
+    private void stubTxnSaveAssignsId(Long assignedId) {
+        when(transactionRepository.saveAndFlush(any(SavingsAccountTransaction.class))).thenAnswer(invocation -> {
+            SavingsAccountTransaction tx = invocation.getArgument(0);
+            Field f = AbstractPersistableCustom.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(tx, assignedId);
+            return tx;
+        });
     }
 
     private static <T> T mock(Class<T> type) {
