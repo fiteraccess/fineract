@@ -277,4 +277,36 @@ public class SavingsAccountRepositoryWrapper {
             throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), accountId);
         }
     }
+
+    /**
+     * Narrow delta-based update for the optimized current-day deposit path. Writes only the columns that change on a
+     * deposit ({@code totalDeposits}, {@code accountBalance}, {@code sub_status}, {@code version}), shrinking WAL
+     * records and enabling PostgreSQL HOT updates on {@code m_savings_account}.
+     * <p>
+     * See {@link SavingsAccountRepository#applyDepositDelta} for invariants on which paths may use this.
+     */
+    @Transactional
+    public void applyDepositDelta(final Long accountId, final BigDecimal depositAmount, final Integer subStatus, final int version) {
+        final int updated = this.repository.applyDepositDelta(accountId, depositAmount, subStatus, version);
+        if (updated == 0) {
+            throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), accountId);
+        }
+    }
+
+    /**
+     * Narrow delta-based update for the optimized current-day withdrawal path. Writes only the columns that change on a
+     * withdrawal ({@code totalWithdrawals}, {@code totalWithdrawalFees}, {@code totalFeeCharge},
+     * {@code accountBalance}, {@code sub_status}, {@code version}), shrinking WAL records and enabling PostgreSQL HOT
+     * updates on {@code m_savings_account}.
+     * <p>
+     * See {@link SavingsAccountRepository#applyWithdrawalDelta} for invariants on which paths may use this.
+     */
+    @Transactional
+    public void applyWithdrawalDelta(final Long accountId, final BigDecimal withdrawalAmount, final BigDecimal feeAmount,
+            final Integer subStatus, final int version) {
+        final int updated = this.repository.applyWithdrawalDelta(accountId, withdrawalAmount, feeAmount, subStatus, version);
+        if (updated == 0) {
+            throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), accountId);
+        }
+    }
 }

@@ -39,4 +39,5 @@
   <include file="parts/2014_add_savings_daily_balance_dirty.xml" relativeToChangelogFile="true" />
   <include file="parts/2015_add_index_sat_lastmodified.xml" relativeToChangelogFile="true" />
   <include file="parts/2016_tune_autovacuum_savings_daily_balance.xml" relativeToChangelogFile="true" />
+  <include file="parts/2017_set_fillfactor_savings_account.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

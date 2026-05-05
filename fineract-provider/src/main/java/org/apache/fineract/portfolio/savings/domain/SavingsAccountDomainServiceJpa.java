@@ -274,11 +274,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountTransaction withdrawal = SavingsAccountTransaction.withdrawal(account, account.office(), paymentDetail,
                 transactionDate, transactionAmountMoney, refNo);
 
-        // Calculate new summary values locally — do NOT mutate account.getSummary() to avoid dirtying the entity
+        // Compute the post-withdrawal available balance for the running-balance field on the new transactions.
+        // We do NOT mutate account.getSummary() — the JPQL UPDATE below applies the delta directly to the DB.
         final SavingsAccountSummary s = account.getSummary();
-        final BigDecimal newTotalWithdrawals = (s.getTotalWithdrawals() != null ? s.getTotalWithdrawals() : BigDecimal.ZERO)
-                .add(transactionAmount);
-        // Posted balance — what m_savings_account.account_balance holds. Used for the JPQL summary update only.
         final BigDecimal newPostedBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
                 .subtract(transactionAmount).subtract(totalFeeAmount);
         // Available balance — posted minus active holds. Matches what recalculateDailyBalances would write
@@ -287,9 +285,6 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final BigDecimal currentHold = (account.getOnHoldFunds() != null ? account.getOnHoldFunds() : BigDecimal.ZERO)
                 .add(account.getSavingsHoldAmount() != null ? account.getSavingsHoldAmount() : BigDecimal.ZERO);
         final BigDecimal newAvailableBalance = newPostedBalance.subtract(currentHold);
-        final BigDecimal newTotalWithdrawalFees = (s.getTotalWithdrawalFees() != null ? s.getTotalWithdrawalFees() : BigDecimal.ZERO)
-                .add(totalFeeAmount);
-        final BigDecimal newTotalFeeCharge = (s.getTotalFeeCharge() != null ? s.getTotalFeeCharge() : BigDecimal.ZERO).add(totalFeeAmount);
 
         // Compute sub_status locally: reset to NONE if INACTIVE or DORMANT
         final Integer currentSubStatus = account.getSubStatus();
@@ -316,21 +311,16 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             // Snapshot table is now maintained by SavingsDailyBalanceSyncService (hourly batch) — no synchronous write
             // here.
 
-            // O(1) direct update of summary + sub_status via JPQL, using locally computed values
-            // Keep existing lastInterestCalculationDate — no interest calculation is done in the optimized path
-            this.savingsAccountRepository.updateSummaryDirectFromValues(account.getId(), s.getTotalDeposits(), newTotalWithdrawals,
-                    s.getTotalInterestPosted(), newTotalWithdrawalFees, newTotalFeeCharge, s.getTotalPenaltyCharge(),
-                    s.getTotalAnnualFees(), newPostedBalance, s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
-                    s.getTotalInterestEarned(), s.getLastInterestCalculationDate(), s.getInterestPostedTillDate(), newSubStatus,
+            // Narrow delta-based UPDATE: writes only the 5 columns that actually change on a withdrawal-with-fee
+            // (totalWithdrawals, totalWithdrawalFees, totalFeeCharge, accountBalance, sub_status) plus version.
+            // Shrinks WAL records and enables PostgreSQL HOT updates on m_savings_account, replacing the previous
+            // 14-column snapshot UPDATE. Safe because this branch provably does not mutate other summary fields —
+            // it bypasses account.withdraw(), summary.updateSummaryWithTransaction(), interest accrual, and
+            // payCharge. The in-memory entity is intentionally NOT mutated here: with no dirty fields, the
+            // commit-time autoflush has nothing to write, eliminating the redundant second UPDATE that used to fire
+            // during postJournalEntriesForTransaction.
+            this.savingsAccountRepository.applyWithdrawalDelta(account.getId(), transactionAmount, totalFeeAmount, newSubStatus,
                     account.getVersion());
-
-            // Sync in-memory entity state with DB to prevent stale version on subsequent flush
-            s.setTotalWithdrawals(newTotalWithdrawals);
-            s.setTotalWithdrawalFees(newTotalWithdrawalFees);
-            s.setTotalFeeCharge(newTotalFeeCharge);
-            s.setAccountBalance(newPostedBalance);
-            account.sub_status = newSubStatus;
-            account.version++;
         } finally {
             this.entityManager.setFlushMode(originalFlushMode);
         }
@@ -344,6 +334,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         }
 
         businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+
         return withdrawal;
     }
 
@@ -492,10 +483,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountTransaction deposit = SavingsAccountTransaction.deposit(account, account.office(), paymentDetail,
                 transactionDate, amount, savingsAccountTransactionType, refNo);
 
-        // Calculate new summary values locally — do NOT mutate account.getSummary() to avoid dirtying the entity
+        // Compute the post-deposit available balance for the running-balance field on the new transaction.
+        // We do NOT mutate account.getSummary() — the JPQL UPDATE below applies the delta directly to the DB.
         final SavingsAccountSummary s = account.getSummary();
-        final BigDecimal newTotalDeposits = (s.getTotalDeposits() != null ? s.getTotalDeposits() : BigDecimal.ZERO).add(transactionAmount);
-        // Posted balance — what m_savings_account.account_balance holds. Used for the JPQL summary update only.
         final BigDecimal newPostedBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
                 .add(transactionAmount);
         // Available balance — posted minus active holds. Matches what recalculateDailyBalances would write
@@ -524,20 +514,16 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             // Snapshot table is now maintained by SavingsDailyBalanceSyncService (hourly batch) — no synchronous write
             // here.
 
-            // O(1) direct update of summary + sub_status via JPQL, using locally computed values
-            // Keep existing lastInterestCalculationDate — no interest calculation is done in the optimized path
-            this.savingsAccountRepository.updateSummaryDirectFromValues(account.getId(), newTotalDeposits, s.getTotalWithdrawals(),
-                    s.getTotalInterestPosted(), s.getTotalWithdrawalFees(), s.getTotalFeeCharge(), s.getTotalPenaltyCharge(),
-                    s.getTotalAnnualFees(), newPostedBalance, s.getTotalOverdraftInterestDerived(), s.getTotalWithholdTax(),
-                    s.getTotalInterestEarned(), s.getLastInterestCalculationDate(), s.getInterestPostedTillDate(), newSubStatus,
-                    account.getVersion());
-
-            // Sync in-memory entity state with DB to prevent stale version on subsequent flush
-            // (e.g., when activate() calls saveAndFlush after this optimized deposit path)
-            s.setTotalDeposits(newTotalDeposits);
-            s.setAccountBalance(newPostedBalance);
-            account.sub_status = newSubStatus;
-            account.version++;
+            // Narrow delta-based UPDATE: writes only the 3 columns that actually change on a deposit
+            // (totalDeposits, accountBalance, sub_status) plus version. Shrinks WAL records and enables PostgreSQL
+            // HOT updates on m_savings_account, replacing the previous 14-column snapshot UPDATE. Safe because this
+            // branch provably does not mutate other summary fields — it uses SavingsAccountTransaction.deposit(...)
+            // (not account.deposit), and bypasses summary.updateSummaryWithTransaction(), interest accrual, and
+            // payCharge. The in-memory entity is intentionally NOT mutated here: with no dirty fields, the
+            // commit-time autoflush has nothing to write, eliminating the redundant second UPDATE that used to fire
+            // during postJournalEntriesForTransaction. Activation does not reach this branch (gated on
+            // isRegularTransaction=true at handleDeposit:375).
+            this.savingsAccountRepository.applyDepositDelta(account.getId(), transactionAmount, newSubStatus, account.getVersion());
         } finally {
             this.entityManager.setFlushMode(originalFlushMode);
         }

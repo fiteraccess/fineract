@@ -297,6 +297,118 @@ public class SavingsPerformanceBenchmarkTest {
         return SavingsProductHelper.createSavingsProduct(savingsProductJSON, this.requestSpec, this.responseSpec);
     }
 
+    /**
+     * Tripwire test for the narrow delta-based JPQL on the optimized current-day deposit path
+     * ({@code SavingsAccountRepository.applyDepositDelta}). Asserts that ONLY {@code totalDeposits} and
+     * {@code accountBalance} change on a deposit, and every other summary field is bit-identical pre/post.
+     * <p>
+     * If a future change introduces a pre-JPQL summary mutator (e.g. interest accrual, charge payment) on the optimized
+     * path, the narrow JPQL would silently drop those mutations. This test surfaces that as an immediate failure on
+     * whichever field stops being equal.
+     * <p>
+     * Companion to {@link #testWithdrawalSummaryInvariants_onlyChangedFieldsMutate}.
+     */
+    @Test
+    public void testDepositSummaryInvariants_onlyChangedFieldsMutate() {
+        LOG.info("=== INVARIANT: Deposit only mutates totalDeposits + accountBalance ===");
+
+        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        Assertions.assertNotNull(clientID);
+        final Integer savingsProductID = createSimpleSavingsProduct();
+        final Integer savingsId = createAndActivateAccount(clientID, savingsProductID);
+
+        // Seed so totals are non-zero before the deposit under test
+        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "500", getTransactionDate(), CommonConstants.RESPONSE_RESOURCE_ID);
+
+        final HashMap before = (HashMap) this.savingsAccountHelper.getSavingsDetails(savingsId).get("summary");
+
+        final String depositAmount = "123.45";
+        this.savingsAccountHelper.depositToSavingsAccount(savingsId, depositAmount, getTransactionDate(),
+                CommonConstants.RESPONSE_RESOURCE_ID);
+
+        final HashMap after = (HashMap) this.savingsAccountHelper.getSavingsDetails(savingsId).get("summary");
+
+        assertSummaryDelta(before, after, "totalDeposits", new java.math.BigDecimal(depositAmount));
+        assertSummaryDelta(before, after, "accountBalance", new java.math.BigDecimal(depositAmount));
+
+        // Every other persisted summary field must be untouched.
+        for (String field : SUMMARY_FIELDS_UNCHANGED_ON_DEPOSIT) {
+            Assertions.assertEquals(before.get(field), after.get(field),
+                    "Field '" + field + "' must be unchanged on the optimized deposit path. "
+                            + "If this fails, a pre-JPQL summary mutator was introduced — the narrow applyDepositDelta JPQL "
+                            + "does not write this field. Either revert to the wide updateSummaryDirect path or add the "
+                            + "field to the delta JPQL.");
+        }
+    }
+
+    /**
+     * Tripwire test for the narrow delta-based JPQL on the optimized current-day withdrawal path
+     * ({@code SavingsAccountRepository.applyWithdrawalDelta}). Asserts that ONLY {@code totalWithdrawals},
+     * {@code totalWithdrawalFees}, {@code totalFeeCharge}, and {@code accountBalance} change on a withdrawal-with-fee,
+     * and every other summary field is bit-identical pre/post.
+     */
+    @Test
+    public void testWithdrawalSummaryInvariants_onlyChangedFieldsMutate() {
+        LOG.info("=== INVARIANT: Withdrawal only mutates withdrawal totals + accountBalance ===");
+
+        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        Assertions.assertNotNull(clientID);
+        final Integer savingsProductID = createSimpleSavingsProduct();
+        final Integer savingsId = createAndActivateAccount(clientID, savingsProductID);
+
+        // Seed with enough balance to cover the withdrawal under test
+        this.savingsAccountHelper.depositToSavingsAccount(savingsId, "10000", getTransactionDate(), CommonConstants.RESPONSE_RESOURCE_ID);
+
+        final HashMap before = (HashMap) this.savingsAccountHelper.getSavingsDetails(savingsId).get("summary");
+
+        final String withdrawalAmount = "75.50";
+        this.savingsAccountHelper.withdrawalFromSavingsAccount(savingsId, withdrawalAmount, getTransactionDate(),
+                CommonConstants.RESPONSE_RESOURCE_ID);
+
+        final HashMap after = (HashMap) this.savingsAccountHelper.getSavingsDetails(savingsId).get("summary");
+
+        final java.math.BigDecimal w = new java.math.BigDecimal(withdrawalAmount);
+        // No withdrawal-fee charge attached in this baseline test, so feeAmount = 0 and totalFee/totalWithdrawalFees
+        // must NOT change. accountBalance falls by exactly the withdrawal amount.
+        assertSummaryDelta(before, after, "totalWithdrawals", w);
+        assertSummaryDelta(before, after, "accountBalance", w.negate());
+
+        for (String field : SUMMARY_FIELDS_UNCHANGED_ON_WITHDRAWAL_NO_FEE) {
+            Assertions.assertEquals(before.get(field), after.get(field),
+                    "Field '" + field + "' must be unchanged on the optimized withdrawal path (no fee). "
+                            + "If this fails, a pre-JPQL summary mutator was introduced — the narrow applyWithdrawalDelta JPQL "
+                            + "does not write this field.");
+        }
+    }
+
+    /**
+     * Fields that must remain bit-identical across an optimized current-day deposit. These correspond to the 11 summary
+     * columns that the wide {@code updateSummaryDirect} JPQL used to rewrite (with their own current values) and that
+     * the new {@code applyDepositDelta} JPQL deliberately does not touch.
+     */
+    private static final String[] SUMMARY_FIELDS_UNCHANGED_ON_DEPOSIT = { "totalWithdrawals", "totalInterestPosted", "totalWithdrawalFees",
+            "totalFeeCharge", "totalPenaltyCharge", "totalAnnualFees", "totalOverdraftInterestDerived", "totalWithholdTax",
+            "totalInterestEarned", "lastInterestCalculationDate", "interestPostedTillDate" };
+
+    private static final String[] SUMMARY_FIELDS_UNCHANGED_ON_WITHDRAWAL_NO_FEE = { "totalDeposits", "totalInterestPosted",
+            "totalWithdrawalFees", "totalFeeCharge", "totalPenaltyCharge", "totalAnnualFees", "totalOverdraftInterestDerived",
+            "totalWithholdTax", "totalInterestEarned", "lastInterestCalculationDate", "interestPostedTillDate" };
+
+    private void assertSummaryDelta(HashMap before, HashMap after, String field, java.math.BigDecimal expectedDelta) {
+        final java.math.BigDecimal beforeVal = toBigDecimal(before.get(field));
+        final java.math.BigDecimal afterVal = toBigDecimal(after.get(field));
+        final java.math.BigDecimal actualDelta = afterVal.subtract(beforeVal);
+        Assertions.assertEquals(0, actualDelta.compareTo(expectedDelta), "Field '" + field + "' delta mismatch: before=" + beforeVal
+                + ", after=" + afterVal + ", expected delta=" + expectedDelta + ", actual delta=" + actualDelta);
+    }
+
+    private java.math.BigDecimal toBigDecimal(Object value) {
+        if (value == null) {
+            return java.math.BigDecimal.ZERO;
+        }
+        return new java.math.BigDecimal(value.toString());
+    }
+
     private Integer createAndActivateAccount(Integer clientID, Integer savingsProductID) {
         final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplication(clientID, savingsProductID, ACCOUNT_TYPE_INDIVIDUAL);
         Assertions.assertNotNull(savingsId);

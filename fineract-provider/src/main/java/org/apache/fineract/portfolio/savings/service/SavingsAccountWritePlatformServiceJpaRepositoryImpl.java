@@ -296,7 +296,14 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
-    @Retry(name = "savingsDeposit", fallbackMethod = "fallbackDeposit")
+    // @Retry removed: the inner @Retry was inside an open participating tx, so its sleep held
+    // the m_savings_account row lock for the full retry budget under contention (Lock:transactionId
+    // cascade). Spring's globalRollbackOnParticipationFailure=true also meant any retry could
+    // never actually heal the operation — the parent commit always rolled back. The outer
+    // resilience4j retry in SynchronousCommandProcessingService.retryWrapper is structurally
+    // outside all @Transactional boundaries and already retries on the same OLE-class exceptions
+    // (executeCommand.retryExceptions config), with fresh transactions per attempt.
+    // See long_transaction_id_lock.md.
     public CommandProcessingResult deposit(final Long savingsId, final JsonCommand command) {
         final long perfStart = System.nanoTime();
         long perfLap = perfStart;
@@ -393,7 +400,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
-    @Retry(name = "savingsWithdrawal", fallbackMethod = "fallbackWithdrawal")
+    // @Retry removed — see comment on deposit() above. Outer retry in
+    // SynchronousCommandProcessingService.retryWrapper handles OLE-class exceptions cleanly
+    // with fresh transactions per attempt.
     public CommandProcessingResult withdrawal(final Long savingsId, final JsonCommand command) {
 
         this.savingsAccountTransactionDataValidator.validate(command);
