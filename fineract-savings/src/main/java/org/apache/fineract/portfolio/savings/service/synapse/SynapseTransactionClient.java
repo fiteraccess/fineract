@@ -86,12 +86,12 @@ public class SynapseTransactionClient {
         return body;
     }
 
-    private <Req, Res> Res post(String url, Req body, Class<Res> responseType) {
+    private <ReqT, ResT> ResT post(String url, ReqT body, Class<ResT> responseType) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set(HttpHeaders.AUTHORIZATION, apiKey);
-        HttpEntity<Req> request = new HttpEntity<>(body, headers);
-        ResponseEntity<Res> response = restTemplate.postForEntity(url, request, responseType);
+        HttpEntity<ReqT> request = new HttpEntity<>(body, headers);
+        ResponseEntity<ResT> response = restTemplate.postForEntity(url, request, responseType);
         return response.getBody();
     }
 }
