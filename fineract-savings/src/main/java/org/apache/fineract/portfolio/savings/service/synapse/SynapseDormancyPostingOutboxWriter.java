@@ -42,15 +42,13 @@ public class SynapseDormancyPostingOutboxWriter {
             String transitionReason) {
         String batchId = UUID.randomUUID().toString();
 
-        SynapseDormancyStatusInstruction instruction =
-                mapper.mapDormancyStatus(account, targetSubStatus, effectiveDate, transitionReason);
+        SynapseDormancyStatusInstruction instruction = mapper.mapDormancyStatus(account, targetSubStatus, effectiveDate, transitionReason);
 
         String payload;
         try {
             payload = objectMapper.writeValueAsString(instruction);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                    "Failed to serialize dormancy instruction for traceId: " + instruction.getTraceId(), e);
+            throw new IllegalStateException("Failed to serialize dormancy instruction for traceId: " + instruction.getTraceId(), e);
         }
 
         OutboxEntry entry = OutboxEntry.builder().traceId(instruction.getTraceId()).accountId(account.getId()).officeId(account.officeId())

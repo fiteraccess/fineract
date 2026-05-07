@@ -23,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -121,8 +120,8 @@ class SynapseDormancyStateApplierTest {
     @BeforeEach
     void setUp() {
         ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, BUSINESS_DATE)));
-        applier = new SynapseDormancyStateApplier(transactionRepository, savingsAccountRepositoryWrapper,
-                journalEntryWritePlatformService, appUserRepository, summaryWrapper);
+        applier = new SynapseDormancyStateApplier(transactionRepository, savingsAccountRepositoryWrapper, journalEntryWritePlatformService,
+                appUserRepository, summaryWrapper);
     }
 
     @AfterEach
@@ -411,8 +410,7 @@ class SynapseDormancyStateApplierTest {
             setField(SavingsAccountTransaction.class, reversedEscheat, "reversed", true);
             SavingsAccountTransaction validEscheat = SavingsAccountTransaction.escheat(account, EFFECTIVE_DATE,
                     Money.of(account.getCurrency(), ESCHEAT_AMOUNT), "trace-multi");
-            when(transactionRepository.findByRefNo("trace-multi"))
-                    .thenReturn(List.of(otherAccountEscheat, reversedEscheat, validEscheat));
+            when(transactionRepository.findByRefNo("trace-multi")).thenReturn(List.of(otherAccountEscheat, reversedEscheat, validEscheat));
 
             ApplyResult result = applier.apply(account, "trace-multi", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
                     ACCOUNT_CURRENCY);
@@ -436,10 +434,9 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-backdated")).thenReturn(Collections.emptyList());
 
             assertThatThrownBy(() -> applier.apply(account, "trace-backdated", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY))
-                            .isInstanceOfSatisfying(PlatformApiDataValidationException.class,
-                                    ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
-                                            .containsExactly("error.msg.savings.escheat.backdated"));
+                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
+                            ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
+                                    .containsExactly("error.msg.savings.escheat.backdated"));
 
             verifyNoInteractions(savingsAccountRepositoryWrapper);
             verifyNoInteractions(journalEntryWritePlatformService);
@@ -471,10 +468,9 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-mismatch")).thenReturn(Collections.emptyList());
 
             assertThatThrownBy(() -> applier.apply(account, "trace-mismatch", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    mismatchedAmount, ACCOUNT_CURRENCY))
-                            .isInstanceOfSatisfying(PlatformApiDataValidationException.class,
-                                    ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
-                                            .containsExactly("error.msg.savings.escheat.amount.mismatch"));
+                    mismatchedAmount, ACCOUNT_CURRENCY)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
+                            ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
+                                    .containsExactly("error.msg.savings.escheat.amount.mismatch"));
 
             verifyNoInteractions(savingsAccountRepositoryWrapper);
             verifyNoInteractions(journalEntryWritePlatformService);
@@ -488,11 +484,10 @@ class SynapseDormancyStateApplierTest {
             BigDecimal underPaid = ESCHEAT_AMOUNT.subtract(BigDecimal.ONE);
             when(transactionRepository.findByRefNo("trace-under")).thenReturn(Collections.emptyList());
 
-            assertThatThrownBy(() -> applier.apply(account, "trace-under", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    underPaid, ACCOUNT_CURRENCY))
-                            .isInstanceOfSatisfying(PlatformApiDataValidationException.class,
-                                    ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
-                                            .containsExactly("error.msg.savings.escheat.amount.mismatch"));
+            assertThatThrownBy(() -> applier.apply(account, "trace-under", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, underPaid,
+                    ACCOUNT_CURRENCY)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
+                            ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
+                                    .containsExactly("error.msg.savings.escheat.amount.mismatch"));
 
             verifyNoInteractions(savingsAccountRepositoryWrapper);
             verifyNoInteractions(journalEntryWritePlatformService);
@@ -534,9 +529,9 @@ class SynapseDormancyStateApplierTest {
         void target_NONE_throwsIllegalArgument() throws Exception {
             SavingsAccount account = buildAccount(20L, STARTING_BALANCE, SavingsAccountSubStatusEnum.NONE.getValue());
 
-            assertThatThrownBy(() -> applier.apply(account, "trace-none", SavingsAccountSubStatusEnum.NONE, EFFECTIVE_DATE, null,
-                    ACCOUNT_CURRENCY)).isInstanceOf(IllegalArgumentException.class)
-                            .hasMessage("Unsupported dormancy target sub-status: NONE");
+            assertThatThrownBy(
+                    () -> applier.apply(account, "trace-none", SavingsAccountSubStatusEnum.NONE, EFFECTIVE_DATE, null, ACCOUNT_CURRENCY))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessage("Unsupported dormancy target sub-status: NONE");
 
             verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, transactionRepository,
                     appUserRepository);
@@ -546,9 +541,9 @@ class SynapseDormancyStateApplierTest {
         void target_BLOCK_throwsIllegalArgument() throws Exception {
             SavingsAccount account = buildAccount(21L, STARTING_BALANCE, SavingsAccountSubStatusEnum.NONE.getValue());
 
-            assertThatThrownBy(() -> applier.apply(account, "trace-block", SavingsAccountSubStatusEnum.BLOCK, EFFECTIVE_DATE, null,
-                    ACCOUNT_CURRENCY)).isInstanceOf(IllegalArgumentException.class)
-                            .hasMessage("Unsupported dormancy target sub-status: BLOCK");
+            assertThatThrownBy(
+                    () -> applier.apply(account, "trace-block", SavingsAccountSubStatusEnum.BLOCK, EFFECTIVE_DATE, null, ACCOUNT_CURRENCY))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessage("Unsupported dormancy target sub-status: BLOCK");
 
             verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, transactionRepository,
                     appUserRepository);

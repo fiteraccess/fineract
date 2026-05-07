@@ -1764,7 +1764,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Override
     public void escheat(Long savingsId) {
         if (isSynapseDormancyPostingEnabled()) {
-            // Journal entries (Dr SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY) post on the Synapse callback via SynapseDormancyStateApplier.
+            // Journal entries (Dr SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY) post on the Synapse callback via
+            // SynapseDormancyStateApplier.
             final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
             synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.ESCHEAT,
                     DateUtils.getBusinessLocalDate(), escheatTransitionReason(account));

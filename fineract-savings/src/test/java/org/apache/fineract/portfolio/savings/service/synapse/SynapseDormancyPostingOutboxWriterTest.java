@@ -112,7 +112,8 @@ class SynapseDormancyPostingOutboxWriterTest {
 
         writer.postDormancy(account, SavingsAccountSubStatusEnum.INACTIVE, EFFECTIVE, REASON);
 
-        ArgumentCaptor<SynapseDormancyStatusInstruction> instructionCaptor = ArgumentCaptor.forClass(SynapseDormancyStatusInstruction.class);
+        ArgumentCaptor<SynapseDormancyStatusInstruction> instructionCaptor = ArgumentCaptor
+                .forClass(SynapseDormancyStatusInstruction.class);
         verify(objectMapper).writeValueAsString(instructionCaptor.capture());
         assertThat(instructionCaptor.getValue()).isSameAs(stubInstruction);
 

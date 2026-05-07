@@ -204,7 +204,8 @@ class SynapseTransactionClientTest {
         void postDormancyStatus_wrapsRestClientResponseExceptionAsSynapsePostingException() {
             SynapseDormancyStatusInstruction instruction = buildInstruction(TRACE_ID);
 
-            mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST)).andRespond(withBadGateway().body("upstream"));
+            mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST))
+                    .andRespond(withBadGateway().body("upstream"));
 
             assertThatThrownBy(() -> client.postDormancyStatus(instruction)).isInstanceOf(SynapsePostingException.class)
                     .hasMessageContaining("traceId=" + TRACE_ID).hasMessageContaining("502")

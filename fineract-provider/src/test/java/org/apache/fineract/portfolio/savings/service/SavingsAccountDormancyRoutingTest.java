@@ -82,8 +82,8 @@ class SavingsAccountDormancyRoutingTest {
     @BeforeEach
     void setUp() throws Exception {
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "UTC", null));
-        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(
-                Map.of(BusinessDateType.BUSINESS_DATE, BUSINESS_DATE, BusinessDateType.COB_DATE, BUSINESS_DATE)));
+        ThreadLocalContextUtil.setBusinessDates(
+                new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, BUSINESS_DATE, BusinessDateType.COB_DATE, BUSINESS_DATE)));
 
         savingAccountAssembler = mock(SavingsAccountAssembler.class);
         savingAccountRepositoryWrapper = mock(SavingsAccountRepositoryWrapper.class);
@@ -268,8 +268,7 @@ class SavingsAccountDormancyRoutingTest {
         enableSynapse();
         doThrow(new SynapsePostingException("posting failed")).when(outboxWriter).postDormancy(any(), any(), any(), any());
 
-        assertThatThrownBy(() -> service.escheat(ACCOUNT_ID)).isInstanceOf(SynapsePostingException.class)
-                .hasMessage("posting failed");
+        assertThatThrownBy(() -> service.escheat(ACCOUNT_ID)).isInstanceOf(SynapsePostingException.class).hasMessage("posting failed");
 
         verify(account, never()).escheat(any());
         verify(savingAccountRepositoryWrapper, never()).saveAndFlush(any(SavingsAccount.class));
@@ -294,8 +293,7 @@ class SavingsAccountDormancyRoutingTest {
 
         service.setSubStatusDormant(ACCOUNT_ID);
 
-        verify(outboxWriter).postDormancy(eq(account), eq(SavingsAccountSubStatusEnum.DORMANT), eq(BUSINESS_DATE),
-                eq("Threshold reached"));
+        verify(outboxWriter).postDormancy(eq(account), eq(SavingsAccountSubStatusEnum.DORMANT), eq(BUSINESS_DATE), eq("Threshold reached"));
     }
 
     @Test
@@ -305,8 +303,7 @@ class SavingsAccountDormancyRoutingTest {
 
         service.escheat(ACCOUNT_ID);
 
-        verify(outboxWriter).postDormancy(eq(account), eq(SavingsAccountSubStatusEnum.ESCHEAT), eq(BUSINESS_DATE),
-                eq("Threshold reached"));
+        verify(outboxWriter).postDormancy(eq(account), eq(SavingsAccountSubStatusEnum.ESCHEAT), eq(BUSINESS_DATE), eq("Threshold reached"));
     }
 
     private void assertJournalEntryPostedFor(Long expectedSavingsId) {

@@ -41,8 +41,8 @@ import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
 
 /**
  * Replays Synapse's dormancy decision (INACTIVE / DORMANT / ESCHEAT) onto a savings account. Owns persistence and
- * journal-entry posting because the ESCHEAT transition bundles state mutation, an ESCHEAT transaction, and a
- * Dr SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY journal entry into one atomic unit.
+ * journal-entry posting because the ESCHEAT transition bundles state mutation, an ESCHEAT transaction, and a Dr
+ * SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY journal entry into one atomic unit.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -97,8 +97,8 @@ public class SynapseDormancyStateApplier {
         }
 
         if (currencyCode != null && !currencyCode.equals(account.getCurrency().getCode())) {
-            log.warn("Dormancy replay currency mismatch for account={}: callback={}, account={} (using account currency)",
-                    account.getId(), currencyCode, account.getCurrency().getCode());
+            log.warn("Dormancy replay currency mismatch for account={}: callback={}, account={} (using account currency)", account.getId(),
+                    currencyCode, account.getCurrency().getCode());
         }
 
         rejectBackdated(account, effectiveDate);
@@ -149,10 +149,10 @@ public class SynapseDormancyStateApplier {
     private void rejectAmountMismatch(final SavingsAccount account, final Money escheatAmount) {
         Money currentBalance = account.getSummary().getAccountBalance(account.getCurrency());
         if (!escheatAmount.isEqualTo(currentBalance)) {
-            throw new PlatformApiDataValidationException(List.of(ApiParameterError.parameterError(
-                    "error.msg.savings.escheat.amount.mismatch",
-                    "Escheat amount " + escheatAmount.getAmount() + " does not match account balance " + currentBalance.getAmount(),
-                    "escheatAmount", escheatAmount.getAmount())));
+            throw new PlatformApiDataValidationException(
+                    List.of(ApiParameterError.parameterError("error.msg.savings.escheat.amount.mismatch",
+                            "Escheat amount " + escheatAmount.getAmount() + " does not match account balance " + currentBalance.getAmount(),
+                            "escheatAmount", escheatAmount.getAmount())));
         }
     }
 }

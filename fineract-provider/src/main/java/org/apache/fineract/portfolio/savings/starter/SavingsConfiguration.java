@@ -408,8 +408,8 @@ public class SavingsConfiguration {
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
                 synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
-                synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider,
-                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider);
+                synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider, synapseDormancyPostingOutboxWriterProvider,
+                dormancyStateApplierProvider);
     }
 
     @Bean

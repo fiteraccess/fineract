@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.service.synapse;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
@@ -42,6 +43,7 @@ public class SynapseTransactionClient {
     private final String dormancyUrl;
     private final String apiKey;
 
+    @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW")
     public SynapseTransactionClient(RestTemplate restTemplate, String baseUrl, String apiKey) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(

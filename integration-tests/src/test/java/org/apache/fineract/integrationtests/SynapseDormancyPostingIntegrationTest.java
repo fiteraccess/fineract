@@ -1,4 +1,4 @@
- /**
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
@@ -98,9 +98,9 @@ public class SynapseDormancyPostingIntegrationTest {
         tenantJdbc().update("DELETE FROM synapse_outbox");
         synapse.resetRequests();
 
-        synapse.stubFor(WireMock.post(WireMock.urlEqualTo(DORMANCY_URL)).willReturn(WireMock.aResponse().withStatus(200)
-                .withHeader("Content-Type", "application/json")
-                .withBody("{\"traceId\":\"stub\",\"status\":\"ACCEPTED\",\"correlationId\":\"corr\",\"reason\":null,\"inflightCount\":null}")));
+        synapse.stubFor(WireMock.post(WireMock.urlEqualTo(DORMANCY_URL))
+                .willReturn(WireMock.aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(
+                        "{\"traceId\":\"stub\",\"status\":\"ACCEPTED\",\"correlationId\":\"corr\",\"reason\":null,\"inflightCount\":null}")));
     }
 
     @AfterEach
@@ -270,8 +270,8 @@ public class SynapseDormancyPostingIntegrationTest {
             forceSubStatus(savingsId, 200);
             String backdated = businessDate.minusDays(1).format(DATE_FMT);
 
-            String code = postReplayExpecting400(savingsId, SavingsAccountHelper.buildReplayDormancyStatusJson(
-                    UUID.randomUUID().toString(), "ESCHEAT", backdated, formatAmount(ESCHEAT_AMOUNT), CURRENCY));
+            String code = postReplayExpecting400(savingsId, SavingsAccountHelper.buildReplayDormancyStatusJson(UUID.randomUUID().toString(),
+                    "ESCHEAT", backdated, formatAmount(ESCHEAT_AMOUNT), CURRENCY));
 
             assertEquals("error.msg.savings.escheat.backdated", code);
             assertEquals(200, subStatusOf(savingsId), "account state should remain DORMANT on rejection");
@@ -283,8 +283,8 @@ public class SynapseDormancyPostingIntegrationTest {
             Integer savingsId = createDepositedSavings();
             forceSubStatus(savingsId, 200);
 
-            String code = postReplayExpecting400(savingsId, SavingsAccountHelper.buildReplayDormancyStatusJson(
-                    UUID.randomUUID().toString(), "ESCHEAT", todayFmt(), formatAmount(999.00f), CURRENCY));
+            String code = postReplayExpecting400(savingsId, SavingsAccountHelper.buildReplayDormancyStatusJson(UUID.randomUUID().toString(),
+                    "ESCHEAT", todayFmt(), formatAmount(999.00f), CURRENCY));
 
             assertEquals("error.msg.savings.escheat.amount.mismatch", code);
             assertEquals(200, subStatusOf(savingsId));
@@ -394,8 +394,7 @@ public class SynapseDormancyPostingIntegrationTest {
             return LocalDate.parse(s);
         }
         if (value instanceof List<?> parts && parts.size() >= 3) {
-            return LocalDate.of(((Number) parts.get(0)).intValue(), ((Number) parts.get(1)).intValue(),
-                    ((Number) parts.get(2)).intValue());
+            return LocalDate.of(((Number) parts.get(0)).intValue(), ((Number) parts.get(1)).intValue(), ((Number) parts.get(2)).intValue());
         }
         throw new IllegalArgumentException("Unexpected effectiveDate encoding: " + value);
     }
@@ -418,8 +417,9 @@ public class SynapseDormancyPostingIntegrationTest {
     }
 
     private int depositOrWithdrawalCountOf(Integer savingsId) {
-        Integer count = tenantJdbc().queryForObject("SELECT COUNT(*) FROM m_savings_account_transaction "
-                + "WHERE savings_account_id = ? AND transaction_type_enum IN (1,2)", Integer.class, savingsId.longValue());
+        Integer count = tenantJdbc().queryForObject(
+                "SELECT COUNT(*) FROM m_savings_account_transaction " + "WHERE savings_account_id = ? AND transaction_type_enum IN (1,2)",
+                Integer.class, savingsId.longValue());
         return count == null ? 0 : count;
     }
 
@@ -430,10 +430,8 @@ public class SynapseDormancyPostingIntegrationTest {
     }
 
     private int journalEntryCountForAccount(Integer savingsId) {
-        Integer count = tenantJdbc().queryForObject(
-                "SELECT COUNT(*) FROM acc_gl_journal_entry je JOIN m_savings_account_transaction t "
-                        + "ON je.savings_transaction_id = t.id WHERE t.savings_account_id = ?",
-                Integer.class, savingsId.longValue());
+        Integer count = tenantJdbc().queryForObject("SELECT COUNT(*) FROM acc_gl_journal_entry je JOIN m_savings_account_transaction t "
+                + "ON je.savings_transaction_id = t.id WHERE t.savings_account_id = ?", Integer.class, savingsId.longValue());
         return count == null ? 0 : count;
     }
 
