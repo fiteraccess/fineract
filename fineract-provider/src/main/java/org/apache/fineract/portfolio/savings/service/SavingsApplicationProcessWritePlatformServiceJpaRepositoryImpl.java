@@ -143,7 +143,7 @@ public class SavingsApplicationProcessWritePlatformServiceJpaRepositoryImpl impl
             final AppUser submittedBy = this.context.authenticatedUser();
 
             final SavingsAccount account = this.savingAccountAssembler.assembleFrom(command, submittedBy);
-            this.savingAccountRepository.save(account);
+            this.savingAccountRepository.saveAndFlush(account);
             String accountNumber = "";
             GroupSavingsIndividualMonitoring gsimAccount = null;
             BigDecimal applicationId = BigDecimal.ZERO;
@@ -241,6 +241,10 @@ public class SavingsApplicationProcessWritePlatformServiceJpaRepositoryImpl impl
 
             businessEventNotifierService.notifyPostBusinessEvent(new SavingsCreateBusinessEvent(account));
 
+            final Map<String, Object> changes = new LinkedHashMap<>();
+            if (account.getAccountNumber() != null) {
+                changes.put("accountNo", account.getAccountNumber());
+            }
             return new CommandProcessingResultBuilder() //
                     .withCommandId(command.commandId()) //
                     .withEntityId(savingsId) //
@@ -248,6 +252,7 @@ public class SavingsApplicationProcessWritePlatformServiceJpaRepositoryImpl impl
                     .withClientId(account.clientId()) //
                     .withGroupId(account.groupId()) //
                     .withSavingsId(savingsId) //
+                    .with(changes) //
                     .withGsimId(gsimAccount == null ? 0 : gsimAccount.getId()).build();
         } catch (final DataAccessException dve) {
             handleDataIntegrityIssues(command, dve.getMostSpecificCause(), dve);
