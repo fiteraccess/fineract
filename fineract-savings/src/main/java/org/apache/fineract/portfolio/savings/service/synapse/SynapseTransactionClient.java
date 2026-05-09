@@ -36,7 +36,7 @@ import org.springframework.web.client.RestTemplate;
 public class SynapseTransactionClient {
 
     private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
-    private static final String DORMANCY_ENDPOINT_PATH = "/v1/proxy/savings/dormancy-statuses";
+    private static final String DORMANCY_ENDPOINT_PATH = "/api/v1/proxy/savings/dormancy-statuses";
 
     private final RestTemplate restTemplate;
     private final String postUrl;
