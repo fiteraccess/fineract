@@ -63,7 +63,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 public class SynapseDormancyPostingIntegrationTest {
 
-    private static final String DORMANCY_URL = "/v1/proxy/savings/dormancy-statuses";
+    private static final String DORMANCY_URL = "/api/v1/proxy/savings/dormancy-statuses";
     private static final String DORMANCY_JOB = "Update Savings Dormant Accounts";
     private static final String DISPATCH_JOB = "Dispatch Synapse Outbox";
     private static final String CURRENCY = "USD";
