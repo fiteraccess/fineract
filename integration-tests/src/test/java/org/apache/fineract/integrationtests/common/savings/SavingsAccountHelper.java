@@ -195,6 +195,17 @@ public class SavingsAccountHelper {
     // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
+    public JsonPath applyForSavingsApplicationFullResponse(String savingsApplicationJson) {
+        LOG.info("--------------------------------APPLYING FOR SAVINGS APPLICATION--------------------------------");
+        final String response = Utils.performServerPost(this.requestSpec, this.responseSpec,
+                SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER, savingsApplicationJson, null);
+        return JsonPath.from(response);
+    }
+
+    // TODO: Rewrite to use fineract-client instead!
+    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
+    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
+    @Deprecated(forRemoval = true)
     public Integer applyForSavingsApplicationWithDatatables(final Integer id, final Integer savingsProductID, final String accountType,
             final String submittedOnDate, final String datatableName) {
         LOG.info("----------------------------APPLYING FOR SAVINGS APPLICATION WITH DATATABLES----------------------------");

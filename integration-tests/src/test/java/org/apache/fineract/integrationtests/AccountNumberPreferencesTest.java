@@ -21,6 +21,7 @@ package org.apache.fineract.integrationtests;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
+import io.restassured.path.json.JsonPath;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
@@ -41,6 +42,7 @@ import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
+import org.apache.fineract.integrationtests.common.savings.SavingsApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.AccountNumberPreferencesHelper;
 import org.apache.fineract.integrationtests.common.system.CodeHelper;
@@ -483,10 +485,15 @@ public class AccountNumberPreferencesTest {
 
         this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
 
-        this.savingsId = this.savingsAccountHelper.applyForSavingsApplication(this.clientId, this.savingsProductId,
-                ACCOUNT_TYPE_INDIVIDUAL);
+        final String savingsApplicationJSON = new SavingsApplicationTestBuilder() //
+                .withSubmittedOnDate(SavingsAccountHelper.CREATED_DATE) //
+                .build(this.clientId.toString(), this.savingsProductId.toString(), ACCOUNT_TYPE_INDIVIDUAL);
+        final JsonPath createResponse = this.savingsAccountHelper.applyForSavingsApplicationFullResponse(savingsApplicationJSON);
+        this.savingsId = createResponse.get("savingsId");
+        final String accountNoFromCreate = createResponse.get("changes.accountNo");
 
         String savingsAccountNo = (String) this.savingsAccountHelper.getSavingsAccountDetail(this.savingsId, "accountNo");
+        Assertions.assertEquals(accountNoFromCreate, savingsAccountNo);
 
         if (isAccountPreferenceSetUp) {
             String savingsPrefixName = (String) this.accountNumberPreferencesHelper

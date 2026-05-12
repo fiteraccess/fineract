@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
+import io.restassured.path.json.JsonPath;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
@@ -55,6 +56,7 @@ import org.apache.fineract.integrationtests.common.TaxGroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
+import org.apache.fineract.integrationtests.common.savings.SavingsApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.integrationtests.common.savings.SavingsTestLifecycleExtension;
@@ -145,6 +147,32 @@ public class ClientSavingsIntegrationTest {
 
         final Object savingsInterest = this.savingsAccountHelper.getSavingsInterest(savingsId);
         // verifySavingsInterest(savingsInterest);
+    }
+
+    @Test
+    public void testSavingsCreateResponseIncludesCallerSuppliedAccountNumber() {
+        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
+
+        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
+        final Integer savingsProductID = createSavingsProduct(this.requestSpec, this.responseSpec, MINIMUM_OPENING_BALANCE, null, null,
+                "false", false);
+        Assertions.assertNotNull(savingsProductID);
+
+        final HashMap<String, String> params = new HashMap<>();
+        final String suppliedAccountNo = Utils.uniqueRandomStringGenerator("AB320-", 8);
+        params.put("accountNo", suppliedAccountNo);
+        final String suppliedJson = new SavingsApplicationTestBuilder() //
+                .withSubmittedOnDate(SavingsAccountHelper.CREATED_DATE) //
+                .withParams(params) //
+                .build(clientID.toString(), savingsProductID.toString(), ACCOUNT_TYPE_INDIVIDUAL);
+        final JsonPath suppliedResponse = this.savingsAccountHelper.applyForSavingsApplicationFullResponse(suppliedJson);
+        final Integer suppliedSavingsId = suppliedResponse.get("savingsId");
+        final String suppliedAccountNoFromCreate = suppliedResponse.get("changes.accountNo");
+        Assertions.assertNotNull(suppliedSavingsId);
+        assertEquals(suppliedAccountNo, suppliedAccountNoFromCreate);
+        final String suppliedAccountNoFromGet = (String) this.savingsAccountHelper.getSavingsAccountDetail(suppliedSavingsId, "accountNo");
+        assertEquals(suppliedAccountNo, suppliedAccountNoFromGet);
     }
 
     @Test

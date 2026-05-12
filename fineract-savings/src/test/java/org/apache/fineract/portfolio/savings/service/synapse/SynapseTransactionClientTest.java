@@ -57,7 +57,7 @@ class SynapseTransactionClientTest {
 
     private static final String BASE_URL = "http://synapse:8080";
     private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
-    private static final String DORMANCY_ENDPOINT_PATH = "/v1/proxy/savings/dormancy-statuses";
+    private static final String DORMANCY_ENDPOINT_PATH = "/api/v1/proxy/savings/dormancy-statuses";
     private static final String FULL_URL = BASE_URL + BATCH_ENDPOINT_PATH;
 
     private MockRestServiceServer mockServer;
