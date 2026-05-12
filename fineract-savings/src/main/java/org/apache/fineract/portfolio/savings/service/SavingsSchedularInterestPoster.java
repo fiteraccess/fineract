@@ -171,9 +171,8 @@ public class SavingsSchedularInterestPoster {
     @SuppressWarnings("unused")
     private void batchUpdate(final List<SavingsAccountData> savingsAccountDataList) throws DataAccessException {
         if (isSynapseEnabled()) {
-            LocalDate currentDate = DateUtils.getBusinessLocalDate();
             Long userId = platformSecurityContext.authenticatedUser().getId();
-            SynapsePostResult result = synapseInterestPostingOutboxWriter.postInterestBatch(savingsAccountDataList, currentDate);
+            SynapsePostResult result = synapseInterestPostingOutboxWriter.postInterestBatch(savingsAccountDataList);
             executeCursorUpdates(result.getCursorUpdates(), userId);
             log.debug("Synapse batch complete: accepted={}, failed={}", result.getAccepted(), result.getFailed());
             return;

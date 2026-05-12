@@ -139,13 +139,14 @@ public class SynapseOutboxTasklet implements Tasklet {
                 } catch (SynapsePostingException e) {
                     log.error("Synapse posting failed for entry id={} traceId={} accountId={}", entry.getId(), entry.getTraceId(),
                             entry.getAccountId(), e);
-                    outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts());
+                    outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts(),
+                            entry.getCreatedAt());
                     failed++;
                 } catch (Exception e) {
                     log.error("Unexpected error dispatching entry id={} traceId={} accountId={}", entry.getId(), entry.getTraceId(),
                             entry.getAccountId(), e);
                     outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()),
-                            entry.getAttempts(), entry.getMaxAttempts());
+                            entry.getAttempts(), entry.getMaxAttempts(), entry.getCreatedAt());
                     failed++;
                 }
             }

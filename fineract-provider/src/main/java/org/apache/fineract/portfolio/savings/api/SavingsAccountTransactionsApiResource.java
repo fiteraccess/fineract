@@ -198,12 +198,18 @@ public class SavingsAccountTransactionsApiResource {
         } else if (is(commandParam, "replayInterestPosting")) {
             final CommandWrapper commandRequest = builder.savingsAccountReplayInterestPosting(savingsId).build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        } else if (is(commandParam, "replayChargePosting")) {
+            final CommandWrapper commandRequest = builder.savingsAccountReplayChargePosting(savingsId).build();
+            result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        } else if (is(commandParam, "replayDormancyStatus")) {
+            final CommandWrapper commandRequest = builder.savingsAccountReplayDormancyStatus(savingsId).build();
+            result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         }
 
         if (result == null) {
             //
-            throw new UnrecognizedQueryParamException("command", commandParam,
-                    new Object[] { "deposit", "withdrawal", SavingsApiConstants.COMMAND_HOLD_AMOUNT, "replayInterestPosting" });
+            throw new UnrecognizedQueryParamException("command", commandParam, new Object[] { "deposit", "withdrawal",
+                    SavingsApiConstants.COMMAND_HOLD_AMOUNT, "replayInterestPosting", "replayChargePosting", "replayDormancyStatus" });
         }
 
         return this.toApiJsonSerializer.serialize(result);

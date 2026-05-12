@@ -426,6 +426,46 @@ public class SavingsAccountHelper {
         return (Integer) performSavingActions(url, jsonBody, CommonConstants.RESPONSE_RESOURCE_ID);
     }
 
+    @Deprecated(forRemoval = true)
+    public Integer replayChargePosting(final Integer savingsId, final String jsonBody) {
+        final String url = createSavingsTransactionURL("replayChargePosting", savingsId);
+        return (Integer) performSavingActions(url, jsonBody, CommonConstants.RESPONSE_RESOURCE_ID);
+    }
+
+    public static String buildReplayChargePostingJson(String amount, String date, Long savingsAccountChargeId, String traceId) {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("transactionDate", date);
+        map.put("transactionAmount", amount);
+        map.put("savingsAccountChargeId", savingsAccountChargeId);
+        map.put("traceId", traceId);
+        map.put("locale", CommonConstants.LOCALE);
+        map.put("dateFormat", CommonConstants.DATE_FORMAT);
+        return new Gson().toJson(map);
+    }
+
+    @Deprecated(forRemoval = true)
+    public Integer replayDormancyStatus(final Integer savingsId, final String jsonBody) {
+        final String url = createSavingsTransactionURL("replayDormancyStatus", savingsId);
+        return (Integer) performSavingActions(url, jsonBody, CommonConstants.RESPONSE_RESOURCE_ID);
+    }
+
+    public static String buildReplayDormancyStatusJson(String traceId, String appliedSubStatus, String effectiveDate, String escheatAmount,
+            String currencyCode) {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("traceId", traceId);
+        map.put("appliedSubStatus", appliedSubStatus);
+        map.put("effectiveDate", effectiveDate);
+        if (escheatAmount != null) {
+            map.put("escheatAmount", escheatAmount);
+        }
+        if (currencyCode != null) {
+            map.put("currencyCode", currencyCode);
+        }
+        map.put("locale", CommonConstants.LOCALE);
+        map.put("dateFormat", CommonConstants.DATE_FORMAT);
+        return new Gson().toJson(map);
+    }
+
     public static String buildReplayInterestPostingJson(String amount, String date, String transactionType, String traceId,
             String overdraftAmount) {
         HashMap<String, Object> map = new HashMap<>();
