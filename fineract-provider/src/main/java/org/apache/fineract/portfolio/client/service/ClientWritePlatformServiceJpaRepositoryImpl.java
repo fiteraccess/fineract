@@ -165,6 +165,12 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
             final String externalId = command.stringValueOfParameterNamed("externalId");
             throw new PlatformDataIntegrityException("error.msg.client.duplicate.externalId",
                     "Client with externalId `" + externalId + "` already exists", "externalId", externalId);
+        } else if (realCause.getMessage().contains("savings_account_account_no")
+                || realCause.getMessage().contains("sa_account_no_UNIQUE")) {
+            final String savingsAccountNo = command.stringValueOfParameterNamed(ClientApiConstants.savingsAccountNoParamName);
+            throw new PlatformDataIntegrityException("error.msg.savingsaccount.duplicate.accountNo",
+                    "Savings account with accountNo `" + savingsAccountNo + "` already exists",
+                    ClientApiConstants.savingsAccountNoParamName, savingsAccountNo);
         } else if (realCause.getMessage().contains("account_no_UNIQUE")) {
             final String accountNo = command.stringValueOfParameterNamed("accountNo");
             throw new PlatformDataIntegrityException("error.msg.client.duplicate.accountNo",
