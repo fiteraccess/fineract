@@ -120,6 +120,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountCharge;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
@@ -133,6 +134,10 @@ import org.apache.fineract.portfolio.savings.exception.SavingsAccountTransaction
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerAssignmentException;
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmentException;
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyPostingOutboxWriter;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyStateApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestTransactionApplier;
 import org.apache.fineract.portfolio.transfer.api.TransferApiConstants;
@@ -183,6 +188,10 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final JdbcTemplate jdbcTemplate;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
     private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
+    private final ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider;
+    private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
+    private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
+    private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
 
     @Transactional
     @Override
@@ -1443,11 +1452,26 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final SavingsAccountCharge savingsAccountCharge = this.savingsAccountChargeRepository
                 .findOneWithNotFoundDetection(savingsAccountChargeId, accountId);
 
+        if (isSynapseChargePostingEnabled()) {
+            SavingsAccount account = savingsAccountCharge.savingsAccount();
+            String externalId = account.getExternalId() != null ? account.getExternalId().getValue() : null;
+
+            synapseChargePostingOutboxWriterProvider.getObject().postCharge(savingsAccountChargeId, account.getId(), account.officeId(),
+                    externalId, savingsAccountCharge.getCharge().getName(), savingsAccountCharge.amoutOutstanding(), transactionDate,
+                    savingsAccountCharge.currencyCode());
+            return;
+        }
+
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MM yyyy").withZone(DateUtils.getDateTimeZoneOfTenant());
 
         while (savingsAccountCharge.isNotFullyPaid() && DateUtils.isBefore(savingsAccountCharge.getDueDate(), transactionDate)) {
             payCharge(savingsAccountCharge, transactionDate, savingsAccountCharge.amoutOutstanding(), fmt, false);
         }
+    }
+
+    private boolean isSynapseChargePostingEnabled() {
+        return synapseChargePostingOutboxWriterProvider.getIfAvailable() != null
+                && configurationDomainService.isSynapseInterestPostingEnabled();
     }
 
     @SuppressWarnings("unused")
@@ -1728,6 +1752,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Override
     public void setSubStatusInactive(Long savingsId) {
+        if (isSynapseDormancyPostingEnabled()) {
+            final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+            synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.INACTIVE,
+                    DateUtils.getBusinessLocalDate(), inactiveTransitionReason(account));
+            return;
+        }
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
         final Set<Long> existingTransactionIds = new HashSet<>();
         final Set<Long> existingReversedTransactionIds = new HashSet<>();
@@ -1739,6 +1769,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Override
     public void setSubStatusDormant(Long savingsId) {
+        if (isSynapseDormancyPostingEnabled()) {
+            final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+            synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.DORMANT,
+                    DateUtils.getBusinessLocalDate(), dormantTransitionReason(account));
+            return;
+        }
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
         account.setSubStatusDormant();
         this.savingAccountRepositoryWrapper.saveAndFlush(account);
@@ -1746,6 +1782,14 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Override
     public void escheat(Long savingsId) {
+        if (isSynapseDormancyPostingEnabled()) {
+            // Journal entries (Dr SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY) post on the Synapse callback via
+            // SynapseDormancyStateApplier.
+            final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+            synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.ESCHEAT,
+                    DateUtils.getBusinessLocalDate(), escheatTransitionReason(account));
+            return;
+        }
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
         final Set<Long> existingTransactionIds = new HashSet<>();
         final Set<Long> existingReversedTransactionIds = new HashSet<>();
@@ -1753,6 +1797,26 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         account.escheat(appuserRepository.fetchSystemUser());
         this.savingAccountRepositoryWrapper.saveAndFlush(account);
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, false);
+    }
+
+    private boolean isSynapseDormancyPostingEnabled() {
+        return synapseDormancyPostingOutboxWriterProvider.getIfAvailable() != null
+                && configurationDomainService.isSynapseInterestPostingEnabled();
+    }
+
+    private String inactiveTransitionReason(SavingsAccount account) {
+        Long days = account.savingsProduct().getDaysToInactive();
+        return days == null ? "Threshold reached" : "Inactive threshold reached: " + days + " days";
+    }
+
+    private String dormantTransitionReason(SavingsAccount account) {
+        Long days = account.savingsProduct().getDaysToDormancy();
+        return days == null ? "Threshold reached" : "Dormant threshold reached: " + days + " days";
+    }
+
+    private String escheatTransitionReason(SavingsAccount account) {
+        Long days = account.savingsProduct().getDaysToEscheat();
+        return days == null ? "Threshold reached" : "Escheat threshold reached: " + days + " days";
     }
 
     private AppUser getAppUserIfPresent() {
@@ -2049,6 +2113,64 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .withOfficeId(account.officeId()).withClientId(account.clientId()).build();
     }
 
+    @Override
+    public CommandProcessingResult replayChargePosting(final Long savingsId, final JsonCommand command) {
+        final SynapseChargeTransactionApplier replayService = chargePostingReplayServiceProvider.getIfAvailable();
+        if (replayService == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
+            throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
+                    "Synapse integration is not enabled. Cannot replay charge posting.");
+        }
+
+        final LocalDate txDate = command.localDateValueOfParameterNamed("transactionDate");
+        final BigDecimal txAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
+        final Long savingsAccountChargeId = command.longValueOfParameterNamed("savingsAccountChargeId");
+        final String traceId = command.stringValueOfParameterNamed("traceId");
+
+        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
+
+        final SynapseChargeTransactionApplier.ReplayResult result = replayService.replay(account, txAmount, txDate, savingsAccountChargeId,
+                traceId);
+
+        if (result.alreadyExists()) {
+            return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId).build();
+        }
+
+        this.savingsAccountTransactionRepository.saveAndFlush(result.transaction());
+        this.savingAccountRepositoryWrapper.updateSummaryDirectAndDetach(account);
+        postJournalEntriesForTransaction(account, result.transaction(), false);
+
+        return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId)
+                .withOfficeId(account.officeId()).withClientId(account.clientId()).build();
+    }
+
+    @Override
+    public CommandProcessingResult replayDormancyStatus(final Long savingsId, final JsonCommand command) {
+        final SynapseDormancyStateApplier applier = dormancyStateApplierProvider.getIfAvailable();
+        if (applier == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
+            throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
+                    "Synapse integration is not enabled. Cannot replay dormancy status.");
+        }
+
+        final String traceId = command.stringValueOfParameterNamed("traceId");
+        final SavingsAccountSubStatusEnum appliedSubStatus = SavingsAccountSubStatusEnum
+                .valueOf(command.stringValueOfParameterNamed("appliedSubStatus"));
+        final LocalDate effectiveDate = command.localDateValueOfParameterNamed("effectiveDate");
+        final BigDecimal escheatAmount = command.bigDecimalValueOfParameterNamed("escheatAmount");
+        final String currencyCode = command.stringValueOfParameterNamed("currencyCode");
+
+        final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+
+        final SynapseDormancyStateApplier.ApplyResult result = applier.apply(account, traceId, appliedSubStatus, effectiveDate,
+                escheatAmount, currencyCode);
+
+        final CommandProcessingResultBuilder builder = new CommandProcessingResultBuilder().withSavingsId(savingsId)
+                .withOfficeId(account.officeId()).withClientId(account.clientId());
+        if (result.escheatTransaction() != null) {
+            builder.withEntityId(result.escheatTransaction().getId());
+        }
+        return builder.build();
+    }
+
     private CommandProcessingResult postInterestViaSynapse(Long savingsId, JsonCommand command,
             SynapseInterestPostingOutboxWriter synapseService) {
         // 1. Validate: load JPA entity for validation only (client/group active, pivot date)
@@ -2104,8 +2226,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         accountData = this.postInterest(accountData, postInterestAs, transactionDate, backdatedTxnsAllowedTill);
 
         // 4. Send to Synapse
-        LocalDate postingDate = DateUtils.getBusinessLocalDate();
-        SynapsePostResult result = synapseService.postInterestForAccount(accountData, postingDate);
+        SynapsePostResult result = synapseService.postInterestForAccount(accountData);
 
         // 5. Persist cursor updates
         if (!result.getCursorUpdates().isEmpty()) {

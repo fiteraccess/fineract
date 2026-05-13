@@ -36,6 +36,7 @@ import static org.mockito.Mockito.when;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
@@ -100,12 +101,14 @@ class SynapseOutboxTaskletTest {
         return new SynapseOutboxTasklet(outboxRepository, handlers, registry, props, executor);
     }
 
+    private static final Instant ENTRY_CREATED_AT = Instant.parse("2026-04-11T10:00:00Z");
+
     private static OutboxEntry entry(long id) {
-        return OutboxEntry.builder().id(id).taskType("INTEREST_POSTING").build();
+        return OutboxEntry.builder().id(id).taskType("INTEREST_POSTING").createdAt(ENTRY_CREATED_AT).build();
     }
 
     private static OutboxEntry entry(long id, String taskType) {
-        return OutboxEntry.builder().id(id).taskType(taskType).build();
+        return OutboxEntry.builder().id(id).taskType(taskType).createdAt(ENTRY_CREATED_AT).build();
     }
 
     @Nested
@@ -172,7 +175,8 @@ class SynapseOutboxTaskletTest {
             tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markSent(List.of(1L));
-            verify(outboxRepository).markFailed(eq(2L), eq("posting failed"), eq(e2.getAttempts()), eq(e2.getMaxAttempts()));
+            verify(outboxRepository).markFailed(eq(2L), eq("posting failed"), eq(e2.getAttempts()), eq(e2.getMaxAttempts()),
+                    eq(e2.getCreatedAt()));
             verify(outboxRepository).markSent(List.of(3L));
         }
 
@@ -198,7 +202,7 @@ class SynapseOutboxTaskletTest {
 
             verify(outboxRepository).markSent(List.of(1L));
             verify(outboxRepository).resetToPending(List.of(2L, 3L));
-            verify(outboxRepository, never()).markFailed(any(), anyString(), anyInt(), anyInt());
+            verify(outboxRepository, never()).markFailed(any(), anyString(), anyInt(), anyInt(), any());
         }
 
         @Test
@@ -215,7 +219,7 @@ class SynapseOutboxTaskletTest {
             tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class));
 
             verify(outboxRepository).markFailed(eq(1L), eq("java.lang.RuntimeException: something broke"), eq(e1.getAttempts()),
-                    eq(e1.getMaxAttempts()));
+                    eq(e1.getMaxAttempts()), eq(e1.getCreatedAt()));
             verify(outboxRepository, never()).markSent(any());
         }
 

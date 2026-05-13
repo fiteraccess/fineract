@@ -18,42 +18,26 @@
  */
 package org.apache.fineract.portfolio.savings.data.synapse;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.extern.jackson.Jacksonized;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 
-/**
- * Represents a single row in the {@code synapse_outbox} table.
- * <p>
- * Task-type agnostic — the {@code payload} field is opaque JSON whose structure is defined by the corresponding
- * {@code SynapseTaskHandler}.
- */
 @Getter
-@Setter
 @Builder
-@NoArgsConstructor
+@Jacksonized
 @AllArgsConstructor
-public class OutboxEntry {
+public class SynapseDormancyStatusInstruction {
 
-    private Long id;
-    private String traceId;
-    private String batchId;
-    private String taskType;
-    private Long accountId;
-    private Long officeId;
-    private String payload;
-    @Builder.Default
-    private String status = "PENDING";
-    @Builder.Default
-    private int attempts = 0;
-    @Builder.Default
-    private int maxAttempts = 1000;
-    private String errorDetail;
-    private Instant createdAt;
-    private Instant dispatchedAt;
-    private Instant completedAt;
-    private Instant nextAttemptAt;
+    private final String traceId;
+    private final Long savingsAccountId;
+    private final Long clientId;
+    private final Long officeId;
+    private final SavingsAccountSubStatusEnum previousSubStatus;
+    private final SavingsAccountSubStatusEnum targetSubStatus;
+    private final LocalDate effectiveDate;
+    private final String transitionReason;
+    private final String currencyCode;
 }

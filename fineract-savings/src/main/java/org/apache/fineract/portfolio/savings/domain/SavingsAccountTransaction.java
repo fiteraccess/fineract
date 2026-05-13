@@ -326,6 +326,15 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
                 accountTransaction, lienTransaction, refNo);
     }
 
+    public static SavingsAccountTransaction escheat(final SavingsAccount savingsAccount, final LocalDate date, final Money amount,
+            final String refNo) {
+        final boolean isReversed = false;
+        final boolean accountTransaction = false;
+        final Boolean lienTransaction = false;
+        return new SavingsAccountTransaction(savingsAccount, savingsAccount.office(), null,
+                SavingsAccountTransactionType.ESCHEAT.getValue(), date, amount, isReversed, accountTransaction, lienTransaction, refNo);
+    }
+
     public static SavingsAccountTransaction copyTransaction(SavingsAccountTransaction accountTransaction) {
         return new SavingsAccountTransaction(accountTransaction.savingsAccount, accountTransaction.office, accountTransaction.paymentDetail,
                 accountTransaction.typeOf, accountTransaction.getTransactionDate(), accountTransaction.amount, accountTransaction.reversed,

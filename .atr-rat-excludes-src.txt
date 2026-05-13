@@ -50,5 +50,7 @@
 /fineract-provider/src/test/resources/results/xbrl.xml
 /gradle/wrapper/gradle-wrapper.properties
 org.springframework.boot.autoconfigure.AutoConfiguration.imports
+/Makefile
+.augmentignore
 
 # vim:ft=conf

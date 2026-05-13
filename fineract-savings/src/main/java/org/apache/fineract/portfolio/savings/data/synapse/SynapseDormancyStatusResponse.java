@@ -18,42 +18,20 @@
  */
 package org.apache.fineract.portfolio.savings.data.synapse;
 
-import java.time.Instant;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Represents a single row in the {@code synapse_outbox} table.
- * <p>
- * Task-type agnostic — the {@code payload} field is opaque JSON whose structure is defined by the corresponding
- * {@code SynapseTaskHandler}.
- */
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OutboxEntry {
+public class SynapseDormancyStatusResponse {
 
-    private Long id;
     private String traceId;
-    private String batchId;
-    private String taskType;
-    private Long accountId;
-    private Long officeId;
-    private String payload;
-    @Builder.Default
-    private String status = "PENDING";
-    @Builder.Default
-    private int attempts = 0;
-    @Builder.Default
-    private int maxAttempts = 1000;
-    private String errorDetail;
-    private Instant createdAt;
-    private Instant dispatchedAt;
-    private Instant completedAt;
-    private Instant nextAttemptAt;
+    private String status;
+    private String correlationId;
+    private String reason;
+    private Integer inflightCount;
 }

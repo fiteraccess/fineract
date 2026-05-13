@@ -40,4 +40,6 @@
   <include file="parts/2015_add_index_sat_lastmodified.xml" relativeToChangelogFile="true" />
   <include file="parts/2016_tune_autovacuum_savings_daily_balance.xml" relativeToChangelogFile="true" />
   <include file="parts/2017_set_fillfactor_savings_account.xml" relativeToChangelogFile="true" />
+  <include file="parts/2013_add_replay_charge_posting_permission.xml" relativeToChangelogFile="true"/>
+  <include file="parts/2014_add_replay_dormancy_status_permission.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

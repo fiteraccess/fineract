@@ -62,7 +62,7 @@ class SynapseInterestPostingOutboxWriterTest {
         SavingsAccountData acct2 = buildAccountWithInterestTx(2L, 10L, "NGN", new BigDecimal("200.00"));
         SavingsAccountData acct3 = buildAccountWithInterestTx(3L, 10L, "NGN", new BigDecimal("50.00"));
 
-        SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2, acct3), POSTING_DATE);
+        SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2, acct3));
 
         assertThat(result.getAccepted()).isEqualTo(3);
         assertThat(result.getFailed()).isEqualTo(0);
@@ -79,7 +79,7 @@ class SynapseInterestPostingOutboxWriterTest {
         SavingsAccountData acct1 = buildAccountNoTx(1L, 10L, "NGN");
         SavingsAccountData acct2 = buildAccountNoTx(2L, 10L, "NGN");
 
-        SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2), POSTING_DATE);
+        SynapsePostResult result = service.postInterestBatch(List.of(acct1, acct2));
 
         verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
         assertThat(result.getAccepted()).isEqualTo(2);
@@ -95,7 +95,7 @@ class SynapseInterestPostingOutboxWriterTest {
     void multipleInstructionsForAccountAllWrittenToOutbox() {
         SavingsAccountData acct = buildAccountWithTwoTx(1L, 10L, "NGN", new BigDecimal("100.00"), new BigDecimal("10.00"));
 
-        SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
 
         assertThat(result.getAccepted()).isEqualTo(1);
         assertThat(result.getFailed()).isEqualTo(0);
@@ -115,7 +115,7 @@ class SynapseInterestPostingOutboxWriterTest {
         SavingsAccountData acct1 = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("100.00"));
         SavingsAccountData acct2 = buildAccountWithInterestTx(2L, 20L, "NGN", new BigDecimal("200.00"));
 
-        service.postInterestBatch(List.of(acct1, acct2), POSTING_DATE);
+        service.postInterestBatch(List.of(acct1, acct2));
 
         ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
         verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
@@ -132,7 +132,7 @@ class SynapseInterestPostingOutboxWriterTest {
                 null, null, null, null, null, LocalDate.of(2026, 3, 15), null, null);
         SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
 
-        SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
 
         verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
         assertThat(result.getCursorUpdates()).hasSize(1);
@@ -144,7 +144,7 @@ class SynapseInterestPostingOutboxWriterTest {
     void zeroAmountTransactionsSkipOutboxWrite() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", BigDecimal.ZERO);
 
-        SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
 
         verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
         assertThat(result.getAccepted()).isEqualTo(1);
@@ -164,7 +164,7 @@ class SynapseInterestPostingOutboxWriterTest {
         tx.reverse();
         acct.setSavingsAccountTransactionData(tx);
 
-        SynapsePostResult result = service.postInterestBatch(List.of(acct), POSTING_DATE);
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
 
         assertThat(result.getAccepted()).isEqualTo(1);
         ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
@@ -178,7 +178,7 @@ class SynapseInterestPostingOutboxWriterTest {
     void postInterestForAccountDelegatesToBatchWithSingleAccount() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("250.00"));
 
-        SynapsePostResult result = service.postInterestForAccount(acct, POSTING_DATE);
+        SynapsePostResult result = service.postInterestForAccount(acct);
 
         assertThat(result.getAccepted()).isEqualTo(1);
         assertThat(result.getFailed()).isEqualTo(0);

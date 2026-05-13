@@ -31,6 +31,14 @@ jobs:
     env:
       TZ: Asia/Kolkata
       DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+      FINERACT_DEFAULT_TENANTDB_HOSTNAME: localhost
+      FINERACT_DEFAULT_TENANTDB_PORT: "5432"
+      FINERACT_DEFAULT_TENANTDB_UID: root
+      FINERACT_DEFAULT_TENANTDB_PWD: postgres
+      FINERACT_SYNAPSE_ENABLED: "true"
+      FINERACT_SYNAPSE_BASE_URL: http://localhost:18089
+      FINERACT_SYNAPSE_API_KEY: "Basic bWlmb3M6cGFzc3dvcmQ="
+      FINERACT_SYNAPSE_FORCE_ENABLED: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5

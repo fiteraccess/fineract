@@ -738,7 +738,6 @@ public class FineractProperties {
         private boolean enabled;
         private boolean forceEnabled;
         private String baseUrl;
-        private String batchEndpoint;
         private long connectTimeoutMs;
         private long readTimeoutMs;
         private int retryMaxAttempts;
