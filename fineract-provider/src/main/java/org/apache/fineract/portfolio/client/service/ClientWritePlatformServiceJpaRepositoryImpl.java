@@ -305,7 +305,9 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
 
             final Locale locale = command.extractLocale();
             final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
-            CommandProcessingResult result = openSavingsAccount(newClient, fmt);
+            final String savingsAccountNo = command.stringValueOfParameterNamed(ClientApiConstants.savingsAccountNoParamName);
+            final Map<String, Object> changes = new LinkedHashMap<>();
+            CommandProcessingResult result = openSavingsAccount(newClient, fmt, savingsAccountNo, changes);
             if (result.getSavingsId() != null) {
                 this.clientRepository.saveAndFlush(newClient);
             }
@@ -343,6 +345,7 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
                     .withGroupId(groupId) //
                     .withEntityId(newClient.getId()) //
                     .withSavingsId(result.getSavingsId())//
+                    .with(changes) //
                     .setRollbackTransaction(rollbackTransaction)//
                     .setRollbackTransaction(result.isRollbackTransaction())//
                     .build();
@@ -717,7 +720,7 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
 
             final AppUser currentUser = this.context.authenticatedUser();
             client.activate(currentUser, fmt, activationDate);
-            CommandProcessingResult result = openSavingsAccount(client, fmt);
+            CommandProcessingResult result = openSavingsAccount(client, fmt, null, new LinkedHashMap<>());
             clientRepository.saveAndFlush(client);
             businessEventNotifierService.notifyPostBusinessEvent(new ClientActivateBusinessEvent(client));
             return new CommandProcessingResultBuilder() //
@@ -735,16 +738,19 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
         }
     }
 
-    private CommandProcessingResult openSavingsAccount(final Client client, final DateTimeFormatter fmt) {
+    private CommandProcessingResult openSavingsAccount(final Client client, final DateTimeFormatter fmt, final String savingsAccountNo,
+            final Map<String, Object> changes) {
         CommandProcessingResult commandProcessingResult = CommandProcessingResult.empty();
         if (client.isActive() && client.savingsProductId() != null) {
             SavingsAccountDataDTO savingsAccountDataDTO = new SavingsAccountDataDTO(client, null, client.savingsProductId(),
-                    client.getActivationDate(), client.activatedBy(), fmt);
+                    client.getActivationDate(), client.activatedBy(), fmt, savingsAccountNo);
             commandProcessingResult = this.savingsApplicationProcessWritePlatformService.createActiveApplication(savingsAccountDataDTO);
             if (commandProcessingResult.getSavingsId() != null) {
-                this.savingsRepositoryWrapper.findOneWithNotFoundDetection(commandProcessingResult.getSavingsId());
+                final SavingsAccount savingsAccount = this.savingsRepositoryWrapper
+                        .findOneWithNotFoundDetection(commandProcessingResult.getSavingsId());
                 client.updateSavingsAccount(commandProcessingResult.getSavingsId());
                 client.updateSavingsProduct(null);
+                changes.put(ClientApiConstants.savingsAccountNoParamName, savingsAccount.getAccountNumber());
             }
         }
         return commandProcessingResult;
