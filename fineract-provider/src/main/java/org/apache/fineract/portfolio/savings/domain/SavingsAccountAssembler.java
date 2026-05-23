@@ -441,7 +441,7 @@ public class SavingsAccountAssembler {
      * chosen {@link SavingsProduct}.
      */
     public SavingsAccount assembleFrom(final Client client, final Group group, final Long productId, final LocalDate appliedonDate,
-            final AppUser appliedBy) {
+            final AppUser appliedBy, final String accountNo) {
 
         AccountType accountType = AccountType.INVALID;
         if (client != null) {
@@ -469,7 +469,7 @@ public class SavingsAccountAssembler {
         }
         final SavingsProduct product = this.savingProductRepository.findById(productId).orElseThrow();
         final Set<SavingsAccountCharge> charges = this.savingsAccountChargeAssembler.fromSavingsProduct(product);
-        final SavingsAccount account = SavingsAccount.createNewApplicationForSubmittal(client, group, product, null, null, null,
+        final SavingsAccount account = SavingsAccount.createNewApplicationForSubmittal(client, group, product, null, accountNo, null,
                 accountType, appliedonDate, appliedBy, product.nominalAnnualInterestRate(), product.interestCompoundingPeriodType(),
                 product.interestPostingPeriodType(), product.interestCalculationType(), product.interestCalculationDaysInYearType(),
                 product.minRequiredOpeningBalance(), product.lockinPeriodFrequency(), product.lockinPeriodFrequencyType(),

@@ -114,6 +114,17 @@ public final class ClientDataValidator {
              */
         }
 
+        if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.savingsAccountNoParamName, element)) {
+            final String savingsAccountNo = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.savingsAccountNoParamName,
+                    element);
+            baseDataValidator.reset().parameter(ClientApiConstants.savingsAccountNoParamName).value(savingsAccountNo).notBlank()
+                    .notExceedingLengthOf(20);
+            if (!this.fromApiJsonHelper.parameterExists(ClientApiConstants.savingsProductIdParamName, element)) {
+                baseDataValidator.reset().parameter(ClientApiConstants.savingsAccountNoParamName).value(savingsAccountNo)
+                        .failWithCode("cannot.be.provided.without.savings.product");
+            }
+        }
+
         if (isFullnameProvided(element) || isIndividualNameProvided(element)) {
 
             // 1. No individual name part provided and fullname provided

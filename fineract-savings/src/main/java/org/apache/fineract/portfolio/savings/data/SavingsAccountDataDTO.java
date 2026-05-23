@@ -32,15 +32,22 @@ public class SavingsAccountDataDTO {
     private final LocalDate applicationDate;
     private final AppUser appliedBy;
     private final DateTimeFormatter fmt;
+    private final String accountNo;
 
     public SavingsAccountDataDTO(final Client client, final Group group, final Long savingsProductId, final LocalDate applicationDate,
             final AppUser appliedBy, final DateTimeFormatter fmt) {
+        this(client, group, savingsProductId, applicationDate, appliedBy, fmt, null);
+    }
+
+    public SavingsAccountDataDTO(final Client client, final Group group, final Long savingsProductId, final LocalDate applicationDate,
+            final AppUser appliedBy, final DateTimeFormatter fmt, final String accountNo) {
         this.client = client;
         this.group = group;
         this.savingsProductId = savingsProductId;
         this.applicationDate = applicationDate;
         this.appliedBy = appliedBy;
         this.fmt = fmt;
+        this.accountNo = accountNo;
     }
 
     public Client getClient() {
@@ -65,5 +72,9 @@ public class SavingsAccountDataDTO {
 
     public DateTimeFormatter getFmt() {
         return this.fmt;
+    }
+
+    public String getAccountNo() {
+        return this.accountNo;
     }
 }
