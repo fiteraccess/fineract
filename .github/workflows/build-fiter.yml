@@ -34,15 +34,14 @@ jobs:
         with:
           role-to-assume: ${{ env.ecr_deploy_role }}
           aws-region: ${{ env.ecr_region }}
-          web-identity-token-file: ${{ steps.id-token.outputs.token }}
 
       - name: Get the current commit hash
         id: commit
-        run: echo "::set-output name=hash::$(git rev-parse HEAD)"
+        run: echo "hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Get the short commit message
+      - name: Get the short commit hash
         id: short-commit-message
-        run: echo "::set-output name=commit_hash::$(git rev-parse --short HEAD)"
+        run: echo "commit_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
 
       - name: Login to Amazon ECR
