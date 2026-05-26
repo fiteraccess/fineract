@@ -321,6 +321,14 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             // during postJournalEntriesForTransaction.
             this.savingsAccountRepository.applyWithdrawalDelta(account.getId(), transactionAmount, totalFeeAmount, newSubStatus,
                     account.getVersion());
+
+            // Sync the in-memory entity so its accountBalance and version match what the JPQL delta just wrote to the
+            // DB. Without this, any downstream code that mutates the entity in the same transaction (close, guarantor
+            // release listener, etc.) hits OptimisticLockException at autoflush time because the entity's version
+            // tag is stale. The fully redundant 14-column UPDATE that AB-220 was avoiding came from setting all
+            // summary fields here — we now set only the two fields the rest of the code path actually reads, which
+            // costs at most one minimal autoflush UPDATE per transaction.
+            account.syncAfterDeltaUpdate(newPostedBalance);
         } finally {
             this.entityManager.setFlushMode(originalFlushMode);
         }
@@ -524,6 +532,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             // during postJournalEntriesForTransaction. Activation does not reach this branch (gated on
             // isRegularTransaction=true at handleDeposit:375).
             this.savingsAccountRepository.applyDepositDelta(account.getId(), transactionAmount, newSubStatus, account.getVersion());
+
+            // Sync the in-memory entity so its accountBalance and version match what the JPQL delta just wrote to the
+            // DB — required for correctness across callers whose downstream code mutates the entity (see the matching
+            // comment in handleWithdrawalOptimized for the full rationale).
+            account.syncAfterDeltaUpdate(newPostedBalance);
         } finally {
             this.entityManager.setFlushMode(originalFlushMode);
         }
