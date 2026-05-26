@@ -18,12 +18,16 @@
  */
 package org.apache.fineract.useradministration.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Collection;
+import lombok.Getter;
 
 /**
  * Immutable data object for role data.
  */
+@Getter
 public class RoleData implements Serializable {
 
     private final Long id;
@@ -35,7 +39,9 @@ public class RoleData implements Serializable {
         return new RolePermissionsData(this.id, this.name, this.description, this.disabled, permissionUsageData);
     }
 
-    public RoleData(final Long id, final String name, final String description, final Boolean disabled) {
+    @JsonCreator
+    public RoleData(@JsonProperty("id") final Long id, @JsonProperty("name") final String name,
+            @JsonProperty("description") final String description, @JsonProperty("disabled") final Boolean disabled) {
         this.id = id;
         this.name = name;
         this.description = description;

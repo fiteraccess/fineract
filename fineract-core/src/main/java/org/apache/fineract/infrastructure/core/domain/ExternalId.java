@@ -49,6 +49,11 @@ public class ExternalId implements Serializable {
         this.value = value;
     }
 
+    @com.fasterxml.jackson.annotation.JsonCreator
+    public static ExternalId fromJson(@com.fasterxml.jackson.annotation.JsonProperty("value") String value) {
+        return StringUtils.isBlank(value) ? empty() : new ExternalId(value);
+    }
+
     /**
      * @return Create a new ExternalId object where value is a newly generated UUID
      */

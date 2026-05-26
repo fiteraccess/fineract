@@ -20,6 +20,8 @@ package org.apache.fineract.useradministration.domain;
 
 import static org.apache.fineract.useradministration.service.AppUserConstants.PASSWORD;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -60,6 +62,7 @@ import org.springframework.security.core.userdetails.User;
 
 @Entity
 @Table(name = "m_appuser", uniqueConstraints = @UniqueConstraint(columnNames = { "username" }, name = "username_org"))
+@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 public class AppUser extends AbstractPersistableCustom<Long> implements PlatformUser {
 
     @Getter
@@ -125,6 +128,7 @@ public class AppUser extends AbstractPersistableCustom<Long> implements Platform
     private boolean isSelfServiceUser;
 
     @Getter
+    @JsonIgnore
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "appUser")
     private Set<AppUserClientMapping> appUserClientMappings = new HashSet<>();
 

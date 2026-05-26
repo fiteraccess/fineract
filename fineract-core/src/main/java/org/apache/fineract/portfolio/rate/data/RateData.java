@@ -19,6 +19,8 @@
 
 package org.apache.fineract.portfolio.rate.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import lombok.Getter;
@@ -45,8 +47,10 @@ public final class RateData implements Serializable {
         return new RateData(id, name, percentage, productApply, active);
     }
 
-    private RateData(final Long id, final String name, final BigDecimal percentage, final EnumOptionData productApply,
-            final boolean active) {
+    @JsonCreator
+    private RateData(@JsonProperty("id") final Long id, @JsonProperty("name") final String name,
+            @JsonProperty("percentage") final BigDecimal percentage, @JsonProperty("productApply") final EnumOptionData productApply,
+            @JsonProperty("active") final boolean active) {
         this.id = id;
         this.name = name;
         this.percentage = percentage;

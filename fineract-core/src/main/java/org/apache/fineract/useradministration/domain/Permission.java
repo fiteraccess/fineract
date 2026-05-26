@@ -22,8 +22,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import lombok.Getter;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 
+@Getter
 @Entity
 @Table(name = "m_permission")
 public class Permission extends AbstractPersistableCustom<Long> implements Serializable {

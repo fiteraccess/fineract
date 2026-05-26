@@ -22,6 +22,8 @@ import static org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations
 import static org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations.preCloseInterestCalculationStrategy;
 import static org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations.rescheduleStrategyType;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import lombok.Getter;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
@@ -52,6 +54,7 @@ public class LoanProductInterestRecalculationData implements Serializable {
     private final boolean allowCompoundingOnEod;
     private final Boolean disallowInterestCalculationOnPastDue;
 
+    @JsonCreator
     public LoanProductInterestRecalculationData(final Long id, final Long productId,
             final EnumOptionData interestRecalculationCompoundingType, final EnumOptionData rescheduleStrategyType,
             final EnumOptionData recalculationRestFrequencyType, final Integer recalculationRestFrequencyInterval,
@@ -60,8 +63,8 @@ public class LoanProductInterestRecalculationData implements Serializable {
             final Integer recalculationCompoundingFrequencyInterval, final EnumOptionData recalculationCompoundingFrequencyNthDay,
             final EnumOptionData recalculationCompoundingFrequencyWeekday, final Integer recalculationCompoundingFrequencyOnDay,
             final boolean isArrearsBasedOnOriginalSchedule, boolean isCompoundingToBePostedAsTransaction,
-            final EnumOptionData preCloseInterestCalculationStrategy, final boolean allowCompoundingOnEod,
-            final Boolean disallowInterestCalculationOnPastDue) {
+            @JsonProperty("preClosureInterestCalculationStrategy") final EnumOptionData preCloseInterestCalculationStrategy,
+            final boolean allowCompoundingOnEod, final Boolean disallowInterestCalculationOnPastDue) {
         this.id = id;
         this.productId = productId;
         this.interestRecalculationCompoundingType = interestRecalculationCompoundingType;

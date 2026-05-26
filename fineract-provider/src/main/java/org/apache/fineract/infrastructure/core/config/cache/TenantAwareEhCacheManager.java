@@ -30,6 +30,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.jcache.JCacheCache;
+import org.springframework.cache.support.NoOpCache;
 
 /**
  * A tenant-aware cache manager for EhCache that creates a dedicated physical cache per tenant and logical cache name.
@@ -68,7 +69,11 @@ public class TenantAwareEhCacheManager implements CacheManager {
 
         javax.cache.Cache<Object, Object> nativeCache = getOrCreateNativeCache(name, tenantScopedName);
         if (nativeCache == null) {
-            return null;
+            // Returning null would make Spring's AbstractCacheResolver throw "Cannot find cache named 'X'"
+            // and fail the request. Falling back to NoOpCache makes the @Cacheable aspect treat it as a
+            // miss and invoke the underlying method instead.
+            log.debug("EhCache config missing for '{}' (tenant-scoped '{}'), degrading to no-cache", name, tenantScopedName);
+            return new NoOpCache(name);
         }
 
         Cache wrapper = new JCacheCache(nativeCache, true);

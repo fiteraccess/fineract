@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.useradministration.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +33,7 @@ import org.apache.fineract.portfolio.client.data.ClientData;
 /**
  * Immutable data object for application user data.
  */
+@Getter
 public final class AppUserData {
 
     private final Long id;
@@ -105,10 +108,15 @@ public final class AppUserData {
         return new AppUserData(id, username, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
-    public static AppUserData instance(final Long id, final String username, final String email, final Long officeId,
-            final String officeName, final String firstname, final String lastname, final Collection<RoleData> availableRoles,
-            final Collection<RoleData> selfServiceRoles, final Collection<RoleData> selectedRoles, final StaffData staff,
-            final Boolean passwordNeverExpire, final Boolean isSelfServiceUser) {
+    @JsonCreator
+    public static AppUserData instance(@JsonProperty("id") final Long id, @JsonProperty("username") final String username,
+            @JsonProperty("email") final String email, @JsonProperty("officeId") final Long officeId,
+            @JsonProperty("officeName") final String officeName, @JsonProperty("firstname") final String firstname,
+            @JsonProperty("lastname") final String lastname, @JsonProperty("availableRoles") final Collection<RoleData> availableRoles,
+            @JsonProperty("selfServiceRoles") final Collection<RoleData> selfServiceRoles,
+            @JsonProperty("selectedRoles") final Collection<RoleData> selectedRoles, @JsonProperty("staff") final StaffData staff,
+            @JsonProperty("passwordNeverExpires") final Boolean passwordNeverExpire,
+            @JsonProperty("isSelfServiceUser") final Boolean isSelfServiceUser) {
         return new AppUserData(id, username, email, officeId, officeName, firstname, lastname, availableRoles, selfServiceRoles,
                 selectedRoles, null, staff, passwordNeverExpire, isSelfServiceUser);
     }

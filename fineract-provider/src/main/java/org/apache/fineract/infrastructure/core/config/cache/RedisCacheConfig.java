@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.api.StatefulConnection;
 import java.time.Duration;
@@ -130,6 +131,9 @@ public class RedisCacheConfig {
         // Register JavaTimeModule to support Java 8 date/time types (LocalDate, LocalDateTime, etc.)
         // Without this, serialization of entities containing date fields will fail.
         redisObjectMapper.registerModule(new JavaTimeModule());
+        // Enables constructor parameter name discovery for classes compiled with -parameters.
+        // Required for Jackson to deserialize DTOs whose public all-args constructor has no @JsonCreator.
+        redisObjectMapper.registerModule(new ParameterNamesModule());
         // Write dates as ISO-8601 strings instead of numeric timestamps for readability
         redisObjectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         // Ignore unknown properties during deserialization. This is necessary because:

@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.NoOpCache;
 
 /**
  * Wraps a Redis cache manager and catches connection errors, degrading gracefully to no-cache (cache miss) instead of
@@ -45,6 +46,9 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         this.knownCacheNames.addAll(initialCacheNames);
     }
 
+    // Returning null here would make Spring's AbstractCacheResolver throw "Cannot find cache named 'X'"
+    // and fail the request. Instead we return a NoOpCache so the @Cacheable aspect sees a miss and
+    // proceeds to invoke the underlying method (e.g. the DB query).
     @Override
     public Cache getCache(String name) {
         try {
@@ -54,11 +58,11 @@ public class FallbackToCacheManagerProxy implements CacheManager {
                 log.debug("Redis cache resolved: name='{}', delegate={}", name, delegate.getClass().getSimpleName());
                 return new FallbackCache(cache);
             }
-            log.debug("Redis cache '{}' not resolved by delegate {}", name, delegate.getClass().getSimpleName());
+            log.debug("Redis cache '{}' not resolved by delegate {}, degrading to no-cache", name, delegate.getClass().getSimpleName());
         } catch (Exception e) {
             log.warn("Redis cache unavailable, degrading to no-cache for '{}'", name, e);
         }
-        return null;
+        return new NoOpCache(name);
     }
 
     @Override

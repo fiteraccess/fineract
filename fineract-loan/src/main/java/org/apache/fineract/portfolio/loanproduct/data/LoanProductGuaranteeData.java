@@ -18,13 +18,14 @@
  */
 package org.apache.fineract.portfolio.loanproduct.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 @Getter
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = { @JsonCreator })
 public final class LoanProductGuaranteeData implements Serializable {
 
     private final Long id;

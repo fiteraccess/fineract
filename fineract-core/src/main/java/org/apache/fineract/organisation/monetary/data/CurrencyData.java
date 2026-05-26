@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.organisation.monetary.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serial;
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
@@ -56,8 +58,10 @@ public class CurrencyData implements Serializable {
         this.displayLabel = null;
     }
 
-    public CurrencyData(final String code, final String name, final int decimalPlaces, final Integer inMultiplesOf,
-            final String displaySymbol, final String nameCode) {
+    @JsonCreator
+    public CurrencyData(@JsonProperty("code") final String code, @JsonProperty("name") final String name,
+            @JsonProperty("decimalPlaces") final int decimalPlaces, @JsonProperty("inMultiplesOf") final Integer inMultiplesOf,
+            @JsonProperty("displaySymbol") final String displaySymbol, @JsonProperty("nameCode") final String nameCode) {
         this.code = code;
         this.name = name;
         this.decimalPlaces = decimalPlaces;

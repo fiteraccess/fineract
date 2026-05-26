@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.organisation.office.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -51,10 +52,12 @@ import org.apache.fineract.organisation.office.exception.RootOfficeParentCannotB
 @Setter
 public class Office extends AbstractPersistableCustom<Long> implements Serializable {
 
+    @JsonIgnore
     @OneToMany(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private List<Office> children = new ArrayList<>();
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Office parent;

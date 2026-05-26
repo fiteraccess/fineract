@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.portfolio.savings.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Collection;
@@ -426,29 +428,51 @@ public final class SavingsProductData implements Serializable {
         this.accountMappingForPayment = null;
     }
 
-    private SavingsProductData(final Long id, final String name, final String shortName, final String description,
-            final CurrencyData currency, final BigDecimal nominalAnnualInterestRate, final EnumOptionData interestCompoundingPeriodType,
-            final EnumOptionData interestPostingPeriodType, final EnumOptionData interestCalculationType,
-            final EnumOptionData interestCalculationDaysInYearType, final BigDecimal minRequiredOpeningBalance,
-            final Integer lockinPeriodFrequency, final EnumOptionData lockinPeriodFrequencyType, final boolean withdrawalFeeForTransfers,
-            final EnumOptionData accountingType, final Map<String, Object> accountingMappings,
-            final Collection<PaymentTypeToGLAccountMapper> paymentChannelToFundSourceMappings,
-            final Collection<CurrencyData> currencyOptions, final Collection<EnumOptionData> interestCompoundingPeriodTypeOptions,
-            final Collection<EnumOptionData> interestPostingPeriodTypeOptions,
-            final Collection<EnumOptionData> interestCalculationTypeOptions,
-            final Collection<EnumOptionData> interestCalculationDaysInYearTypeOptions,
-            final Collection<EnumOptionData> lockinPeriodFrequencyTypeOptions, final Collection<EnumOptionData> withdrawalFeeTypeOptions,
-            final Collection<PaymentTypeData> paymentTypeOptions, final Collection<EnumOptionData> accountingRuleOptions,
-            final Map<String, List<GLAccountData>> accountingMappingOptions, final Collection<ChargeData> charges,
-            final Collection<ChargeData> chargeOptions, final Collection<ChargeData> penaltyOptions,
-            final Collection<ChargeToGLAccountMapper> feeToIncomeAccountMappings,
-            final Collection<ChargeToGLAccountMapper> penaltyToIncomeAccountMappings, final boolean allowOverdraft,
-            final BigDecimal overdraftLimit, final BigDecimal minRequiredBalance, final boolean enforceMinRequiredBalance,
-            final BigDecimal maxAllowedLienLimit, final boolean lienAllowed, final BigDecimal minBalanceForInterestCalculation,
-            final BigDecimal nominalAnnualInterestRateOverdraft, final BigDecimal minOverdraftForInterestCalculation,
-            final boolean withHoldTax, final TaxGroupData taxGroup, final Collection<TaxGroupData> taxGroupOptions,
-            final Boolean isDormancyTrackingActive, final Long daysToInactive, final Long daysToDormancy, final Long daysToEscheat,
-            final String accountMappingForPayment) {
+    @JsonCreator
+    private SavingsProductData(@JsonProperty("id") final Long id, @JsonProperty("name") final String name,
+            @JsonProperty("shortName") final String shortName, @JsonProperty("description") final String description,
+            @JsonProperty("currency") final CurrencyData currency,
+            @JsonProperty("nominalAnnualInterestRate") final BigDecimal nominalAnnualInterestRate,
+            @JsonProperty("interestCompoundingPeriodType") final EnumOptionData interestCompoundingPeriodType,
+            @JsonProperty("interestPostingPeriodType") final EnumOptionData interestPostingPeriodType,
+            @JsonProperty("interestCalculationType") final EnumOptionData interestCalculationType,
+            @JsonProperty("interestCalculationDaysInYearType") final EnumOptionData interestCalculationDaysInYearType,
+            @JsonProperty("minRequiredOpeningBalance") final BigDecimal minRequiredOpeningBalance,
+            @JsonProperty("lockinPeriodFrequency") final Integer lockinPeriodFrequency,
+            @JsonProperty("lockinPeriodFrequencyType") final EnumOptionData lockinPeriodFrequencyType,
+            @JsonProperty("withdrawalFeeForTransfers") final boolean withdrawalFeeForTransfers,
+            @JsonProperty("accountingRule") final EnumOptionData accountingType,
+            @JsonProperty("accountingMappings") final Map<String, Object> accountingMappings,
+            @JsonProperty("paymentChannelToFundSourceMappings") final Collection<PaymentTypeToGLAccountMapper> paymentChannelToFundSourceMappings,
+            @JsonProperty("currencyOptions") final Collection<CurrencyData> currencyOptions,
+            @JsonProperty("interestCompoundingPeriodTypeOptions") final Collection<EnumOptionData> interestCompoundingPeriodTypeOptions,
+            @JsonProperty("interestPostingPeriodTypeOptions") final Collection<EnumOptionData> interestPostingPeriodTypeOptions,
+            @JsonProperty("interestCalculationTypeOptions") final Collection<EnumOptionData> interestCalculationTypeOptions,
+            @JsonProperty("interestCalculationDaysInYearTypeOptions") final Collection<EnumOptionData> interestCalculationDaysInYearTypeOptions,
+            @JsonProperty("lockinPeriodFrequencyTypeOptions") final Collection<EnumOptionData> lockinPeriodFrequencyTypeOptions,
+            @JsonProperty("withdrawalFeeTypeOptions") final Collection<EnumOptionData> withdrawalFeeTypeOptions,
+            @JsonProperty("paymentTypeOptions") final Collection<PaymentTypeData> paymentTypeOptions,
+            @JsonProperty("accountingRuleOptions") final Collection<EnumOptionData> accountingRuleOptions,
+            @JsonProperty("accountingMappingOptions") final Map<String, List<GLAccountData>> accountingMappingOptions,
+            @JsonProperty("charges") final Collection<ChargeData> charges,
+            @JsonProperty("chargeOptions") final Collection<ChargeData> chargeOptions,
+            @JsonProperty("penaltyOptions") final Collection<ChargeData> penaltyOptions,
+            @JsonProperty("feeToIncomeAccountMappings") final Collection<ChargeToGLAccountMapper> feeToIncomeAccountMappings,
+            @JsonProperty("penaltyToIncomeAccountMappings") final Collection<ChargeToGLAccountMapper> penaltyToIncomeAccountMappings,
+            @JsonProperty("allowOverdraft") final boolean allowOverdraft, @JsonProperty("overdraftLimit") final BigDecimal overdraftLimit,
+            @JsonProperty("minRequiredBalance") final BigDecimal minRequiredBalance,
+            @JsonProperty("enforceMinRequiredBalance") final boolean enforceMinRequiredBalance,
+            @JsonProperty("maxAllowedLienLimit") final BigDecimal maxAllowedLienLimit,
+            @JsonProperty("lienAllowed") final boolean lienAllowed,
+            @JsonProperty("minBalanceForInterestCalculation") final BigDecimal minBalanceForInterestCalculation,
+            @JsonProperty("nominalAnnualInterestRateOverdraft") final BigDecimal nominalAnnualInterestRateOverdraft,
+            @JsonProperty("minOverdraftForInterestCalculation") final BigDecimal minOverdraftForInterestCalculation,
+            @JsonProperty("withHoldTax") final boolean withHoldTax, @JsonProperty("taxGroup") final TaxGroupData taxGroup,
+            @JsonProperty("taxGroupOptions") final Collection<TaxGroupData> taxGroupOptions,
+            @JsonProperty("isDormancyTrackingActive") final Boolean isDormancyTrackingActive,
+            @JsonProperty("daysToInactive") final Long daysToInactive, @JsonProperty("daysToDormancy") final Long daysToDormancy,
+            @JsonProperty("daysToEscheat") final Long daysToEscheat,
+            @JsonProperty("accountMappingForPayment") final String accountMappingForPayment) {
         this.id = id;
         this.name = name;
         this.shortName = shortName;

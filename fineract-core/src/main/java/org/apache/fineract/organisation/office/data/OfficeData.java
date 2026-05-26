@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.organisation.office.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -74,9 +76,12 @@ public class OfficeData implements Serializable {
                 office.parentId, office.parentName, allowedParents);
     }
 
-    public OfficeData(final Long id, final String name, final String nameDecorated, final ExternalId externalId,
-            final LocalDate openingDate, final String hierarchy, final Long parentId, final String parentName,
-            final Collection<OfficeData> allowedParents) {
+    @JsonCreator
+    public OfficeData(@JsonProperty("id") final Long id, @JsonProperty("name") final String name,
+            @JsonProperty("nameDecorated") final String nameDecorated, @JsonProperty("externalId") final ExternalId externalId,
+            @JsonProperty("openingDate") final LocalDate openingDate, @JsonProperty("hierarchy") final String hierarchy,
+            @JsonProperty("parentId") final Long parentId, @JsonProperty("parentName") final String parentName,
+            @JsonProperty("allowedParents") final Collection<OfficeData> allowedParents) {
         this.id = id;
         this.name = name;
         this.nameDecorated = nameDecorated;

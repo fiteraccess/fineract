@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.loanproduct.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.io.Serializable;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * Immutable data object representing a transaction strategy option for a loan.
  */
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = { @JsonCreator })
 @Getter
 public final class TransactionProcessingStrategyData implements Serializable {
 
