@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.infrastructure.core.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import lombok.Getter;
 
@@ -29,7 +31,8 @@ import lombok.Getter;
 @Getter
 public class EnumOptionData extends BaseEnumOptionData<Long> implements Serializable {
 
-    public EnumOptionData(Long id, String code, String description) {
+    @JsonCreator
+    public EnumOptionData(@JsonProperty("id") Long id, @JsonProperty("code") String code, @JsonProperty("value") String description) {
         super(id, code, description);
     }
 }

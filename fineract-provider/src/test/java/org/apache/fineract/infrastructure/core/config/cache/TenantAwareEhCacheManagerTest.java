@@ -31,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.Cache;
+import org.springframework.cache.support.NoOpCache;
 
 class TenantAwareEhCacheManagerTest {
 
@@ -117,12 +118,13 @@ class TenantAwareEhCacheManagerTest {
     }
 
     @Test
-    void getCache_shouldReturnNullForUnsupportedLogicalCache() {
+    void getCache_shouldDegradeToNoOpForUnsupportedLogicalCache() {
         setTenant("default");
 
         Cache cache = manager.getCache("unknown");
 
-        assertThat(cache).isNull();
+        assertThat(cache).isInstanceOf(NoOpCache.class);
+        assertThat(cache.getName()).isEqualTo("unknown");
         assertThat(nativeCacheManager.getCache("default__unknown")).isNull();
     }
 

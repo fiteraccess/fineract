@@ -20,9 +20,8 @@ package org.apache.fineract.portfolio.savings.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -30,11 +29,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface SavingsAccountDailyBalanceRepository
         extends JpaRepository<SavingsAccountDailyBalance, SavingsAccountDailyBalance.SavingsAccountDailyBalanceId> {
-
-    /**
-     * Find snapshot for a specific account and date.
-     */
-    Optional<SavingsAccountDailyBalance> findBySavingsAccountIdAndBalanceDate(Long savingsAccountId, LocalDate balanceDate);
 
     @Modifying
     @Query(value = "INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance) "
@@ -57,28 +51,14 @@ public interface SavingsAccountDailyBalanceRepository
             @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     /**
-     * Find all snapshots for a savings account after a given date (inclusive), ordered by date ascending. Used for
-     * cascading backdated transaction deltas forward.
+     * Find all snapshots for a set of savings accounts within a date range, ordered by account then date ascending.
+     * Used by the interest tasklet to fetch a page's worth of snapshots in one round-trip; callers group by
+     * {@code savingsAccountId} and feed each slice into
+     * {@link org.apache.fineract.portfolio.savings.service.SnapshotInterestCalculationService} batched overload.
      */
-    @Query("SELECT db FROM SavingsAccountDailyBalance db WHERE db.savingsAccountId = :savingsAccountId "
-            + "AND db.balanceDate > :afterDate ORDER BY db.balanceDate ASC")
-    List<SavingsAccountDailyBalance> findByAccountAfterDate(@Param("savingsAccountId") Long savingsAccountId,
-            @Param("afterDate") LocalDate afterDate);
+    @Query("SELECT db FROM SavingsAccountDailyBalance db " + "WHERE db.savingsAccountId IN :accountIds "
+            + "AND db.balanceDate BETWEEN :startDate AND :endDate " + "ORDER BY db.savingsAccountId, db.balanceDate ASC")
+    List<SavingsAccountDailyBalance> findByAccountsAndDateRange(@Param("accountIds") Collection<Long> accountIds,
+            @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
-    /**
-     * Find the latest daily balance snapshot on or before a given date. Used to determine the account balance at a
-     * backdated transaction date without loading transaction entities.
-     *
-     * @param accountId
-     *            the savings account ID
-     * @param date
-     *            find snapshot on or before this date
-     * @param pageable
-     *            use Pageable.ofSize(1) to get only the latest
-     * @return list containing at most one snapshot (the latest on or before the date)
-     */
-    @Query("SELECT db FROM SavingsAccountDailyBalance db WHERE db.savingsAccountId = :accountId "
-            + "AND db.balanceDate <= :date ORDER BY db.balanceDate DESC")
-    List<SavingsAccountDailyBalance> findLatestOnOrBefore(@Param("accountId") Long accountId, @Param("date") LocalDate date,
-            Pageable pageable);
 }

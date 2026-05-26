@@ -1,3 +1,4 @@
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements. See the NOTICE file
@@ -27,20 +28,23 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.api.StatefulConnection;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.apache.fineract.organisation.office.domain.Office;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheWriter;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -85,7 +89,8 @@ public class RedisCacheConfig {
 
         LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder clientConfigBuilder = LettucePoolingClientConfiguration
                 .builder().poolConfig((GenericObjectPoolConfig<StatefulConnection<?, ?>>) poolConfig).clientOptions(clientOptions)
-                .commandTimeout(Duration.ofSeconds(2)).shutdownTimeout(Duration.ofSeconds(2));
+                .commandTimeout(Duration.ofSeconds(redis.getCommandTimeoutSeconds()))
+                .shutdownTimeout(Duration.ofSeconds(redis.getShutdownTimeoutSeconds()));
 
         // Enable SSL/TLS for AWS ElastiCache and other managed Redis services that require encryption
         if (redis.isSsl()) {
@@ -95,9 +100,28 @@ public class RedisCacheConfig {
         return new LettuceConnectionFactory(config, clientConfigBuilder.build());
     }
 
+    // Fail-fast boot check: if Redis is enabled but unreachable, abort startup so deployers notice the
+    // missing dependency immediately. FallbackToCacheManagerProxy still handles post-boot transient blips.
+    @Bean
+    public InitializingBean redisConnectionValidator(LettuceConnectionFactory redisConnectionFactory,
+            FineractProperties fineractProperties) {
+        return () -> {
+            FineractProperties.FineractRedisProperties redis = fineractProperties.getCache().getRedis();
+            try (RedisConnection connection = redisConnectionFactory.getConnection()) {
+                String response = connection.ping();
+                if (!"PONG".equalsIgnoreCase(response)) {
+                    throw new IllegalStateException("Redis PING returned unexpected response: " + response);
+                }
+            } catch (RuntimeException e) {
+                throw new IllegalStateException("Redis is enabled (fineract.cache.redis.enabled=true) but the server at " + redis.getHost()
+                        + ":" + redis.getPort() + " is unreachable — aborting startup.", e);
+            }
+        };
+    }
+
     @Bean("redisCacheManagerWithFallback")
-    public FallbackToCacheManagerProxy redisCacheManagerWithFallback(@Qualifier("ehCacheManager") CacheManager ehCacheManager,
-            FineractProperties fineractProperties, LettuceConnectionFactory redisConnectionFactory) {
+    public FallbackToCacheManagerProxy redisCacheManagerWithFallback(FineractProperties fineractProperties,
+            LettuceConnectionFactory redisConnectionFactory) {
         long ttl = fineractProperties.getCache().getRedis().getDefaultTtlSeconds();
 
         // Restrict Jackson polymorphic deserialization to trusted packages only.
@@ -108,6 +132,9 @@ public class RedisCacheConfig {
         // Register JavaTimeModule to support Java 8 date/time types (LocalDate, LocalDateTime, etc.)
         // Without this, serialization of entities containing date fields will fail.
         redisObjectMapper.registerModule(new JavaTimeModule());
+        // Enables constructor parameter name discovery for classes compiled with -parameters.
+        // Required for Jackson to deserialize DTOs whose public all-args constructor has no @JsonCreator.
+        redisObjectMapper.registerModule(new ParameterNamesModule());
         // Write dates as ISO-8601 strings instead of numeric timestamps for readability
         redisObjectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         // Ignore unknown properties during deserialization. This is necessary because:
@@ -120,6 +147,7 @@ public class RedisCacheConfig {
         // Jackson cannot deserialize it. Since authorities are recomputed from the roles collection
         // (which IS serialized), we tell Jackson to skip this property entirely for Redis caching.
         redisObjectMapper.addMixIn(org.apache.fineract.useradministration.domain.AppUser.class, AppUserCacheMixin.class);
+        redisObjectMapper.addMixIn(org.apache.fineract.organisation.office.domain.Office.class, OfficeCacheMixin.class);
 
         // Custom type resolver that includes final types like Long and String.
         // The default NON_FINAL skips final classes, causing Long to serialize as plain "42"
@@ -143,7 +171,7 @@ public class RedisCacheConfig {
         TenantAwareRedisCacheManager redisCacheManager = new TenantAwareRedisCacheManager(
                 RedisCacheWriter.nonLockingRedisCacheWriter(redisConnectionFactory), redisCacheConfig);
 
-        return new FallbackToCacheManagerProxy(redisCacheManager, ehCacheManager.getCacheNames());
+        return new FallbackToCacheManagerProxy(redisCacheManager);
     }
 
     /**
@@ -155,5 +183,18 @@ public class RedisCacheConfig {
 
         @JsonIgnore
         abstract Collection<GrantedAuthority> getAuthorities();
+    }
+
+    /**
+     * Jackson mixin for Office Redis serialization. Breaks the bidirectional {@code parent}/{@code children} cycle that
+     * otherwise causes infinite recursion during cache writes.
+     */
+    abstract static class OfficeCacheMixin {
+
+        @JsonIgnore
+        abstract List<Office> getChildren();
+
+        @JsonIgnore
+        abstract Office getParent();
     }
 }

@@ -18,13 +18,14 @@
  */
 package org.apache.fineract.portfolio.loanproduct.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.io.Serializable;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
+@AllArgsConstructor(onConstructor_ = { @JsonCreator })
 public class AdvancedPaymentData implements Serializable {
 
     private final String transactionType;
@@ -32,7 +33,7 @@ public class AdvancedPaymentData implements Serializable {
     private final List<PaymentAllocationOrder> paymentAllocationOrder;
 
     @Getter
-    @AllArgsConstructor
+    @AllArgsConstructor(onConstructor_ = { @JsonCreator })
     public static class PaymentAllocationOrder implements Serializable {
 
         private final String paymentAllocationRule;

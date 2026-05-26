@@ -201,6 +201,28 @@ public class SavingsAccountTransactionData implements Serializable {
         return data;
     }
 
+    /**
+     * Variant of
+     * {@link #create(Long, SavingsAccountTransactionEnumData, PaymentDetailData, Long, String, LocalDate, CurrencyData, BigDecimal, BigDecimal, BigDecimal, boolean, LocalDate, boolean, BigDecimal, LocalDate)}
+     * that also carries the {@code isReversal} and {@code originalTransactionId} flags. Used by the interest-posting
+     * mapper so the DTO faithfully represents the DB row — without these flags the DTO recalc treats reversal records
+     * as regular deposits and the subsequent batch UPDATE flips {@code is_reversal} back to {@code false} in DB,
+     * corrupting {@code running_balance_derived} on every txn after a reversal.
+     */
+    public static SavingsAccountTransactionData create(final Long id, final SavingsAccountTransactionEnumData transactionType,
+            final PaymentDetailData paymentDetailData, final Long savingsId, final String savingsAccountNo, final LocalDate date,
+            final CurrencyData currency, final BigDecimal amount, final BigDecimal outstandingChargeAmount, final BigDecimal runningBalance,
+            final boolean reversed, final LocalDate submittedOnDate, final boolean interestedPostedAsOn, final BigDecimal cumulativeBalance,
+            final LocalDate balanceEndDate, final Boolean isReversal, final Long originalTransactionId) {
+        SavingsAccountTransactionData data = new SavingsAccountTransactionData(id, transactionType, paymentDetailData, savingsId,
+                savingsAccountNo, date, currency, amount, outstandingChargeAmount, runningBalance, reversed, null, null, submittedOnDate,
+                interestedPostedAsOn, null, null, isReversal, originalTransactionId, false, null, null, null, false);
+        data.transactionDate = date;
+        data.cumulativeBalance = cumulativeBalance;
+        data.balanceEndDate = balanceEndDate;
+        return data;
+    }
+
     public static SavingsAccountTransactionData create(final Long id) {
         return createData(id, null, null, null, null, null, null, null, null, null, false, null, null, null, false, null, null, false);
     }

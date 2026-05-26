@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.infrastructure.hooks.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
@@ -37,6 +38,7 @@ import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 @Accessors(chain = true)
 public class HookResource extends AbstractPersistableCustom<Long> {
 
+    @JsonIgnore
     @ManyToOne(optional = false)
     @JoinColumn(name = "hook_id", referencedColumnName = "id", nullable = false)
     private Hook hook;

@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.portfolio.fund.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import lombok.Getter;
 
@@ -38,7 +40,9 @@ public final class FundData implements Serializable {
         return new FundData(id, name, externalId);
     }
 
-    private FundData(final Long id, final String name, final String externalId) {
+    @JsonCreator
+    private FundData(@JsonProperty("id") final Long id, @JsonProperty("name") final String name,
+            @JsonProperty("externalId") final String externalId) {
         this.id = id;
         this.name = name;
         this.externalId = externalId;

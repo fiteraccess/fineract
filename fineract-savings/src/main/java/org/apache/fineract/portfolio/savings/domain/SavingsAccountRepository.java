@@ -193,4 +193,52 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
             @Param("lastInterestCalculationDate") LocalDate lastInterestCalculationDate,
             @Param("interestPostedTillDate") LocalDate interestPostedTillDate, @Param("subStatus") Integer subStatus,
             @Param("version") int version);
+
+    /**
+     * Narrow O(1) update for the optimized current-day deposit path. Increments {@code totalDeposits} and
+     * {@code accountBalance} by the deposit amount, sets {@code sub_status}, and bumps {@code version}. Optimistic-
+     * locked on {@code version}.
+     * <p>
+     * Safe to use only on paths that provably do not mutate any other summary field in the same transaction. The
+     * optimized deposit branch in {@link org.apache.fineract.portfolio.savings.domain.SavingsAccountDomainServiceJpa}
+     * satisfies that invariant — it bypasses {@code account.deposit(...)},
+     * {@code summary.updateSummaryWithTransaction(...)}, interest accrual, and charge payment.
+     * <p>
+     * For paths that compute multiple changed fields (interest posting, account close, backdated transactions), use
+     * {@link #updateSummaryDirect}.
+     */
+    @Modifying
+    @Query("""
+            UPDATE SavingsAccount sa SET
+                sa.summary.totalDeposits  = COALESCE(sa.summary.totalDeposits, 0)  + :depositAmount,
+                sa.summary.accountBalance = COALESCE(sa.summary.accountBalance, 0) + :depositAmount,
+                sa.sub_status = :subStatus,
+                sa.version = sa.version + 1
+            WHERE sa.id = :id AND sa.version = :version
+            """)
+    int applyDepositDelta(@Param("id") Long id, @Param("depositAmount") BigDecimal depositAmount, @Param("subStatus") Integer subStatus,
+            @Param("version") int version);
+
+    /**
+     * Narrow O(1) update for the optimized current-day withdrawal path. Increments {@code totalWithdrawals} by the
+     * withdrawal amount, increments {@code totalWithdrawalFees} and {@code totalFeeCharge} by the fee amount, subtracts
+     * {@code (withdrawalAmount + feeAmount)} from {@code accountBalance}, sets {@code sub_status}, and bumps
+     * {@code version}. Optimistic-locked on {@code version}.
+     * <p>
+     * Same invariant as {@link #applyDepositDelta} — only safe on the optimized withdrawal branch which provably does
+     * not mutate other summary fields. {@code feeAmount} may be {@link BigDecimal#ZERO} when no withdrawal fee applies.
+     */
+    @Modifying
+    @Query("""
+            UPDATE SavingsAccount sa SET
+                sa.summary.totalWithdrawals    = COALESCE(sa.summary.totalWithdrawals, 0)    + :withdrawalAmount,
+                sa.summary.totalWithdrawalFees = COALESCE(sa.summary.totalWithdrawalFees, 0) + :feeAmount,
+                sa.summary.totalFeeCharge      = COALESCE(sa.summary.totalFeeCharge, 0)      + :feeAmount,
+                sa.summary.accountBalance      = COALESCE(sa.summary.accountBalance, 0)      - (:withdrawalAmount + :feeAmount),
+                sa.sub_status = :subStatus,
+                sa.version = sa.version + 1
+            WHERE sa.id = :id AND sa.version = :version
+            """)
+    int applyWithdrawalDelta(@Param("id") Long id, @Param("withdrawalAmount") BigDecimal withdrawalAmount,
+            @Param("feeAmount") BigDecimal feeAmount, @Param("subStatus") Integer subStatus, @Param("version") int version);
 }

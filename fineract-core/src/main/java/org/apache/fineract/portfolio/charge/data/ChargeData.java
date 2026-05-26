@@ -27,6 +27,7 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 import org.apache.fineract.accounting.glaccount.data.GLAccountData;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -40,6 +41,7 @@ import org.apache.fineract.portfolio.tax.data.TaxGroupData;
 @Getter
 @EqualsAndHashCode(of = "id")
 @Builder(toBuilder = true)
+@Jacksonized
 public final class ChargeData implements Comparable<ChargeData>, Serializable {
 
     private final Long id;

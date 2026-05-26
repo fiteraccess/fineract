@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.template.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -47,10 +48,12 @@ public class Template extends AbstractPersistableCustom<Long> {
     private String name;
 
     @Enumerated
+    @JsonIgnore
     @JsonSerialize(using = TemplateEntitySerializer.class)
     private TemplateEntity entity;
 
     @Enumerated
+    @JsonIgnore
     @JsonSerialize(using = TemplateTypeSerializer.class)
     private TemplateType type;
 

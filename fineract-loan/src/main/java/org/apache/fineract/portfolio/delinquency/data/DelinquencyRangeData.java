@@ -21,11 +21,13 @@ package org.apache.fineract.portfolio.delinquency.data;
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
 @ToString
 @AllArgsConstructor
+@NoArgsConstructor
 @Getter
 @Setter
 public class DelinquencyRangeData implements Serializable {

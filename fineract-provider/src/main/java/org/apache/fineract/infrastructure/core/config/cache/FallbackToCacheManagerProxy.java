@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.NoOpCache;
 
 /**
  * Wraps a Redis cache manager and catches connection errors, degrading gracefully to no-cache (cache miss) instead of
@@ -45,18 +46,23 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         this.knownCacheNames.addAll(initialCacheNames);
     }
 
+    // Returning null here would make Spring's AbstractCacheResolver throw "Cannot find cache named 'X'"
+    // and fail the request. Instead we return a NoOpCache so the @Cacheable aspect sees a miss and
+    // proceeds to invoke the underlying method (e.g. the DB query).
     @Override
     public Cache getCache(String name) {
         try {
             Cache cache = delegate.getCache(name);
             if (cache != null) {
                 knownCacheNames.add(name);
+                log.debug("Redis cache resolved: name='{}', delegate={}", name, delegate.getClass().getSimpleName());
                 return new FallbackCache(cache);
             }
+            log.debug("Redis cache '{}' not resolved by delegate {}, degrading to no-cache", name, delegate.getClass().getSimpleName());
         } catch (Exception e) {
-            log.warn("Redis cache unavailable, degrading to no-cache for '{}': {}", name, e.getMessage());
+            log.warn("Redis cache unavailable, degrading to no-cache for '{}'", name, e);
         }
-        return null;
+        return new NoOpCache(name);
     }
 
     @Override
@@ -89,9 +95,11 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         @Override
         public ValueWrapper get(Object key) {
             try {
-                return primary.get(key);
+                ValueWrapper result = primary.get(key);
+                log.debug("Redis get cache='{}' key='{}' hit={}", primary.getName(), key, result != null);
+                return result;
             } catch (Exception e) {
-                log.warn("Redis get failed for key '{}', skipping: {}", key, e.getMessage());
+                log.warn("Redis get failed for cache='{}' key='{}', skipping", primary.getName(), key, e);
                 return null;
             }
         }
@@ -99,9 +107,11 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         @Override
         public <T> T get(Object key, Class<T> type) {
             try {
-                return primary.get(key, type);
+                T result = primary.get(key, type);
+                log.debug("Redis get cache='{}' key='{}' type={} hit={}", primary.getName(), key, type.getSimpleName(), result != null);
+                return result;
             } catch (Exception e) {
-                log.warn("Redis get failed for key '{}', skipping: {}", key, e.getMessage());
+                log.warn("Redis get failed for cache='{}' key='{}' type={}, skipping", primary.getName(), key, type.getSimpleName(), e);
                 return null;
             }
         }
@@ -111,7 +121,7 @@ public class FallbackToCacheManagerProxy implements CacheManager {
             try {
                 return primary.get(key, valueLoader);
             } catch (Exception e) {
-                log.warn("Redis get failed for key '{}', skipping: {}", key, e.getMessage());
+                log.warn("Redis get(valueLoader) failed for cache='{}' key='{}', skipping", primary.getName(), key, e);
                 return null;
             }
         }
@@ -120,8 +130,11 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         public void put(Object key, Object value) {
             try {
                 primary.put(key, value);
+                log.debug("Redis put cache='{}' key='{}' valueType={}", primary.getName(), key,
+                        value != null ? value.getClass().getName() : "null");
             } catch (Exception e) {
-                log.warn("Redis put failed for key '{}', skipping: {}", key, e.getMessage());
+                log.warn("Redis put failed for cache='{}' key='{}' valueType={}, skipping", primary.getName(), key,
+                        value != null ? value.getClass().getName() : "null", e);
             }
         }
 
@@ -129,8 +142,9 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         public void evict(Object key) {
             try {
                 primary.evict(key);
+                log.debug("Redis evict cache='{}' key='{}'", primary.getName(), key);
             } catch (Exception e) {
-                log.warn("Redis evict failed for key '{}': {}", key, e.getMessage());
+                log.warn("Redis evict failed for cache='{}' key='{}'", primary.getName(), key, e);
             }
         }
 
@@ -138,8 +152,9 @@ public class FallbackToCacheManagerProxy implements CacheManager {
         public void clear() {
             try {
                 primary.clear();
+                log.debug("Redis clear cache='{}'", primary.getName());
             } catch (Exception e) {
-                log.warn("Redis clear failed: {}", e.getMessage());
+                log.warn("Redis clear failed for cache='{}'", primary.getName(), e);
             }
         }
     }

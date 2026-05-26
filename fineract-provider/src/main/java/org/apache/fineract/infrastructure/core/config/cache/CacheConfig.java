@@ -23,11 +23,12 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.cache.CacheManager;
 import javax.cache.Caching;
 import javax.cache.spi.CachingProvider;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +42,10 @@ import org.reflections.scanners.Scanners;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.jcache.JCacheCacheManager;
 import org.springframework.cache.support.NoOpCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -58,8 +61,12 @@ public class CacheConfig {
     @Autowired
     private FineractProperties fineractProperties;
 
+    // Ehcache beans only load when Redis is not the active cache backend. With Redis enabled, the
+    // RuntimeDelegatingCacheManager routes all @Cacheable traffic to Redis and the ehcache machinery
+    // is unused — so we skip loading it entirely to avoid accidental parallel cache populations.
     @Bean
-    public TransactionBoundCacheManager defaultCacheManager(JCacheCacheManager ehCacheManager) {
+    @ConditionalOnProperty(name = "fineract.cache.redis.enabled", havingValue = "false", matchIfMissing = true)
+    public TransactionBoundCacheManager defaultCacheManager(@Qualifier("ehCacheManager") CacheManager ehCacheManager) {
         SpecifiedCacheSupportingCacheManager cacheManager = new SpecifiedCacheSupportingCacheManager();
         cacheManager.setNoOpCacheManager(new NoOpCacheManager());
         cacheManager.setDelegateCacheManager(ehCacheManager);
@@ -68,17 +75,30 @@ public class CacheConfig {
         return new TransactionBoundCacheManager(cacheManager);
     }
 
-    @Bean
-    public JCacheCacheManager ehCacheManager() {
-        JCacheCacheManager jCacheCacheManager = new JCacheCacheManager();
-        jCacheCacheManager.setCacheManager(getInternalEhCacheManager());
-        return jCacheCacheManager;
+    @Bean(name = "ehCacheNativeManager", destroyMethod = "close")
+    @ConditionalOnProperty(name = "fineract.cache.redis.enabled", havingValue = "false", matchIfMissing = true)
+    public javax.cache.CacheManager ehCacheNativeManager() {
+        return createInternalEhCacheManager();
     }
 
-    private CacheManager getInternalEhCacheManager() {
+    @Bean("ehCacheManager")
+    @ConditionalOnProperty(name = "fineract.cache.redis.enabled", havingValue = "false", matchIfMissing = true)
+    public CacheManager ehCacheManager(@Qualifier("ehCacheNativeManager") javax.cache.CacheManager ehCacheNativeManager) {
+        return new TenantAwareEhCacheManager(ehCacheNativeManager, buildCacheConfigurations());
+    }
+
+    @Bean("ehCacheMaintenanceManager")
+    @ConditionalOnProperty(name = "fineract.cache.redis.enabled", havingValue = "false", matchIfMissing = true)
+    public CacheManager ehCacheMaintenanceManager(@Qualifier("ehCacheNativeManager") javax.cache.CacheManager ehCacheNativeManager) {
+        return new DynamicJCacheCacheManager(ehCacheNativeManager);
+    }
+
+    private javax.cache.CacheManager createInternalEhCacheManager() {
         CachingProvider provider = Caching.getCachingProvider();
-        CacheManager cacheManager = provider.getCacheManager();
-        // Default cache configuration template
+        return provider.getCacheManager();
+    }
+
+    private Map<String, javax.cache.configuration.Configuration<Object, Object>> buildCacheConfigurations() {
         Duration defaultTimeToLive = fineractProperties.getCache().getDefaultTemplate().getTtl();
         Integer defaultMaxEntries = fineractProperties.getCache().getDefaultTemplate().getMaximumEntries();
         javax.cache.configuration.Configuration<Object, Object> defaultTemplate = generateCacheConfiguration(defaultMaxEntries,
@@ -102,20 +122,17 @@ public class CacheConfig {
         cacheNames.addAll(annotatedCacheConfigClasses.stream()
                 .map(clazz -> clazz.getAnnotation(org.springframework.cache.annotation.CacheConfig.class))
                 .flatMap(annotation -> Arrays.stream(annotation.cacheNames())).collect(Collectors.toSet()));
-        // Register the caches into the cache manager
-        cacheNames.forEach(cacheName -> {
-            if (cacheManager.getCache(cacheName) == null) {
-                javax.cache.configuration.Configuration<Object, Object> configurationTemplate = generateCustomCacheConfiguration(cacheName,
-                        defaultTemplate, defaultTimeToLive, defaultMaxEntries);
-                cacheManager.createCache(cacheName, configurationTemplate);
-            }
-        });
+
+        Map<String, javax.cache.configuration.Configuration<Object, Object>> configurations = new LinkedHashMap<>();
+        cacheNames.forEach(cacheName -> configurations.put(cacheName,
+                generateCustomCacheConfiguration(cacheName, defaultTemplate, defaultTimeToLive, defaultMaxEntries)));
+
         Set<String> incorrectConfigurations = new HashSet<>(fineractProperties.getCache().getCustomTemplates().keySet());
         incorrectConfigurations.removeAll(cacheNames);
         if (!incorrectConfigurations.isEmpty()) {
             log.warn("The following cache configurations are defined but cache does not exists: {}", incorrectConfigurations);
         }
-        return cacheManager;
+        return configurations;
     }
 
     private javax.cache.configuration.Configuration<Object, Object> generateCustomCacheConfiguration(String cacheIdentifier,

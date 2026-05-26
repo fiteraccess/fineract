@@ -124,6 +124,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
+import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.apache.fineract.portfolio.savings.exception.PostInterestAsOnDateException;
 import org.apache.fineract.portfolio.savings.exception.PostInterestAsOnDateException.PostInterestAsOnExceptionType;
 import org.apache.fineract.portfolio.savings.exception.PostInterestClosingDateException;
@@ -186,6 +187,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider;
     private final JdbcTemplate jdbcTemplate;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
     private final ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider;
     private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
     private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
@@ -303,7 +305,14 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
-    @Retry(name = "savingsDeposit", fallbackMethod = "fallbackDeposit")
+    // @Retry removed: the inner @Retry was inside an open participating tx, so its sleep held
+    // the m_savings_account row lock for the full retry budget under contention (Lock:transactionId
+    // cascade). Spring's globalRollbackOnParticipationFailure=true also meant any retry could
+    // never actually heal the operation — the parent commit always rolled back. The outer
+    // resilience4j retry in SynchronousCommandProcessingService.retryWrapper is structurally
+    // outside all @Transactional boundaries and already retries on the same OLE-class exceptions
+    // (executeCommand.retryExceptions config), with fresh transactions per attempt.
+    // See long_transaction_id_lock.md.
     public CommandProcessingResult deposit(final Long savingsId, final JsonCommand command) {
         final long perfStart = System.nanoTime();
         long perfLap = perfStart;
@@ -400,7 +409,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     @Transactional
     @Override
-    @Retry(name = "savingsWithdrawal", fallbackMethod = "fallbackWithdrawal")
+    // @Retry removed — see comment on deposit() above. Outer retry in
+    // SynchronousCommandProcessingService.retryWrapper handles OLE-class exceptions cleanly
+    // with fresh transactions per attempt.
     public CommandProcessingResult withdrawal(final Long savingsId, final JsonCommand command) {
 
         this.savingsAccountTransactionDataValidator.validate(command);
@@ -777,6 +788,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             throwValidationForActiveStatus(SavingsApiConstants.undoTransactionAction);
         }
         account.undoTransaction(transactionId);
+        // Mark this (account, date) dirty so the hourly sync job (or the next interest tasklet's syncNow())
+        // will refresh / delete the snapshot row. running_balance_derived is rewritten by the cascading recalculate
+        // below; the snapshot table needs the dirty signal because reversal can leave a date with no
+        // remaining non-reversed txns. See plan §5.
+        this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
 
         // undoing transaction is withdrawal then undo withdrawal fee
         // transaction if any
@@ -870,6 +886,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final MathContext mc = new MathContext(10, MoneyHelper.getRoundingMode());
         account.undoTransaction(transactionId);
+        // Same dirty-enqueue rationale as undoTransaction (plan §5): reversing a txn can leave the date with no
+        // remaining non-reversed txns, which the watermark scan can't detect on its own.
+        this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
 
         // for undo withdrawal fee
         final SavingsAccountTransaction nextSavingsAccountTransaction = this.savingsAccountTransactionRepository
@@ -1028,7 +1047,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
             this.savingsAccountDomainService.handleWithdrawal(account, fmt, closedDate, transactionAmount, paymentDetail,
                     transactionBooleanValues, false);
-
         }
 
         final Map<String, Object> accountChanges = account.close(user, command);

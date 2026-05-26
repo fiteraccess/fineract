@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.organisation.staff.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
@@ -75,6 +76,7 @@ public class Staff extends AbstractPersistableCustom<Long> {
     @Column(name = "joining_date")
     private LocalDate joiningDate;
 
+    @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "organisational_role_parent_staff_id")
     private Staff organisationalRoleParentStaff;

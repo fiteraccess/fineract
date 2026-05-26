@@ -4087,6 +4087,18 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.version;
     }
 
+    /**
+     * Sync the in-memory entity to match a JPQL delta update performed via the repository's apply*Delta methods. The
+     * optimized withdrawal/deposit path issues a direct UPDATE that bypasses JPA dirty checking — DB has the new
+     * accountBalance and an incremented version, but the in-memory state still holds the pre-update values. Callers
+     * that proceed to invoke validations (e.g. close()) or any operation that triggers an autoflush in the same
+     * transaction must call this to avoid stale-balance validation failures and OptimisticLockException.
+     */
+    public void syncAfterDeltaUpdate(BigDecimal newAccountBalance) {
+        this.summary.setAccountBalance(newAccountBalance);
+        this.version++;
+    }
+
     public boolean isWithHoldTax() {
         return this.withHoldTax;
     }

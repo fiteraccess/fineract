@@ -18,20 +18,21 @@
  */
 package org.apache.fineract.portfolio.loanproduct.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.io.Serializable;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
+@AllArgsConstructor(onConstructor_ = { @JsonCreator })
 public class CreditAllocationData implements Serializable {
 
     private final String transactionType;
     private final List<CreditAllocationOrder> creditAllocationOrder;
 
     @Getter
-    @AllArgsConstructor
+    @AllArgsConstructor(onConstructor_ = { @JsonCreator })
     public static class CreditAllocationOrder implements Serializable {
 
         private final String creditAllocationRule;

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <!--
+        CREATE INDEX CONCURRENTLY cannot run inside a transaction, so this
+        changeSet declares runInTransaction="false". The IF NOT EXISTS guard
+        ensures re-runs do not fail if the index is already present.
+        NOTE: the audit column on m_savings_account_transaction is named
+        last_modified_on_utc (TIMESTAMP WITH TIME ZONE), per
+        AuditableFieldsConstants.LAST_MODIFIED_DATE_DB_FIELD.
+    -->
+    <changeSet author="fineract" id="1" context="postgresql" runInTransaction="false">
+        <sql splitStatements="false">
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sat_lastmodified_partial
+                ON m_savings_account_transaction (last_modified_on_utc)
+                INCLUDE (savings_account_id, transaction_date, id, running_balance_derived)
+                WHERE is_reversed = false;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

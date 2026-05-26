@@ -22,6 +22,7 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.util.List;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountDailyBalance;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
 
 /**
@@ -50,4 +51,18 @@ public interface SnapshotInterestCalculationService {
      */
     List<PostingPeriod> calculateInterestFromSnapshots(SavingsAccount account, MathContext mc, LocalDate upToDate,
             boolean isInterestTransfer, boolean isSavingsInterestPostingAtCurrentPeriodEnd, Integer financialYearBeginningMonth);
+
+    /**
+     * Overload that accepts a pre-fetched list of snapshots for the account, skipping the per-account repository
+     * round-trip. Intended for callers (e.g. the interest tasklet) that batch-fetch snapshots for a page of accounts
+     * via {@code SavingsAccountDailyBalanceRepository#findByAccountsAndDateRange} and then pass each account's slice
+     * here.
+     *
+     * <p>
+     * The supplied list is expected to cover {@code [account.getStartInterestCalculationDate(), upToDate]} for the
+     * given account; entries outside the relevant period are ignored.
+     */
+    List<PostingPeriod> calculateInterestFromSnapshots(SavingsAccount account, MathContext mc, LocalDate upToDate,
+            boolean isInterestTransfer, boolean isSavingsInterestPostingAtCurrentPeriodEnd, Integer financialYearBeginningMonth,
+            List<SavingsAccountDailyBalance> preFetchedSnapshots);
 }

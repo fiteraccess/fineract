@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.NoOpCache;
 import org.springframework.data.redis.RedisConnectionFailureException;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,21 +66,23 @@ class FallbackToCacheManagerProxyTest {
     }
 
     @Test
-    void getCache_shouldReturnNullWhenDelegateThrows() {
+    void getCache_shouldDegradeToNoOpWhenDelegateThrows() {
         when(delegate.getCache(CACHE_NAME)).thenThrow(new RedisConnectionFailureException("Connection refused"));
 
         Cache result = proxy.getCache(CACHE_NAME);
 
-        assertThat(result).isNull();
+        assertThat(result).isInstanceOf(NoOpCache.class);
+        assertThat(result.getName()).isEqualTo(CACHE_NAME);
     }
 
     @Test
-    void getCache_shouldReturnNullWhenDelegateReturnsNull() {
+    void getCache_shouldDegradeToNoOpWhenDelegateReturnsNull() {
         when(delegate.getCache(CACHE_NAME)).thenReturn(null);
 
         Cache result = proxy.getCache(CACHE_NAME);
 
-        assertThat(result).isNull();
+        assertThat(result).isInstanceOf(NoOpCache.class);
+        assertThat(result.getName()).isEqualTo(CACHE_NAME);
     }
 
     @Test

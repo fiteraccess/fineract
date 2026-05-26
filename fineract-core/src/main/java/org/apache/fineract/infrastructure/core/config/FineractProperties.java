@@ -611,6 +611,8 @@ public class FineractProperties {
         private int poolMaxIdle = 8;
         private int poolMaxActive = 16;
         private boolean ssl = false;
+        private long commandTimeoutSeconds = 2;
+        private long shutdownTimeoutSeconds = 2;
     }
 
     @Getter

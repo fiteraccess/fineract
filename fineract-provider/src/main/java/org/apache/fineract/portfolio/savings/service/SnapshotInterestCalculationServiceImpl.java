@@ -57,6 +57,15 @@ public class SnapshotInterestCalculationServiceImpl implements SnapshotInterestC
     public List<PostingPeriod> calculateInterestFromSnapshots(final SavingsAccount account, final MathContext mc, final LocalDate upToDate,
             final boolean isInterestTransfer, final boolean isSavingsInterestPostingAtCurrentPeriodEnd,
             final Integer financialYearBeginningMonth) {
+        // Self-fetching path: one repository round-trip per account.
+        return calculateInterestFromSnapshots(account, mc, upToDate, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
+                financialYearBeginningMonth, null);
+    }
+
+    @Override
+    public List<PostingPeriod> calculateInterestFromSnapshots(final SavingsAccount account, final MathContext mc, final LocalDate upToDate,
+            final boolean isInterestTransfer, final boolean isSavingsInterestPostingAtCurrentPeriodEnd,
+            final Integer financialYearBeginningMonth, final List<SavingsAccountDailyBalance> preFetchedSnapshots) {
 
         final MonetaryCurrency currency = account.getCurrency();
         final List<PostingPeriod> allPostingPeriods = new ArrayList<>();
@@ -84,9 +93,11 @@ public class SnapshotInterestCalculationServiceImpl implements SnapshotInterestC
         final List<LocalDateInterval> postingPeriodIntervals = savingsHelper.determineInterestPostingPeriods(startDate, upToDate,
                 postingPeriodType, financialYearBeginningMonth, Collections.emptyList());
 
-        // Load all snapshots for the full interest calculation period
-        final List<SavingsAccountDailyBalance> snapshots = dailyBalanceRepository.findByAccountAndDateRange(account.getId(), startDate,
-                upToDate);
+        // Use pre-fetched snapshots when supplied (batched read by caller); otherwise fall back to a single
+        // per-account round-trip. The pre-fetched list may contain entries outside [startDate, upToDate];
+        // buildTransactionDetailsFromSnapshots filters by periodInterval anyway.
+        final List<SavingsAccountDailyBalance> snapshots = (preFetchedSnapshots != null) ? preFetchedSnapshots
+                : dailyBalanceRepository.findByAccountAndDateRange(account.getId(), startDate, upToDate);
 
         Money periodStartingBalance = Money.zero(currency);
 

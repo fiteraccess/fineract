@@ -25,6 +25,11 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountDailyBalanceRe
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * @deprecated Replaced by {@link SavingsDailyBalanceSyncService}; see {@link DailyBalanceSnapshotService} class-level
+ *             Javadoc. Kept only for staged removal across releases.
+ */
+@Deprecated(forRemoval = true)
 @Service
 @RequiredArgsConstructor
 public class DailyBalanceSnapshotServiceImpl implements DailyBalanceSnapshotService {

@@ -74,7 +74,7 @@ public class CacheableLoanProductConfigService implements LoanProductConfigProvi
     @Cacheable(value = "loanProductConfig", key = "':' + #productId")
     @Transactional(readOnly = true)
     public CacheableLoanProductConfig getProductConfig(Long productId) {
-        log.debug("Loading LoanProductTransactionConfig for productId={} (cache miss)", productId);
+        log.debug("CACHE MISS: loading CacheableLoanProductConfig for productId={} from DB (will attempt to cache result)", productId);
 
         LoanProduct p = repository.findById(productId).orElseThrow(() -> new LoanProductNotFoundException(productId));
 

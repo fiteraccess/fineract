@@ -92,6 +92,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeReposito
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
@@ -395,6 +396,7 @@ public class SavingsConfiguration {
             SavingsAccountReadPlatformService savingsAccountReadPlatformService,
             ObjectProvider<SynapseInterestPostingOutboxWriter> synapseInterestPostingServiceProvider, JdbcTemplate jdbcTemplate,
             CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
+            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository,
             ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider,
             ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider,
             ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider,
@@ -408,8 +410,8 @@ public class SavingsConfiguration {
                 standingInstructionRepository, businessEventNotifierService, gsimRepository, savingsAccountInterestPostingService,
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
                 synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
-                synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider, synapseDormancyPostingOutboxWriterProvider,
-                dormancyStateApplierProvider);
+                savingsDailyBalanceSyncRepository, synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider,
+                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider);
     }
 
     @Bean

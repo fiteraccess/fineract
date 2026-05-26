@@ -62,6 +62,7 @@ public enum JobName {
     JOURNAL_ENTRY_AGGREGATION("Journal Entry Aggregation"), //
     DISPATCH_SYNAPSE_OUTBOX("Dispatch Synapse Outbox"), //
     PURGE_SYNAPSE_OUTBOX("Purge Synapse Outbox"), //
+    SYNC_SAVINGS_DAILY_BALANCE("Sync Savings Daily Balance"), //
     ; //
 
     private final String name;

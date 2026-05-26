@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.organisation.staff.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -94,9 +96,13 @@ public final class StaffData implements Serializable {
         return new StaffData(id, null, null, displayName, null, null, null, null, null, null, null, null);
     }
 
-    public static StaffData instance(final Long id, final String firstname, final String lastname, final String displayName,
-            final Long officeId, final String officeName, final Boolean isLoanOfficer, final String externalId, final String mobileNo,
-            final boolean isActive, final LocalDate joiningDate) {
+    @JsonCreator
+    public static StaffData instance(@JsonProperty("id") final Long id, @JsonProperty("firstname") final String firstname,
+            @JsonProperty("lastname") final String lastname, @JsonProperty("displayName") final String displayName,
+            @JsonProperty("officeId") final Long officeId, @JsonProperty("officeName") final String officeName,
+            @JsonProperty("isLoanOfficer") final Boolean isLoanOfficer, @JsonProperty("externalId") final String externalId,
+            @JsonProperty("mobileNo") final String mobileNo, @JsonProperty("isActive") final boolean isActive,
+            @JsonProperty("joiningDate") final LocalDate joiningDate) {
         return new StaffData(id, firstname, lastname, displayName, officeId, officeName, isLoanOfficer, externalId, mobileNo, null,
                 isActive, joiningDate);
     }
@@ -144,5 +150,21 @@ public final class StaffData implements Serializable {
 
     public Long getOfficeId() {
         return this.officeId;
+    }
+
+    public String getExternalId() {
+        return this.externalId;
+    }
+
+    public String getMobileNo() {
+        return this.mobileNo;
+    }
+
+    public Boolean getIsLoanOfficer() {
+        return this.isLoanOfficer;
+    }
+
+    public Boolean getIsActive() {
+        return this.isActive;
     }
 }

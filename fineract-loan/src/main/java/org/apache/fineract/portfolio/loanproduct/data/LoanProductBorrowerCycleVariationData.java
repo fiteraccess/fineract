@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.portfolio.loanproduct.data;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import lombok.Getter;
@@ -36,8 +38,13 @@ public class LoanProductBorrowerCycleVariationData implements Serializable {
     private final BigDecimal maxValue;
     private final BigDecimal defaultValue;
 
-    public LoanProductBorrowerCycleVariationData(final Long id, final Integer borrowerCycleNumber, final EnumOptionData paramType,
-            final EnumOptionData valueConditionType, final BigDecimal defaultValue, final BigDecimal minValue, final BigDecimal maxValue) {
+    @JsonCreator
+    public LoanProductBorrowerCycleVariationData(@JsonProperty("id") final Long id,
+            @JsonProperty("borrowerCycleNumber") final Integer borrowerCycleNumber,
+            @JsonProperty("paramType") final EnumOptionData paramType,
+            @JsonProperty("valueConditionType") final EnumOptionData valueConditionType,
+            @JsonProperty("defaultValue") final BigDecimal defaultValue, @JsonProperty("minValue") final BigDecimal minValue,
+            @JsonProperty("maxValue") final BigDecimal maxValue) {
         this.id = id;
         this.borrowerCycleNumber = borrowerCycleNumber;
         this.paramType = paramType;
