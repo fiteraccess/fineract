@@ -54,4 +54,8 @@ public interface ClientRepository extends JpaRepository<Client, Long>, JpaSpecif
     @Modifying
     @Query("UPDATE Client client SET client.imageId = null WHERE client.id = :clientId")
     void removeImageId(@Param("clientId") Long clientId);
+
+    boolean existsByMobileNo(String mobileNo);
+
+    boolean existsByEmailAddress(String emailAddress);
 }

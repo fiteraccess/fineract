@@ -179,6 +179,10 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
             final String mobileNo = command.stringValueOfParameterNamed("mobileNo");
             throw new PlatformDataIntegrityException("error.msg.client.duplicate.mobileNo",
                     "Client with mobileNo `" + mobileNo + "` already exists", "mobileNo", mobileNo);
+        } else if (realCause.getMessage().contains("email_address")) {
+            final String emailAddress = command.stringValueOfParameterNamed("emailAddress");
+            throw new PlatformDataIntegrityException("error.msg.client.duplicate.emailAddress",
+                    "Client with emailAddress `" + emailAddress + "` already exists", "emailAddress", emailAddress);
         }
 
         logAsErrorUnexpectedDataIntegrityException(dve);
@@ -255,6 +259,16 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
             final String accountNo = command.stringValueOfParameterNamed(ClientApiConstants.accountNoParamName);
             final String mobileNo = command.stringValueOfParameterNamed(ClientApiConstants.mobileNoParamName);
             final String emailAddress = command.stringValueOfParameterNamed(ClientApiConstants.emailAddressParamName);
+
+            if (StringUtils.isNotBlank(mobileNo) && this.clientRepository.existsByMobileNo(mobileNo)) {
+                throw new PlatformDataIntegrityException("error.msg.client.duplicate.mobileNo",
+                        "Client with mobileNo `" + mobileNo + "` already exists", "mobileNo", mobileNo);
+            }
+            if (StringUtils.isNotBlank(emailAddress) && this.clientRepository.existsByEmailAddress(emailAddress)) {
+                throw new PlatformDataIntegrityException("error.msg.client.duplicate.emailAddress",
+                        "Client with emailAddress `" + emailAddress + "` already exists", "emailAddress", emailAddress);
+            }
+
             final String firstname = command.stringValueOfParameterNamed(ClientApiConstants.firstnameParamName);
             final String middlename = command.stringValueOfParameterNamed(ClientApiConstants.middlenameParamName);
             final String lastname = command.stringValueOfParameterNamed(ClientApiConstants.lastnameParamName);
