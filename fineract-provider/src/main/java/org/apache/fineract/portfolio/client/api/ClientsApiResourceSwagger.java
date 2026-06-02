@@ -325,12 +325,14 @@ final class ClientsApiResourceSwagger {
         public String activationDate;
         @Schema(example = "+353851239876")
         public String mobileNo;
+        @Schema(example = "test@test.com")
+        public String emailAddress;
+        @Schema(example = "20")
+        public Long genderId;
         @Schema(description = "List of PostClientsDatatable")
         public List<PostClientsDatatable> datatables;
         @Schema(description = "Address requests")
         public List<ClientAddressRequest> address;
-        @Schema(example = "test@test.com")
-        public String emailAddress;
     }
 
     @Schema(description = "PostClientsResponse")

@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -323,7 +324,11 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
                 .active(true)//
                 .activationDate(activationDate)//
                 .dateFormat(LoanTestData.DATETIME_PATTERN)//
-                .locale(LoanTestData.LOCALE));
+                .locale(LoanTestData.LOCALE)//
+                .mobileNo(Utils.randomStringGenerator("M", 10))//
+                .emailAddress(UUID.randomUUID().toString() + "@example.com")//
+                .dateOfBirth(LocalDate.of(1990, 1, 1))//
+                .genderId(20L));
     }
 
     private Long createAndDisburseLoan(Long clientId, String submitDate, String disburseDate, Long chargeId) {

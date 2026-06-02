@@ -20,7 +20,9 @@ package org.apache.fineract.integrationtests.client.feign.helpers;
 
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
+import java.time.LocalDate;
 import java.util.Collections;
+import java.util.UUID;
 import org.apache.fineract.client.feign.FineractFeignClient;
 import org.apache.fineract.client.models.GetClientsClientIdResponse;
 import org.apache.fineract.client.models.PostClientsRequest;
@@ -52,7 +54,11 @@ public class FeignClientHelper {
                 .active(true)//
                 .activationDate(activationDate)//
                 .dateFormat(LoanTestData.DATETIME_PATTERN)//
-                .locale(LoanTestData.LOCALE);
+                .locale(LoanTestData.LOCALE)//
+                .mobileNo(Utils.randomStringGenerator("M", 10))//
+                .emailAddress(UUID.randomUUID().toString() + "@example.com")//
+                .dateOfBirth(LocalDate.of(1990, 1, 1))//
+                .genderId(20L);
 
         return createClient(request);
     }

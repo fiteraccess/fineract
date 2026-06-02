@@ -30,6 +30,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -85,6 +86,7 @@ public class ClientHelper {
     public static final String DEFAULT_OFFICE_ID = "1";
     public static final Long LEGALFORM_ID_PERSON = 1L;
     public static final Long LEGALFORM_ID_ENTITY = 2L;
+    public static final Integer GENDER_ID_MALE = 20;
     public static final String CREATED_DATE = Utils.getLocalDateOfTenant().minusDays(5).format(Utils.dateFormatter);
     public static final String CREATED_DATE_PLUS_ONE = Utils.getLocalDateOfTenant().minusDays(4).format(Utils.dateFormatter);
     public static final String CREATED_DATE_PLUS_TWO = Utils.getLocalDateOfTenant().minusDays(3).format(Utils.dateFormatter);
@@ -457,6 +459,12 @@ public class ClientHelper {
         }
         map.put("dateFormat", Utils.DATE_FORMAT);
         map.put("locale", "en");
+        map.put("mobileNo", Utils.randomStringGenerator("M", 10));
+        map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
+        if (legalFormId != null && legalFormId == 1L) {
+            map.put("dateOfBirth", "01 January 1990");
+            map.put("genderId", GENDER_ID_MALE);
+        }
         return map;
     }
 
@@ -546,6 +554,10 @@ public class ClientHelper {
         map.put("active", "true");
         map.put("activationDate", dateOfJoining);
         map.put("legalFormId", 1);
+        map.put("mobileNo", Utils.randomStringGenerator("M", 10));
+        map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
+        map.put("dateOfBirth", "01 January 1990");
+        map.put("genderId", GENDER_ID_MALE);
 
         log.info("map :  {}", map);
         return GSON.toJson(map);
@@ -566,6 +578,10 @@ public class ClientHelper {
         map.put("active", "true");
         map.put("activationDate", dateOfJoining);
         map.put("legalFormId", 1);
+        map.put("mobileNo", Utils.randomStringGenerator("M", 10));
+        map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
+        map.put("dateOfBirth", "01 January 1990");
+        map.put("genderId", GENDER_ID_MALE);
         if (datatables != null) {
             map.put("datatables", Arrays.asList(datatables));
         }
@@ -589,6 +605,8 @@ public class ClientHelper {
         map.put("active", "true");
         map.put("activationDate", dateOfJoining);
         map.put("legalFormId", LEGALFORM_ID_ENTITY);
+        map.put("mobileNo", Utils.randomStringGenerator("M", 10));
+        map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
 
         final HashMap<String, Object> clientNonPersonMap = new HashMap<>();
         clientNonPersonMap.put("constitutionId", soleProprietorCodeValueId);
@@ -1211,7 +1229,10 @@ public class ClientHelper {
     public static PostClientsRequest defaultClientCreationRequest() {
         return new PostClientsRequest().officeId(1L).legalFormId(LEGALFORM_ID_PERSON).firstname(Utils.randomFirstNameGenerator())
                 .lastname(Utils.randomLastNameGenerator()).externalId(UUID.randomUUID().toString()).dateFormat(Utils.DATE_FORMAT)
-                .locale("en").active(true).activationDate(DEFAULT_DATE);
+                .locale("en").active(true).activationDate(DEFAULT_DATE)
+                .mobileNo(Utils.randomStringGenerator("M", 10))
+                .emailAddress(UUID.randomUUID().toString() + "@example.com")
+                .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(Long.valueOf(GENDER_ID_MALE));
     }
 
     public LoanAccountLockResponseDTO retrieveLockedAccounts(int page, int limit) {

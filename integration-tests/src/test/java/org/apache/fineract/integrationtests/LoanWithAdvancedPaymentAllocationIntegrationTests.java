@@ -25,9 +25,11 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.AdvancedPaymentData;
@@ -92,7 +94,9 @@ public class LoanWithAdvancedPaymentAllocationIntegrationTests {
         Assertions.assertNotNull(loanProductId);
         GetLoanProductsProductIdResponse loanProduct = LOAN_TRANSACTION_HELPER.getLoanProduct(loanProductId);
         final PostClientsResponse clientResponse = CLIENT_HELPER.createClient(new PostClientsRequest().activationDate("01 January 2022")
-                .active(true).dateFormat("dd MMMM yyyy").fullname("fullName").locale("en").legalFormId(1L).officeId(1L));
+                .active(true).dateFormat("dd MMMM yyyy").fullname("fullName").locale("en").legalFormId(1L).officeId(1L)
+                .mobileNo(Utils.randomStringGenerator("M", 10)).emailAddress(UUID.randomUUID().toString() + "@example.com")
+                .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L));
         Integer loanId = createLoanAccount(LOAN_TRANSACTION_HELPER, clientResponse.getClientId().toString(), loanProductId.toString(),
                 "02 January 2022");
         // then
