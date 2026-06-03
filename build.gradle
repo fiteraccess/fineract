@@ -910,19 +910,19 @@ configure(project.fineractPublishProjects) {
 
 // Configuration for CycloneDX SBOM generator
 // https://github.com/CycloneDX/cyclonedx-gradle-plugin
-apply plugin: 'org.cyclonedx.bom'
+// Only apply SBOM generation when NOT in CI (fails on Eclipse SWT dependency resolution)
+if (System.getenv('CI') != 'true' && !project.hasProperty('skipSbom')) {
+    apply plugin: 'org.cyclonedx.bom'
 
-cyclonedxBom {
-    projectType = "application"
-    includeBomSerialNumber = true
-    includeLicenseText = true
-}
+    cyclonedxBom {
+        projectType = "application"
+        includeBomSerialNumber = true
+        includeLicenseText = true
+    }
 
-tasks.withType(org.cyclonedx.gradle.CyclonedxDirectTask).configureEach {
-    includeMetadataResolution.set(false)
-    // Disable to avoid Eclipse SWT dependency resolution issues
-    // See: https://github.com/CycloneDX/cyclonedx-gradle-plugin/issues
-    enabled = false
+    tasks.withType(org.cyclonedx.gradle.CyclonedxDirectTask).configureEach {
+        includeMetadataResolution.set(false)
+    }
 }
 
 tasks.register('printSourceSetInformation') {
@@ -942,14 +942,5 @@ tasks.register('printSourceSetInformation') {
 
 tasks.withType(Checkstyle).configureEach {
     exclude("**/*.avsc")
-}
-
-// Disable CycloneDX SBOM generation for PR builds (fails on Eclipse SWT dependencies)
-if (System.getenv('CI') == 'true' || project.hasProperty('skipSbom')) {
-    tasks.configureEach { task ->
-        if (task.name.contains('cyclonedx') || task.name.contains('Bom')) {
-            task.enabled = false
-        }
-    }
 }
 
