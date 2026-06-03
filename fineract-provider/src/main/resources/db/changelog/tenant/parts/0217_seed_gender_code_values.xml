@@ -45,4 +45,7 @@
             <column name="is_mandatory" valueBoolean="false"/>
         </insert>
     </changeSet>
+    <changeSet author="fineract" id="2" context="postgresql">
+        <sql>SELECT SETVAL('m_code_value_id_seq', COALESCE(MAX(id), 0)+1, false) FROM m_code_value;</sql>
+    </changeSet>
 </databaseChangeLog>
