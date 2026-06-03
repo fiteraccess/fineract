@@ -278,9 +278,8 @@ public class ClientTest {
 
         PostClientsRequest request = new PostClientsRequest().officeId(1L).legalFormId(LEGALFORM_ID_PERSON).firstname(firstName)
                 .middlename(middleName).lastname(lastName).externalId(UUID.randomUUID().toString()).dateFormat(Utils.DATE_FORMAT)
-                .locale("en").active(true).activationDate(DEFAULT_DATE)
-                .mobileNo(Utils.randomStringGenerator("M", 10)).emailAddress(UUID.randomUUID().toString() + "@example.com")
-                .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L);
+                .locale("en").active(true).activationDate(DEFAULT_DATE).mobileNo(Utils.randomStringGenerator("M", 10))
+                .emailAddress(UUID.randomUUID().toString() + "@example.com").dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L);
         Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, request);
         assertNotNull(clientId);
 
@@ -290,9 +289,8 @@ public class ClientTest {
 
         request = new PostClientsRequest().officeId(1L).legalFormId(LEGALFORM_ID_PERSON).fullname(fullName)
                 .externalId(UUID.randomUUID().toString()).dateFormat(Utils.DATE_FORMAT).locale("en").active(true)
-                .activationDate(DEFAULT_DATE)
-                .mobileNo(Utils.randomStringGenerator("M", 10)).emailAddress(UUID.randomUUID().toString() + "@example.com")
-                .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L);
+                .activationDate(DEFAULT_DATE).mobileNo(Utils.randomStringGenerator("M", 10))
+                .emailAddress(UUID.randomUUID().toString() + "@example.com").dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L);
         clientId = ClientHelper.createClient(requestSpec, responseSpec, request);
         assertNotNull(clientId);
 
