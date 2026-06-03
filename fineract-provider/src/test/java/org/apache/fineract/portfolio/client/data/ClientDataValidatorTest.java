@@ -114,6 +114,10 @@ class ClientDataValidatorTest {
                     "active": false,
                     "dateFormat": "%s",
                     "locale": "en",
+                    "mobileNo": "1234567890",
+                    "emailAddress": "jane.doe@example.com",
+                    "dateOfBirth": "01 January 1990",
+                    "genderId": 1,
                     %s
                 }
                 """.formatted(DATE_FORMAT, extraFields.trim().replaceAll(",\\s*$", ""));
