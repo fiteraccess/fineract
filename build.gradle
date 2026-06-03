@@ -410,11 +410,19 @@ configure(project.fineractJavaProjects) {
     tasks.withType(JavaCompile).configureEach {
         options.incremental = true
         options.fork = true
+        options.forkOptions.jvmArgs = ['-Xmx2g', '-XX:+UseParallelGC']
         outputs.cacheIf { true }
         options.compilerArgs << '-parameters'
         options.encoding = 'UTF-8'
-        options.compilerArgs << '-Xlint:unchecked'
-        options.compilerArgs << '-Xlint:deprecation'
+
+        // Skip expensive lint checks for faster builds (enable only if warnings=strict)
+        if (!project.hasProperty('warnings') || !project.warnings.contains('strict')) {
+            options.compilerArgs << '-nowarn'
+        } else {
+            options.compilerArgs << '-Xlint:unchecked'
+            options.compilerArgs << '-Xlint:deprecation'
+        }
+
         if (project.hasProperty('warnings') && project.warnings.contains('fail')) {
             options.compilerArgs << '-Werror'
         }
