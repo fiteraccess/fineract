@@ -29,7 +29,9 @@ public class ClientRequestFactory {
 
     private static final Long HEAD_OFFICE_ID = 1L;
     private static final Long LEGAL_FORM_ID_PERSON = 1L;
-    public static final String DATE_FORMAT = "dd MMMM yyyy";
+    // Use ISO date format because the generated client serializes LocalDate fields (e.g. dateOfBirth) as ISO (yyyy-MM-dd).
+    // dateFormat must match what gets serialized, otherwise backend validation fails.
+    public static final String DATE_FORMAT = "yyyy-MM-dd";
     public static final String DEFAULT_LOCALE = "en";
     public static final Long GENDER_ID_MALE = 20L;
 
@@ -43,7 +45,7 @@ public class ClientRequestFactory {
                 .dateFormat(DATE_FORMAT)//
                 .locale(DEFAULT_LOCALE)//
                 .active(true)//
-                .activationDate("04 March 2011")//
+                .activationDate("2011-03-04")//
                 .mobileNo(Utils.randomStringGenerator("M", 10))//
                 .emailAddress(UUID.randomUUID().toString() + "@example.com")//
                 .dateOfBirth(LocalDate.of(1990, 1, 1))//
