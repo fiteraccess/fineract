@@ -47,7 +47,34 @@ count_scenarios() {
 echo "Analyzing feature files to count scenarios..."
 > "$TEMP_FILE"
 
+# MVP: Patterns to exclude from E2E tests (Savings/Recurring Deposits only)
+EXCLUDE_FEATURE_PATTERNS=(
+  "Loan"
+  "FixedDeposit"
+  "Share"
+  "AssetExternalization"
+  "EMICalculation"
+)
+
+is_excluded() {
+  local fname="$1"
+  for pattern in "${EXCLUDE_FEATURE_PATTERNS[@]}"; do
+    if [[ "$fname" == *"$pattern"* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 while IFS= read -r -d $'\0' file; do
+  fname=$(basename "$file")
+
+  # MVP: Skip excluded feature files
+  if is_excluded "$fname"; then
+    echo "  [MVP] Skipping excluded feature: $fname" >&2
+    continue
+  fi
+
   # Remove the 'fineract-e2e-tests-runner/' prefix
   rel_path="${file#fineract-e2e-tests-runner/}"
   scenario_count=$(count_scenarios "$file")
