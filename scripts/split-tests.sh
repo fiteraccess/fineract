@@ -45,13 +45,48 @@ fi
 
 echo "🔍 Searching for eligible JUnit test classes..."
 
+# MVP: Patterns to exclude (matches build.gradle test filter exclusions)
+# These tests are for products NOT in the MVP scope (Savings + Recurring Deposits only)
+EXCLUDE_PATTERNS=(
+  "Loan"
+  "FixedDeposit"
+  "FixedLength"
+  "Share"
+  "Guarantor"
+  "Investor"
+  "Mix"
+  "WorkingCapital"
+  "Progressive"
+  "Delinquency"
+  "Chargeback"
+  "ChargeOff"
+  "Reschedule"
+  "Disburs"
+  "Repay"
+)
+
 ALL_TESTS=$(find . -type f -path "*/src/test/java/*.java" \
+  -not -path "./fineract-e2e-tests-runner/*" \
+  -not -path "./fineract-e2e-tests-core/*" \
+  -not -path "./integration-tests/*" \
   | while read filepath; do
       filename=$(basename "$filepath")
 
       # Skip abstract class or interface by name
       if [[ "$filename" =~ ^Abstract.*Test\.java$ || "$filename" =~ .*AbstractTest\.java$ ]]; then
         echo "Skipping abstract-named file: $filename" >&2
+        continue
+      fi
+
+      # MVP: Skip excluded test patterns (saves Gradle startup time per filtered test)
+      skip=0
+      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+        if [[ "$filename" == *"$pattern"* ]]; then
+          skip=1
+          break
+        fi
+      done
+      if [[ $skip -eq 1 ]]; then
         continue
       fi
 

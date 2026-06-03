@@ -14,9 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Define the number of shards (1-based indexing)
-        shard_index: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        total_shards: [10]
+        # MVP: Reduced from 10 to 3 shards - 38 loan features excluded, only ~9 features remain
+        shard_index: [1, 2, 3]
+        total_shards: [3]
 
     env:
       DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}

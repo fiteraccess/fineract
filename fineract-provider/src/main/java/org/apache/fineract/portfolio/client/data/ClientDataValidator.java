@@ -171,11 +171,12 @@ public final class ClientDataValidator {
                     .notExceedingLengthOf(100);
         }
 
-        if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.mobileNoParamName, element)) {
-            final String mobileNo = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.mobileNoParamName, element);
-            baseDataValidator.reset().parameter(ClientApiConstants.mobileNoParamName).value(mobileNo).ignoreIfNull()
-                    .notExceedingLengthOf(50);
-        }
+        final String mobileNo = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.mobileNoParamName, element);
+        baseDataValidator.reset().parameter(ClientApiConstants.mobileNoParamName).value(mobileNo).notBlank().notExceedingLengthOf(50);
+
+        final String emailAddress = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.emailAddressParamName, element);
+        baseDataValidator.reset().parameter(ClientApiConstants.emailAddressParamName).value(emailAddress).notBlank()
+                .notExceedingLengthOf(50);
 
         final Boolean active = this.fromApiJsonHelper.extractBooleanNamed(ClientApiConstants.activeParamName, element);
         if (active != null) {
@@ -199,15 +200,30 @@ public final class ClientDataValidator {
             baseDataValidator.reset().parameter(ClientApiConstants.submittedOnDateParamName).value(submittedOnDate).notNull();
         }
 
-        if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.dateOfBirthParamName, element)) {
+        final Integer legalFormIdValue = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(ClientApiConstants.legalFormIdParamName,
+                element);
+        final boolean isPerson = legalFormIdValue != null && legalFormIdValue == 1;
+
+        if (isPerson) {
             final LocalDate dateOfBirth = this.fromApiJsonHelper.extractLocalDateNamed(ClientApiConstants.dateOfBirthParamName, element);
             baseDataValidator.reset().parameter(ClientApiConstants.dateOfBirthParamName).value(dateOfBirth).notNull()
                     .validateDateBefore(DateUtils.getBusinessLocalDate()).validateDateBefore(submittedOnDate);
-        }
 
-        if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.genderIdParamName, element)) {
             final Integer genderId = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(ClientApiConstants.genderIdParamName, element);
-            baseDataValidator.reset().parameter(ClientApiConstants.genderIdParamName).value(genderId).integerGreaterThanZero();
+            baseDataValidator.reset().parameter(ClientApiConstants.genderIdParamName).value(genderId).notNull().integerGreaterThanZero();
+        } else {
+            if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.dateOfBirthParamName, element)) {
+                final LocalDate dateOfBirth = this.fromApiJsonHelper.extractLocalDateNamed(ClientApiConstants.dateOfBirthParamName,
+                        element);
+                baseDataValidator.reset().parameter(ClientApiConstants.dateOfBirthParamName).value(dateOfBirth).notNull()
+                        .validateDateBefore(DateUtils.getBusinessLocalDate()).validateDateBefore(submittedOnDate);
+            }
+
+            if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.genderIdParamName, element)) {
+                final Integer genderId = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(ClientApiConstants.genderIdParamName,
+                        element);
+                baseDataValidator.reset().parameter(ClientApiConstants.genderIdParamName).value(genderId).integerGreaterThanZero();
+            }
         }
 
         if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.clientTypeIdParamName, element)) {

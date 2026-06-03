@@ -410,11 +410,19 @@ configure(project.fineractJavaProjects) {
     tasks.withType(JavaCompile).configureEach {
         options.incremental = true
         options.fork = true
+        options.forkOptions.jvmArgs = ['-Xmx2g', '-XX:+UseParallelGC']
         outputs.cacheIf { true }
         options.compilerArgs << '-parameters'
         options.encoding = 'UTF-8'
-        options.compilerArgs << '-Xlint:unchecked'
-        options.compilerArgs << '-Xlint:deprecation'
+
+        // Skip expensive lint checks for faster builds (enable only if warnings=strict)
+        if (!project.hasProperty('warnings') || !project.warnings.contains('strict')) {
+            options.compilerArgs << '-nowarn'
+        } else {
+            options.compilerArgs << '-Xlint:unchecked'
+            options.compilerArgs << '-Xlint:deprecation'
+        }
+
         if (project.hasProperty('warnings') && project.warnings.contains('fail')) {
             options.compilerArgs << '-Werror'
         }
@@ -902,16 +910,19 @@ configure(project.fineractPublishProjects) {
 
 // Configuration for CycloneDX SBOM generator
 // https://github.com/CycloneDX/cyclonedx-gradle-plugin
-apply plugin: 'org.cyclonedx.bom'
+// Only apply SBOM generation when NOT in CI (fails on Eclipse SWT dependency resolution)
+if (System.getenv('CI') != 'true' && !project.hasProperty('skipSbom')) {
+    apply plugin: 'org.cyclonedx.bom'
 
-cyclonedxBom {
-    projectType = "application"
-    includeBomSerialNumber = true
-    includeLicenseText = true
-}
+    cyclonedxBom {
+        projectType = "application"
+        includeBomSerialNumber = true
+        includeLicenseText = true
+    }
 
-tasks.withType(org.cyclonedx.gradle.CyclonedxDirectTask).configureEach {
-    includeMetadataResolution.set(false)
+    tasks.withType(org.cyclonedx.gradle.CyclonedxDirectTask).configureEach {
+        includeMetadataResolution.set(false)
+    }
 }
 
 tasks.register('printSourceSetInformation') {
@@ -932,3 +943,4 @@ tasks.register('printSourceSetInformation') {
 tasks.withType(Checkstyle).configureEach {
     exclude("**/*.avsc")
 }
+

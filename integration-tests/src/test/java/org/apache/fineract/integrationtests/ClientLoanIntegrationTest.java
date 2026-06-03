@@ -7119,7 +7119,9 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
 
     private PostClientsRequest createRandomClientWithDate(String date) {
         return new PostClientsRequest().officeId(1L).legalFormId(1L).firstname(Utils.randomFirstNameGenerator())
-                .lastname(Utils.randomLastNameGenerator()).active(true).locale("en").activationDate(date).dateFormat(DATETIME_PATTERN);
+                .lastname(Utils.randomLastNameGenerator()).active(true).locale("en").activationDate(date).dateFormat(DATETIME_PATTERN)
+                .mobileNo(Utils.randomStringGenerator("M", 10)).emailAddress(UUID.randomUUID().toString() + "@example.com")
+                .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L);
     }
 
     private Integer applyForLoanApplication(final Integer clientID, final Integer loanProductID, final List<HashMap> charges) {

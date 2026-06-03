@@ -23,11 +23,17 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.BDDMockito.given;
 
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.configuration.data.GlobalConfigurationPropertyData;
 import org.apache.fineract.infrastructure.configuration.service.ConfigurationReadPlatformService;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,10 +55,19 @@ class ClientDataValidatorTest {
 
     @BeforeEach
     public void setUp() {
+        // ClientDataValidator references DateUtils.getBusinessLocalDate() while building the date-of-birth validation
+        // chain,
+        // so we must populate ThreadLocalContextUtil with a business date before exercising validateForCreate(...).
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2024, 1, 1))));
         GlobalConfigurationPropertyData addressDisabled = new GlobalConfigurationPropertyData().setEnabled(false);
         given(configurationReadPlatformService.retrieveGlobalConfiguration(GlobalConfigurationConstants.ENABLE_ADDRESS))
                 .willReturn(addressDisabled);
         underTest = new ClientDataValidator(new FromJsonHelper(), configurationReadPlatformService);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        ThreadLocalContextUtil.reset();
     }
 
     @Test
@@ -99,6 +114,10 @@ class ClientDataValidatorTest {
                     "active": false,
                     "dateFormat": "%s",
                     "locale": "en",
+                    "mobileNo": "1234567890",
+                    "emailAddress": "jane.doe@example.com",
+                    "dateOfBirth": "01 January 1990",
+                    "genderId": 1,
                     %s
                 }
                 """.formatted(DATE_FORMAT, extraFields.trim().replaceAll(",\\s*$", ""));

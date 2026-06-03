@@ -104,4 +104,12 @@ public class ClientRepositoryWrapper {
         return this.repository.findIdByExternalId(externalId);
     }
 
+    public boolean existsByMobileNo(final String mobileNo) {
+        return this.repository.existsByMobileNo(mobileNo);
+    }
+
+    public boolean existsByEmailAddress(final String emailAddress) {
+        return this.repository.existsByEmailAddress(emailAddress);
+    }
+
 }

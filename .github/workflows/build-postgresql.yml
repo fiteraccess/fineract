@@ -13,7 +13,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [test-core-1, test-core-2, test-core-3, test-core-4, test-core-5]
+        # MVP: Reduced from 5 to 3 shards - with 53% fewer tests, we don't need as many parallel runners
+        task: [test-core-1, test-core-2, test-core-3]
 
     services:
       postgresql:
@@ -99,7 +100,8 @@ jobs:
         run: |
           chmod +x scripts/split-tests.sh
           SHARD_INDEX=$(echo "${{ matrix.task }}" | awk -F'-' '{print $3}')
-          ./scripts/split-tests.sh 5 $SHARD_INDEX
+          # MVP: Using 3 shards (reduced from 5)
+          ./scripts/split-tests.sh 3 $SHARD_INDEX
           cat "shard-tests_${SHARD_INDEX}.txt"
 
       - name: Run Gradle Task

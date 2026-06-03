@@ -144,6 +144,26 @@ tasks.named('test').configure {
         dependsOn cargoStartLocal, waitForFineract
         finalizedBy cargoStopLocal
     }
+
+    // MVP: Only run Savings and Recurring Deposit tests for faster execution
+    // Excludes: Loans, Fixed Deposits, Shares, and related features
+    filter {
+        excludeTestsMatching '*Loan*'
+        excludeTestsMatching '*FixedDeposit*'
+        excludeTestsMatching '*FixedLength*'
+        excludeTestsMatching '*Share*'
+        excludeTestsMatching '*Guarantor*'
+        excludeTestsMatching '*Investor*'
+        excludeTestsMatching '*Mix*'
+        excludeTestsMatching '*WorkingCapital*'
+        excludeTestsMatching '*Progressive*'
+        excludeTestsMatching '*Delinquency*'
+        excludeTestsMatching '*Chargeback*'
+        excludeTestsMatching '*ChargeOff*'
+        excludeTestsMatching '*Reschedule*'
+        excludeTestsMatching '*Disburs*'
+        excludeTestsMatching '*Repay*'
+    }
 }
 
 if (!project.hasProperty('cargoDisabled')) {

@@ -31,6 +31,7 @@ import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostOfficesResponse;
 import org.apache.fineract.test.factory.ClientRequestFactory;
+import org.apache.fineract.test.helper.CodeHelper;
 import org.apache.fineract.test.messaging.event.EventCheckHelper;
 import org.apache.fineract.test.stepdef.AbstractStepDef;
 import org.apache.fineract.test.support.TestContextKey;
@@ -41,6 +42,7 @@ public class ClientStepDef extends AbstractStepDef {
     private final FineractFeignClient fineractClient;
     private final ClientRequestFactory clientRequestFactory;
     private final EventCheckHelper eventCheckHelper;
+    private final CodeHelper codeHelper;
 
     @When("Admin creates a client with random data")
     public void createClientRandomFirstNameLastName() {
@@ -85,9 +87,11 @@ public class ClientStepDef extends AbstractStepDef {
 
     @When("Admin creates a client with Firstname {string} and Lastname {string} with address")
     public void createClientWithAddress(String firstName, String lastName) {
-        Long addressTypeId = 15L;
-        Long countryId = 17L;
-        Long stateId = 18L;
+        // Create the code values dynamically rather than relying on hardcoded ids, since STATE / COUNTRY / ADDRESS_TYPE
+        // code values are not present in the default seed data.
+        Long addressTypeId = codeHelper.createAddressTypeCodeValue("AddressType-" + System.nanoTime()).getSubResourceId();
+        Long countryId = codeHelper.createCountryCodeValue("Country-" + System.nanoTime()).getSubResourceId();
+        Long stateId = codeHelper.createStateCodeValue("State-" + System.nanoTime()).getSubResourceId();
         String city = "Budapest";
         boolean addressIsActive = true;
         String postalCode = "1000";
