@@ -1228,8 +1228,8 @@ public class ClientHelper {
 
     public static PostClientsRequest defaultClientCreationRequest() {
         return new PostClientsRequest().officeId(1L).legalFormId(LEGALFORM_ID_PERSON).firstname(Utils.randomFirstNameGenerator())
-                .lastname(Utils.randomLastNameGenerator()).externalId(UUID.randomUUID().toString()).active(true)
-                .activationDate(DEFAULT_DATE).mobileNo(Utils.randomStringGenerator("M", 10))
+                .lastname(Utils.randomLastNameGenerator()).externalId(UUID.randomUUID().toString()).dateFormat(Utils.DATE_FORMAT)
+                .locale("en").active(true).activationDate(DEFAULT_DATE).mobileNo(Utils.randomStringGenerator("M", 10))
                 .emailAddress(UUID.randomUUID().toString() + "@example.com").dateOfBirth(LocalDate.of(1990, 1, 1))
                 .genderId(Long.valueOf(GENDER_ID_MALE));
     }
