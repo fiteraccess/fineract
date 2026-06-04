@@ -1,0 +1,81 @@
+# Azure DevOps equivalent of .github/workflows/build-ecr.yaml
+# Builds the Fineract image and pushes it to Amazon ECR.
+# Authentication is via OIDC (no long-lived AWS keys).
+#
+
+# GitHub: on: push -> branches: develop
+trigger:
+  branches:
+    include:
+      - develop
+
+pr: none
+
+jobs:
+  - job: image_to_ecr_dev
+    displayName: 'Build & push image to ECR'
+    timeoutInMinutes: 60
+    pool:
+      vmImage: 'ubuntu-24.04'
+
+    steps:
+      - checkout: self
+        fetchDepth: 0
+
+      - task: JavaToolInstaller@0
+        displayName: 'Set up JDK 21'
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: 'x64'
+          jdkSourceOption: 'PreInstalled'
+
+      - task: Cache@2
+        displayName: 'Cache Gradle dependencies'
+        inputs:
+          key: 'gradle | "$(Agent.OS)" | **/*.gradle*, **/gradle-wrapper.properties'
+          restoreKeys: |
+            gradle | "$(Agent.OS)"
+          path: '$(HOME)/.gradle'
+
+      # Build the image into the local Docker daemon. No AWS access needed yet.
+      - bash: |
+          set -euo pipefail
+          ./gradlew --no-daemon --console=plain \
+            :fineract-provider:clean :fineract-provider:build :fineract-provider:jibDockerBuild \
+            -x test -x cucumber -x spotlessCheck -x rat -x checkstyleMain
+        displayName: 'Build image (jibDockerBuild)'
+
+      - task: AWSShellScript@1
+        displayName: Build, tag, and push image to Amazon ECR
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+        inputs:
+          awsCredentials: 'aws-ecr-shared'
+          regionName: '$(ECR_REGION)'
+          # Run in the checkout so `git rev-parse` and `docker build .` resolve.
+          workingDirectory: '$(Build.SourcesDirectory)'
+          scriptType: inline
+          inlineScript: |
+            set -euo pipefail
+
+            # Confirm the service connection actually authenticated.
+            aws sts get-caller-identity
+
+            aws ecr get-login-password --region "$(ECR_REGION)" \
+              | docker login --username AWS --password-stdin "$(ECR_REGISTRY)"
+
+            IMAGE="$(ECR_REGISTRY)/$(ECR_REPOSITORY)"
+            SHORT_COMMIT=$(git rev-parse --short HEAD)
+
+            ./gradlew --no-daemon --console=plain \
+            :fineract-provider:clean :fineract-provider:build :fineract-provider:jibDockerBuild \
+            -x test -x cucumber -x spotlessCheck -x rat -x checkstyleMain
+
+            docker tag fineract:latest "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+
+            docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+            docker tag "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${COMMIT_HASH}"
+            docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${COMMIT_HASH}"
+
+            echo "##[section]Image published"
+            echo "  ${ECR_REGISTRY}/${ECR_REPOSITORY}:${COMMIT_HASH}"
+            echo "  ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"

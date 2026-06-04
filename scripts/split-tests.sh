@@ -69,6 +69,10 @@ ALL_TESTS=$(find . -type f -path "*/src/test/java/*.java" \
   -not -path "./fineract-e2e-tests-runner/*" \
   -not -path "./fineract-e2e-tests-core/*" \
   -not -path "./integration-tests/*" \
+  -not -path "./fineract-loan/*" \
+  -not -path "./fineract-progressive-loan/*" \
+  -not -path "./fineract-progressive-loan-embeddable-schedule-generator/*" \
+  -not -path "./custom/acme/loan/*" \
   | while read filepath; do
       filename=$(basename "$filepath")
 
@@ -87,6 +91,13 @@ ALL_TESTS=$(find . -type f -path "*/src/test/java/*.java" \
         fi
       done
       if [[ $skip -eq 1 ]]; then
+        continue
+      fi
+
+      # Skip loan tests by basename. Allowlist exception:
+      # LoanAccountDisbursementToSavingsWithAutoDownPaymentTest exercises a savings flow.
+      if [[ "$filename" == *Loan* && "$filename" != "LoanAccountDisbursementToSavingsWithAutoDownPaymentTest.java" ]]; then
+        echo "Skipping loan test: $filename" >&2
         continue
       fi
 

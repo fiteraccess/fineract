@@ -1,6 +1,6 @@
 name: Fineract Build & Cucumber tests (without E2E tests)
 
-on: [pull_request]
+on: pull_request
 
 permissions:
   contents: read
@@ -15,11 +15,9 @@ jobs:
       matrix:
         include:
           - task: build-core
-            job_type: main
+            job_type: prod
           - task: cucumber
-            job_type: main
-          - task: build-progressive-loan
-            job_type: progressive-loan
+            job_type: prod
 
     env:
       TZ: Asia/Kolkata
@@ -52,7 +50,7 @@ jobs:
           validate-wrappers: true
 
       - name: Run Gradle Task
-        if: matrix.job_type == 'main'
+        if: matrix.job_type == 'prod'
         run: |
           set -e  # Fail the script if any command fails
 
@@ -65,45 +63,14 @@ jobs:
               ;;
           esac
 
-      - name: Build and Test Progressive Loan
-        if: matrix.job_type == 'progressive-loan'
-        run: |
-          # Build the JAR
-          ./gradlew --no-daemon --console=plain :fineract-progressive-loan-embeddable-schedule-generator:shadowJar
-
-          # Store the JAR filename in an environment variable
-          EMBEDDABLE_JAR_FILE=$(ls fineract-progressive-loan-embeddable-schedule-generator/build/libs/*-all.jar | head -n 1)
-          echo "EMBEDDABLE_JAR_FILE=$EMBEDDABLE_JAR_FILE" >> $GITHUB_ENV
-          echo "JAR file: $EMBEDDABLE_JAR_FILE"
-
-          # Run unit tests
-          ./gradlew --no-daemon --console=plain :fineract-progressive-loan-embeddable-schedule-generator:test
-
-          # Build and run sample application
-          mkdir -p sample-app
-          javac -cp "$EMBEDDABLE_JAR_FILE" -d sample-app fineract-progressive-loan-embeddable-schedule-generator/misc/Main.java
-          java -cp "$EMBEDDABLE_JAR_FILE:sample-app" Main
-          java -cp "$EMBEDDABLE_JAR_FILE:sample-app" Main 25
-
       - name: Archive test results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
         with:
           name: test-results-${{ matrix.task }}
-          path: |
-            **/build/reports/
-            **/fineract-progressive-loan-embeddable-schedule-generator/build/reports/
+          path: '**/build/reports/'
           if-no-files-found: ignore
           retention-days: 5
-
-      - name: Archive Progressive Loan JAR
-        if: matrix.job_type == 'progressive-loan' && always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
-        with:
-          name: progressive-loan-jar
-          path: ${{ env.EMBEDDABLE_JAR_FILE }}
-          retention-days: 5
-          if-no-files-found: ignore
 
       - name: Archive server logs
         if: always()

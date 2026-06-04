@@ -1,0 +1,223 @@
+# Azure DevOps equivalent of .github/workflows/build-e2e-tests.yml
+# Fineract E2E Tests
+#
+# Builds the Fineract image, brings up the docker-compose stack, and runs the
+# Cucumber e2e feature files sharded into 5 parallel jobs via
+# scripts/split-features.sh.
+
+# GitHub: on: [pull_request]
+trigger: none
+
+pr:
+  branches:
+    include:
+      - '*'
+
+jobs:
+  - job: e2e
+    displayName: 'E2E Tests'
+    timeoutInMinutes: 60
+    pool:
+      vmImage: 'ubuntu-24.04'
+
+    # GitHub matrix: shard_index 1..5, total_shards 5  (fail-fast: false)
+    strategy:
+      maxParallel: 5
+      matrix:
+        shard-1:
+          shardIndex: '1'
+        shard-2:
+          shardIndex: '2'
+        shard-3:
+          shardIndex: '3'
+        shard-4:
+          shardIndex: '4'
+        shard-5:
+          shardIndex: '5'
+
+    variables:
+      totalShards: '5'
+      IMAGE_NAME: fineract
+      BASE_URL: https://localhost:8443
+      TEST_USERNAME: mifos
+      TEST_PASSWORD: password
+      TEST_STRONG_PASSWORD: 'A1b2c3d4e5f$'
+      TEST_TENANT_ID: default
+      INITIALIZATION_ENABLED: 'true'
+      EVENT_VERIFICATION_ENABLED: 'true'
+      ACTIVEMQ_BROKER_URL: tcp://localhost:61616
+      ACTIVEMQ_TOPIC_NAME: events
+
+    steps:
+      - checkout: self
+        fetchDepth: 0
+
+      - task: JavaToolInstaller@0
+        displayName: 'Set up JDK 21'
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: 'x64'
+          jdkSourceOption: 'PreInstalled'
+
+      - task: Cache@2
+        displayName: 'Cache Gradle dependencies'
+        inputs:
+          key: 'gradle | "$(Agent.OS)" | **/*.gradle*, **/gradle-wrapper.properties'
+          restoreKeys: |
+            gradle | "$(Agent.OS)"
+          path: '$(HOME)/.gradle'
+
+      - bash: chmod +x scripts/split-features.sh
+        displayName: 'Make scripts executable'
+
+      - bash: |
+          ./scripts/split-features.sh $(totalShards) $(shardIndex)
+          echo "Shard $(shardIndex) feature files:"
+          cat feature_shard_$(shardIndex).txt
+        displayName: 'Split feature files into shards'
+
+      - bash: ./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild -Djib.to.image=$(IMAGE_NAME) -x test -x cucumber
+        displayName: 'Build the image'
+
+      - bash: docker compose -f docker-compose-postgresql-test-activemq.yml up -d
+        displayName: 'Start the Fineract stack'
+
+      - bash: docker ps
+        displayName: 'Check the stack'
+
+      - bash: |
+          echo "Waiting for Manager container to be ready..."
+          timeout 300 bash -c 'until docker ps --filter "health=healthy" --filter "name=fineract" --format "{{.Status}}" | grep -q "healthy"; do
+            if docker ps --filter "name=fineract" --format "{{.Status}}" | grep -q "unhealthy"; then
+              echo "Container is unhealthy. Stopping..."
+              docker ps -a
+              docker logs $(docker ps -q --filter name=fineract) || true
+              exit 1
+            fi
+            echo "Waiting for Manager to be ready..."
+            sleep 5
+          done'
+
+          echo "Checking Manager health endpoint..."
+          curl -f -k --retry 30 --retry-all-errors --connect-timeout 10 --retry-delay 10 \
+            https://localhost:8443/fineract-provider/actuator/health
+        displayName: 'Wait for Manager to be ready'
+
+      - bash: |
+          FAILED=0
+          mkdir -p "allure-results-shard-$(shardIndex)"
+          mkdir -p "allure-results-merged"
+
+          if [ ! -s "feature_shard_$(shardIndex).txt" ]; then
+            echo "No features to test in this shard. Skipping..."
+            exit 0
+          fi
+
+          while IFS= read -r feature_file || [ -n "$feature_file" ]; do
+            [ -z "$feature_file" ] && continue
+            safe_name=$(echo "$feature_file" | tr '/' '-' | tr ' ' '_')
+
+            echo "##[group]Testing feature: $feature_file"
+
+            if ! ./gradlew --no-daemon --console=plain \
+              :fineract-e2e-tests-runner:cucumber \
+              -Pcucumber.features="$feature_file" \
+              -Dallure.results.directory="allure-results-shard-$(shardIndex)/$safe_name" \
+              allureReport; then
+              echo "##[error]Test failed for $feature_file"
+              FAILED=1
+            fi
+
+            echo "##[endgroup]"
+
+            if [ -d "allure-results-shard-$(shardIndex)/$safe_name" ]; then
+              cp -r "allure-results-shard-$(shardIndex)/$safe_name/." "allure-results-merged/" || true
+            fi
+          done < "feature_shard_$(shardIndex).txt"
+
+          if [ -d "allure-results-merged" ] && [ "$(ls -A allure-results-merged)" ]; then
+            echo "Generating Allure report..."
+            mkdir -p "allure-report-shard-$(shardIndex)"
+            ./fineract-e2e-tests-runner/build/allure/commandline/bin/allure generate "allure-results-merged" --clean -o "allure-report-shard-$(shardIndex)" || \
+              echo "##[warning]Failed to generate Allure report for shard $(shardIndex)"
+          fi
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "##[error]Some tests failed in this shard"
+            exit 1
+          fi
+        displayName: 'Execute tests for shard $(shardIndex)'
+
+      - task: PublishTestResults@2
+        displayName: 'Publish JUnit test results'
+        condition: always()
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '**/build/test-results/test/TEST-*.xml'
+          testRunTitle: 'e2e-shard-$(shardIndex)'
+          mergeTestResults: true
+          failTaskOnFailedTests: false
+
+      - bash: |
+          mkdir -p '$(Build.ArtifactStagingDirectory)/allure-results'
+          mkdir -p '$(System.DefaultWorkingDirectory)/allure-report-shard-$(shardIndex)'
+        displayName: 'Ensure artifact dirs exist'
+        condition: always()
+
+      - task: CopyFiles@2
+        displayName: 'Collect allure results'
+        condition: always()
+        inputs:
+          sourceFolder: '$(System.DefaultWorkingDirectory)'
+          contents: |
+            allure-results-shard-$(shardIndex)/**
+            allure-results-merged/**
+            **/build/allure-results/**
+            **/build/reports/tests/test/**
+            **/build/test-results/test/**
+          targetFolder: '$(Build.ArtifactStagingDirectory)/allure-results'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Upload test results'
+        condition: always()
+        continueOnError: true
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)/allure-results'
+          artifact: 'allure-results-shard-$(shardIndex)'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Upload Allure Report'
+        condition: always()
+        continueOnError: true
+        inputs:
+          targetPath: '$(System.DefaultWorkingDirectory)/allure-report-shard-$(shardIndex)'
+          artifact: 'allure-report-shard-$(shardIndex)'
+
+      - bash: mkdir -p '$(Build.ArtifactStagingDirectory)/logs'
+        displayName: 'Ensure logs dir exists'
+        condition: always()
+
+      - task: CopyFiles@2
+        displayName: 'Collect logs'
+        condition: always()
+        inputs:
+          sourceFolder: '$(System.DefaultWorkingDirectory)'
+          contents: |
+            **/build/reports/tests/**
+            **/logs/**
+            **/out/**
+          targetFolder: '$(Build.ArtifactStagingDirectory)/logs'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Upload logs'
+        condition: always()
+        continueOnError: true
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)/logs'
+          artifact: 'logs-shard-$(shardIndex)'
+
+      - bash: |
+          docker compose -f docker-compose-postgresql-test-activemq.yml down -v
+          docker system prune -f
+        displayName: 'Clean up'
+        condition: always()

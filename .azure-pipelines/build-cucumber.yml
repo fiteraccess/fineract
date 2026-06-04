@@ -1,0 +1,122 @@
+# Azure DevOps equivalent of .github/workflows/build-cucumber.yml
+# Fineract Build & Cucumber tests (without E2E tests)
+#
+# Matrix of two jobs:
+#   build-core         -> gradle build (no tests/cucumber/doc)
+#   cucumber           -> gradle cucumber (excluding the e2e runner)
+
+# GitHub: on: [pull_request]
+trigger: none
+
+pr:
+  branches:
+    include:
+      - '*'
+
+jobs:
+  - job: verify
+    displayName: 'Build & Cucumber'
+    timeoutInMinutes: 60
+    pool:
+      vmImage: 'ubuntu-24.04'
+
+    strategy:
+      maxParallel: 2
+      matrix:
+        build-core:
+          taskName: build-core
+          jobType: main
+        cucumber:
+          taskName: cucumber
+          jobType: main
+
+    variables:
+      TZ: Asia/Kolkata
+
+    steps:
+      - checkout: self
+        fetchDepth: 0
+        fetchTags: true
+
+      - task: JavaToolInstaller@0
+        displayName: 'Set up JDK 21'
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: 'x64'
+          jdkSourceOption: 'PreInstalled'
+
+      - task: Cache@2
+        displayName: 'Cache Gradle dependencies'
+        inputs:
+          key: 'gradle | "$(Agent.OS)" | **/*.gradle*, **/gradle-wrapper.properties'
+          restoreKeys: |
+            gradle | "$(Agent.OS)"
+          path: '$(HOME)/.gradle'
+
+      - bash: |
+          set -e
+          case "$(taskName)" in
+            build-core)
+              ./gradlew --no-daemon build -x test -x cucumber -x doc
+              ;;
+            cucumber)
+              ./gradlew --no-daemon cucumber -x :fineract-e2e-tests-runner:cucumber -x checkstyleJmh -x checkstyleMain -x checkstyleTest -x spotlessCheck -x spotlessApply -x spotbugsMain -x spotbugsTest -x javadoc -x javadocJar -x modernizer
+              ;;
+          esac
+        displayName: 'Run Gradle Task'
+        condition: eq(variables['jobType'], 'main')
+
+      - task: PublishTestResults@2
+        displayName: 'Publish JUnit test results'
+        condition: always()
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '**/build/test-results/**/TEST-*.xml'
+          testRunTitle: '$(taskName)'
+          mergeTestResults: true
+          failTaskOnFailedTests: false
+
+      - bash: mkdir -p '$(Build.ArtifactStagingDirectory)/test-results'
+        displayName: 'Ensure test-results dir exists'
+        condition: always()
+
+      - task: CopyFiles@2
+        displayName: 'Collect test reports'
+        condition: always()
+        inputs:
+          sourceFolder: '$(System.DefaultWorkingDirectory)'
+          contents: '**/build/reports/**'
+          targetFolder: '$(Build.ArtifactStagingDirectory)/test-results'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Archive test results'
+        condition: always()
+        continueOnError: true
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)/test-results'
+          artifact: 'test-results-$(taskName)'
+
+      # CopyFiles@2 does not create targetFolder when the glob matches nothing,
+      # and PublishPipelineArtifact then fails with "Path does not exist".
+      # GitHub's upload-artifact only warns on no match, so create the folder
+      # up front to keep the same non-fatal behaviour (cargo logs are often
+      # absent, e.g. the build-core leg never starts a server).
+      - bash: mkdir -p '$(Build.ArtifactStagingDirectory)/server-logs'
+        displayName: 'Ensure server-logs dir exists'
+        condition: always()
+
+      - task: CopyFiles@2
+        displayName: 'Collect server logs'
+        condition: always()
+        inputs:
+          sourceFolder: '$(System.DefaultWorkingDirectory)'
+          contents: '**/build/cargo/**'
+          targetFolder: '$(Build.ArtifactStagingDirectory)/server-logs'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Archive server logs'
+        condition: always()
+        continueOnError: true
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)/server-logs'
+          artifact: 'server-logs-$(taskName)'
