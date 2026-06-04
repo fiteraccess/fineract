@@ -236,4 +236,5 @@
     <include file="parts/0215_transaction_summary_reports_add_buydown_fee_types.xml" relativeToChangelogFile="true" />
     <include file="parts/0216_add_sync_savings_daily_balance_job.xml" relativeToChangelogFile="true" />
     <include file="parts/0217_seed_gender_code_values.xml" relativeToChangelogFile="true" />
+    <include file="parts/0218_update_client_saving_transactions_report.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
