@@ -286,6 +286,8 @@ allprojects  {
             '**/*.adoc',
             '**/*.puml',
             '**/*.github/**',
+            // Fiter fork: Azure DevOps pipeline mirrors (CI config, no license header)
+            '**/.azure-pipelines/**',
             '**/MANIFEST.MF',
             '**/spring.factories',
             '**/org.springframework.boot.autoconfigure.AutoConfiguration.imports',
