@@ -235,8 +235,6 @@ public class ReadReportingServiceImpl implements ReadReportingService {
             new File(fileLocation).mkdirs();
         }
 
-        final String genaratePdf = fileLocation + File.separator + reportName + ".pdf";
-
         try {
             final GenericResultsetData result = retrieveGenericResultset(reportName, type, queryParams, isSelfServiceUserReport);
 
@@ -247,13 +245,14 @@ public class ReadReportingServiceImpl implements ReadReportingService {
             log.debug("NO. of Columns: {}", columnHeaders.size());
             final Integer chSize = columnHeaders.size();
 
-            final Document document = new Document(PageSize.B0.rotate());
+            final Document document = new Document(PageSize.A4.rotate());
 
             // Validate filename characters and use Path.of() for safe handling
-            if (!reportName.matches("^[a-zA-Z0-9_.-]+$")) {
+            String sanitizedReportName = reportName.replaceAll("[^a-zA-Z0-9_. -]", "").replaceAll("\\s+", "_");
+            if (sanitizedReportName.isEmpty()) {
                 throw new IllegalArgumentException("Invalid report name format");
             }
-            Path validatedPath = Paths.get(fileLocation, reportName + ".pdf").normalize();
+            Path validatedPath = Paths.get(fileLocation, sanitizedReportName + ".pdf").normalize();
             if (!validatedPath.startsWith(Paths.get(fileLocation))) {
                 throw new IllegalArgumentException("Path traversal attempt detected");
             }
@@ -278,16 +277,14 @@ public class ReadReportingServiceImpl implements ReadReportingService {
                 row = element.getRow();
                 rSize = row.size();
                 for (int j = 0; j < rSize; j++) {
-                    currVal = (String) row.get(j);
-                    if (currVal != null) {
-                        table.addCell(currVal);
-                    }
+                    currVal = row.get(j) != null ? String.valueOf(row.get(j)) : null;
+                    table.addCell(currVal != null ? currVal : "");
                 }
             }
             table.completeRow();
             document.add(table);
             document.close();
-            return genaratePdf;
+            return validatedPath.toString();
         } catch (final Exception e) {
             log.error("error.msg.reporting.error:", e);
             throw ErrorHandler.getMappable(e);
