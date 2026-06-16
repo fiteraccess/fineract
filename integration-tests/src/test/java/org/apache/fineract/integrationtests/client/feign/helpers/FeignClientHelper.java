@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.UUID;
 import org.apache.fineract.client.feign.FineractFeignClient;
 import org.apache.fineract.client.models.GetClientsClientIdResponse;
+import org.apache.fineract.client.models.GetCodeValuesDataResponse;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
@@ -32,10 +33,34 @@ import org.apache.fineract.integrationtests.common.Utils;
 
 public class FeignClientHelper {
 
+    /**
+     * System-defined "Gender" code id. Its code values are seeded dynamically, so their ids must be resolved at
+     * runtime.
+     */
+    private static final Long GENDER_CODE_ID = 4L;
+    private static final String GENDER_MALE = "Male";
+
     private final FineractFeignClient fineractClient;
+
+    private Long maleGenderId;
 
     public FeignClientHelper(FineractFeignClient fineractClient) {
         this.fineractClient = fineractClient;
+    }
+
+    /**
+     * Resolves the code value id of the "Male" gender by fetching the values of the Gender code
+     * ({@value #GENDER_CODE_ID}) instead of relying on a hard-coded id, which is no longer stable since gender code
+     * values are seeded dynamically.
+     */
+    public Long getMaleGenderId() {
+        if (maleGenderId == null) {
+            maleGenderId = ok(() -> fineractClient.codeValues().retrieveAllCodeValues(GENDER_CODE_ID)).stream()
+                    .filter(codeValue -> GENDER_MALE.equalsIgnoreCase(codeValue.getName())).map(GetCodeValuesDataResponse::getId)
+                    .findFirst().orElseThrow(() -> new IllegalStateException(
+                            "Code value '" + GENDER_MALE + "' not found for code with id " + GENDER_CODE_ID));
+        }
+        return maleGenderId;
     }
 
     public Long createClient() {
@@ -58,7 +83,7 @@ public class FeignClientHelper {
                 .mobileNo(Utils.randomStringGenerator("M", 10))//
                 .emailAddress(UUID.randomUUID().toString() + "@example.com")//
                 .dateOfBirth(LocalDate.of(1990, 1, 1))//
-                .genderId(20L);
+                .genderId(getMaleGenderId());
 
         return createClient(request);
     }

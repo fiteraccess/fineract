@@ -212,7 +212,7 @@ public final class BatchHelper {
                 + extId + "\",  \"dateFormat\": \"dd MMMM yyyy\", \"locale\": \"en\","
                 + "\"active\": false, \"submittedOnDate\": \"04 March 2009\"," + "\"mobileNo\": \"" + Utils.randomStringGenerator("M", 10)
                 + "\"," + "\"emailAddress\": \"" + UUID.randomUUID().toString() + "@example.com\","
-                + "\"dateOfBirth\": \"01 January 1990\", \"genderId\": 20}";
+                + "\"dateOfBirth\": \"01 January 1990\", \"genderId\": " + ClientHelper.getMaleGenderId() + "}";
 
         br.setBody(body);
 
@@ -245,7 +245,7 @@ public final class BatchHelper {
                 + externalId + "\",  \"dateFormat\": \"dd MMMM yyyy\", \"locale\": \"en\","
                 + "\"active\": true, \"activationDate\": \"04 March 2010\", \"submittedOnDate\": \"04 March 2010\"," + "\"mobileNo\": \""
                 + Utils.randomStringGenerator("M", 10) + "\"," + "\"emailAddress\": \"" + UUID.randomUUID().toString() + "@example.com\","
-                + "\"dateOfBirth\": \"01 January 1990\", \"genderId\": 20}";
+                + "\"dateOfBirth\": \"01 January 1990\", \"genderId\": " + ClientHelper.getMaleGenderId() + "}";
 
         br.setBody(body);
 

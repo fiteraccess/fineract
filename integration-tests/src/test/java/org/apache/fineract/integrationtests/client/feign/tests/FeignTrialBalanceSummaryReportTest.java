@@ -328,7 +328,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
                 .mobileNo(Utils.randomStringGenerator("M", 10))//
                 .emailAddress(UUID.randomUUID().toString() + "@example.com")//
                 .dateOfBirth(LocalDate.of(1990, 1, 1))//
-                .genderId(20L));
+                .genderId(clientHelper.getMaleGenderId()));
     }
 
     private Long createAndDisburseLoan(Long clientId, String submitDate, String disburseDate, Long chargeId) {
