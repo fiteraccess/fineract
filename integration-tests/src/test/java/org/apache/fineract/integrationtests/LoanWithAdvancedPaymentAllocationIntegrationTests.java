@@ -93,10 +93,10 @@ public class LoanWithAdvancedPaymentAllocationIntegrationTests {
         Integer loanProductId = LOAN_TRANSACTION_HELPER.getLoanProductId(createLoanJSON(defaultAllocation, repaymentPaymentAllocation));
         Assertions.assertNotNull(loanProductId);
         GetLoanProductsProductIdResponse loanProduct = LOAN_TRANSACTION_HELPER.getLoanProduct(loanProductId);
-        final PostClientsResponse clientResponse = CLIENT_HELPER
-                .createClient(new PostClientsRequest().activationDate("01 January 2022").active(true).dateFormat("dd MMMM yyyy")
-                        .fullname("fullName").locale("en").legalFormId(1L).officeId(1L).mobileNo(Utils.randomStringGenerator("M", 10))
-                        .emailAddress(UUID.randomUUID().toString() + "@example.com").dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(20L));
+        final PostClientsResponse clientResponse = CLIENT_HELPER.createClient(new PostClientsRequest().activationDate("01 January 2022")
+                .active(true).dateFormat("dd MMMM yyyy").fullname("fullName").locale("en").legalFormId(1L).officeId(1L)
+                .mobileNo(Utils.randomStringGenerator("M", 10)).emailAddress(UUID.randomUUID().toString() + "@example.com")
+                .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(ClientHelper.getMaleGenderId()));
         Integer loanId = createLoanAccount(LOAN_TRANSACTION_HELPER, clientResponse.getClientId().toString(), loanProductId.toString(),
                 "02 January 2022");
         // then

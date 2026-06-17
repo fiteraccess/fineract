@@ -48,6 +48,7 @@ import org.apache.fineract.client.models.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.client.models.GetClientsClientIdResponse;
 import org.apache.fineract.client.models.GetClientsClientIdTransactionsResponse;
 import org.apache.fineract.client.models.GetClientsClientIdTransactionsTransactionIdResponse;
+import org.apache.fineract.client.models.GetCodeValuesDataResponse;
 import org.apache.fineract.client.models.GetObligeeData;
 import org.apache.fineract.client.models.LoanAccountLockResponseDTO;
 import org.apache.fineract.client.models.PageClientSearchData;
@@ -86,7 +87,12 @@ public class ClientHelper {
     public static final String DEFAULT_OFFICE_ID = "1";
     public static final Long LEGALFORM_ID_PERSON = 1L;
     public static final Long LEGALFORM_ID_ENTITY = 2L;
-    public static final Integer GENDER_ID_MALE = 20;
+    /**
+     * System-defined "Gender" code id; its code values are seeded dynamically, so their ids are resolved at runtime.
+     */
+    public static final Long GENDER_CODE_ID = 4L;
+    private static final String GENDER_MALE = "Male";
+    private static Long maleGenderId;
     public static final String CREATED_DATE = Utils.getLocalDateOfTenant().minusDays(5).format(Utils.dateFormatter);
     public static final String CREATED_DATE_PLUS_ONE = Utils.getLocalDateOfTenant().minusDays(4).format(Utils.dateFormatter);
     public static final String CREATED_DATE_PLUS_TWO = Utils.getLocalDateOfTenant().minusDays(3).format(Utils.dateFormatter);
@@ -444,6 +450,21 @@ public class ClientHelper {
         return setInitialClientValues(officeId, legalFormId, UUID.randomUUID().toString());
     }
 
+    /**
+     * Resolves the code value id of the "Male" gender by fetching the values of the Gender code
+     * ({@link #GENDER_CODE_ID}) instead of relying on a hard-coded id, which is no longer stable since gender code
+     * values are seeded dynamically.
+     */
+    public static Long getMaleGenderId() {
+        if (maleGenderId == null) {
+            maleGenderId = Calls.ok(FineractClientHelper.getFineractClient().codeValues.retrieveAllCodeValues(GENDER_CODE_ID)).stream()
+                    .filter(codeValue -> GENDER_MALE.equalsIgnoreCase(codeValue.getName())).map(GetCodeValuesDataResponse::getId)
+                    .findFirst().orElseThrow(() -> new IllegalStateException(
+                            "Code value '" + GENDER_MALE + "' not found for code with id " + GENDER_CODE_ID));
+        }
+        return maleGenderId;
+    }
+
     // TODO: Rewrite to use fineract-client instead!
     // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
@@ -463,7 +484,7 @@ public class ClientHelper {
         map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
         if (legalFormId != null && legalFormId == 1L) {
             map.put("dateOfBirth", "01 January 1990");
-            map.put("genderId", GENDER_ID_MALE);
+            map.put("genderId", getMaleGenderId());
         }
         return map;
     }
@@ -557,7 +578,7 @@ public class ClientHelper {
         map.put("mobileNo", Utils.randomStringGenerator("M", 10));
         map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
         map.put("dateOfBirth", "01 January 1990");
-        map.put("genderId", GENDER_ID_MALE);
+        map.put("genderId", getMaleGenderId());
 
         log.info("map :  {}", map);
         return GSON.toJson(map);
@@ -581,7 +602,7 @@ public class ClientHelper {
         map.put("mobileNo", Utils.randomStringGenerator("M", 10));
         map.put("emailAddress", UUID.randomUUID().toString() + "@example.com");
         map.put("dateOfBirth", "01 January 1990");
-        map.put("genderId", GENDER_ID_MALE);
+        map.put("genderId", getMaleGenderId());
         if (datatables != null) {
             map.put("datatables", Arrays.asList(datatables));
         }
@@ -1231,7 +1252,7 @@ public class ClientHelper {
                 .lastname(Utils.randomLastNameGenerator()).externalId(UUID.randomUUID().toString()).dateFormat(Utils.DATE_FORMAT)
                 .locale("en").active(true).activationDate(DEFAULT_DATE).mobileNo(Utils.randomStringGenerator("M", 10))
                 .emailAddress(UUID.randomUUID().toString() + "@example.com").dateOfBirth(LocalDate.of(1990, 1, 1))
-                .genderId(Long.valueOf(GENDER_ID_MALE));
+                .genderId(getMaleGenderId());
     }
 
     public LoanAccountLockResponseDTO retrieveLockedAccounts(int page, int limit) {

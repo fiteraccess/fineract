@@ -20,11 +20,15 @@ package org.apache.fineract.test.factory;
 
 import java.time.LocalDate;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.client.models.PostClientsRequest;
+import org.apache.fineract.test.data.codevalue.CodeNames;
+import org.apache.fineract.test.data.codevalue.CodeValueResolver;
 import org.apache.fineract.test.helper.Utils;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class ClientRequestFactory {
 
     private static final Long HEAD_OFFICE_ID = 1L;
@@ -34,7 +38,9 @@ public class ClientRequestFactory {
     // dateFormat must match what gets serialized, otherwise backend validation fails.
     public static final String DATE_FORMAT = "yyyy-MM-dd";
     public static final String DEFAULT_LOCALE = "en";
-    public static final Long GENDER_ID_MALE = 20L;
+    private static final String GENDER_MALE = "Male";
+
+    private final CodeValueResolver codeValueResolver;
 
     public PostClientsRequest defaultClientCreationRequest() {
         return new PostClientsRequest()//
@@ -50,7 +56,10 @@ public class ClientRequestFactory {
                 .mobileNo(Utils.randomStringGenerator("M", 10))//
                 .emailAddress(UUID.randomUUID().toString() + "@example.com")//
                 .dateOfBirth(LocalDate.of(1990, 1, 1))//
-                .genderId(GENDER_ID_MALE);//
+                // Resolve the gender code value id at runtime: gender code values are seeded/created dynamically, so
+                // the
+                // id is no longer stable and must not be hard-coded.
+                .genderId(codeValueResolver.resolve(CodeNames.GENDER.getValue(), GENDER_MALE));//
     }
 
     private String randomClientId(final String prefix, final int lenOfRandomSuffix) {
