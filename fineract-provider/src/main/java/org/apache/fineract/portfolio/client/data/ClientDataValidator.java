@@ -172,10 +172,10 @@ public final class ClientDataValidator {
         }
 
         final String mobileNo = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.mobileNoParamName, element);
-        baseDataValidator.reset().parameter(ClientApiConstants.mobileNoParamName).value(mobileNo).notBlank().notExceedingLengthOf(50);
+        baseDataValidator.reset().parameter(ClientApiConstants.mobileNoParamName).value(mobileNo).ignoreIfNull().notExceedingLengthOf(50);
 
         final String emailAddress = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.emailAddressParamName, element);
-        baseDataValidator.reset().parameter(ClientApiConstants.emailAddressParamName).value(emailAddress).notBlank()
+        baseDataValidator.reset().parameter(ClientApiConstants.emailAddressParamName).value(emailAddress).ignoreIfNull()
                 .notExceedingLengthOf(50);
 
         final Boolean active = this.fromApiJsonHelper.extractBooleanNamed(ClientApiConstants.activeParamName, element);
