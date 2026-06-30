@@ -24,6 +24,7 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.amountPa
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargeIdParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.dueAsOfDateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.lienAllowedParamName;
+import static org.apache.fineract.portfolio.savings.SavingsApiConstants.referenceTransactionsParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.transactionAmountParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.transactionDateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withHoldTaxParamName;
@@ -31,6 +32,7 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withdraw
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import io.github.resilience4j.retry.annotation.Retry;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -121,6 +123,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeReposito
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
+import org.apache.fineract.portfolio.savings.domain.ReferenceTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
@@ -363,6 +366,15 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final SavingsAccountTransaction deposit = this.savingsAccountDomainService.handleDeposit(account, fmt, transactionDate,
                 transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
 
+        // AB-265: apply side-effect transactions (EMT Levy today; VAT-style in future) asserted by the caller.
+        // Synapse pre-computed the amounts; Fineract just records them under the parent's refNo for atomic
+        // bulk-reversal.
+        final List<ReferenceTransaction> referenceTransactions = parseReferenceTransactions(command);
+        if (!referenceTransactions.isEmpty()) {
+            this.savingsAccountDomainService.applyReferenceTransactions(account, deposit, referenceTransactions, isAccountTransfer,
+                    backdatedTxnsAllowedTill);
+        }
+
         now = System.nanoTime();
         log.warn("PERF deposit savingsId={} step=handleDeposit elapsed={}ms", savingsId, (now - perfLap) / 1_000_000.0);
         perfLap = now;
@@ -405,6 +417,37 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private Long saveTransactionToGenerateTransactionId(final SavingsAccountTransaction transaction) {
         this.savingsAccountTransactionRepository.saveAndFlush(transaction);
         return transaction.getId();
+    }
+
+    /**
+     * AB-265: parse the {@code referenceTransactions} JSON array from a deposit/withdrawal command. Each element must
+     * carry a {@code type} (matching a {@link SavingsAccountTransactionType} constant) and an {@code amount}. The list
+     * is intentionally generic so future siblings (VAT, etc.) can ride the same wire format without an API change. An
+     * absent or empty array yields an empty list — the caller skips the applier in that case.
+     */
+    private List<ReferenceTransaction> parseReferenceTransactions(final JsonCommand command) {
+        if (!command.parameterExists(referenceTransactionsParamName)) {
+            return List.of();
+        }
+        final JsonArray array = command.arrayOfParameterNamed(referenceTransactionsParamName);
+        if (array == null || array.isEmpty()) {
+            return List.of();
+        }
+        final List<ReferenceTransaction> refs = new ArrayList<>(array.size());
+        for (final JsonElement element : array) {
+            final JsonObject obj = element.getAsJsonObject();
+            final String typeName = obj.get("type").getAsString();
+            final BigDecimal amount = obj.get("amount").getAsBigDecimal();
+            final SavingsAccountTransactionType type;
+            try {
+                type = SavingsAccountTransactionType.valueOf(typeName);
+            } catch (final IllegalArgumentException ex) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.unknown",
+                        "Unknown referenceTransactions.type: " + typeName, typeName);
+            }
+            refs.add(new ReferenceTransaction(type, amount));
+        }
+        return refs;
     }
 
     @Transactional
@@ -452,6 +495,15 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance);
         final SavingsAccountTransaction withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate,
                 transactionAmount, paymentDetail, transactionBooleanValues, backdatedTxnsAllowedTill);
+
+        // AB-265: apply side-effect transactions (EMT Levy today) asserted by the caller. Withdrawal-fee remains
+        // handled by handleWithdrawal itself; EMT is appended here so the rule lives in Synapse and Fineract just
+        // records what it is told.
+        final List<ReferenceTransaction> referenceTransactions = parseReferenceTransactions(command);
+        if (!referenceTransactions.isEmpty()) {
+            this.savingsAccountDomainService.applyReferenceTransactions(account, withdrawal, referenceTransactions, isAccountTransfer,
+                    backdatedTxnsAllowedTill);
+        }
 
         if (isGsim && (withdrawal.getId() != null)) {
             GroupSavingsIndividualMonitoring gsim = gsimRepository.findById(account.getGsim().getId()).orElseThrow();

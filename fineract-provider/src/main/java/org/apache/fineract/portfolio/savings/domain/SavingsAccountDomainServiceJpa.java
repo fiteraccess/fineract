@@ -34,6 +34,7 @@ import java.util.UUID;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.event.business.domain.savings.transaction.SavingsDepositBusinessEvent;
@@ -567,6 +568,62 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountTransactionType savingsAccountTransactionType = SavingsAccountTransactionType.DIVIDEND_PAYOUT;
         return handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction,
                 savingsAccountTransactionType, backdatedTxnsAllowedTill);
+    }
+
+    /**
+     * AB-265: persists side-effect transactions (e.g. EMT Levy) asserted by an upstream system to be created alongside
+     * a primary savings transaction. Each row gets the parent's {@code ref_no} so the existing bulk-reverse path
+     * ({@code findByRefNo} + {@code handleReversal}) reverses parent + reference rows atomically. This method does
+     * <strong>not</strong> evaluate any rule — the amount and applicability decision were made upstream.
+     *
+     * <p>
+     * Today only {@link SavingsAccountTransactionType#EMT_LEVY} is accepted. Future side-effects (VAT, etc.) must add
+     * their own branch; an unsupported type fails fast so a partially-implemented sibling is never silently dropped.
+     */
+    @Transactional
+    @Override
+    public List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
+            final SavingsAccountTransaction parentTransaction, final List<ReferenceTransaction> references, final boolean isAccountTransfer,
+            final boolean backdatedTxnsAllowedTill) {
+        if (references == null || references.isEmpty()) {
+            return List.of();
+        }
+
+        final String refNo = parentTransaction.getRefNo();
+        if (refNo == null || refNo.isBlank()) {
+            throw new IllegalStateException("Parent savings transaction " + parentTransaction.getId()
+                    + " has no refNo; cannot link reference transactions for bulk reversal");
+        }
+
+        final LocalDate transactionDate = parentTransaction.getTransactionDate();
+        BigDecimal runningBalance = parentTransaction.getRunningBalance(account.getCurrency()).getAmount();
+
+        final List<SavingsAccountTransaction> created = new ArrayList<>(references.size());
+        for (final ReferenceTransaction ref : references) {
+            if (!ref.type().isEmtLevy()) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
+                        "Reference transaction type " + ref.type() + " is not yet supported; only EMT_LEVY is implemented (AB-265)",
+                        ref.type());
+            }
+
+            final BigDecimal amount = ref.amount();
+            final Money money = Money.of(account.getCurrency(), amount);
+            runningBalance = runningBalance.subtract(amount);
+
+            final SavingsAccountTransaction emtLevy = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money,
+                    refNo);
+            emtLevy.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
+            this.savingsAccountTransactionRepository.saveAndFlush(emtLevy);
+
+            // Narrow delta UPDATE: decrement account_balance, increment total_fee_charge, bump version.
+            // Mirrors the optimistic-lock pattern of applyWithdrawalDelta/applyDepositDelta.
+            this.savingsAccountRepository.applyReferenceTransactionDelta(account.getId(), amount, account.getVersion());
+            account.syncAfterDeltaUpdate(runningBalance);
+
+            postJournalEntriesForTransaction(account, emtLevy, isAccountTransfer);
+            created.add(emtLevy);
+        }
+        return created;
     }
 
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,

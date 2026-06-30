@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
+import org.apache.fineract.portfolio.savings.domain.ReferenceTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 
@@ -48,4 +49,13 @@ public interface SavingsAccountDomainService {
             boolean backdatedTxnsAllowedTill);
 
     SavingsAccountTransaction handleHold(SavingsAccount account, BigDecimal amount, LocalDate transactionDate, Boolean lienAllowed);
+
+    /**
+     * AB-265: append side-effect transactions (e.g. EMT Levy) asserted by an upstream system. Each reference row is
+     * created with the parent transaction's {@code ref_no} so the existing bulk-reverse (via {@code findByRefNo})
+     * reverses parent + references atomically. The amount and applicability decision were made upstream — this method
+     * does NOT re-evaluate any rule.
+     */
+    List<SavingsAccountTransaction> applyReferenceTransactions(SavingsAccount account, SavingsAccountTransaction parentTransaction,
+            List<ReferenceTransaction> references, boolean isAccountTransfer, boolean backdatedTxnsAllowedTill);
 }

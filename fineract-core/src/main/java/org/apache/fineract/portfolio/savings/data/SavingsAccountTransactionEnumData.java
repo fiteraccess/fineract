@@ -105,6 +105,10 @@ public class SavingsAccountTransactionEnumData implements Serializable {
         return Long.valueOf(SavingsAccountTransactionType.WITHDRAWAL_FEE.getValue()).equals(this.id);
     }
 
+    public boolean isEmtLevy() {
+        return Long.valueOf(SavingsAccountTransactionType.EMT_LEVY.getValue()).equals(this.id);
+    }
+
     public boolean isCredit() {
         SavingsAccountTransactionType transactionType = getTransactionTypeEnum();
         return transactionType != null && transactionType.isCredit();

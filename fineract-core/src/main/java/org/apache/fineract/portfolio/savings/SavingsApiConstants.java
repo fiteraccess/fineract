@@ -180,6 +180,9 @@ public class SavingsApiConstants {
 
     public static final String noteParamName = "note";
 
+    // AB-265: side-effect transactions asserted by upstream system (e.g. Synapse) — currently EMT Levy.
+    public static final String referenceTransactionsParamName = "referenceTransactions";
+
     // Savings account associations
     public static final String transactions = "transactions";
     public static final String charges = "charges";

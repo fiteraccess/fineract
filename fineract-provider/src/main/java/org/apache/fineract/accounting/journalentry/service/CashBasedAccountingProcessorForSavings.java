@@ -142,6 +142,26 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                     this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
                             CashAccountsForSavings.SAVINGS_CONTROL.getValue(), CashAccountsForSavings.ESCHEAT_LIABILITY.getValue(),
                             savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal, journalEntries);
+                } else if (savingsTransactionDTO.getTransactionType().isEmtLevy() && savingsTransactionDTO.isOverdraftTransaction()) {
+                    // EMT Levy on an overdraft: split between the overdrawn portion (DR overdraft control)
+                    // and the remainder against regular savings, CR the EMT Levy liability for the full amount.
+                    boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;
+                    this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
+                            CashAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
+                            savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, overdraftAmount, isReversal,
+                            journalEntries);
+                    if (isPositive) {
+                        this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
+                                CashAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
+                                savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount.subtract(overdraftAmount),
+                                isReversal, journalEntries);
+                    }
+                } else if (savingsTransactionDTO.getTransactionType().isEmtLevy()) {
+                    // AB-265 EMT Levy: DR Savings Control, CR EMT Levy liability (via FinancialActivity mapping).
+                    // The amount was computed in Synapse and bundled into this transaction via referenceTransactions.
+                    this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
+                            CashAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
+                            savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal, journalEntries);
                 } else if (savingsTransactionDTO.getTransactionType().isInterestPosting()
                         && savingsTransactionDTO.isOverdraftTransaction()) {
                     boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;
