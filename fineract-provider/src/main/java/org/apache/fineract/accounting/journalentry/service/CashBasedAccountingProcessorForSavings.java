@@ -152,16 +152,16 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                             journalEntries);
                     if (isPositive) {
                         this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
-                                CashAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
-                                savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount.subtract(overdraftAmount),
-                                isReversal, journalEntries);
+                                CashAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(), savingsProductId,
+                                paymentTypeId, savingsId, transactionId, transactionDate, amount.subtract(overdraftAmount), isReversal,
+                                journalEntries);
                     }
                 } else if (savingsTransactionDTO.getTransactionType().isEmtLevy()) {
                     // AB-265 EMT Levy: DR Savings Control, CR EMT Levy liability (via FinancialActivity mapping).
                     // The amount was computed in Synapse and bundled into this transaction via referenceTransactions.
                     this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
-                            CashAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
-                            savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal, journalEntries);
+                            CashAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(), savingsProductId,
+                            paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal, journalEntries);
                 } else if (savingsTransactionDTO.getTransactionType().isInterestPosting()
                         && savingsTransactionDTO.isOverdraftTransaction()) {
                     boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;

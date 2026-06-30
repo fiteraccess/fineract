@@ -311,8 +311,8 @@ public class SavingsAccountRepositoryWrapper {
     }
 
     /**
-     * AB-265: narrow delta for an EMT Levy (or other reference transaction) appended to a primary transaction. Subtracts
-     * {@code amount} from {@code accountBalance} and adds it to {@code totalFeeCharge}; optimistic-locked on
+     * AB-265: narrow delta for an EMT Levy (or other reference transaction) appended to a primary transaction.
+     * Subtracts {@code amount} from {@code accountBalance} and adds it to {@code totalFeeCharge}; optimistic-locked on
      * {@code version}.
      * <p>
      * See {@link SavingsAccountRepository#applyReferenceTransactionDelta} for invariants. Caller must call

@@ -163,18 +163,18 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                     if (isPositive) {
                         this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
                                 AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
-                                savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount.subtract(overdraftAmount),
-                                isReversal);
+                                savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate,
+                                amount.subtract(overdraftAmount), isReversal);
                     }
                 }
                 /**
-                 * AB-265 EMT Levy: DR Savings Control, CR EMT Levy liability (via FinancialActivity mapping).
-                 * The amount was computed in Synapse and bundled into this transaction via referenceTransactions.
+                 * AB-265 EMT Levy: DR Savings Control, CR EMT Levy liability (via FinancialActivity mapping). The
+                 * amount was computed in Synapse and bundled into this transaction via referenceTransactions.
                  */
                 else if (savingsTransactionDTO.getTransactionType().isEmtLevy()) {
                     this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
-                            AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(),
-                            savingsProductId, paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal);
+                            AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(), savingsProductId,
+                            paymentTypeId, savingsId, transactionId, transactionDate, amount, isReversal);
                 }
                 /**
                  * Handle Interest Applications and reversals of Interest Applications
