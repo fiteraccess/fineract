@@ -442,8 +442,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             try {
                 type = SavingsAccountTransactionType.valueOf(typeName);
             } catch (final IllegalArgumentException ex) {
-                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.unknown",
-                        "Unknown referenceTransactions.type: " + typeName, typeName);
+                final GeneralPlatformDomainRuleException wrapper = new GeneralPlatformDomainRuleException(
+                        "error.msg.savings.reference.transaction.type.unknown", "Unknown referenceTransactions.type: " + typeName,
+                        typeName);
+                wrapper.initCause(ex);
+                throw wrapper;
             }
             refs.add(new ReferenceTransaction(type, amount));
         }
