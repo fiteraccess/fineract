@@ -614,6 +614,16 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                     refNo);
             emtLevy.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
             this.savingsAccountTransactionRepository.saveAndFlush(emtLevy);
+            // Wire the fresh row into the account's aggregate so the bulk-reverse path (findByRefNo +
+            // handleReversal) sees the same managed instance in account.transactions when it cascades
+            // the reversed=true flag on save. Without this, reverseTransaction(isBulk=true) would flip
+            // reversed=true on the freshly-loaded findByRefNo copy but the account.transactions copy
+            // (unreversed) would win the JPA cascade write, leaving the EMT row un-reversed in the DB.
+            if (backdatedTxnsAllowedTill) {
+                account.addTransactionToExisting(emtLevy);
+            } else {
+                account.addTransaction(emtLevy);
+            }
 
             // Narrow delta UPDATE: decrement account_balance, increment total_fee_charge, bump version.
             // Mirrors the optimistic-lock pattern of applyWithdrawalDelta/applyDepositDelta.
