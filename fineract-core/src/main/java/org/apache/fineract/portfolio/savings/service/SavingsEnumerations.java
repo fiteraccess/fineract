@@ -198,6 +198,10 @@ public final class SavingsEnumerations {
                 optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.AMOUNT_RELEASE.getValue().longValue(),
                         SavingsAccountTransactionType.AMOUNT_RELEASE.getCode(), "Release Amount");
             break;
+            case EMT_LEVY:
+                optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.EMT_LEVY.getValue().longValue(),
+                        SavingsAccountTransactionType.EMT_LEVY.getCode(), "EMT Levy");
+            break;
         }
         return optionData;
     }
