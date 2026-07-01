@@ -857,6 +857,22 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 account.undoTransaction(transactionId + 1);
             }
         }
+        // AB-265: EMT Levy reference rows share the parent transaction's ref_no. The web-app issues a
+        // single-tx undo (command=undo) rather than the bulk isBulk=true path, so reverseTransaction /
+        // handleReversal never runs — we must reverse the EMT sibling(s) here alongside the parent.
+        final String parentRefNo = savingsAccountTransaction.getRefNo();
+        if (parentRefNo != null && !parentRefNo.isBlank()) {
+            final List<SavingsAccountTransaction> referenceTransactions = this.savingsAccountTransactionRepository.findByRefNo(parentRefNo);
+            for (final SavingsAccountTransaction referenceTransaction : referenceTransactions) {
+                if (referenceTransaction.getId().equals(transactionId)) {
+                    continue;
+                }
+                if (referenceTransaction.isEmtLevy() && !referenceTransaction.isReversed()) {
+                    account.undoTransaction(referenceTransaction.getId());
+                    this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), referenceTransaction.getTransactionDate());
+                }
+            }
+        }
         boolean isInterestTransfer = false;
         LocalDate postInterestOnDate = null;
         boolean postReversals = false;
