@@ -613,6 +613,29 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final SavingsAccountTransaction emtLevy = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money,
                     refNo);
             emtLevy.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
+
+            // ORDER MATTERS. handleDeposit / handleWithdrawalOptimized run applyDepositDelta / applyWithdrawalDelta
+            // and then syncAfterDeltaUpdate BEFORE returning, so account.version is bumped in memory but the entity
+            // is now "dirty" from EclipseLink's point of view. If we call saveAndFlush(emtLevy) first, the flush
+            // cascades an UPDATE m_savings_account with a stale WHERE version clause and PostgreSQL rejects it with
+            // "concurrent modification" (OLE) — which the API layer surfaces as 409.
+            //
+            // Sequence:
+            // 1. suppress autoflush so the JPQL delta below can run without triggering the account UPDATE,
+            // 2. issue the JPQL applyReferenceTransactionDelta (WHERE version = current in-memory version, which
+            // matches DB because handleDeposit's sync already reconciled them),
+            // 3. syncAfterDeltaUpdate so the in-memory version tracks the new DB value,
+            // 4. restore flushMode and saveAndFlush the EMT row — the subsequent autoflush of the dirty account
+            // now uses a version tag that matches DB, so no OLE.
+            final FlushModeType originalFlushMode = this.entityManager.getFlushMode();
+            this.entityManager.setFlushMode(FlushModeType.COMMIT);
+            try {
+                this.savingsAccountRepository.applyReferenceTransactionDelta(account.getId(), amount, account.getVersion());
+                account.syncAfterDeltaUpdate(runningBalance);
+            } finally {
+                this.entityManager.setFlushMode(originalFlushMode);
+            }
+
             this.savingsAccountTransactionRepository.saveAndFlush(emtLevy);
             // Wire the fresh row into the account's aggregate so the bulk-reverse path (findByRefNo +
             // handleReversal) sees the same managed instance in account.transactions when it cascades
@@ -624,11 +647,6 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             } else {
                 account.addTransaction(emtLevy);
             }
-
-            // Narrow delta UPDATE: decrement account_balance, increment total_fee_charge, bump version.
-            // Mirrors the optimistic-lock pattern of applyWithdrawalDelta/applyDepositDelta.
-            this.savingsAccountRepository.applyReferenceTransactionDelta(account.getId(), amount, account.getVersion());
-            account.syncAfterDeltaUpdate(runningBalance);
 
             postJournalEntriesForTransaction(account, emtLevy, isAccountTransfer);
             created.add(emtLevy);
