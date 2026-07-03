@@ -241,4 +241,20 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
             """)
     int applyWithdrawalDelta(@Param("id") Long id, @Param("withdrawalAmount") BigDecimal withdrawalAmount,
             @Param("feeAmount") BigDecimal feeAmount, @Param("subStatus") Integer subStatus, @Param("version") int version);
+
+    /**
+     * AB-265: narrow O(1) delta for an EMT Levy (or any reference transaction) appended to a primary transaction.
+     * Subtracts the levy amount from {@code accountBalance} and adds it to {@code totalFeeCharge} (kept in the fee
+     * aggregate so admin views of "total charges" include EMT). Optimistic-locked on {@code version}; bumps it on
+     * success. Caller must call {@link SavingsAccount#syncAfterDeltaUpdate(BigDecimal)} with the new running balance.
+     */
+    @Modifying
+    @Query("""
+            UPDATE SavingsAccount sa SET
+                sa.summary.totalFeeCharge = COALESCE(sa.summary.totalFeeCharge, 0) + :amount,
+                sa.summary.accountBalance = COALESCE(sa.summary.accountBalance, 0) - :amount,
+                sa.version = sa.version + 1
+            WHERE sa.id = :id AND sa.version = :version
+            """)
+    int applyReferenceTransactionDelta(@Param("id") Long id, @Param("amount") BigDecimal amount, @Param("version") int version);
 }

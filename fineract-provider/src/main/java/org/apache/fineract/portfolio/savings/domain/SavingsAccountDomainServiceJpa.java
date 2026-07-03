@@ -34,6 +34,7 @@ import java.util.UUID;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.event.business.domain.savings.transaction.SavingsDepositBusinessEvent;
@@ -567,6 +568,90 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountTransactionType savingsAccountTransactionType = SavingsAccountTransactionType.DIVIDEND_PAYOUT;
         return handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction,
                 savingsAccountTransactionType, backdatedTxnsAllowedTill);
+    }
+
+    /**
+     * AB-265: persists side-effect transactions (e.g. EMT Levy) asserted by an upstream system to be created alongside
+     * a primary savings transaction. Each row gets the parent's {@code ref_no} so the existing bulk-reverse path
+     * ({@code findByRefNo} + {@code handleReversal}) reverses parent + reference rows atomically. This method does
+     * <strong>not</strong> evaluate any rule — the amount and applicability decision were made upstream.
+     *
+     * <p>
+     * Today only {@link SavingsAccountTransactionType#EMT_LEVY} is accepted. Future side-effects (VAT, etc.) must add
+     * their own branch; an unsupported type fails fast so a partially-implemented sibling is never silently dropped.
+     */
+    @Transactional
+    @Override
+    public List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
+            final SavingsAccountTransaction parentTransaction, final List<ReferenceTransaction> references, final boolean isAccountTransfer,
+            final boolean backdatedTxnsAllowedTill) {
+        if (references == null || references.isEmpty()) {
+            return List.of();
+        }
+
+        final String refNo = parentTransaction.getRefNo();
+        if (refNo == null || refNo.isBlank()) {
+            throw new IllegalStateException("Parent savings transaction " + parentTransaction.getId()
+                    + " has no refNo; cannot link reference transactions for bulk reversal");
+        }
+
+        final LocalDate transactionDate = parentTransaction.getTransactionDate();
+        BigDecimal runningBalance = parentTransaction.getRunningBalance(account.getCurrency()).getAmount();
+
+        final List<SavingsAccountTransaction> created = new ArrayList<>(references.size());
+        for (final ReferenceTransaction ref : references) {
+            if (!ref.type().isEmtLevy()) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
+                        "Reference transaction type " + ref.type() + " is not yet supported; only EMT_LEVY is implemented (AB-265)",
+                        ref.type());
+            }
+
+            final BigDecimal amount = ref.amount();
+            final Money money = Money.of(account.getCurrency(), amount);
+            runningBalance = runningBalance.subtract(amount);
+
+            final SavingsAccountTransaction emtLevy = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money,
+                    refNo);
+            emtLevy.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
+
+            // ORDER MATTERS. handleDeposit / handleWithdrawalOptimized run applyDepositDelta / applyWithdrawalDelta
+            // and then syncAfterDeltaUpdate BEFORE returning, so account.version is bumped in memory but the entity
+            // is now "dirty" from EclipseLink's point of view. If we call saveAndFlush(emtLevy) first, the flush
+            // cascades an UPDATE m_savings_account with a stale WHERE version clause and PostgreSQL rejects it with
+            // "concurrent modification" (OLE) — which the API layer surfaces as 409.
+            //
+            // Sequence:
+            // 1. suppress autoflush so the JPQL delta below can run without triggering the account UPDATE,
+            // 2. issue the JPQL applyReferenceTransactionDelta (WHERE version = current in-memory version, which
+            // matches DB because handleDeposit's sync already reconciled them),
+            // 3. syncAfterDeltaUpdate so the in-memory version tracks the new DB value,
+            // 4. restore flushMode and saveAndFlush the EMT row — the subsequent autoflush of the dirty account
+            // now uses a version tag that matches DB, so no OLE.
+            final FlushModeType originalFlushMode = this.entityManager.getFlushMode();
+            this.entityManager.setFlushMode(FlushModeType.COMMIT);
+            try {
+                this.savingsAccountRepository.applyReferenceTransactionDelta(account.getId(), amount, account.getVersion());
+                account.syncAfterDeltaUpdate(runningBalance);
+            } finally {
+                this.entityManager.setFlushMode(originalFlushMode);
+            }
+
+            this.savingsAccountTransactionRepository.saveAndFlush(emtLevy);
+            // Wire the fresh row into the account's aggregate so the bulk-reverse path (findByRefNo +
+            // handleReversal) sees the same managed instance in account.transactions when it cascades
+            // the reversed=true flag on save. Without this, reverseTransaction(isBulk=true) would flip
+            // reversed=true on the freshly-loaded findByRefNo copy but the account.transactions copy
+            // (unreversed) would win the JPA cascade write, leaving the EMT row un-reversed in the DB.
+            if (backdatedTxnsAllowedTill) {
+                account.addTransactionToExisting(emtLevy);
+            } else {
+                account.addTransaction(emtLevy);
+            }
+
+            postJournalEntriesForTransaction(account, emtLevy, isAccountTransfer);
+            created.add(emtLevy);
+        }
+        return created;
     }
 
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,

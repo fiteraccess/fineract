@@ -309,4 +309,20 @@ public class SavingsAccountRepositoryWrapper {
             throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), accountId);
         }
     }
+
+    /**
+     * AB-265: narrow delta for an EMT Levy (or other reference transaction) appended to a primary transaction.
+     * Subtracts {@code amount} from {@code accountBalance} and adds it to {@code totalFeeCharge}; optimistic-locked on
+     * {@code version}.
+     * <p>
+     * See {@link SavingsAccountRepository#applyReferenceTransactionDelta} for invariants. Caller must call
+     * {@link SavingsAccount#syncAfterDeltaUpdate(BigDecimal)} with the new running balance afterwards.
+     */
+    @Transactional
+    public void applyReferenceTransactionDelta(final Long accountId, final BigDecimal amount, final int version) {
+        final int updated = this.repository.applyReferenceTransactionDelta(accountId, amount, version);
+        if (updated == 0) {
+            throw new ObjectOptimisticLockingFailureException(SavingsAccount.class.getName(), accountId);
+        }
+    }
 }
