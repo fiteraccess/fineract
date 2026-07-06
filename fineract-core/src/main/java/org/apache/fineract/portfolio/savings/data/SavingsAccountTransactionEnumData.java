@@ -63,7 +63,7 @@ public class SavingsAccountTransactionEnumData implements Serializable {
         this.interestPosting = transactionType == SavingsAccountTransactionType.INTEREST_POSTING;
         this.feeDeduction = transactionType == SavingsAccountTransactionType.ANNUAL_FEE
                 || transactionType == SavingsAccountTransactionType.WITHDRAWAL_FEE
-                || transactionType == SavingsAccountTransactionType.PAY_CHARGE;
+                || transactionType == SavingsAccountTransactionType.PAY_CHARGE || transactionType == SavingsAccountTransactionType.EMT_LEVY;
         this.initiateTransfer = transactionType == SavingsAccountTransactionType.INITIATE_TRANSFER;
         this.approveTransfer = transactionType == SavingsAccountTransactionType.APPROVE_TRANSFER;
         this.withdrawTransfer = transactionType == SavingsAccountTransactionType.WITHDRAW_TRANSFER;
