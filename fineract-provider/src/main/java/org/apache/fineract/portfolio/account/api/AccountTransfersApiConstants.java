@@ -38,6 +38,11 @@ public final class AccountTransfersApiConstants {
     public static final String transferDescriptionParamName = "transferDescription";
     public static final String currencyParamName = "currency";
 
+    // AB-266: reference transactions on the transfer body are split by leg so each side's levy pins under the correct
+    // parent transaction. Deposit / withdrawal continue to use SavingsApiConstants.referenceTransactionsParamName.
+    public static final String sourceReferenceTransactionsParamName = "sourceReferenceTransactions";
+    public static final String destinationReferenceTransactionsParamName = "destinationReferenceTransactions";
+
     /**
      * These parameters will match the class level parameters of {@link AccountTransferData}. Where possible, we try to
      * get response parameters to match those of request parameters.

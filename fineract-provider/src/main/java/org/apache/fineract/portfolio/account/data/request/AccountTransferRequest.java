@@ -20,6 +20,8 @@ package org.apache.fineract.portfolio.account.data.request;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.List;
+import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -43,4 +45,11 @@ public class AccountTransferRequest implements Serializable {
     private String toClientId;
     private String fromAccountId;
     private String fromOfficeId;
+
+    // AB-266: reference transactions pinned per leg — Fineract routes source refs under the withdrawal parent and
+    // destination refs under the deposit parent. Each entry carries { "type": "EMT_LEVY", "amount": 50 }. Untyped
+    // (List<Map>) so the API accepts and forwards the arrays unchanged; AccountTransfersWritePlatformServiceImpl
+    // parses them via ReferenceTransaction.parseArray downstream.
+    private List<Map<String, Object>> sourceReferenceTransactions;
+    private List<Map<String, Object>> destinationReferenceTransactions;
 }
