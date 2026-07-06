@@ -18,7 +18,13 @@
  */
 package org.apache.fineract.portfolio.savings.domain;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 
@@ -46,5 +52,38 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
             throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.amount.not.positive",
                     "Reference transaction amount must be positive: " + amount, amount);
         }
+    }
+
+    /**
+     * AB-266: shared JSON-array parser for {@code referenceTransactions}-style fields. Deposit / withdrawal use
+     * {@code "referenceTransactions"}; the account-transfer path uses {@code "sourceReferenceTransactions"} and
+     * {@code "destinationReferenceTransactions"} so each leg's levy is applied against its own parent transaction.
+     * Absent, {@code null}, or empty arrays yield an empty list — the caller skips the applier in that case.
+     */
+    public static List<ReferenceTransaction> parseArray(final JsonCommand command, final String paramName) {
+        if (!command.parameterExists(paramName)) {
+            return List.of();
+        }
+        final JsonArray array = command.arrayOfParameterNamed(paramName);
+        if (array == null || array.isEmpty()) {
+            return List.of();
+        }
+        final List<ReferenceTransaction> refs = new ArrayList<>(array.size());
+        for (final JsonElement element : array) {
+            final JsonObject obj = element.getAsJsonObject();
+            final String typeName = obj.get("type").getAsString();
+            final BigDecimal amount = obj.get("amount").getAsBigDecimal();
+            final SavingsAccountTransactionType type;
+            try {
+                type = SavingsAccountTransactionType.valueOf(typeName);
+            } catch (final IllegalArgumentException ex) {
+                // Pass ex through defaultUserMessageArgs so AbstractPlatformException.findThrowableCause chains it
+                // as the RuntimeException cause without violating checkstyle's AvoidHidingCauseException rule.
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.unknown",
+                        "Unknown " + paramName + ".type: " + typeName, typeName, ex);
+            }
+            refs.add(new ReferenceTransaction(type, amount));
+        }
+        return refs;
     }
 }

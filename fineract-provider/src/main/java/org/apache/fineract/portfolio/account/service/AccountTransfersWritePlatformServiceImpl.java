@@ -45,6 +45,7 @@ import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
+import org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
 import org.apache.fineract.portfolio.account.data.AccountTransfersDataValidator;
 import org.apache.fineract.portfolio.account.domain.AccountTransferAssembler;
@@ -66,6 +67,7 @@ import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
 import org.apache.fineract.portfolio.savings.domain.GSIMRepositoy;
 import org.apache.fineract.portfolio.savings.domain.GroupSavingsIndividualMonitoring;
+import org.apache.fineract.portfolio.savings.domain.ReferenceTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
@@ -129,11 +131,29 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
             final SavingsAccountTransaction withdrawal = this.savingsAccountDomainService.handleWithdrawal(fromSavingsAccount, fmt,
                     transactionDate, transactionAmount, paymentDetail, transactionBooleanValues, backdatedTxnsAllowedTill);
 
+            // AB-266: apply source-side reference transactions (EMT Levy on the WITHDRAW leg) asserted by Synapse.
+            // Empty when the source product opts out, when the transfer is intra-client, or when the amount is
+            // below the threshold — Synapse pre-computed the decision.
+            final List<ReferenceTransaction> sourceRefs = ReferenceTransaction.parseArray(command,
+                    AccountTransfersApiConstants.sourceReferenceTransactionsParamName);
+            if (!sourceRefs.isEmpty()) {
+                this.savingsAccountDomainService.applyReferenceTransactions(fromSavingsAccount, withdrawal, sourceRefs, isAccountTransfer,
+                        backdatedTxnsAllowedTill);
+            }
+
             final Long toSavingsId = command.longValueOfParameterNamed(toAccountIdParamName);
             final SavingsAccount toSavingsAccount = assembleSavingsAccount(toSavingsId, backdatedTxnsAllowedTill);
 
             final SavingsAccountTransaction deposit = this.savingsAccountDomainService.handleDeposit(toSavingsAccount, fmt, transactionDate,
                     transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
+
+            // AB-266: apply destination-side reference transactions (EMT Levy on the DEPOSIT leg) asserted by Synapse.
+            final List<ReferenceTransaction> destinationRefs = ReferenceTransaction.parseArray(command,
+                    AccountTransfersApiConstants.destinationReferenceTransactionsParamName);
+            if (!destinationRefs.isEmpty()) {
+                this.savingsAccountDomainService.applyReferenceTransactions(toSavingsAccount, deposit, destinationRefs, isAccountTransfer,
+                        backdatedTxnsAllowedTill);
+            }
 
             if (!fromSavingsAccount.getCurrency().getCode().equals(toSavingsAccount.getCurrency().getCode())) {
                 throw new DifferentCurrenciesException(fromSavingsAccount.getCurrency().getCode(),
