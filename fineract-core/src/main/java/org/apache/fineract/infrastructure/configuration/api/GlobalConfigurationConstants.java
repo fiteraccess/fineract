@@ -83,6 +83,7 @@ public final class GlobalConfigurationConstants {
     public static final String PASSWORD_REUSE_CHECK_HISTORY_COUNT = "password-reuse-check-history-count";
     public static final String FORCE_PASSWORD_RESET_ON_FIRST_LOGIN = "force-password-reset-on-first-login";
     public static final String ENABLE_SYNAPSE_INTEREST_POSTING = "enable-synapse-interest-posting";
+    public static final String ENABLE_ASYNCHRONOUS_FLEXCUBE_POSTING = "enable-asynchronous-flexcube-posting";
 
     private GlobalConfigurationConstants() {}
 }

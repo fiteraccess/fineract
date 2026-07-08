@@ -159,4 +159,6 @@ public interface ConfigurationDomainService {
     boolean isForcePasswordResetOnFirstLoginEnabled();
 
     boolean isSynapseInterestPostingEnabled();
+
+    boolean isAsynchronousFlexcubePostingEnabled();
 }
