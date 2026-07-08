@@ -238,4 +238,5 @@
     <include file="parts/0217_seed_gender_code_values.xml" relativeToChangelogFile="true" />
     <include file="parts/0218_update_client_saving_transactions_report.xml" relativeToChangelogFile="true" />
     <include file="parts/0219_emt_levy_seed.xml" relativeToChangelogFile="true" />
+    <include file="parts/0220_add_asynchronous_flexcube_posting_config.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

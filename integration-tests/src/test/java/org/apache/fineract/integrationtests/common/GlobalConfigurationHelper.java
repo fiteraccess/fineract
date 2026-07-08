@@ -614,6 +614,13 @@ public class GlobalConfigurationHelper {
         enableSynapseInterestPosting.put("trapDoor", false);
         defaults.add(enableSynapseInterestPosting);
 
+        HashMap<String, Object> enableAsynchronousFlexcubePosting = new HashMap<>();
+        enableAsynchronousFlexcubePosting.put("name", GlobalConfigurationConstants.ENABLE_ASYNCHRONOUS_FLEXCUBE_POSTING);
+        enableAsynchronousFlexcubePosting.put("value", 0L);
+        enableAsynchronousFlexcubePosting.put("enabled", false);
+        enableAsynchronousFlexcubePosting.put("trapDoor", false);
+        defaults.add(enableAsynchronousFlexcubePosting);
+
         return defaults;
     }
 

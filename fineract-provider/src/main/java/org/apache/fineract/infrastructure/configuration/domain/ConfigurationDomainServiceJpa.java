@@ -585,4 +585,9 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
         }
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING).isEnabled();
     }
+
+    @Override
+    public boolean isAsynchronousFlexcubePostingEnabled() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_ASYNCHRONOUS_FLEXCUBE_POSTING).isEnabled();
+    }
 }
