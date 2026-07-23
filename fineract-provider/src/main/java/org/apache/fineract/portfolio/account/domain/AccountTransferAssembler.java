@@ -24,6 +24,7 @@ import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConst
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
@@ -44,6 +45,14 @@ public class AccountTransferAssembler {
         this.accountTransferDetailAssembler = accountTransferDetailAssembler;
     }
 
+    // AB-487: fall back to a descriptive default when no transfer description is supplied.
+    static String defaultTransferDescription(final String description, final String fromAccountNumber, final String toAccountNumber) {
+        if (StringUtils.isNotBlank(description)) {
+            return description;
+        }
+        return "Bank transfer from account " + fromAccountNumber + " to " + toAccountNumber;
+    }
+
     public AccountTransferDetails assembleSavingsToSavingsTransfer(final JsonCommand command, final SavingsAccount fromSavingsAccount,
             final SavingsAccount toSavingsAccount, final SavingsAccountTransaction withdrawal, final SavingsAccountTransaction deposit) {
 
@@ -54,7 +63,11 @@ public class AccountTransferAssembler {
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed(transferAmountParamName);
         final Money transactionMonetaryAmount = Money.of(fromSavingsAccount.getCurrency(), transactionAmount);
 
-        final String description = command.stringValueOfParameterNamed(transferDescriptionParamName);
+        // AB-487: transferDescription is optional on the wire. When the caller (Synapse or back-office) omits it or
+        // sends it blank, default to a human-readable description built from the two account numbers so the ledger
+        // never records a blank transfer narration.
+        final String description = defaultTransferDescription(command.stringValueOfParameterNamed(transferDescriptionParamName),
+                fromSavingsAccount.getAccountNumber(), toSavingsAccount.getAccountNumber());
         AccountTransferTransaction accountTransferTransaction = AccountTransferTransaction.savingsToSavingsTransfer(accountTransferDetails,
                 withdrawal, deposit, transactionDate, transactionMonetaryAmount, description);
         accountTransferDetails.addAccountTransferTransaction(accountTransferTransaction);
