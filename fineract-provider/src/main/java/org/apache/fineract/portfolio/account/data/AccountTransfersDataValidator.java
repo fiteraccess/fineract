@@ -91,10 +91,13 @@ public class AccountTransfersDataValidator {
         baseDataValidator.reset().parameter(AccountTransfersApiConstants.transferAmountParamName).value(transactionAmount).notNull()
                 .positiveAmount();
 
+        // AB-487: transferDescription is optional. Synapse always sends a non-blank description, but when it is
+        // absent or blank the transfer is still accepted; AccountTransferAssembler defaults it to a human-readable
+        // "Bank transfer from account <from> to <to>". Only the length cap is enforced here.
         final String transactionDescription = this.fromApiJsonHelper
                 .extractStringNamed(AccountTransfersApiConstants.transferDescriptionParamName, element);
         baseDataValidator.reset().parameter(AccountTransfersApiConstants.transferDescriptionParamName).value(transactionDescription)
-                .notBlank().notExceedingLengthOf(200);
+                .ignoreIfNull().notExceedingLengthOf(200);
 
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
