@@ -240,4 +240,5 @@
     <include file="parts/0219_emt_levy_seed.xml" relativeToChangelogFile="true" />
     <include file="parts/0220_add_asynchronous_flexcube_posting_config.xml" relativeToChangelogFile="true" />
     <include file="parts/0221_add_manage_channel_permission.xml" relativeToChangelogFile="true" />
+    <include file="parts/0222_seed_transaction_tag_category.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
