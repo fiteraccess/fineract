@@ -95,4 +95,21 @@
             <column name="enum_type" valueBoolean="false"/>
         </insert>
     </changeSet>
+
+    <changeSet author="fiteraccess" id="ab-338-add-nip-switch-accounting-configuration-permissions">
+        <insert tableName="m_permission">
+            <column name="grouping" value="configuration"/>
+            <column name="code" value="UPDATE_NIP_SWITCH_ACCOUNTING_CONFIGURATION"/>
+            <column name="entity_name" value="NIP_SWITCH_ACCOUNTING_CONFIGURATION"/>
+            <column name="action_name" value="UPDATE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="configuration"/>
+            <column name="code" value="READ_NIP_SWITCH_ACCOUNTING_CONFIGURATION"/>
+            <column name="entity_name" value="NIP_SWITCH_ACCOUNTING_CONFIGURATION"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
 </databaseChangeLog>
