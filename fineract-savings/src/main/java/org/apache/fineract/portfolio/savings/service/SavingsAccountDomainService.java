@@ -35,6 +35,14 @@ public interface SavingsAccountDomainService {
             BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
             boolean backdatedTxnsAllowedTill);
 
+    /**
+     * Records a NIP withdrawal bundle as one domain operation. The principal, supplied reference transactions and their
+     * notes share the transaction boundary and the principal's root reference.
+     */
+    SavingsAccountTransaction handleNipWithdrawal(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
+            BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
+            String switchId, List<ReferenceTransaction> references, boolean backdatedTxnsAllowedTill);
+
     SavingsAccountTransaction handleDeposit(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
             BigDecimal transactionAmount, PaymentDetail paymentDetail, boolean isAccountTransfer, boolean isRegularTransaction,
             boolean backdatedTxnsAllowedTill);

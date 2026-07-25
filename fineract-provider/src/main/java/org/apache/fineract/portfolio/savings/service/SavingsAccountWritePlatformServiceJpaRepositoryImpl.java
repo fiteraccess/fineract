@@ -194,6 +194,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
     private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
     private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
+    private final NipWithdrawalPreflight nipWithdrawalPreflight;
 
     @Transactional
     @Override
@@ -434,6 +435,10 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
         final ReferenceTransaction.NipWithdrawalRequest nipRequest = ReferenceTransaction.parseNipWithdrawal(command);
 
+        if (nipRequest.switchId() != null) {
+            this.nipWithdrawalPreflight.validate(nipRequest.switchId(), nipRequest.references());
+        }
+
         final Locale locale = command.extractLocale();
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
 
@@ -463,14 +468,19 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final boolean isWithdrawBalance = false;
         final SavingsTransactionBooleanValues transactionBooleanValues = new SavingsTransactionBooleanValues(isAccountTransfer,
                 isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance);
-        final SavingsAccountTransaction withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate,
-                transactionAmount, paymentDetail, transactionBooleanValues, backdatedTxnsAllowedTill);
-
-        // AB-265: apply side-effect transactions (EMT Levy today) asserted by the caller. Withdrawal-fee remains
-        // handled by handleWithdrawal itself; EMT is appended here so the rule lives in Synapse and Fineract just
-        // records what it is told.
         final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
-        if (!referenceTransactions.isEmpty()) {
+        final SavingsAccountTransaction withdrawal;
+        if (nipRequest.switchId() != null) {
+            withdrawal = this.savingsAccountDomainService.handleNipWithdrawal(account, fmt, transactionDate, transactionAmount,
+                    paymentDetail, transactionBooleanValues, nipRequest.switchId(), referenceTransactions, backdatedTxnsAllowedTill);
+        } else {
+            withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                    transactionBooleanValues, backdatedTxnsAllowedTill);
+        }
+
+        // Legacy EMT side effects remain on their existing path. NIP rows are handled by the bundled domain operation
+        // so their principal, references, notes and completion event share one operation.
+        if (nipRequest.switchId() == null && !referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, withdrawal, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
         }

@@ -43,6 +43,8 @@ import org.apache.fineract.infrastructure.event.business.service.BusinessEventNo
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
+import org.apache.fineract.portfolio.note.domain.Note;
+import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
@@ -70,6 +72,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private final EntityManager entityManager;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
     private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
+    private final NoteRepository noteRepository;
 
     @Autowired
     public SavingsAccountDomainServiceJpa(final SavingsAccountRepositoryWrapper savingsAccountRepository,
@@ -79,7 +82,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository,
             final BusinessEventNotifierService businessEventNotifierService, final BalanceValidationService balanceValidationService,
             final EntityManager entityManager, CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
-            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository) {
+            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository, NoteRepository noteRepository) {
         this.savingsAccountRepository = savingsAccountRepository;
         this.savingsAccountTransactionRepository = savingsAccountTransactionRepository;
         this.journalEntryWritePlatformService = journalEntryWritePlatformService;
@@ -91,6 +94,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         this.entityManager = entityManager;
         this.cacheableSavingsProductConfigService = cacheableSavingsProductConfigService;
         this.savingsDailyBalanceSyncRepository = savingsDailyBalanceSyncRepository;
+        this.noteRepository = noteRepository;
     }
 
     @Transactional
@@ -98,6 +102,39 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     public SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final boolean backdatedTxnsAllowedTill) {
+        return handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues, null,
+                backdatedTxnsAllowedTill, true);
+    }
+
+    @Transactional
+    @Override
+    public SavingsAccountTransaction handleNipWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
+            final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
+            final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId,
+            final List<ReferenceTransaction> references, final boolean backdatedTxnsAllowedTill) {
+        final SavingsAccountTransaction withdrawal = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                transactionBooleanValues, switchId, backdatedTxnsAllowedTill, false);
+        final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        // handleWithdrawal has already applied and validated the principal plus ordinary product withdrawal fees.
+        // Validate
+        // the remaining supplied debit against that updated balance before persisting a single reference row.
+        this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
+        final List<SavingsAccountTransaction> createdReferences = applyReferenceTransactions(account, withdrawal, references,
+                transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill, switchId);
+        for (int index = 0; index < createdReferences.size(); index++) {
+            final ReferenceTransaction reference = references.get(index);
+            if (reference.isNipFee()) {
+                this.noteRepository.save(Note.savingsTransactionNote(account, createdReferences.get(index), reference.description()));
+            }
+        }
+        this.businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+        return withdrawal;
+    }
+
+    private SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
+            final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
+            final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId, final boolean backdatedTxnsAllowedTill,
+            final boolean notifyBusinessEvent) {
         context.authenticatedUser();
         account.validateForAccountBlock();
         account.validateForDebitBlock();
@@ -111,7 +148,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // past-dated transactions (which need running balance recalculation and interest reversal handling)
         if (!DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
             return handleWithdrawalOptimized(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues,
-                    relaxingDaysConfigForPivotDate, backdatedTxnsAllowedTill);
+                    relaxingDaysConfigForPivotDate, switchId, backdatedTxnsAllowedTill, notifyBusinessEvent);
         }
 
         // Legacy path for backdated transactions
@@ -135,6 +172,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         UUID refNo = UUID.randomUUID();
         final SavingsAccountTransaction withdrawal = account.withdraw(transactionDTO, transactionBooleanValues.isApplyWithdrawFee(),
                 backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo.toString());
+        withdrawal.setSwitchId(switchId);
         final MathContext mc = MathContext.DECIMAL64;
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
@@ -165,7 +203,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, transactionBooleanValues.isAccountTransfer(),
                 backdatedTxnsAllowedTill);
 
-        businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+        if (notifyBusinessEvent) {
+            businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+        }
         return withdrawal;
     }
 
@@ -177,7 +217,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private SavingsAccountTransaction handleWithdrawalOptimized(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final Long relaxingDaysConfigForPivotDate,
-            final boolean backdatedTxnsAllowedTill) {
+            final String switchId, final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent) {
 
         // --- O(1) business validations (mirroring SavingsAccount.withdraw()) ---
 
@@ -274,6 +314,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final Money transactionAmountMoney = Money.of(account.getCurrency(), transactionAmount);
         final SavingsAccountTransaction withdrawal = SavingsAccountTransaction.withdrawal(account, account.office(), paymentDetail,
                 transactionDate, transactionAmountMoney, refNo);
+        withdrawal.setSwitchId(switchId);
 
         // Compute the post-withdrawal available balance for the running-balance field on the new transactions.
         // We do NOT mutate account.getSummary() — the JPQL UPDATE below applies the delta directly to the DB.
@@ -342,7 +383,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             postJournalEntriesForTransaction(account, feeTransaction, transactionBooleanValues.isAccountTransfer());
         }
 
-        businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+        if (notifyBusinessEvent) {
+            businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+        }
 
         return withdrawal;
     }
@@ -585,6 +628,12 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     public List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
             final SavingsAccountTransaction parentTransaction, final List<ReferenceTransaction> references, final boolean isAccountTransfer,
             final boolean backdatedTxnsAllowedTill) {
+        return applyReferenceTransactions(account, parentTransaction, references, isAccountTransfer, backdatedTxnsAllowedTill, null);
+    }
+
+    private List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
+            final SavingsAccountTransaction parentTransaction, final List<ReferenceTransaction> references, final boolean isAccountTransfer,
+            final boolean backdatedTxnsAllowedTill, final String switchId) {
         if (references == null || references.isEmpty()) {
             return List.of();
         }
@@ -596,23 +645,30 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         }
 
         final LocalDate transactionDate = parentTransaction.getTransactionDate();
-        BigDecimal runningBalance = parentTransaction.getRunningBalance(account.getCurrency()).getAmount();
+        BigDecimal transactionRunningBalance = parentTransaction.getRunningBalance(account.getCurrency()).getAmount();
+        BigDecimal postedAccountBalance = account.getSummary().getAccountBalance(account.getCurrency()).getAmount();
 
         final List<SavingsAccountTransaction> created = new ArrayList<>(references.size());
         for (final ReferenceTransaction ref : references) {
-            if (!ref.type().isEmtLevy()) {
-                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
-                        "Reference transaction type " + ref.type() + " is not yet supported; only EMT_LEVY is implemented (AB-265)",
-                        ref.type());
-            }
-
             final BigDecimal amount = ref.amount();
             final Money money = Money.of(account.getCurrency(), amount);
-            runningBalance = runningBalance.subtract(amount);
+            final SavingsAccountTransaction referenceTransaction;
+            if (ref.type().isEmtLevy()) {
+                referenceTransaction = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money, refNo);
+            } else if (ref.type().isCommission()) {
+                referenceTransaction = SavingsAccountTransaction.commission(account, account.office(), transactionDate, money, refNo,
+                        switchId);
+            } else if (ref.type().isVat()) {
+                referenceTransaction = SavingsAccountTransaction.vat(account, account.office(), transactionDate, money, refNo, switchId);
+            } else {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
+                        "Reference transaction type " + ref.type() + " is not supported", ref.type());
+            }
 
-            final SavingsAccountTransaction emtLevy = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money,
-                    refNo);
-            emtLevy.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
+            transactionRunningBalance = transactionRunningBalance.subtract(amount);
+            postedAccountBalance = postedAccountBalance.subtract(amount);
+
+            referenceTransaction.setRunningBalance(Money.of(account.getCurrency(), transactionRunningBalance));
 
             // ORDER MATTERS. handleDeposit / handleWithdrawalOptimized run applyDepositDelta / applyWithdrawalDelta
             // and then syncAfterDeltaUpdate BEFORE returning, so account.version is bumped in memory but the entity
@@ -631,25 +687,25 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             this.entityManager.setFlushMode(FlushModeType.COMMIT);
             try {
                 this.savingsAccountRepository.applyReferenceTransactionDelta(account.getId(), amount, account.getVersion());
-                account.syncAfterDeltaUpdate(runningBalance);
+                account.syncAfterDeltaUpdate(postedAccountBalance);
             } finally {
                 this.entityManager.setFlushMode(originalFlushMode);
             }
 
-            this.savingsAccountTransactionRepository.saveAndFlush(emtLevy);
+            this.savingsAccountTransactionRepository.saveAndFlush(referenceTransaction);
             // Wire the fresh row into the account's aggregate so the bulk-reverse path (findByRefNo +
             // handleReversal) sees the same managed instance in account.transactions when it cascades
             // the reversed=true flag on save. Without this, reverseTransaction(isBulk=true) would flip
             // reversed=true on the freshly-loaded findByRefNo copy but the account.transactions copy
             // (unreversed) would win the JPA cascade write, leaving the EMT row un-reversed in the DB.
             if (backdatedTxnsAllowedTill) {
-                account.addTransactionToExisting(emtLevy);
+                account.addTransactionToExisting(referenceTransaction);
             } else {
-                account.addTransaction(emtLevy);
+                account.addTransaction(referenceTransaction);
             }
 
-            postJournalEntriesForTransaction(account, emtLevy, isAccountTransfer);
-            created.add(emtLevy);
+            postJournalEntriesForTransaction(account, referenceTransaction, isAccountTransfer);
+            created.add(referenceTransaction);
         }
         return created;
     }
