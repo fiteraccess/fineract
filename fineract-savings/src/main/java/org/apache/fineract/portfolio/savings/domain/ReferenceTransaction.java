@@ -24,6 +24,8 @@ import com.google.gson.JsonObject;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -37,7 +39,8 @@ import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
  * The receiver does not re-evaluate the rule — it just records what the caller asserts, linked to the parent via the
  * parent's {@code ref_no}. Forward-compatible with future siblings (VAT, etc.).
  */
-public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecimal amount) {
+public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecimal amount, String description,
+        CommissionBreakdown breakdown) {
 
     public ReferenceTransaction {
         if (type == null) {
@@ -52,6 +55,10 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
             throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.amount.not.positive",
                     "Reference transaction amount must be positive: " + amount, amount);
         }
+    }
+
+    public boolean isNipFee() {
+        return type.isCommission() || type.isVat();
     }
 
     /**
@@ -71,8 +78,8 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         final List<ReferenceTransaction> refs = new ArrayList<>(array.size());
         for (final JsonElement element : array) {
             final JsonObject obj = element.getAsJsonObject();
-            final String typeName = obj.get("type").getAsString();
-            final BigDecimal amount = obj.get("amount").getAsBigDecimal();
+            final String typeName = requiredString(obj, "type", paramName);
+            final BigDecimal amount = requiredAmount(obj, "amount", paramName);
             final SavingsAccountTransactionType type;
             try {
                 type = SavingsAccountTransactionType.valueOf(typeName);
@@ -82,8 +89,123 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
                 throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.unknown",
                         "Unknown " + paramName + ".type: " + typeName, typeName, ex);
             }
-            refs.add(new ReferenceTransaction(type, amount));
+            final CommissionBreakdown breakdown = type.isVat() ? null : parseBreakdown(obj, paramName);
+            refs.add(new ReferenceTransaction(type, amount, optionalString(obj, "description"), breakdown));
         }
         return refs;
+    }
+
+    /**
+     * Parses and validates the NIP-only additions accepted by a savings withdrawal. Existing EMT references
+     * deliberately remain outside this branch so active deposit, transfer, and withdrawal payloads keep their current
+     * behavior.
+     */
+    public static NipWithdrawalRequest parseNipWithdrawal(final JsonCommand command) {
+        final List<ReferenceTransaction> references = parseArray(command, "referenceTransactions");
+        final boolean switchIdPresent = command.parameterExists("switchId");
+        final String switchId = switchIdPresent ? normalizeSwitchId(command.stringValueOfParameterNamed("switchId")) : null;
+        final boolean containsNipReference = references.stream().anyMatch(ReferenceTransaction::isNipFee);
+
+        if (!switchIdPresent && containsNipReference) {
+            throw invalid("switchId.required", "switchId is required for Commission or VAT reference transactions");
+        }
+        if (!switchIdPresent) {
+            return new NipWithdrawalRequest(null, references);
+        }
+        if (references.stream().anyMatch(reference -> !reference.isNipFee())) {
+            throw invalid("reference.transaction.type.not.supported",
+                    "NIP withdrawals support only Commission and VAT reference transactions");
+        }
+        references.forEach(ReferenceTransaction::validateNipFee);
+        return new NipWithdrawalRequest(switchId, references);
+    }
+
+    /** Rejects NIP-specific request data on deposit and transfer paths. */
+    public static void rejectNipFields(final JsonCommand command, final List<ReferenceTransaction> references) {
+        if (command.parameterExists("switchId") || references.stream()
+                .anyMatch(reference -> reference.isNipFee() || reference.description() != null || reference.breakdown() != null)) {
+            throw invalid("not.supported", "NIP request fields are supported only on savings withdrawals");
+        }
+    }
+
+    private void validateNipFee() {
+        if (StringUtils.isBlank(description)) {
+            throw invalid("reference.transaction.description.required", "NIP reference transaction description is required");
+        }
+        if (type.isCommission()) {
+            if (breakdown == null) {
+                throw invalid("commission.breakdown.required", "Commission reference transaction breakdown is required");
+            }
+            breakdown.validate(amount);
+        }
+    }
+
+    private static String normalizeSwitchId(final String switchId) {
+        if (StringUtils.isBlank(switchId)) {
+            throw invalid("switchId.required", "switchId must be nonblank");
+        }
+        return switchId.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static CommissionBreakdown parseBreakdown(final JsonObject reference, final String paramName) {
+        if (!reference.has("breakdown") || reference.get("breakdown").isJsonNull()) {
+            return null;
+        }
+        final JsonObject breakdown = reference.getAsJsonObject("breakdown");
+        return new CommissionBreakdown(parseLeg(breakdown, "switchFee", paramName), parseLeg(breakdown, "bankCommission", paramName));
+    }
+
+    private static CommissionBreakdownLeg parseLeg(final JsonObject breakdown, final String name, final String paramName) {
+        if (!breakdown.has(name) || breakdown.get(name).isJsonNull()) {
+            return null;
+        }
+        final JsonObject leg = breakdown.getAsJsonObject(name);
+        return new CommissionBreakdownLeg(
+                leg.has("amount") && !leg.get("amount").isJsonNull() ? leg.get("amount").getAsBigDecimal() : null);
+    }
+
+    private static String requiredString(final JsonObject object, final String name, final String paramName) {
+        final String value = optionalString(object, name);
+        if (StringUtils.isBlank(value)) {
+            throw invalid("reference.transaction." + name + ".required", paramName + "." + name + " is required");
+        }
+        return value;
+    }
+
+    private static String optionalString(final JsonObject object, final String name) {
+        return object.has(name) && !object.get(name).isJsonNull() ? object.get(name).getAsString() : null;
+    }
+
+    private static BigDecimal requiredAmount(final JsonObject object, final String name, final String paramName) {
+        if (!object.has(name) || object.get(name).isJsonNull()) {
+            throw invalid("reference.transaction." + name + ".required", paramName + "." + name + " is required");
+        }
+        return object.get(name).getAsBigDecimal();
+    }
+
+    private static GeneralPlatformDomainRuleException invalid(final String code, final String message) {
+        return new GeneralPlatformDomainRuleException("error.msg.savings.nip." + code, message);
+    }
+
+    public record NipWithdrawalRequest(String switchId, List<ReferenceTransaction> references) {
+    }
+
+    public record CommissionBreakdown(CommissionBreakdownLeg switchFee, CommissionBreakdownLeg bankCommission) {
+
+        private void validate(final BigDecimal parentAmount) {
+            if (switchFee == null || bankCommission == null || switchFee.amount == null || bankCommission.amount == null) {
+                throw invalid("commission.breakdown.legs.required",
+                        "Commission breakdown switchFee and bankCommission amounts are required");
+            }
+            if (switchFee.amount.signum() < 0 || bankCommission.amount.signum() < 0) {
+                throw invalid("commission.breakdown.amount.not.negative", "Commission breakdown amounts must be non-negative");
+            }
+            if (switchFee.amount.add(bankCommission.amount).compareTo(parentAmount) != 0) {
+                throw invalid("commission.breakdown.sum.mismatch", "Commission breakdown amounts must equal the Commission amount");
+            }
+        }
+    }
+
+    public record CommissionBreakdownLeg(BigDecimal amount) {
     }
 }

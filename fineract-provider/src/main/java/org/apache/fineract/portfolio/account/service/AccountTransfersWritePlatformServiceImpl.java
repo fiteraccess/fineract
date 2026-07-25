@@ -99,6 +99,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
         boolean isRegularTransaction = true;
 
         this.accountTransfersDataValidator.validate(command);
+        rejectNipReferenceTransactions(command);
 
         final LocalDate transactionDate = command.localDateValueOfParameterNamed(transferDateParamName);
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed(transferAmountParamName);
@@ -535,6 +536,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
     public CommandProcessingResult refundByTransfer(JsonCommand command) {
         // TODO Auto-generated method stub
         this.accountTransfersDataValidator.validate(command);
+        rejectNipReferenceTransactions(command);
 
         final LocalDate transactionDate = command.localDateValueOfParameterNamed(transferDateParamName);
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed(transferAmountParamName);
@@ -582,5 +584,12 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
         // }
 
         return builder.build();
+    }
+
+    private void rejectNipReferenceTransactions(final JsonCommand command) {
+        ReferenceTransaction.rejectNipFields(command,
+                ReferenceTransaction.parseArray(command, AccountTransfersApiConstants.sourceReferenceTransactionsParamName));
+        ReferenceTransaction.rejectNipFields(command,
+                ReferenceTransaction.parseArray(command, AccountTransfersApiConstants.destinationReferenceTransactionsParamName));
     }
 }

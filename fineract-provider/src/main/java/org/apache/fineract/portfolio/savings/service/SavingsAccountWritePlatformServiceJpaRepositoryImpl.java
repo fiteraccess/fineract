@@ -322,6 +322,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.context.authenticatedUser();
 
         this.savingsAccountTransactionDataValidator.validate(command);
+        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
+        ReferenceTransaction.rejectNipFields(command, referenceTransactions);
         boolean isGsim = false;
 
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
@@ -368,7 +370,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         // AB-265: apply side-effect transactions (EMT Levy today; VAT-style in future) asserted by the caller.
         // Synapse pre-computed the amounts; Fineract just records them under the parent's refNo for atomic
         // bulk-reversal.
-        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
         if (!referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, deposit, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
@@ -431,6 +432,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
+        final ReferenceTransaction.NipWithdrawalRequest nipRequest = ReferenceTransaction.parseNipWithdrawal(command);
 
         final Locale locale = command.extractLocale();
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
@@ -467,7 +469,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         // AB-265: apply side-effect transactions (EMT Levy today) asserted by the caller. Withdrawal-fee remains
         // handled by handleWithdrawal itself; EMT is appended here so the rule lives in Synapse and Fineract just
         // records what it is told.
-        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
+        final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
         if (!referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, withdrawal, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
