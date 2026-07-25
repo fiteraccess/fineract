@@ -141,6 +141,9 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
     @Column(name = "ref_no", nullable = true)
     private String refNo;
 
+    @Column(name = "switch_id", nullable = true, length = 64)
+    private String switchId;
+
     SavingsAccountTransaction() {}
 
     private SavingsAccountTransaction(final SavingsAccount savingsAccount, final Office office, final PaymentDetail paymentDetail,
@@ -243,6 +246,22 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         final Boolean lienTransaction = false;
         return new SavingsAccountTransaction(savingsAccount, office, SavingsAccountTransactionType.EMT_LEVY.getValue(), date, amount,
                 isReversed, isManualTransaction, lienTransaction, refNo);
+    }
+
+    public static SavingsAccountTransaction commission(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
+            final Money amount, final String refNo, final String switchId) {
+        final SavingsAccountTransaction transaction = new SavingsAccountTransaction(savingsAccount, office,
+                SavingsAccountTransactionType.COMMISSION.getValue(), date, amount, false, false, false, refNo);
+        transaction.switchId = switchId;
+        return transaction;
+    }
+
+    public static SavingsAccountTransaction vat(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
+            final Money amount, final String refNo, final String switchId) {
+        final SavingsAccountTransaction transaction = new SavingsAccountTransaction(savingsAccount, office,
+                SavingsAccountTransactionType.VAT.getValue(), date, amount, false, false, false, refNo);
+        transaction.switchId = switchId;
+        return transaction;
     }
 
     public static SavingsAccountTransaction annualFee(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
@@ -472,6 +491,14 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         this.refNo = refNo;
     }
 
+    public String getSwitchId() {
+        return this.switchId;
+    }
+
+    public void setSwitchId(final String switchId) {
+        this.switchId = switchId;
+    }
+
     public PaymentDetail getPaymentDetail() {
         return this.paymentDetail;
     }
@@ -652,7 +679,8 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         }
         return new SavingsAccountingBridgeTransactionDTO(getId(), this.office.getId(), transactionType, isReversed(), getTransactionDate(),
                 currencyCode, this.amount, this.overdraftAmount,
-                this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData);
+                this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData,
+                this.switchId);
     }
 
     public Map<String, Object> toMapData(final String currencyCode) {

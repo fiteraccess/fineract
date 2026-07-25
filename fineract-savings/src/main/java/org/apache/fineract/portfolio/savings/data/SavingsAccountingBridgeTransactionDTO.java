@@ -42,4 +42,5 @@ public class SavingsAccountingBridgeTransactionDTO {
     private Long paymentTypeId;
     private List<SavingsAccountingBridgeChargePaymentDTO> savingsChargesPaid = new ArrayList<>();
     private List<SavingsAccountingBridgeTaxDTO> taxDetails = new ArrayList<>();
+    private String switchId;
 }
