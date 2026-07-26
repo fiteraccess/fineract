@@ -15,13 +15,16 @@ import com.google.gson.Gson;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.ChargeRequest;
+import org.apache.fineract.client.models.GetFinancialActivityAccountsResponse;
 import org.apache.fineract.client.models.PostChargesResponse;
+import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountsSavingsAccountIdChargesRequest;
 import org.apache.fineract.client.models.PostSavingsProductsRequest;
 import org.apache.fineract.integrationtests.common.ClientHelper;
@@ -46,6 +49,44 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
     private static final int VAT = 26;
 
     private final Gson gson = new Gson();
+
+    @Test
+    void postsPrincipalAndSuppliedReferencesToConfiguredJournalAccounts() {
+        final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+        runAt(date, () -> {
+            final String configuredSwitchId = uniqueSwitchId();
+            final SwitchAccounting switchAccounting = configureSwitch(configuredSwitchId);
+            final Account vatPayable = configureVatPayableMapping();
+            final SavingsAccounting savingsAccounting = createSavingsAccounting();
+            final Long savingsId = createActiveCashBasedSavingsAccount(date, savingsAccounting);
+            deposit(savingsId, date, new BigDecimal("1000.00"));
+
+            withdraw(savingsId, date, "100.00", "  " + configuredSwitchId.toLowerCase() + "  ",
+                    List.of(vat("7.00", "  First VAT journal note  "), commission("3.00", "Commission journal note", "1.00", "2.00"),
+                            vat("2.00", "Last VAT journal note")));
+
+            final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
+            assertThat(transactions).hasSize(4);
+            assertTransaction(transactions.get(0), WITHDRAWAL, "100.00", "900.00");
+            assertTransaction(transactions.get(1), VAT, "7.00", "893.00");
+            assertTransaction(transactions.get(2), COMMISSION, "3.00", "890.00");
+            assertTransaction(transactions.get(3), VAT, "2.00", "888.00");
+            assertSharedReferenceAndSwitch(transactions, configuredSwitchId);
+            assertThat(referenceNotes(savingsId))
+                    .isEqualTo(List.of("  First VAT journal note  ", "Commission journal note", "Last VAT journal note"));
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("888.00");
+
+            assertJournalEntries(transactions.get(0), journalPosting("DEBIT", savingsAccounting.savingsControl(), "100.00"),
+                    journalPosting("CREDIT", switchAccounting.payable(), "100.00"));
+            assertJournalEntries(transactions.get(1), journalPosting("DEBIT", savingsAccounting.savingsControl(), "7.00"),
+                    journalPosting("CREDIT", vatPayable, "7.00"));
+            assertJournalEntries(transactions.get(2), journalPosting("DEBIT", savingsAccounting.savingsControl(), "3.00"),
+                    journalPosting("CREDIT", switchAccounting.switchFee(), "1.00"),
+                    journalPosting("CREDIT", switchAccounting.commissionIncome(), "2.00"));
+            assertJournalEntries(transactions.get(3), journalPosting("DEBIT", savingsAccounting.savingsControl(), "2.00"),
+                    journalPosting("CREDIT", vatPayable, "2.00"));
+        });
+    }
 
     @Test
     void preservesReferenceOrderProductFeeRunningBalancesSwitchAndNotes() {
@@ -174,6 +215,19 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         return savingsId;
     }
 
+    @SuppressWarnings("removal")
+    private Long createActiveCashBasedSavingsAccount(final String date, final SavingsAccounting accounting) {
+        final Long clientId = createClient();
+        final String productJson = new SavingsProductHelper().withCurrencyCode("USD").withInterestCompoundingPeriodTypeAsDaily()
+                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance()
+                .withAccountingRuleAsCashBased(accounting.productAccounts()).build();
+        final Long productId = SavingsProductHelper.createSavingsProduct(productJson, requestSpec, responseSpec).longValue();
+        final Long savingsId = applySavingsAccount(applySavingsRequest(clientId, productId, date)).getSavingsId();
+        approveSavingsAccount(savingsId, date);
+        activateSavingsAccount(savingsId, date);
+        return savingsId;
+    }
+
     private Long createClient() {
         return clientHelper.createClient(ClientHelper.defaultClientCreationRequest().dateFormat("yyyy-MM-dd").activationDate("2011-03-04"))
                 .getClientId();
@@ -187,11 +241,11 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
                 .chargeId(charge.getResourceId()).amount(new BigDecimal(amount).floatValue()).locale("en")));
     }
 
-    private void configureSwitch(final String switchId) {
+    private SwitchAccounting configureSwitch(final String switchId) {
         final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
-        final Account payable = accountHelper.createLiabilityAccount();
-        final Account switchFee = accountHelper.createExpenseAccount();
-        final Account commissionIncome = accountHelper.createIncomeAccount();
+        final Account payable = accountHelper.createLiabilityAccount("NIP Principal Payable");
+        final Account switchFee = accountHelper.createExpenseAccount("NIP Switch Fee");
+        final Account commissionIncome = accountHelper.createIncomeAccount("NIP Commission Income");
         final Map<String, Object> configuration = new LinkedHashMap<>();
         configuration.put("switchPayableGlAccountId", payable.getAccountID());
         configuration.put("switchFeeGlAccountId", switchFee.getAccountID());
@@ -200,23 +254,30 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         Utils.performServerPut(requestSpec, responseSpec,
                 "/fineract-provider/api/v1/nip-switch-accounting-configurations/" + switchId + "?" + Utils.TENANT_IDENTIFIER,
                 gson.toJson(configuration));
+        return new SwitchAccounting(payable, switchFee, commissionIncome);
     }
 
-    @SuppressWarnings({ "rawtypes", "removal" })
-    private void configureVatPayableMapping() {
-        final Account vatPayable = new AccountHelper(requestSpec, responseSpec).createLiabilityAccount();
+    private Account configureVatPayableMapping() {
         final FinancialActivityAccountHelper helper = new FinancialActivityAccountHelper(requestSpec);
-        final int vatPayableActivityId = FinancialActivity.VAT_PAYABLE.getValue();
-        for (final HashMap mapping : helper.getAllFinancialActivityAccounts(responseSpec)) {
-            final Map financialActivity = (Map) mapping.get("financialActivityData");
-            if (((Number) financialActivity.get("id")).intValue() == vatPayableActivityId) {
-                helper.updateFinancialActivityAccount(((Number) mapping.get("id")).intValue(), vatPayableActivityId,
-                        vatPayable.getAccountID(), responseSpec, CommonConstants.RESPONSE_CHANGES);
-                return;
+        final long vatPayableActivityId = FinancialActivity.VAT_PAYABLE.getValue();
+        for (final GetFinancialActivityAccountsResponse mapping : helper.getAllFinancialActivityAccounts()) {
+            if (mapping.getFinancialActivityData().getId() == vatPayableActivityId) {
+                return new Account(mapping.getGlAccountData().getId().intValue(), Account.AccountType.LIABILITY);
             }
         }
-        helper.createFinancialActivityAccount(vatPayableActivityId, vatPayable.getAccountID(), responseSpec,
-                CommonConstants.RESPONSE_RESOURCE_ID);
+        final Account vatPayable = new AccountHelper(requestSpec, responseSpec).createLiabilityAccount("NIP VAT Payable");
+        helper.createFinancialActivityAccount(new PostFinancialActivityAccountsRequest().financialActivityId(vatPayableActivityId)
+                .glAccountId(vatPayable.getAccountID().longValue()));
+        return vatPayable;
+    }
+
+    private SavingsAccounting createSavingsAccounting() {
+        final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
+        final Account savingsReference = accountHelper.createAssetAccount("NIP Savings Reference");
+        final Account savingsControl = accountHelper.createLiabilityAccount("NIP Savings Control");
+        final Account feeIncome = accountHelper.createIncomeAccount("NIP Product Fee Income");
+        final Account interestExpense = accountHelper.createExpenseAccount("NIP Interest Expense");
+        return new SavingsAccounting(savingsReference, savingsControl, feeIncome, interestExpense);
     }
 
     private void withdraw(final Long savingsId, final String date, final String amount, final String switchId,
@@ -295,6 +356,29 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
                 Long.class, savingsId);
     }
 
+    @SuppressWarnings({ "rawtypes", "removal" })
+    private void assertJournalEntries(final Map<String, Object> transaction, final JournalPosting... expectedPostings) {
+        final Number transactionId = (Number) value(transaction, "id");
+        final ArrayList<HashMap> entries = journalEntryHelper.getJournalEntriesByTransactionId("S" + transactionId.longValue());
+        final List<JournalPosting> actualPostings = new ArrayList<>();
+        for (final HashMap entry : entries) {
+            final Map entryType = (Map) entry.get("entryType");
+            actualPostings.add(new JournalPosting(entryType.get("value").toString(), ((Number) entry.get("glAccountId")).intValue(),
+                    decimal(entry.get("amount"))));
+        }
+        final List<JournalPosting> expected = List.of(expectedPostings);
+        assertThat(actualPostings).hasSameSizeAs(expected);
+        assertThat(actualPostings.containsAll(expected) && expected.containsAll(actualPostings)).isTrue();
+    }
+
+    private JournalPosting journalPosting(final String entryType, final Account account, final String amount) {
+        return new JournalPosting(entryType, account.getAccountID(), decimal(amount));
+    }
+
+    private BigDecimal decimal(final Object value) {
+        return new BigDecimal(value.toString()).stripTrailingZeros();
+    }
+
     private JdbcTemplate tenantJdbc() {
         return TenantJdbcSupport.tenantJdbc();
     }
@@ -311,7 +395,28 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         return direct != null ? direct : row.get(column.toUpperCase());
     }
 
+    private void assertSharedReferenceAndSwitch(final List<Map<String, Object>> transactions, final String switchId) {
+        final String rootReference = value(transactions.get(0), "ref_no").toString();
+        for (final Map<String, Object> transaction : transactions) {
+            assertThat(value(transaction, "ref_no")).isEqualTo(rootReference);
+            assertThat(value(transaction, "switch_id")).isEqualTo(switchId);
+        }
+    }
+
     private String uniqueSwitchId() {
         return ("NIP_" + System.nanoTime()).toUpperCase();
+    }
+
+    private record SwitchAccounting(Account payable, Account switchFee, Account commissionIncome) {
+    }
+
+    private record SavingsAccounting(Account savingsReference, Account savingsControl, Account feeIncome, Account interestExpense) {
+
+        Account[] productAccounts() {
+            return new Account[] { savingsReference, savingsControl, feeIncome, interestExpense };
+        }
+    }
+
+    private record JournalPosting(String entryType, Integer glAccountId, BigDecimal amount) {
     }
 }
