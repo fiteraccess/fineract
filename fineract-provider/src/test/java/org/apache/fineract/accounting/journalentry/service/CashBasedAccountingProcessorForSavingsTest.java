@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -330,6 +331,28 @@ class CashBasedAccountingProcessorForSavingsTest {
         verify(helper, never()).persistJournalEntries(anyList());
     }
 
+    @Test
+    void shouldUseEachNipSavingsTransactionIdentifierForItsOwnJournalEntries() {
+        GLAccount savingsControl = glAccount(101L);
+        GLAccount vatPayable = glAccount(301L);
+        configureSwitch();
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L)).thenReturn(vatPayable);
+        SavingsTransactionDTO principal = transaction(SavingsAccountTransactionType.WITHDRAWAL, "NIBSS", BigDecimal.valueOf(100), null,
+                false, null, "55");
+        SavingsTransactionDTO commission = transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN, null, false,
+                new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.valueOf(3), BigDecimal.valueOf(7)), "56");
+        SavingsTransactionDTO vat = transaction(SavingsAccountTransactionType.VAT, "NIBSS", BigDecimal.valueOf(6), null, false, null, "57");
+
+        processor.createJournalEntriesForSavings(savings(principal, commission, vat));
+
+        ArgumentCaptor<String> transactionIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(helper, times(3)).createBalancedJournalEntriesForSavings(eq(office), eq("NGN"), eq(11L), transactionIdCaptor.capture(),
+                eq(TRANSACTION_DATE), anyList(), anyList(), eq(false), anyList());
+        assertThat(transactionIdCaptor.getAllValues()).containsExactly("55", "56", "57");
+    }
+
     private SavingsDTO savings(final SavingsTransactionDTO transaction) {
         return new SavingsDTO(11L, 22L, 33L, "NGN", true, false, List.of(transaction), office);
     }
@@ -361,9 +384,15 @@ class CashBasedAccountingProcessorForSavingsTest {
     private SavingsTransactionDTO transaction(final SavingsAccountTransactionType type, final String switchId, final BigDecimal amount,
             final BigDecimal overdraftAmount, final boolean accountTransfer,
             final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation) {
+        return transaction(type, switchId, amount, overdraftAmount, accountTransfer, commissionAllocation, "55");
+    }
+
+    private SavingsTransactionDTO transaction(final SavingsAccountTransactionType type, final String switchId, final BigDecimal amount,
+            final BigDecimal overdraftAmount, final boolean accountTransfer,
+            final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation, final String transactionId) {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(Long.valueOf(type.getValue()),
                 type.getCode(), type.name());
-        return new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
+        return new SavingsTransactionDTO(33L, 44L, transactionId, TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
                 overdraftAmount, accountTransfer, List.of(), switchId, commissionAllocation);
     }
 

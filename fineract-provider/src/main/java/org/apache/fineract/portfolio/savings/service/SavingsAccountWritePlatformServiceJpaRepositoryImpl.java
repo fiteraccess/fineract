@@ -764,7 +764,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         List<SavingsAccountTransaction> savingsAccountTransactions = null;
         if (isBulk) {
             String transactionRefNo = savingsAccountTransaction.getRefNo();
-            savingsAccountTransactions = this.savingsAccountTransactionRepository.findByRefNo(transactionRefNo);
+            savingsAccountTransactions = selectTransactionsForBulkReversal(transactionId,
+                    this.savingsAccountTransactionRepository.findByRefNo(transactionRefNo));
             reversal = this.savingsAccountDomainService.handleReversal(account, savingsAccountTransactions, backdatedTxnsAllowedTill);
         } else {
             reversal = this.savingsAccountDomainService.handleReversal(account, Collections.singletonList(savingsAccountTransaction),
@@ -778,6 +779,16 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .withGroupId(account.groupId()) //
                 .withSavingsId(savingsId) //
                 .build();
+    }
+
+    static List<SavingsAccountTransaction> selectTransactionsForBulkReversal(final Long requestedTransactionId,
+            final List<SavingsAccountTransaction> linkedTransactions) {
+        return linkedTransactions.stream()
+                .filter(transaction -> requestedTransactionId.equals(transaction.getId()) || !isNipFeeReference(transaction)).toList();
+    }
+
+    private static boolean isNipFeeReference(final SavingsAccountTransaction transaction) {
+        return transaction.getTransactionType().isCommission() || transaction.getTransactionType().isVat();
     }
 
     @Override
