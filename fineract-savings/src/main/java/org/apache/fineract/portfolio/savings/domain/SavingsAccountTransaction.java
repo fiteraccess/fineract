@@ -680,7 +680,7 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return new SavingsAccountingBridgeTransactionDTO(getId(), this.office.getId(), transactionType, isReversed(), getTransactionDate(),
                 currencyCode, this.amount, this.overdraftAmount,
                 this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData,
-                this.switchId);
+                this.switchId, null);
     }
 
     public Map<String, Object> toMapData(final String currencyCode) {

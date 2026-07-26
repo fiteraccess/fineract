@@ -24,6 +24,7 @@ import java.util.List;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeCommissionAllocationDTO;
 
 @RequiredArgsConstructor
 @Getter
@@ -46,6 +47,8 @@ public class SavingsTransactionDTO {
     private final BigDecimal overdraftAmount;
     private final boolean isAccountTransfer;
     private final List<TaxPaymentDTO> taxPayments;
+    private final String switchId;
+    private final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation;
 
     public boolean isOverdraftTransaction() {
         return this.overdraftAmount != null && this.overdraftAmount.doubleValue() > 0;

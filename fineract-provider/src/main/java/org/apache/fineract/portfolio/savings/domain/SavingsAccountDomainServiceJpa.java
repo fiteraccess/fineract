@@ -303,6 +303,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // Validate balance including fees — must check transactionAmount + totalFeeAmount
         this.balanceValidationService.validateBalance(account, transactionAmount.add(totalFeeAmount),
                 transactionBooleanValues.isExceptionForBalanceCheck());
+        final BigDecimal availableBalanceBeforeWithdrawal = account.getWithdrawableBalanceWithoutMinimumBalance();
 
         // Reverse accrual transactions on or after the transaction date (O(1) JPQL UPDATE)
         if (Boolean.TRUE
@@ -315,6 +316,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountTransaction withdrawal = SavingsAccountTransaction.withdrawal(account, account.office(), paymentDetail,
                 transactionDate, transactionAmountMoney, refNo);
         withdrawal.setSwitchId(switchId);
+        final BigDecimal principalOverdraftAmount = calculateIncrementalOverdraftAmount(availableBalanceBeforeWithdrawal,
+                transactionAmount);
+        if (principalOverdraftAmount.signum() > 0) {
+            withdrawal.setOverdraftAmount(Money.of(account.getCurrency(), principalOverdraftAmount));
+        }
 
         // Compute the post-withdrawal available balance for the running-balance field on the new transactions.
         // We do NOT mutate account.getSummary() — the JPQL UPDATE below applies the delta directly to the DB.
@@ -651,6 +657,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final List<SavingsAccountTransaction> created = new ArrayList<>(references.size());
         for (final ReferenceTransaction ref : references) {
             final BigDecimal amount = ref.amount();
+            final BigDecimal balanceBeforeReference = transactionRunningBalance;
             final Money money = Money.of(account.getCurrency(), amount);
             final SavingsAccountTransaction referenceTransaction;
             if (ref.type().isEmtLevy()) {
@@ -669,6 +676,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             postedAccountBalance = postedAccountBalance.subtract(amount);
 
             referenceTransaction.setRunningBalance(Money.of(account.getCurrency(), transactionRunningBalance));
+            final BigDecimal incrementalOverdraftAmount = calculateIncrementalOverdraftAmount(balanceBeforeReference, amount);
+            if (incrementalOverdraftAmount.signum() > 0) {
+                referenceTransaction.setOverdraftAmount(Money.of(account.getCurrency(), incrementalOverdraftAmount));
+            }
 
             // ORDER MATTERS. handleDeposit / handleWithdrawalOptimized run applyDepositDelta / applyWithdrawalDelta
             // and then syncAfterDeltaUpdate BEFORE returning, so account.version is bumped in memory but the entity
@@ -704,10 +715,16 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 account.addTransaction(referenceTransaction);
             }
 
-            postJournalEntriesForTransaction(account, referenceTransaction, isAccountTransfer);
+            postJournalEntriesForTransaction(account, referenceTransaction, isAccountTransfer, ref);
             created.add(referenceTransaction);
         }
         return created;
+    }
+
+    static BigDecimal calculateIncrementalOverdraftAmount(final BigDecimal availableBalanceBeforeDebit, final BigDecimal debitAmount) {
+        final BigDecimal overdraftBeforeDebit = availableBalanceBeforeDebit.negate().max(BigDecimal.ZERO);
+        final BigDecimal overdraftAfterDebit = availableBalanceBeforeDebit.subtract(debitAmount).negate().max(BigDecimal.ZERO);
+        return overdraftAfterDebit.subtract(overdraftBeforeDebit).max(BigDecimal.ZERO).min(debitAmount);
     }
 
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,
@@ -827,8 +844,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
      */
     private void postJournalEntriesForTransaction(final SavingsAccount account, final SavingsAccountTransaction transaction,
             final boolean isAccountTransfer) {
-        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account,
-                List.of(transaction), isAccountTransfer);
+        postJournalEntriesForTransaction(account, transaction, isAccountTransfer, null);
+    }
+
+    private void postJournalEntriesForTransaction(final SavingsAccount account, final SavingsAccountTransaction transaction,
+            final boolean isAccountTransfer, final ReferenceTransaction referenceTransaction) {
+        final SavingsAccountingBridgeDTO accountingBridgeData = referenceTransaction == null
+                ? SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account, List.of(transaction), isAccountTransfer)
+                : SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account, transaction, referenceTransaction,
+                        isAccountTransfer);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData, account.office());
     }
 

@@ -19,29 +19,9 @@
 package org.apache.fineract.portfolio.savings.data;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class SavingsAccountingBridgeTransactionDTO {
-
-    private Long id;
-    private Long officeId;
-    private SavingsAccountTransactionEnumData type;
-    private boolean reversed;
-    private LocalDate date;
-    private String currencyCode;
-    private BigDecimal amount;
-    private BigDecimal overdraftAmount;
-    private Long paymentTypeId;
-    private List<SavingsAccountingBridgeChargePaymentDTO> savingsChargesPaid = new ArrayList<>();
-    private List<SavingsAccountingBridgeTaxDTO> taxDetails = new ArrayList<>();
-    private String switchId;
-    private SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation;
+/**
+ * Caller-supplied accounting allocation for one Commission savings transaction.
+ */
+public record SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal switchFeeAmount, BigDecimal bankCommissionAmount) {
 }

@@ -21,9 +21,11 @@ package org.apache.fineract.portfolio.savings.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
+import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTransactionDTO;
 import org.junit.jupiter.api.Test;
@@ -71,6 +73,27 @@ class SavingsAccountingBridgeDataHelperTest {
         assertThat(result.isAccrualBasedAccountingEnabled()).isFalse();
         assertThat(result.isAccountTransfer()).isTrue();
         assertThat(result.getNewSavingsTransactions()).containsExactly(bridgeTransaction);
+    }
+
+    @Test
+    void buildAccountingBridgeDataShouldCarrySuppliedCommissionAllocation() {
+        when(account.getCurrency()).thenReturn(currency);
+        when(currency.getCode()).thenReturn("NGN");
+        when(account.savingsProduct()).thenReturn(savingsProduct);
+        SavingsAccountingBridgeTransactionDTO bridgeTransaction = new SavingsAccountingBridgeTransactionDTO();
+        when(firstTransaction.toAccountingBridgeDTO("NGN")).thenReturn(bridgeTransaction);
+        ReferenceTransaction referenceTransaction = new ReferenceTransaction(SavingsAccountTransactionType.COMMISSION, BigDecimal.TEN,
+                "Commission", new ReferenceTransaction.CommissionBreakdown(
+                        new ReferenceTransaction.CommissionBreakdownLeg(BigDecimal.valueOf(2)),
+                        new ReferenceTransaction.CommissionBreakdownLeg(BigDecimal.valueOf(8))));
+
+        SavingsAccountingBridgeDTO result = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account, firstTransaction,
+                referenceTransaction, false);
+
+        assertThat(result.getNewSavingsTransactions()).singleElement().satisfies(transaction -> {
+            assertThat(transaction.getCommissionAllocation().switchFeeAmount()).isEqualByComparingTo("2");
+            assertThat(transaction.getCommissionAllocation().bankCommissionAmount()).isEqualByComparingTo("8");
+        });
     }
 
     @Test
