@@ -19,9 +19,12 @@
 package org.apache.fineract.accounting.journalentry.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -102,6 +105,68 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldOmitZeroSwitchFeeCommissionLegInAccrualAccounting() {
+        GLAccount savingsControl = glAccount(101L);
+        configureSwitch();
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(savings(transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN,
+                null, new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.ZERO, BigDecimal.TEN))));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.TEN)),
+                List.of(new SavingsJournalEntryAllocation(203L, BigDecimal.TEN)));
+    }
+
+    @Test
+    void shouldOmitZeroBankCommissionLegInAccrualAccounting() {
+        GLAccount savingsControl = glAccount(101L);
+        configureSwitch();
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(savings(transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN,
+                null, new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.TEN, BigDecimal.ZERO))));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.TEN)),
+                List.of(new SavingsJournalEntryAllocation(202L, BigDecimal.TEN)));
+    }
+
+    @Test
+    void shouldRejectMismatchedCommissionAllocationInAccrualAccounting() {
+        SavingsTransactionDTO commission = transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN, null,
+                new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.ONE, BigDecimal.TWO));
+
+        assertThatThrownBy(() -> processor.createJournalEntriesForSavings(savings(commission))).isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("must equal the Commission transaction amount");
+
+        verifyNoInteractions(configurationProvider);
+        verify(helper, never()).createBalancedJournalEntriesForSavings(eq(office), eq("NGN"), eq(11L), eq("55"), eq(TRANSACTION_DATE),
+                anyList(), anyList(), eq(false));
+        verify(helper, never()).persistJournalEntries(anyList());
+    }
+
+    @Test
+    void shouldSplitCommissionBetweenSavingsAndOverdraftControlsInAccrualAccounting() {
+        GLAccount savingsControl = glAccount(101L);
+        GLAccount overdraftPortfolioControl = glAccount(102L);
+        configureSwitch();
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), 44L))
+                .thenReturn(overdraftPortfolioControl);
+
+        processor.createJournalEntriesForSavings(savings(transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN,
+                BigDecimal.valueOf(4), new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.valueOf(3), BigDecimal.valueOf(7)))));
+
+        assertBalancedAllocations(
+                List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(6)),
+                        new SavingsJournalEntryAllocation(102L, BigDecimal.valueOf(4))),
+                List.of(new SavingsJournalEntryAllocation(202L, BigDecimal.valueOf(3)),
+                        new SavingsJournalEntryAllocation(203L, BigDecimal.valueOf(7))));
+    }
+
+    @Test
     void shouldRouteVatToTheTenantFinancialActivityMappingInAccrualAccounting() {
         GLAccount vatPayable = glAccount(301L);
         GLAccount savingsControl = glAccount(101L);
@@ -115,6 +180,75 @@ class AccrualBasedAccountingProcessorForSavingsTest {
         assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(6))),
                 List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(6))));
         verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
+    void shouldSplitVatBetweenSavingsAndOverdraftControlsInAccrualAccounting() {
+        GLAccount vatPayable = glAccount(301L);
+        GLAccount savingsControl = glAccount(101L);
+        GLAccount overdraftPortfolioControl = glAccount(102L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L)).thenReturn(vatPayable);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), 44L))
+                .thenReturn(overdraftPortfolioControl);
+
+        processor.createJournalEntriesForSavings(
+                savings(transaction(SavingsAccountTransactionType.VAT, "NIBSS", BigDecimal.valueOf(6), BigDecimal.valueOf(2), null)));
+
+        assertBalancedAllocations(
+                List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(4)),
+                        new SavingsJournalEntryAllocation(102L, BigDecimal.valueOf(2))),
+                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(6))));
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
+    void shouldNotCreateVatJournalEntriesWhenVatPayableMappingFailsInAccrualAccounting() {
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L))
+                .thenThrow(new IllegalStateException("VAT_PAYABLE unavailable"));
+
+        assertThatThrownBy(() -> processor.createJournalEntriesForSavings(
+                savings(transaction(SavingsAccountTransactionType.VAT, "NIBSS", BigDecimal.valueOf(6), null, null))))
+                .isInstanceOf(IllegalStateException.class).hasMessage("VAT_PAYABLE unavailable");
+
+        verify(helper, never()).getLinkedGLAccountForSavingsProduct(eq(22L), eq(AccrualAccountsForSavings.SAVINGS_CONTROL.getValue()),
+                eq(44L));
+        verify(helper, never()).getLinkedGLAccountForSavingsProduct(eq(22L),
+                eq(AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue()), eq(44L));
+        verify(helper, never()).createBalancedJournalEntriesForSavings(eq(office), eq("NGN"), eq(11L), eq("55"), eq(TRANSACTION_DATE),
+                anyList(), anyList(), eq(false));
+        verify(helper, never()).persistJournalEntries(anyList());
+    }
+
+    @Test
+    void shouldNotResolveVatPayableForFeeFreeRequestInAccrualAccounting() {
+        processor.createJournalEntriesForSavings(new SavingsDTO(11L, 22L, 33L, "NGN", true, false, List.of(), office));
+
+        verify(helper, never()).getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L);
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
+    void shouldUseEachNipSavingsTransactionIdentifierForItsOwnAccrualJournalEntries() {
+        GLAccount savingsControl = glAccount(101L);
+        GLAccount vatPayable = glAccount(301L);
+        configureSwitch();
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L)).thenReturn(vatPayable);
+        SavingsTransactionDTO principal = transaction(SavingsAccountTransactionType.WITHDRAWAL, "NIBSS", BigDecimal.valueOf(100), null,
+                null, "55");
+        SavingsTransactionDTO commission = transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN, null,
+                new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.valueOf(3), BigDecimal.valueOf(7)), "56");
+        SavingsTransactionDTO vat = transaction(SavingsAccountTransactionType.VAT, "NIBSS", BigDecimal.valueOf(6), null, null, "57");
+
+        processor.createJournalEntriesForSavings(savings(principal, commission, vat));
+
+        ArgumentCaptor<String> transactionIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(helper, times(3)).createBalancedJournalEntriesForSavings(eq(office), eq("NGN"), eq(11L), transactionIdCaptor.capture(),
+                eq(TRANSACTION_DATE), anyList(), anyList(), eq(false));
+        assertThat(transactionIdCaptor.getAllValues()).containsExactly("55", "56", "57");
     }
 
     @Test
@@ -136,11 +270,21 @@ class AccrualBasedAccountingProcessorForSavingsTest {
         return new SavingsDTO(11L, 22L, 33L, "NGN", true, false, List.of(transaction), office);
     }
 
+    private SavingsDTO savings(final SavingsTransactionDTO... transactions) {
+        return new SavingsDTO(11L, 22L, 33L, "NGN", true, false, List.of(transactions), office);
+    }
+
     private SavingsTransactionDTO transaction(final SavingsAccountTransactionType type, final String switchId, final BigDecimal amount,
             final BigDecimal overdraftAmount, final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation) {
+        return transaction(type, switchId, amount, overdraftAmount, commissionAllocation, "55");
+    }
+
+    private SavingsTransactionDTO transaction(final SavingsAccountTransactionType type, final String switchId, final BigDecimal amount,
+            final BigDecimal overdraftAmount, final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation,
+            final String transactionId) {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(Long.valueOf(type.getValue()),
                 type.getCode(), type.name());
-        return new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
+        return new SavingsTransactionDTO(33L, 44L, transactionId, TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
                 overdraftAmount, false, List.of(), switchId, commissionAllocation);
     }
 
