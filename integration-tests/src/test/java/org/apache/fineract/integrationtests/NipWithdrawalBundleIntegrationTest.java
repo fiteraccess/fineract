@@ -18,8 +18,6 @@
  */
 package org.apache.fineract.integrationtests;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.google.gson.Gson;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.specification.ResponseSpecification;
