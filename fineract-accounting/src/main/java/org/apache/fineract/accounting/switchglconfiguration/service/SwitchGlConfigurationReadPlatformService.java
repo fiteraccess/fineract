@@ -16,31 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.portfolio.savings.data;
+package org.apache.fineract.accounting.switchglconfiguration.service;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import org.apache.fineract.accounting.switchglconfiguration.data.SwitchGlConfigurationData;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class SavingsAccountingBridgeTransactionDTO {
+public interface SwitchGlConfigurationReadPlatformService {
 
-    private Long id;
-    private Long officeId;
-    private SavingsAccountTransactionEnumData type;
-    private boolean reversed;
-    private LocalDate date;
-    private String currencyCode;
-    private BigDecimal amount;
-    private BigDecimal overdraftAmount;
-    private Long paymentTypeId;
-    private String switchCode;
-    private List<SavingsAccountingBridgeChargePaymentDTO> savingsChargesPaid = new ArrayList<>();
-    private List<SavingsAccountingBridgeTaxDTO> taxDetails = new ArrayList<>();
+    List<SwitchGlConfigurationData> retrieveAll();
+
+    SwitchGlConfigurationData retrieveOne(Long id);
+
+    SwitchGlConfigurationData addTemplateDetails(SwitchGlConfigurationData switchGlConfigurationData);
+
+    SwitchGlConfigurationData retrieveTemplate();
 }

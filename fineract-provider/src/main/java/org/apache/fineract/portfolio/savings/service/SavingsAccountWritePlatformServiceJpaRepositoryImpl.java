@@ -25,6 +25,7 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargeId
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.dueAsOfDateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.lienAllowedParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.referenceTransactionsParamName;
+import static org.apache.fineract.portfolio.savings.SavingsApiConstants.switchCodeParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.transactionAmountParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.transactionDateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withHoldTaxParamName;
@@ -53,6 +54,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
+import org.apache.fineract.accounting.switchglconfiguration.domain.SwitchDirection;
+import org.apache.fineract.accounting.switchglconfiguration.domain.SwitchGlConfigurationRepositoryWrapper;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -194,6 +197,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
     private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
     private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
+    // AB-416: resolves and validates the (switchCode, direction) pair on a NIP deposit/withdrawal before any
+    // posting occurs - rejects (404/409) an unconfigured or disabled switch instead of letting money move first.
+    private final SwitchGlConfigurationRepositoryWrapper switchGlConfigurationRepositoryWrapper;
 
     @Transactional
     @Override
@@ -356,6 +362,15 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final Map<String, Object> changes = new LinkedHashMap<>();
         final PaymentDetail paymentDetail = this.paymentDetailWritePlatformService.createAndPersistPaymentDetail(command, changes);
 
+        // AB-416: a deposit is always the INBOUND leg of a NIP transfer. Reject an unconfigured or disabled switch
+        // before any posting occurs - the switch validation must never be able to leave money moved with nowhere to
+        // post it. switchCode itself is optional; only present on transactions routed through a switch.
+        final String switchCode = command.stringValueOfParameterNamed(switchCodeParamName);
+        if (StringUtils.isNotBlank(switchCode)) {
+            this.switchGlConfigurationRepositoryWrapper.findBySwitchCodeAndDirectionWithNotFoundDetection(switchCode,
+                    SwitchDirection.INBOUND);
+        }
+
         now = System.nanoTime();
         log.warn("PERF deposit savingsId={} step=preparePayment elapsed={}ms", savingsId, (now - perfLap) / 1_000_000.0);
         perfLap = now;
@@ -364,6 +379,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         boolean isRegularTransaction = true;
         final SavingsAccountTransaction deposit = this.savingsAccountDomainService.handleDeposit(account, fmt, transactionDate,
                 transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
+
+        if (StringUtils.isNotBlank(switchCode)) {
+            deposit.setSwitchCode(switchCode);
+            this.savingsAccountTransactionRepository.saveAndFlush(deposit);
+        }
 
         // AB-265: apply side-effect transactions (EMT Levy today; VAT-style in future) asserted by the caller.
         // Synapse pre-computed the amounts; Fineract just records them under the parent's refNo for atomic
@@ -438,6 +458,13 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final Map<String, Object> changes = new LinkedHashMap<>();
         final PaymentDetail paymentDetail = this.paymentDetailWritePlatformService.createAndPersistPaymentDetail(command, changes);
 
+        // AB-416: a withdrawal is always the OUTBOUND leg of a NIP transfer - see the matching comment in deposit().
+        final String switchCode = command.stringValueOfParameterNamed(switchCodeParamName);
+        if (StringUtils.isNotBlank(switchCode)) {
+            this.switchGlConfigurationRepositoryWrapper.findBySwitchCodeAndDirectionWithNotFoundDetection(switchCode,
+                    SwitchDirection.OUTBOUND);
+        }
+
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
         final boolean isSameDay = transactionDate == null || !DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate());
 
@@ -463,6 +490,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance);
         final SavingsAccountTransaction withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate,
                 transactionAmount, paymentDetail, transactionBooleanValues, backdatedTxnsAllowedTill);
+
+        if (StringUtils.isNotBlank(switchCode)) {
+            withdrawal.setSwitchCode(switchCode);
+            this.savingsAccountTransactionRepository.saveAndFlush(withdrawal);
+        }
 
         // AB-265: apply side-effect transactions (EMT Levy today) asserted by the caller. Withdrawal-fee remains
         // handled by handleWithdrawal itself; EMT is appended here so the rule lives in Synapse and Fineract just

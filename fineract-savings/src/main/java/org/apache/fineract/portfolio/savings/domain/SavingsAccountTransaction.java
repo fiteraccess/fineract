@@ -141,6 +141,11 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
     @Column(name = "ref_no", nullable = true)
     private String refNo;
 
+    // AB-416: identifies the NIP switch (NIBSS/HYDROGEN/...) this transaction was routed through, for GL-account
+    // lookup by AB-338's posting engine. Direction is never persisted here - it's always derivable from typeOf.
+    @Column(name = "switch_code", nullable = true)
+    private String switchCode;
+
     SavingsAccountTransaction() {}
 
     private SavingsAccountTransaction(final SavingsAccount savingsAccount, final Office office, final PaymentDetail paymentDetail,
@@ -476,6 +481,14 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return this.paymentDetail;
     }
 
+    public String getSwitchCode() {
+        return this.switchCode;
+    }
+
+    public void setSwitchCode(final String switchCode) {
+        this.switchCode = switchCode;
+    }
+
     public void updateReleaseId(Long releaseId) {
         this.releaseIdOfHoldAmountTransaction = releaseId;
     }
@@ -652,7 +665,8 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         }
         return new SavingsAccountingBridgeTransactionDTO(getId(), this.office.getId(), transactionType, isReversed(), getTransactionDate(),
                 currencyCode, this.amount, this.overdraftAmount,
-                this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData);
+                this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), this.switchCode, savingsChargesPaidData,
+                taxData);
     }
 
     public Map<String, Object> toMapData(final String currencyCode) {

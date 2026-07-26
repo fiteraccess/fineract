@@ -310,6 +310,7 @@ public class AccountingProcessorHelper {
             final BigDecimal amount = map.getAmount();
             final boolean reversed = map.isReversed();
             final Long paymentTypeId = map.getPaymentTypeId();
+            final String switchCode = map.getSwitchCode();
             final BigDecimal overdraftAmount = map.getOverdraftAmount();
 
             final List<ChargePaymentDTO> feePayments = new ArrayList<>();
@@ -341,7 +342,7 @@ public class AccountingProcessorHelper {
             }
             final SavingsTransactionDTO transaction = new SavingsTransactionDTO(transactionOfficeId, paymentTypeId, transactionId,
                     transactionDate, transactionType, amount, reversed, feePayments, penaltyPayments, overdraftAmount, isAccountTransfer,
-                    taxPayments);
+                    taxPayments, switchCode);
 
             newSavingsTransactions.add(transaction);
 

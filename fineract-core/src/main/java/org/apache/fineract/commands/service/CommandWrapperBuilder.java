@@ -2663,6 +2663,30 @@ public class CommandWrapperBuilder {
         return this;
     }
 
+    public CommandWrapperBuilder createSwitchGlConfiguration() {
+        this.actionName = "CREATE";
+        this.entityName = "SWITCHGLCONFIGURATION";
+        this.entityId = null;
+        this.href = "/switchglconfigurations/template";
+        return this;
+    }
+
+    public CommandWrapperBuilder updateSwitchGlConfiguration(final Long switchGlConfigurationId) {
+        this.actionName = "UPDATE";
+        this.entityName = "SWITCHGLCONFIGURATION";
+        this.entityId = switchGlConfigurationId;
+        this.href = "/switchglconfigurations/" + switchGlConfigurationId;
+        return this;
+    }
+
+    public CommandWrapperBuilder deleteSwitchGlConfiguration(final Long switchGlConfigurationId) {
+        this.actionName = "DELETE";
+        this.entityName = "SWITCHGLCONFIGURATION";
+        this.entityId = switchGlConfigurationId;
+        this.href = "/switchglconfigurations/" + switchGlConfigurationId;
+        return this;
+    }
+
     public CommandWrapperBuilder registerDBDatatable(final String datatable, final String apptable) {
         this.actionName = "REGISTER";
         this.entityName = "DATATABLE";

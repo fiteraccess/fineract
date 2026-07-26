@@ -63,8 +63,8 @@ public class DepositAccountTransactionDataValidator {
 
     private static final Set<String> DEPOSIT_ACCOUNT_TRANSACTION_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(
             DepositsApiConstants.localeParamName, DepositsApiConstants.dateFormatParamName, transactionDateParamName,
-            transactionAmountParamName, paymentTypeIdParamName, transactionAccountNumberParamName, checkNumberParamName,
-            routingCodeParamName, receiptNumberParamName, bankNumberParamName, DepositsApiConstants.amountParamName,
+            transactionAmountParamName, paymentTypeIdParamName, DepositsApiConstants.switchCodeParamName, transactionAccountNumberParamName,
+            checkNumberParamName, routingCodeParamName, receiptNumberParamName, bankNumberParamName, DepositsApiConstants.amountParamName,
             DepositsApiConstants.accountIdParamName, DepositsApiConstants.dateParamName, DepositsApiConstants.submittedOnDateParamName,
             DepositsApiConstants.lienTransaction, DepositsApiConstants.isManualTransaction, DepositsApiConstants.chargesPaidByData,
             DepositsApiConstants.accountNoParamName, DepositsApiConstants.noteParamName));
@@ -120,6 +120,11 @@ public class DepositAccountTransactionDataValidator {
             baseDataValidator.reset().parameter(paymentDetailParameterName).value(paymentDetailParameterValue).ignoreIfNull()
                     .notExceedingLengthOf(50);
         }
+
+        // AB-416: mirrors SavingsAccountTransactionDataValidator.validate() - see that method's comment.
+        final String switchCode = this.fromApiJsonHelper.extractStringNamed(DepositsApiConstants.switchCodeParamName, element);
+        baseDataValidator.reset().parameter(DepositsApiConstants.switchCodeParamName).value(switchCode).ignoreIfNull()
+                .notExceedingLengthOf(20);
 
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }

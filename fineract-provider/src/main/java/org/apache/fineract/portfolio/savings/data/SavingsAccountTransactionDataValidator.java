@@ -117,6 +117,13 @@ public class SavingsAccountTransactionDataValidator {
 
         validatePaymentTypeDetails(baseDataValidator, element);
 
+        // AB-416: switchCode is optional (only NIP transfers send it) but, when present, must fit the persisted
+        // column width. The (switch, direction) pair itself is validated separately, before any posting - see
+        // SavingsAccountWritePlatformServiceJpaRepositoryImpl.
+        final String switchCode = this.fromApiJsonHelper.extractStringNamed(SavingsApiConstants.switchCodeParamName, element);
+        baseDataValidator.reset().parameter(SavingsApiConstants.switchCodeParamName).value(switchCode).ignoreIfNull()
+                .notExceedingLengthOf(20);
+
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 

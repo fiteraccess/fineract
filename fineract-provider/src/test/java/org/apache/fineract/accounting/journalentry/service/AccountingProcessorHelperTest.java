@@ -96,7 +96,7 @@ class AccountingProcessorHelperTest {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(
                 Long.valueOf(SavingsAccountTransactionType.WITHHOLD_TAX.getValue()), "withholdTax", "Withhold tax");
         SavingsAccountingBridgeTransactionDTO transactionDTO = new SavingsAccountingBridgeTransactionDTO(55L, 66L, transactionType, false,
-                LocalDate.of(2026, 2, 3), "USD", BigDecimal.TEN, BigDecimal.ONE, 77L,
+                LocalDate.of(2026, 2, 3), "USD", BigDecimal.TEN, BigDecimal.ONE, 77L, null,
                 new ArrayList<>(List.of(new SavingsAccountingBridgeChargePaymentDTO(88L, 99L, true, BigDecimal.TWO),
                         new SavingsAccountingBridgeChargePaymentDTO(111L, 222L, false, BigDecimal.valueOf(3)))),
                 new ArrayList<>(List.of(new SavingsAccountingBridgeTaxDTO(BigDecimal.valueOf(4), 333L, 444L))));

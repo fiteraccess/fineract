@@ -125,6 +125,9 @@ public class SavingsApiConstants {
     public static final String feeIntervalParamName = "feeInterval";
     public static final String accountingRuleParamName = "accountingRule";
     public static final String paymentTypeIdParamName = "paymentTypeId";
+    // AB-416: independent of paymentTypeId - identifies the NIP switch (NIBSS/HYDROGEN/...) for GL-configuration
+    // lookup, not payment-channel classification. Direction is derived from the command, not sent separately.
+    public static final String switchCodeParamName = "switchCode";
     public static final String transactionAccountNumberParamName = "accountNumber";
     public static final String checkNumberParamName = "checkNumber";
     public static final String routingCodeParamName = "routingCode";

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.accounting.producttoaccountmapping.service.ProductToGLAccountMappingWritePlatformService;
+import org.apache.fineract.accounting.switchglconfiguration.domain.SwitchGlConfigurationRepositoryWrapper;
 import org.apache.fineract.commands.service.CommandProcessingService;
 import org.apache.fineract.infrastructure.accountnumberformat.domain.AccountNumberFormatRepositoryWrapper;
 import org.apache.fineract.infrastructure.codes.service.CodeValueReadPlatformService;
@@ -400,7 +401,8 @@ public class SavingsConfiguration {
             ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider,
             ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider,
             ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider,
-            ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider) {
+            ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider,
+            SwitchGlConfigurationRepositoryWrapper switchGlConfigurationRepositoryWrapper) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -411,7 +413,7 @@ public class SavingsConfiguration {
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
                 synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
                 savingsDailyBalanceSyncRepository, synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider,
-                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider);
+                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider, switchGlConfigurationRepositoryWrapper);
     }
 
     @Bean

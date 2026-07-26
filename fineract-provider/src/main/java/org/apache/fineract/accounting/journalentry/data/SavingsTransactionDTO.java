@@ -47,6 +47,10 @@ public class SavingsTransactionDTO {
     private final boolean isAccountTransfer;
     private final List<TaxPaymentDTO> taxPayments;
 
+    // AB-416: identifies the NIP switch this transaction was routed through - AB-338's posting engine resolves the
+    // switch's GL account(s) from this plus transactionType (deposit = inbound, withdrawal = outbound).
+    private final String switchCode;
+
     public boolean isOverdraftTransaction() {
         return this.overdraftAmount != null && this.overdraftAmount.doubleValue() > 0;
     }

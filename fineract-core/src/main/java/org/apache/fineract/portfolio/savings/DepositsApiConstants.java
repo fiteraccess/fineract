@@ -107,6 +107,8 @@ public final class DepositsApiConstants {
     public static final String feeIntervalParamName = "feeInterval";
     public static final String accountingRuleParamName = "accountingRule";
     public static final String paymentTypeIdParamName = "paymentTypeId";
+    // AB-416: mirrors SavingsApiConstants.switchCodeParamName - see that constant's comment.
+    public static final String switchCodeParamName = "switchCode";
     public static final String transactionAccountNumberParamName = "accountNumber";
     public static final String checkNumberParamName = "checkNumber";
     public static final String routingCodeParamName = "routingCode";
