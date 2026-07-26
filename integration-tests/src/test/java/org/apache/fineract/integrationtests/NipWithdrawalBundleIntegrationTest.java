@@ -45,6 +45,7 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
 
     private static final int WITHDRAWAL = 2;
     private static final int WITHDRAWAL_FEE = 4;
+    private static final int EMT_LEVY = 24;
     private static final int COMMISSION = 25;
     private static final int VAT = 26;
 
@@ -143,6 +144,28 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
             assertThat(value(transactions.get(0), "switch_id")).isEqualTo(configuredSwitchId);
             assertThat(accountBalance(savingsId)).isEqualByComparingTo("75.00");
             assertThat(referenceNotes(savingsId)).isEmpty();
+        });
+    }
+
+    @Test
+    void preservesLegacyEmtLevyReferenceProcessingWithoutSwitchId() {
+        final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+        runAt(date, () -> {
+            final Long savingsId = createActiveSavingsAccount(date, false);
+            deposit(savingsId, date, new BigDecimal("100.00"));
+
+            withdraw(savingsId, date, "25.00", null, List.of(emtLevy("5.00")));
+
+            final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
+            assertThat(transactions).hasSize(2);
+            assertTransaction(transactions.get(0), WITHDRAWAL, "25.00", "75.00");
+            assertTransaction(transactions.get(1), EMT_LEVY, "5.00", "70.00");
+
+            final String rootReference = value(transactions.get(0), "ref_no").toString();
+            assertThat(value(transactions.get(1), "ref_no")).isEqualTo(rootReference);
+            assertThat(value(transactions.get(0), "switch_id")).isNull();
+            assertThat(value(transactions.get(1), "switch_id")).isNull();
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("70.00");
         });
     }
 
@@ -325,14 +348,18 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         return reference;
     }
 
+    private Map<String, Object> emtLevy(final String amount) {
+        return Map.of("type", "EMT_LEVY", "amount", new BigDecimal(amount));
+    }
+
     private List<Map<String, Object>> bundledTransactions(final Long savingsId) {
         return tenantJdbc().queryForList("""
                 SELECT id, transaction_type_enum, amount, running_balance_derived, ref_no, switch_id
                   FROM m_savings_account_transaction
                  WHERE savings_account_id = ?
-                   AND transaction_type_enum IN (?, ?, ?, ?)
+                   AND transaction_type_enum IN (?, ?, ?, ?, ?)
                  ORDER BY id
-                """, savingsId, WITHDRAWAL, WITHDRAWAL_FEE, COMMISSION, VAT);
+                """, savingsId, WITHDRAWAL, WITHDRAWAL_FEE, EMT_LEVY, COMMISSION, VAT);
     }
 
     private List<String> referenceNotes(final Long savingsId) {

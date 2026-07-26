@@ -18,6 +18,12 @@
  */
 package org.apache.fineract.accounting.nipswitch.data;
 
-public record NipSwitchAccountingConfigurationData(String switchId, Long switchPayableGlAccountId, Long switchFeeGlAccountId,
-        Long commissionIncomeGlAccountId, boolean active) {
+import io.swagger.v3.oas.annotations.media.Schema;
+
+public record NipSwitchAccountingConfigurationData(
+        @Schema(description = "Normalized switch identifier.", example = "NIBSS") String switchId,
+        @Schema(description = "GL credited for NIP principal.", example = "101") Long switchPayableGlAccountId,
+        @Schema(description = "GL credited for the supplied Switch Fee leg.", example = "102") Long switchFeeGlAccountId,
+        @Schema(description = "GL credited for the supplied Bank Commission leg.", example = "103") Long commissionIncomeGlAccountId,
+        @Schema(description = "Whether this mapping may be used for new NIP withdrawals.", example = "true") boolean active) {
 }

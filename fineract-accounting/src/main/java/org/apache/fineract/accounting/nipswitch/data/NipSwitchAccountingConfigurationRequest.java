@@ -18,8 +18,14 @@
  */
 package org.apache.fineract.accounting.nipswitch.data;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.Serializable;
 
-public record NipSwitchAccountingConfigurationRequest(Long switchPayableGlAccountId, Long switchFeeGlAccountId,
-        Long commissionIncomeGlAccountId, Boolean active) implements Serializable {
+public record NipSwitchAccountingConfigurationRequest(
+        @Schema(description = "Enabled detail liability GL credited for NIP principal.", example = "101") Long switchPayableGlAccountId,
+        @Schema(description = "Enabled detail GL credited for the supplied Switch Fee leg.", example = "102") Long switchFeeGlAccountId,
+        @Schema(description = "Enabled detail income GL credited for the supplied Bank Commission leg.", example = "103") Long commissionIncomeGlAccountId,
+        @Schema(description = "Whether this switch configuration may be used for new NIP withdrawals.", example = "true") Boolean active)
+        implements
+            Serializable {
 }

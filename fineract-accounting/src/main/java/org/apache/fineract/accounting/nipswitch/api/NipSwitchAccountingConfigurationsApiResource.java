@@ -50,7 +50,9 @@ import org.springframework.stereotype.Component;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 @Component
-@Tag(name = "NIP Switch Accounting Configurations", description = "Tenant-scoped GL routing for outbound NIP switches.")
+@Tag(name = "NIP Switch Accounting Configurations", description = "Tenant-scoped GL routing for outbound NIP switches. Configurations contain three GL identifiers and active "
+        + "status only; fee amounts remain owned and supplied by Synapse. VAT uses the separate tenant-wide VAT_PAYABLE "
+        + "Financial Activity mapping.")
 @RequiredArgsConstructor
 public class NipSwitchAccountingConfigurationsApiResource {
 
@@ -60,7 +62,7 @@ public class NipSwitchAccountingConfigurationsApiResource {
     private final PortfolioCommandSourceWritePlatformService commandSourceService;
 
     @GET
-    @Operation(summary = "List NIP switch accounting configurations", operationId = "retrieveAllNipSwitchAccountingConfigurations")
+    @Operation(summary = "List NIP switch accounting configurations", operationId = "retrieveAllNipSwitchAccountingConfigurations", description = "Lists the current tenant's normalized switch-to-GL mappings.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = NipSwitchAccountingConfigurationData.class))))
     public List<NipSwitchAccountingConfigurationData> retrieveAll() {
         context.authenticatedUser().validateHasReadPermission(NipSwitchAccountingConfigurationApiConstants.RESOURCE_NAME_FOR_PERMISSION);
@@ -69,20 +71,21 @@ public class NipSwitchAccountingConfigurationsApiResource {
 
     @GET
     @Path("{switchId}")
-    @Operation(summary = "Retrieve a NIP switch accounting configuration", operationId = "retrieveNipSwitchAccountingConfiguration")
+    @Operation(summary = "Retrieve a NIP switch accounting configuration", operationId = "retrieveNipSwitchAccountingConfiguration", description = "Retrieves one normalized switch-to-GL mapping for the current tenant.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = NipSwitchAccountingConfigurationData.class)))
     public NipSwitchAccountingConfigurationData retrieve(
-            @PathParam("switchId") @Parameter(description = "NIP switch identifier") String switchId) {
+            @PathParam("switchId") @Parameter(description = "NIP switch identifier; trimmed and uppercased before lookup") String switchId) {
         context.authenticatedUser().validateHasReadPermission(NipSwitchAccountingConfigurationApiConstants.RESOURCE_NAME_FOR_PERMISSION);
         return service.retrieve(switchId);
     }
 
     @PUT
     @Path("{switchId}")
-    @Operation(summary = "Create or replace a NIP switch accounting configuration", operationId = "upsertNipSwitchAccountingConfiguration")
+    @Operation(summary = "Create or replace a NIP switch accounting configuration", operationId = "upsertNipSwitchAccountingConfiguration", description = "Atomically upserts the three GL mappings and active status. No fee or VAT amount is stored.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = NipSwitchAccountingConfigurationRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
-    public CommandProcessingResult upsert(@PathParam("switchId") @Parameter(description = "NIP switch identifier") String switchId,
+    public CommandProcessingResult upsert(
+            @PathParam("switchId") @Parameter(description = "NIP switch identifier; trimmed and uppercased before storage") String switchId,
             @Parameter(hidden = true) NipSwitchAccountingConfigurationRequest request) {
         CommandWrapper command = new CommandWrapperBuilder().upsertNipSwitchAccountingConfiguration(switchId)
                 .withJson(requestSerializer.serialize(request)).build();

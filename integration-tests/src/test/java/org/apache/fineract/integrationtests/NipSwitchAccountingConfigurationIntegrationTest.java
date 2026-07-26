@@ -66,7 +66,7 @@ class NipSwitchAccountingConfigurationIntegrationTest {
         Account fee = accountHelper.createExpenseAccount();
         Account income = accountHelper.createIncomeAccount();
 
-        put("%20" + switchId.toLowerCase() + "%20", configuration(payable, fee, income, true), okResponse);
+        put(" " + switchId.toLowerCase() + " ", configuration(payable, fee, income, true), okResponse);
 
         Map configuration = get(switchId.toLowerCase(), okResponse);
         assertThat(configuration.get("switchId")).isEqualTo(switchId);
@@ -78,7 +78,7 @@ class NipSwitchAccountingConfigurationIntegrationTest {
         Account replacementPayable = accountHelper.createLiabilityAccount();
         put(switchId, configuration(replacementPayable, fee, income, false), okResponse);
 
-        Map replaced = get("%20" + switchId.toLowerCase() + "%20", okResponse);
+        Map replaced = get(" " + switchId.toLowerCase() + " ", okResponse);
         assertAccountId(replaced, "switchPayableGlAccountId", replacementPayable);
         assertThat(replaced.get("active")).isEqualTo(false);
 

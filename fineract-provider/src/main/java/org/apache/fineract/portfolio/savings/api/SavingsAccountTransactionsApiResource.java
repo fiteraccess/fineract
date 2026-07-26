@@ -173,6 +173,11 @@ public class SavingsAccountTransactionsApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Create a savings account transaction", description = "For command=withdrawal, a nonblank switchId identifies an outbound NIP withdrawal. FinProxy/Synapse "
+            + "supplies the authoritative ordered Commission/VAT references and Commission allocation; Fineract validates "
+            + "only persistence and balanced-accounting prerequisites. Existing product withdrawal fees and overdraft rules "
+            + "apply to the complete debit. Processing uses native command idempotency. Same-key/different-payload conflicts "
+            + "and automatic Commission/VAT reversal semantics are not defined by this API.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountTransactionsRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountTransactionsResponse.class)))
     public String transaction(@PathParam("savingsId") final Long savingsId, @QueryParam("command") final String commandParam,
