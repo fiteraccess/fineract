@@ -18,10 +18,13 @@
  */
 package org.apache.fineract.portfolio.savings.service;
 
+import org.apache.fineract.accounting.common.AccountingConstants;
 import org.apache.fineract.accounting.common.AccountingEnumerations;
 import org.apache.fineract.accounting.common.AccountingRuleType;
+import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.portfolio.savings.PreClosurePenalInterestOnType;
+import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
@@ -157,6 +160,31 @@ public class SavingsEnumerationsTest {
         EnumOptionData data = SavingsEnumerations.savingEnumeration("unknownType", 1);
 
         Assertions.assertNull(data);
+    }
+
+    @Test
+    void mapsNativeCommissionAndVatTransactionTypes() {
+        var commission = SavingsEnumerations.transactionType(SavingsAccountTransactionType.COMMISSION);
+        var vat = SavingsEnumerations.transactionType(SavingsAccountTransactionType.VAT);
+
+        Assertions.assertEquals("Commission", commission.getValue());
+        Assertions.assertTrue(commission.isCommission());
+        Assertions.assertTrue(commission.isDebit());
+        Assertions.assertTrue(commission.isChargeTransaction());
+        Assertions.assertEquals("VAT", vat.getValue());
+        Assertions.assertTrue(vat.isVat());
+        Assertions.assertTrue(vat.isDebit());
+        Assertions.assertTrue(vat.isChargeTransaction());
+    }
+
+    @Test
+    void preservesLegacyEmtAndExposesVatPayableActivity() {
+        var emtLevy = SavingsEnumerations.transactionType(SavingsAccountTransactionType.EMT_LEVY);
+
+        Assertions.assertTrue(emtLevy.isEmtLevy());
+        Assertions.assertEquals("EMT Levy", emtLevy.getValue());
+        Assertions.assertEquals(203, AccountingConstants.FinancialActivity.VAT_PAYABLE.getValue());
+        Assertions.assertEquals(GLAccountType.LIABILITY, AccountingConstants.FinancialActivity.VAT_PAYABLE.getMappedGLAccountType());
     }
 
 }

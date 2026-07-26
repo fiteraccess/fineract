@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeCommissionAllocationDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTransactionDTO;
 
@@ -39,6 +40,18 @@ public final class SavingsAccountingBridgeDataHelper {
         return new SavingsAccountingBridgeDTO(account.getId(), account.productId(), account.officeId(), currencyCode,
                 account.savingsProduct().isCashBasedAccountingEnabled(), account.savingsProduct().isAccrualBasedAccountingEnabled(),
                 isAccountTransfer, newSavingsTransactions);
+    }
+
+    public static SavingsAccountingBridgeDTO buildAccountingBridgeData(final SavingsAccount account,
+            final SavingsAccountTransaction transaction, final ReferenceTransaction referenceTransaction, final boolean isAccountTransfer) {
+        final SavingsAccountingBridgeDTO accountingBridgeData = buildAccountingBridgeData(account, List.of(transaction), isAccountTransfer);
+        if (referenceTransaction.type().isCommission()) {
+            final ReferenceTransaction.CommissionBreakdown breakdown = referenceTransaction.breakdown();
+            accountingBridgeData.getNewSavingsTransactions().get(0)
+                    .setCommissionAllocation(new SavingsAccountingBridgeCommissionAllocationDTO(breakdown.switchFee().amount(),
+                            breakdown.bankCommission().amount()));
+        }
+        return accountingBridgeData;
     }
 
     public static List<SavingsAccountTransaction> findNewTransactions(final SavingsAccount account, final Set<Long> existingTransactionIds,

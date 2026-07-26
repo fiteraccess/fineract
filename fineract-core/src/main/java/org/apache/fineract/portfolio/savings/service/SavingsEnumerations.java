@@ -202,6 +202,14 @@ public final class SavingsEnumerations {
                 optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.EMT_LEVY.getValue().longValue(),
                         SavingsAccountTransactionType.EMT_LEVY.getCode(), "EMT Levy");
             break;
+            case COMMISSION:
+                optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.COMMISSION.getValue().longValue(),
+                        SavingsAccountTransactionType.COMMISSION.getCode(), "Commission");
+            break;
+            case VAT:
+                optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.VAT.getValue().longValue(),
+                        SavingsAccountTransactionType.VAT.getCode(), "VAT");
+            break;
         }
         return optionData;
     }

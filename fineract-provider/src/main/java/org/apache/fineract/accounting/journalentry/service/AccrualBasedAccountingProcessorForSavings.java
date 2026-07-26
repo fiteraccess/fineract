@@ -20,15 +20,22 @@ package org.apache.fineract.accounting.journalentry.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingConstants.AccrualAccountsForSavings;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
+import org.apache.fineract.accounting.glaccount.domain.GLAccount;
 import org.apache.fineract.accounting.journalentry.data.ChargePaymentDTO;
 import org.apache.fineract.accounting.journalentry.data.SavingsDTO;
+import org.apache.fineract.accounting.journalentry.data.SavingsJournalEntryAllocation;
 import org.apache.fineract.accounting.journalentry.data.SavingsTransactionDTO;
+import org.apache.fineract.accounting.nipswitch.domain.NipSwitchAccountingConfigurationProvider;
+import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.organisation.office.domain.Office;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeCommissionAllocationDTO;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -36,6 +43,7 @@ import org.springframework.stereotype.Component;
 public class AccrualBasedAccountingProcessorForSavings implements AccountingProcessorForSavings {
 
     private final AccountingProcessorHelper helper;
+    private final NipSwitchAccountingConfigurationProvider nipSwitchAccountingConfigurationProvider;
 
     @Override
     public void createJournalEntriesForSavings(final SavingsDTO savingsDTO) {
@@ -56,6 +64,12 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                 final List<ChargePaymentDTO> penaltyPayments = savingsTransactionDTO.getPenaltyPayments();
 
                 this.helper.checkForBranchClosures(savingsDTO.getOfficeId(), transactionDate);
+
+                final NipAccountingContext nipAccountingContext = new NipAccountingContext(savingsProductId, savingsId, currencyCode,
+                        savingsTransactionDTO, office);
+                if (tryCreateNipJournalEntries(nipAccountingContext)) {
+                    continue;
+                }
 
                 if (savingsTransactionDTO.getTransactionType().isWithdrawal() && savingsTransactionDTO.isOverdraftTransaction()) {
                     boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;
@@ -311,5 +325,104 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                 }
             }
         }
+    }
+
+    private boolean tryCreateNipJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        if (StringUtils.isBlank(transaction.getSwitchId())) {
+            return false;
+        }
+        if (transaction.getTransactionType().isWithdrawal()) {
+            createNipPrincipalJournalEntries(context);
+        } else if (transaction.getTransactionType().isCommission()) {
+            createCommissionJournalEntries(context);
+        } else if (transaction.getTransactionType().isVat()) {
+            createVatJournalEntries(context);
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    private void createNipPrincipalJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
+                .require(transaction.getSwitchId());
+        createBalancedJournalEntries(context, createDebitAllocations(context),
+                List.of(new SavingsJournalEntryAllocation(configuration.switchPayableGlAccountId(), transaction.getAmount())));
+    }
+
+    private void createCommissionJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation = requireBalancedCommissionAllocation(transaction);
+        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
+                .require(transaction.getSwitchId());
+        final List<SavingsJournalEntryAllocation> creditAllocations = new ArrayList<>(2);
+        if (commissionAllocation.switchFeeAmount().signum() > 0) {
+            creditAllocations
+                    .add(new SavingsJournalEntryAllocation(configuration.switchFeeGlAccountId(), commissionAllocation.switchFeeAmount()));
+        }
+        if (commissionAllocation.bankCommissionAmount().signum() > 0) {
+            creditAllocations.add(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(),
+                    commissionAllocation.bankCommissionAmount()));
+        }
+        createBalancedJournalEntries(context, createDebitAllocations(context), creditAllocations);
+    }
+
+    private SavingsAccountingBridgeCommissionAllocationDTO requireBalancedCommissionAllocation(final SavingsTransactionDTO transaction) {
+        final SavingsAccountingBridgeCommissionAllocationDTO allocation = transaction.getCommissionAllocation();
+        if (allocation == null || allocation.switchFeeAmount() == null || allocation.bankCommissionAmount() == null) {
+            throw new PlatformDataIntegrityException("error.msg.savings.commission.accounting.allocation.required",
+                    "Commission accounting requires both supplied allocation legs");
+        }
+        if (allocation.switchFeeAmount().signum() < 0 || allocation.bankCommissionAmount().signum() < 0) {
+            throw new PlatformDataIntegrityException("error.msg.savings.commission.accounting.allocation.not.negative",
+                    "Commission accounting allocation amounts must be non-negative");
+        }
+        if (allocation.switchFeeAmount().add(allocation.bankCommissionAmount()).compareTo(transaction.getAmount()) != 0) {
+            throw new PlatformDataIntegrityException("error.msg.savings.commission.accounting.allocation.sum.mismatch",
+                    "Commission accounting allocation amounts must equal the Commission transaction amount", transaction.getAmount(),
+                    allocation.switchFeeAmount(), allocation.bankCommissionAmount());
+        }
+        return allocation;
+    }
+
+    private void createVatJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final GLAccount vatPayableAccount = this.helper.getLinkedGLAccountForSavingsProduct(context.savingsProductId(),
+                FinancialActivity.VAT_PAYABLE.getValue(), transaction.getPaymentTypeId());
+        createBalancedJournalEntries(context, createDebitAllocations(context),
+                List.of(new SavingsJournalEntryAllocation(vatPayableAccount.getId(), transaction.getAmount())));
+    }
+
+    private List<SavingsJournalEntryAllocation> createDebitAllocations(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final BigDecimal effectiveOverdraftAmount = transaction.getOverdraftAmount() == null ? BigDecimal.ZERO
+                : transaction.getOverdraftAmount();
+        final BigDecimal customerFundedAmount = transaction.getAmount().subtract(effectiveOverdraftAmount);
+        final List<SavingsJournalEntryAllocation> debitAllocations = new ArrayList<>(2);
+        if (customerFundedAmount.signum() > 0) {
+            final GLAccount savingsControlAccount = this.helper.getLinkedGLAccountForSavingsProduct(context.savingsProductId(),
+                    AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), transaction.getPaymentTypeId());
+            debitAllocations.add(new SavingsJournalEntryAllocation(savingsControlAccount.getId(), customerFundedAmount));
+        }
+        if (effectiveOverdraftAmount.signum() > 0) {
+            final GLAccount overdraftPortfolioControlAccount = this.helper.getLinkedGLAccountForSavingsProduct(context.savingsProductId(),
+                    AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), transaction.getPaymentTypeId());
+            debitAllocations.add(new SavingsJournalEntryAllocation(overdraftPortfolioControlAccount.getId(), effectiveOverdraftAmount));
+        }
+        return debitAllocations;
+    }
+
+    private void createBalancedJournalEntries(final NipAccountingContext context,
+            final List<SavingsJournalEntryAllocation> debitAllocations, final List<SavingsJournalEntryAllocation> creditAllocations) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        this.helper.createBalancedJournalEntriesForSavings(context.office(), context.currencyCode(), context.savingsId(),
+                transaction.getTransactionId(), transaction.getTransactionDate(), debitAllocations, creditAllocations,
+                transaction.isReversed());
+    }
+
+    private record NipAccountingContext(Long savingsProductId, Long savingsId, String currencyCode, SavingsTransactionDTO transaction,
+            Office office) {
     }
 }

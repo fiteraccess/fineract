@@ -194,6 +194,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider;
     private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
     private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
+    private final NipWithdrawalPreflight nipWithdrawalPreflight;
 
     @Transactional
     @Override
@@ -322,6 +323,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.context.authenticatedUser();
 
         this.savingsAccountTransactionDataValidator.validate(command);
+        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
+        ReferenceTransaction.rejectNipFields(command, referenceTransactions);
         boolean isGsim = false;
 
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
@@ -368,7 +371,6 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         // AB-265: apply side-effect transactions (EMT Levy today; VAT-style in future) asserted by the caller.
         // Synapse pre-computed the amounts; Fineract just records them under the parent's refNo for atomic
         // bulk-reversal.
-        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
         if (!referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, deposit, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
@@ -431,6 +433,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
+        final ReferenceTransaction.NipWithdrawalRequest nipRequest = ReferenceTransaction.parseNipWithdrawal(command);
+
+        if (nipRequest.switchId() != null) {
+            this.nipWithdrawalPreflight.validate(nipRequest.switchId(), nipRequest.references());
+        }
 
         final Locale locale = command.extractLocale();
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
@@ -461,14 +468,19 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final boolean isWithdrawBalance = false;
         final SavingsTransactionBooleanValues transactionBooleanValues = new SavingsTransactionBooleanValues(isAccountTransfer,
                 isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance);
-        final SavingsAccountTransaction withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate,
-                transactionAmount, paymentDetail, transactionBooleanValues, backdatedTxnsAllowedTill);
+        final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
+        final SavingsAccountTransaction withdrawal;
+        if (nipRequest.switchId() != null) {
+            withdrawal = this.savingsAccountDomainService.handleNipWithdrawal(account, fmt, transactionDate, transactionAmount,
+                    paymentDetail, transactionBooleanValues, nipRequest.switchId(), referenceTransactions, backdatedTxnsAllowedTill);
+        } else {
+            withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                    transactionBooleanValues, backdatedTxnsAllowedTill);
+        }
 
-        // AB-265: apply side-effect transactions (EMT Levy today) asserted by the caller. Withdrawal-fee remains
-        // handled by handleWithdrawal itself; EMT is appended here so the rule lives in Synapse and Fineract just
-        // records what it is told.
-        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
-        if (!referenceTransactions.isEmpty()) {
+        // Legacy EMT side effects remain on their existing path. NIP rows are handled by the bundled domain operation
+        // so their principal, references, notes and completion event share one operation.
+        if (nipRequest.switchId() == null && !referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, withdrawal, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
         }
@@ -752,7 +764,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         List<SavingsAccountTransaction> savingsAccountTransactions = null;
         if (isBulk) {
             String transactionRefNo = savingsAccountTransaction.getRefNo();
-            savingsAccountTransactions = this.savingsAccountTransactionRepository.findByRefNo(transactionRefNo);
+            savingsAccountTransactions = selectTransactionsForBulkReversal(transactionId,
+                    this.savingsAccountTransactionRepository.findByRefNo(transactionRefNo));
             reversal = this.savingsAccountDomainService.handleReversal(account, savingsAccountTransactions, backdatedTxnsAllowedTill);
         } else {
             reversal = this.savingsAccountDomainService.handleReversal(account, Collections.singletonList(savingsAccountTransaction),
@@ -766,6 +779,16 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .withGroupId(account.groupId()) //
                 .withSavingsId(savingsId) //
                 .build();
+    }
+
+    static List<SavingsAccountTransaction> selectTransactionsForBulkReversal(final Long requestedTransactionId,
+            final List<SavingsAccountTransaction> linkedTransactions) {
+        return linkedTransactions.stream()
+                .filter(transaction -> requestedTransactionId.equals(transaction.getId()) || !isNipFeeReference(transaction)).toList();
+    }
+
+    private static boolean isNipFeeReference(final SavingsAccountTransaction transaction) {
+        return transaction.getTransactionType().isCommission() || transaction.getTransactionType().isVat();
     }
 
     @Override

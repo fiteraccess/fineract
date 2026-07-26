@@ -22,6 +22,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.apache.fineract.portfolio.TransactionEntryType;
 
@@ -194,6 +195,39 @@ final class SavingsAccountTransactionsApiResourceSwagger {
 
         private PostSavingsAccountTransactionsRequest() {}
 
+        @Schema(description = "One caller-supplied Commission allocation leg.")
+        public static final class PostNipCommissionAllocationLeg {
+
+            private PostNipCommissionAllocationLeg() {}
+
+            @Schema(description = "Non-negative amount supplied by Synapse.", example = "3.75")
+            public BigDecimal amount;
+        }
+
+        @Schema(description = "Synapse-supplied Commission allocation. Both legs are required and must sum to the Commission amount.")
+        public static final class PostNipCommissionBreakdown {
+
+            private PostNipCommissionBreakdown() {}
+
+            public PostNipCommissionAllocationLeg switchFee;
+            public PostNipCommissionAllocationLeg bankCommission;
+        }
+
+        @Schema(description = "A reference debit supplied in authoritative order. NIP withdrawals support COMMISSION and VAT; legacy EMT_LEVY remains supported on its existing path.")
+        public static final class PostSavingsReferenceTransaction {
+
+            private PostSavingsReferenceTransaction() {}
+
+            @Schema(allowableValues = { "EMT_LEVY", "COMMISSION", "VAT" }, example = "COMMISSION")
+            public String type;
+            @Schema(description = "Positive caller-supplied debit amount.", example = "22.00")
+            public BigDecimal amount;
+            @Schema(description = "Required for Commission and VAT and persisted verbatim as the transaction note.", example = "NIP transfer commission")
+            public String description;
+            @Schema(description = "Required for Commission and ignored for VAT.")
+            public PostNipCommissionBreakdown breakdown;
+        }
+
         @Schema(example = "27 March 2022")
         public String transactionDate;
         @Schema(example = "1000")
@@ -208,6 +242,10 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public String reasonForBlock;
         @Schema(example = "1")
         public Integer paymentTypeId;
+        @Schema(description = "Nonblank switch identifier for an outbound NIP withdrawal. Fineract trims and uppercases it.", example = "NIBSS")
+        public String switchId;
+        @Schema(description = "Optional Commission/VAT references recorded in the supplied order. Omit or send an empty list for a fee-free NIP withdrawal.")
+        public List<PostSavingsReferenceTransaction> referenceTransactions;
     }
 
     @Schema(description = "PostSavingsAccountTransactionsResponse")

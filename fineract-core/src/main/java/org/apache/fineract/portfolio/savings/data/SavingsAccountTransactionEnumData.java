@@ -63,7 +63,8 @@ public class SavingsAccountTransactionEnumData implements Serializable {
         this.interestPosting = transactionType == SavingsAccountTransactionType.INTEREST_POSTING;
         this.feeDeduction = transactionType == SavingsAccountTransactionType.ANNUAL_FEE
                 || transactionType == SavingsAccountTransactionType.WITHDRAWAL_FEE
-                || transactionType == SavingsAccountTransactionType.PAY_CHARGE || transactionType == SavingsAccountTransactionType.EMT_LEVY;
+                || transactionType == SavingsAccountTransactionType.PAY_CHARGE || transactionType == SavingsAccountTransactionType.EMT_LEVY
+                || transactionType == SavingsAccountTransactionType.COMMISSION || transactionType == SavingsAccountTransactionType.VAT;
         this.initiateTransfer = transactionType == SavingsAccountTransactionType.INITIATE_TRANSFER;
         this.approveTransfer = transactionType == SavingsAccountTransactionType.APPROVE_TRANSFER;
         this.withdrawTransfer = transactionType == SavingsAccountTransactionType.WITHDRAW_TRANSFER;
@@ -107,6 +108,14 @@ public class SavingsAccountTransactionEnumData implements Serializable {
 
     public boolean isEmtLevy() {
         return Long.valueOf(SavingsAccountTransactionType.EMT_LEVY.getValue()).equals(this.id);
+    }
+
+    public boolean isCommission() {
+        return Long.valueOf(SavingsAccountTransactionType.COMMISSION.getValue()).equals(this.id);
+    }
+
+    public boolean isVat() {
+        return Long.valueOf(SavingsAccountTransactionType.VAT.getValue()).equals(this.id);
     }
 
     public boolean isCredit() {

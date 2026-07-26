@@ -48,6 +48,7 @@ import org.apache.fineract.accounting.journalentry.data.ClientTransactionDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanTransactionDTO;
 import org.apache.fineract.accounting.journalentry.data.SavingsDTO;
+import org.apache.fineract.accounting.journalentry.data.SavingsJournalEntryAllocation;
 import org.apache.fineract.accounting.journalentry.data.SavingsTransactionDTO;
 import org.apache.fineract.accounting.journalentry.data.SharesDTO;
 import org.apache.fineract.accounting.journalentry.data.SharesTransactionDTO;
@@ -341,7 +342,7 @@ public class AccountingProcessorHelper {
             }
             final SavingsTransactionDTO transaction = new SavingsTransactionDTO(transactionOfficeId, paymentTypeId, transactionId,
                     transactionDate, transactionType, amount, reversed, feePayments, penaltyPayments, overdraftAmount, isAccountTransfer,
-                    taxPayments);
+                    taxPayments, map.getSwitchId(), map.getCommissionAllocation());
 
             newSavingsTransactions.add(transaction);
 
@@ -813,6 +814,91 @@ public class AccountingProcessorHelper {
             journalEntries.add(buildCreditJournalEntryForSavings(office, currencyCode, creditAccount, savingsId, transactionId,
                     transactionDate, amount));
         }
+    }
+
+    /**
+     * Builds a balanced savings journal from directly configured GL identifiers, then persists the complete set only
+     * after every allocation has been validated and every account has been resolved.
+     *
+     * <p>
+     * Zero allocations are omitted. Allocation order and duplicate GL identifiers are preserved so callers can retain
+     * distinct semantic legs, such as switch fee and bank Commission.
+     */
+    public List<JournalEntry> createBalancedJournalEntriesForSavings(final Office office, final String currencyCode, final Long savingsId,
+            final String transactionId, final LocalDate transactionDate, final List<SavingsJournalEntryAllocation> debitAllocations,
+            final List<SavingsJournalEntryAllocation> creditAllocations, final boolean isReversal) {
+        final List<JournalEntry> journalEntries = new ArrayList<>();
+        createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate, debitAllocations,
+                creditAllocations, isReversal, journalEntries);
+        return persistJournalEntries(journalEntries);
+    }
+
+    public void createBalancedJournalEntriesForSavings(final Office office, final String currencyCode, final Long savingsId,
+            final String transactionId, final LocalDate transactionDate, final List<SavingsJournalEntryAllocation> debitAllocations,
+            final List<SavingsJournalEntryAllocation> creditAllocations, final boolean isReversal,
+            final List<JournalEntry> journalEntries) {
+        final List<SavingsJournalEntryAllocation> effectiveDebits = validateAllocations(debitAllocations);
+        final List<SavingsJournalEntryAllocation> effectiveCredits = validateAllocations(creditAllocations);
+        final BigDecimal debitTotal = totalAllocations(effectiveDebits);
+        final BigDecimal creditTotal = totalAllocations(effectiveCredits);
+        if (effectiveDebits.isEmpty() || effectiveCredits.isEmpty()) {
+            throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.NO_DEBITS_OR_CREDITS, null, null, null);
+        }
+        if (debitTotal.compareTo(creditTotal) != 0) {
+            throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.DEBIT_CREDIT_SUM_MISMATCH, null, null, null);
+        }
+
+        final List<ResolvedSavingsJournalEntryAllocation> resolvedDebits = resolveAllocations(effectiveDebits);
+        final List<ResolvedSavingsJournalEntryAllocation> resolvedCredits = resolveAllocations(effectiveCredits);
+        final List<JournalEntry> balancedEntries = new ArrayList<>(resolvedDebits.size() + resolvedCredits.size());
+        appendSavingsJournalEntries(balancedEntries, resolvedDebits, isReversal ? JournalEntryType.CREDIT : JournalEntryType.DEBIT, office,
+                currencyCode, savingsId, transactionId, transactionDate);
+        appendSavingsJournalEntries(balancedEntries, resolvedCredits, isReversal ? JournalEntryType.DEBIT : JournalEntryType.CREDIT, office,
+                currencyCode, savingsId, transactionId, transactionDate);
+        journalEntries.addAll(balancedEntries);
+    }
+
+    private List<SavingsJournalEntryAllocation> validateAllocations(final List<SavingsJournalEntryAllocation> allocations) {
+        if (allocations == null) {
+            throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.DEBIT_CREDIT_ACCOUNT_OR_AMOUNT_EMPTY, null, null, null);
+        }
+        final List<SavingsJournalEntryAllocation> effectiveAllocations = new ArrayList<>(allocations.size());
+        for (final SavingsJournalEntryAllocation allocation : allocations) {
+            if (allocation == null || allocation.glAccountId() == null || allocation.amount() == null || allocation.amount().signum() < 0) {
+                throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.DEBIT_CREDIT_ACCOUNT_OR_AMOUNT_EMPTY, null, null, null);
+            }
+            if (allocation.amount().signum() > 0) {
+                effectiveAllocations.add(allocation);
+            }
+        }
+        return effectiveAllocations;
+    }
+
+    private BigDecimal totalAllocations(final List<SavingsJournalEntryAllocation> allocations) {
+        return allocations.stream().map(SavingsJournalEntryAllocation::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<ResolvedSavingsJournalEntryAllocation> resolveAllocations(final List<SavingsJournalEntryAllocation> allocations) {
+        return allocations.stream().map(
+                allocation -> new ResolvedSavingsJournalEntryAllocation(getGLAccountById(allocation.glAccountId()), allocation.amount()))
+                .toList();
+    }
+
+    private void appendSavingsJournalEntries(final List<JournalEntry> journalEntries,
+            final List<ResolvedSavingsJournalEntryAllocation> allocations, final JournalEntryType type, final Office office,
+            final String currencyCode, final Long savingsId, final String transactionId, final LocalDate transactionDate) {
+        for (final ResolvedSavingsJournalEntryAllocation allocation : allocations) {
+            if (type == JournalEntryType.DEBIT) {
+                journalEntries.add(buildDebitJournalEntryForSavings(office, currencyCode, allocation.account(), savingsId, transactionId,
+                        transactionDate, allocation.amount()));
+            } else {
+                journalEntries.add(buildCreditJournalEntryForSavings(office, currencyCode, allocation.account(), savingsId, transactionId,
+                        transactionDate, allocation.amount()));
+            }
+        }
+    }
+
+    private record ResolvedSavingsJournalEntryAllocation(GLAccount account, BigDecimal amount) {
     }
 
     public void createAccrualBasedDebitJournalEntriesAndReversalsForSavings(final Office office, final String currencyCode,

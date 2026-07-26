@@ -437,7 +437,8 @@ public final class AccountingConstants {
         OPENING_BALANCES_TRANSFER_CONTRA(300, "openingBalancesTransferContra", GLAccountType.EQUITY), //
         ASSET_FUND_SOURCE(103, "fundSource", GLAccountType.ASSET), //
         PAYABLE_DIVIDENDS(201, "payableDividends", GLAccountType.LIABILITY), //
-        EMT_LEVY(202, "emtLevy", GLAccountType.LIABILITY); //
+        EMT_LEVY(202, "emtLevy", GLAccountType.LIABILITY), //
+        VAT_PAYABLE(203, "vatPayable", GLAccountType.LIABILITY); //
 
         private final Integer value;
         private final String code;

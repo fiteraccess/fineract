@@ -2917,6 +2917,14 @@ public class CommandWrapperBuilder {
         return this;
     }
 
+    public CommandWrapperBuilder upsertNipSwitchAccountingConfiguration(final String switchId) {
+        this.actionName = "UPDATE";
+        this.entityName = "NIP_SWITCH_ACCOUNTING_CONFIGURATION";
+        this.transactionId = switchId;
+        this.href = "/nip-switch-accounting-configurations/" + switchId;
+        return this;
+    }
+
     public CommandWrapperBuilder createClientCharge(final Long clientId) {
         this.actionName = ClientApiConstants.CLIENT_CHARGE_ACTION_CREATE;
         this.entityName = ClientApiConstants.CLIENT_CHARGES_RESOURCE_NAME;
