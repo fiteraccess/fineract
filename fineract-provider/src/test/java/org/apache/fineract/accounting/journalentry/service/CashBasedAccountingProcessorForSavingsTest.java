@@ -88,8 +88,8 @@ class CashBasedAccountingProcessorForSavingsTest {
 
             assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(401L, BigDecimal.valueOf(100))),
                     List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(100))));
-            verify(helper, never()).getLinkedGLAccountForSavingsProduct(22L,
-                    CashAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), 44L);
+            verify(helper, never()).getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(),
+                    44L);
         }
 
         @Test

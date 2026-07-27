@@ -181,7 +181,7 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
     }
 
     @Test
-    void optimizedNipDepositShouldPersistSwitchOnPrincipalAndLinkedEmtLevy() {
+    void optimizedNipDepositShouldPersistSwitchAndClearedOverdraftOnPrincipalAndLinkedEmtLevy() {
         SavingsAccount account = mock(SavingsAccount.class);
         SavingsAccountSummary summary = mock(SavingsAccountSummary.class);
         SavingsProduct savingsProduct = mock(SavingsProduct.class);
@@ -191,8 +191,8 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         when(account.allowDeposit()).thenReturn(true);
         when(account.getActivationDate()).thenReturn(BUSINESS_DATE.minusYears(1));
         when(account.getSummary()).thenReturn(summary);
-        when(summary.getAccountBalance()).thenReturn(BigDecimal.TEN);
-        when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.TEN));
+        when(summary.getAccountBalance()).thenReturn(BigDecimal.valueOf(-30));
+        when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.valueOf(-30)));
         when(account.getOnHoldFunds()).thenReturn(BigDecimal.ZERO);
         when(account.getSavingsHoldAmount()).thenReturn(BigDecimal.ZERO);
         when(account.getSubStatus()).thenReturn(0);
@@ -218,6 +218,7 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         ArgumentCaptor<SavingsAccountTransaction> transactionCaptor = ArgumentCaptor.forClass(SavingsAccountTransaction.class);
         verify(savingsAccountTransactionRepository, times(2)).saveAndFlush(transactionCaptor.capture());
         assertThat(transactionCaptor.getAllValues()).allSatisfy(transaction -> assertThat(transaction.getSwitchId()).isEqualTo("NIBSS"));
+        assertThat(transactionCaptor.getAllValues().getFirst().getOverdraftAmount()).isEqualByComparingTo("30");
         assertThat(transactionCaptor.getAllValues()).extracting(SavingsAccountTransaction::getRefNo).doesNotContainNull()
                 .containsOnly(transactionCaptor.getAllValues().getFirst().getRefNo());
     }

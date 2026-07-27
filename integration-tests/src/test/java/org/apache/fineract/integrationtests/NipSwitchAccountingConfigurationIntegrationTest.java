@@ -73,6 +73,8 @@ class NipSwitchAccountingConfigurationIntegrationTest {
         assertAccountId(configuration, "switchPayableGlAccountId", payable);
         assertAccountId(configuration, "switchFeeGlAccountId", fee);
         assertAccountId(configuration, "commissionIncomeGlAccountId", income);
+        assertThat(configuration.get("direction")).isEqualTo("OUTBOUND");
+        assertThat(configuration.get("switchReceivableGlAccountId")).isNull();
         assertThat(configuration.get("active")).isEqualTo(true);
 
         Account replacementPayable = accountHelper.createLiabilityAccount();
@@ -100,6 +102,7 @@ class NipSwitchAccountingConfigurationIntegrationTest {
         request.put("switchPayableGlAccountId", headerAccountId);
         request.put("switchFeeGlAccountId", fee.getAccountID());
         request.put("commissionIncomeGlAccountId", income.getAccountID());
+        request.put("direction", "OUTBOUND");
         request.put("active", true);
 
         put(switchId, request, validationErrorResponse);
@@ -112,6 +115,7 @@ class NipSwitchAccountingConfigurationIntegrationTest {
         request.put("switchPayableGlAccountId", payable.getAccountID());
         request.put("switchFeeGlAccountId", fee.getAccountID());
         request.put("commissionIncomeGlAccountId", income.getAccountID());
+        request.put("direction", "OUTBOUND");
         request.put("active", active);
         return request;
     }

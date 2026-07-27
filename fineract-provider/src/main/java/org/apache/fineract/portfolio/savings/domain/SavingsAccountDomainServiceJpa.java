@@ -559,8 +559,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // Compute the post-deposit available balance for the running-balance field on the new transaction.
         // We do NOT mutate account.getSummary() — the JPQL UPDATE below applies the delta directly to the DB.
         final SavingsAccountSummary s = account.getSummary();
-        final BigDecimal newPostedBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO)
-                .add(transactionAmount);
+        final BigDecimal currentPostedBalance = s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO;
+        final BigDecimal newPostedBalance = currentPostedBalance.add(transactionAmount);
+        final BigDecimal clearedOverdraft = currentPostedBalance.signum() < 0 ? transactionAmount.min(currentPostedBalance.negate())
+                : BigDecimal.ZERO;
+        deposit.setOverdraftAmount(Money.of(account.getCurrency(), clearedOverdraft));
         // Available balance — posted minus active holds. Matches what recalculateDailyBalances would write
         // (it walks the timeline treating hold txns as debits). Used for setRunningBalance on the new txn
         // so the snapshot derived from running_balance_derived is hold-aware. See plan §10.2.

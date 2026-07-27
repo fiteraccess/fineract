@@ -89,14 +89,13 @@ class NipSwitchAccountingConfigurationServiceTest {
         }
 
         @Test
-        void distinguishesInactiveFromMissingConfiguration() {
-            NipSwitchAccountingConfigurationEntity inactive = configuration("NIBSS", NipSwitchAccountingDirection.OUTBOUND, false,
-                    detailAccount(1), detailAccount(2), detailAccount(3), null);
+        void distinguishesInactiveFromMissingInboundConfiguration() {
+            NipSwitchAccountingConfigurationEntity inactive = configuration("NIBSS", NipSwitchAccountingDirection.INBOUND, false, null,
+                    null, null, assetDetailAccount(4));
             when(repository.findBySwitchIdAndActiveTrue("NIBSS")).thenReturn(Optional.empty());
             when(repository.findBySwitchId("NIBSS")).thenReturn(Optional.of(inactive));
 
-            assertThatThrownBy(() -> service.requireOutbound("nibss"))
-                    .isInstanceOf(NipSwitchAccountingConfigurationInactiveException.class);
+            assertThatThrownBy(() -> service.requireInbound("nibss")).isInstanceOf(NipSwitchAccountingConfigurationInactiveException.class);
 
             when(repository.findBySwitchId("NIBSS")).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.requireInbound("nibss")).isInstanceOf(NipSwitchAccountingConfigurationNotFoundException.class);
