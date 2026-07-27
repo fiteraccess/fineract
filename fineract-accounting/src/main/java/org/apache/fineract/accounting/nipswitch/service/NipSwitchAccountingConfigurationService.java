@@ -137,7 +137,7 @@ public class NipSwitchAccountingConfigurationService implements NipSwitchAccount
         }
         GLAccount glAccount = glAccountRepository.findOneWithNotFoundDetection(glAccountId);
         if (glAccount.isDisabled() || !glAccount.isDetailAccount()
-                || mustBeAsset && !GLAccountType.ASSET.getValue().equals(glAccount.getType())) {
+                || (mustBeAsset && !GLAccountType.ASSET.getValue().equals(glAccount.getType()))) {
             throw new PlatformApiDataValidationException("error.msg.nip.switch.accounting.configuration.gl.account.not.usable",
                     mustBeAsset ? "The Receivable GL account must be an enabled detail asset account"
                             : "The GL account must be an enabled detail account",
