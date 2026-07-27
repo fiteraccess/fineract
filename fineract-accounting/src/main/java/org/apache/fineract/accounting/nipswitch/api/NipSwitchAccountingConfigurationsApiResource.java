@@ -22,6 +22,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -83,7 +84,31 @@ public class NipSwitchAccountingConfigurationsApiResource {
     @PUT
     @Path("{switchId}")
     @Operation(summary = "Create or replace a NIP switch accounting configuration", operationId = "upsertNipSwitchAccountingConfiguration", description = "Atomically replaces the complete directional GL mapping and active status. No fee or VAT amount is stored.")
-    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = NipSwitchAccountingConfigurationRequest.class)))
+    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = NipSwitchAccountingConfigurationRequest.class), examples = {
+            @ExampleObject(name = "OUTBOUND", summary = "Outbound-only switch", value = """
+                    {
+                      "direction": "OUTBOUND",
+                      "switchPayableGlAccountId": 101,
+                      "switchFeeGlAccountId": 102,
+                      "commissionIncomeGlAccountId": 103,
+                      "active": true
+                    }
+                    """), @ExampleObject(name = "INBOUND", summary = "Inbound-only switch", value = """
+                    {
+                      "direction": "INBOUND",
+                      "switchReceivableGlAccountId": 104,
+                      "active": true
+                    }
+                    """), @ExampleObject(name = "BOTH", summary = "Bidirectional switch", value = """
+                    {
+                      "direction": "BOTH",
+                      "switchPayableGlAccountId": 101,
+                      "switchFeeGlAccountId": 102,
+                      "commissionIncomeGlAccountId": 103,
+                      "switchReceivableGlAccountId": 104,
+                      "active": true
+                    }
+                    """) }))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult upsert(
             @PathParam("switchId") @Parameter(description = "NIP switch identifier; trimmed and uppercased before storage") String switchId,

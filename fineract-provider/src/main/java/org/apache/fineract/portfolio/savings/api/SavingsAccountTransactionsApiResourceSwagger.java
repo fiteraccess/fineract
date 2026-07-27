@@ -213,7 +213,7 @@ final class SavingsAccountTransactionsApiResourceSwagger {
             public PostNipCommissionAllocationLeg bankCommission;
         }
 
-        @Schema(description = "A reference debit supplied in authoritative order. NIP withdrawals support COMMISSION and VAT; legacy EMT_LEVY remains supported on its existing path.")
+        @Schema(description = "A reference debit supplied in authoritative order. NIP withdrawals support COMMISSION and VAT; inbound NIP deposits support only the existing optional EMT_LEVY reference.")
         public static final class PostSavingsReferenceTransaction {
 
             private PostSavingsReferenceTransaction() {}
@@ -242,9 +242,9 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public String reasonForBlock;
         @Schema(example = "1")
         public Integer paymentTypeId;
-        @Schema(description = "Nonblank switch identifier for an outbound NIP withdrawal. Fineract trims and uppercases it.", example = "NIBSS")
+        @Schema(description = "Nonblank switch identifier for an outbound NIP withdrawal or inbound NIP deposit. Fineract trims and uppercases it.", example = "NIBSS")
         public String switchId;
-        @Schema(description = "Optional Commission/VAT references recorded in the supplied order. Omit or send an empty list for a fee-free NIP withdrawal.")
+        @Schema(description = "Optional references recorded in supplied order. Withdrawals accept Commission/VAT; inbound deposits accept only EMT_LEVY.")
         public List<PostSavingsReferenceTransaction> referenceTransactions;
     }
 
