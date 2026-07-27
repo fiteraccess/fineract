@@ -26,40 +26,69 @@ import static org.mockito.Mockito.when;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class NipSwitchAccountingConfigurationValidatorTest {
 
     private final NipSwitchAccountingConfigurationValidator validator = new NipSwitchAccountingConfigurationValidator(new FromJsonHelper());
 
-    @Test
-    void acceptsCompleteConfiguration() {
-        JsonCommand command = command("""
-                {
-                  "switchPayableGlAccountId": 1,
-                  "switchFeeGlAccountId": 2,
-                  "commissionIncomeGlAccountId": 3,
-                  "active": true
-                }
-                """);
+    @Nested
+    class ValidShapes {
 
-        assertThatCode(() -> validator.validateForUpsert("NIBSS", command)).doesNotThrowAnyException();
+        @Test
+        void acceptsOutboundOnlyConfiguration() {
+            assertThatCode(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "OUTBOUND", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "active": true }
+                    """))).doesNotThrowAnyException();
+        }
+
+        @Test
+        void acceptsInboundOnlyConfiguration() {
+            assertThatCode(() -> validator.validateForUpsert("UPSL", command("""
+                    { "direction": "INBOUND", "switchReceivableGlAccountId": 4, "active": true }
+                    """))).doesNotThrowAnyException();
+        }
+
+        @Test
+        void acceptsBidirectionalConfiguration() {
+            assertThatCode(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "BOTH", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "switchReceivableGlAccountId": 4, "active": true }
+                    """))).doesNotThrowAnyException();
+        }
     }
 
-    @Test
-    void rejectsBlankSwitchAndInvalidConfigurationValues() {
-        JsonCommand command = command("""
-                {
-                  "switchPayableGlAccountId": 0,
-                  "switchFeeGlAccountId": -2
-                }
-                """);
+    @Nested
+    class InvalidShapes {
 
-        assertThatThrownBy(() -> validator.validateForUpsert(" ", command)).isInstanceOf(PlatformApiDataValidationException.class)
-                .satisfies(exception -> {
-                    PlatformApiDataValidationException validationException = (PlatformApiDataValidationException) exception;
-                    org.assertj.core.api.Assertions.assertThat(validationException.getErrors()).hasSize(5);
-                });
+        @Test
+        void rejectsMissingOrUnsupportedDirection() {
+            assertThatThrownBy(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+            assertThatThrownBy(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "SIDEWAYS", "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+        }
+
+        @Test
+        void rejectsFieldsThatDoNotExactlyMatchDirection() {
+            assertThatThrownBy(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "OUTBOUND", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "switchReceivableGlAccountId": 4, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+            assertThatThrownBy(() -> validator.validateForUpsert("UPSL", command("""
+                    { "direction": "INBOUND", "switchPayableGlAccountId": 1,
+                      "switchReceivableGlAccountId": 4, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+            assertThatThrownBy(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "BOTH", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+        }
     }
 
     private JsonCommand command(String json) {

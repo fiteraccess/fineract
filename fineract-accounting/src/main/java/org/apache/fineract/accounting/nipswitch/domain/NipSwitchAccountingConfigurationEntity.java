@@ -20,6 +20,8 @@ package org.apache.fineract.accounting.nipswitch.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -43,17 +45,25 @@ public class NipSwitchAccountingConfigurationEntity extends AbstractPersistableC
     @Column(name = "switch_id", nullable = false, unique = true, length = 64)
     private String switchId;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "switch_payable_gl_account_id", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "direction", nullable = false, length = 16)
+    private NipSwitchAccountingDirection direction;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "switch_payable_gl_account_id")
     private GLAccount switchPayableGlAccount;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "switch_fee_gl_account_id", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "switch_fee_gl_account_id")
     private GLAccount switchFeeGlAccount;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "commission_income_gl_account_id", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "commission_income_gl_account_id")
     private GLAccount commissionIncomeGlAccount;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "switch_receivable_gl_account_id")
+    private GLAccount switchReceivableGlAccount;
 
     @Column(name = "active", nullable = false)
     private boolean active;
@@ -64,25 +74,32 @@ public class NipSwitchAccountingConfigurationEntity extends AbstractPersistableC
     @Column(name = "last_modified_on_utc", nullable = false)
     private LocalDateTime lastModifiedOnUtc;
 
-    public static NipSwitchAccountingConfigurationEntity create(String switchId, GLAccount switchPayableGlAccount,
-            GLAccount switchFeeGlAccount, GLAccount commissionIncomeGlAccount, boolean active) {
+    public static NipSwitchAccountingConfigurationEntity create(String switchId, NipSwitchAccountingDirection direction,
+            GLAccount switchPayableGlAccount, GLAccount switchFeeGlAccount, GLAccount commissionIncomeGlAccount,
+            GLAccount switchReceivableGlAccount, boolean active) {
         NipSwitchAccountingConfigurationEntity entity = new NipSwitchAccountingConfigurationEntity();
         entity.switchId = switchId;
-        entity.replace(switchPayableGlAccount, switchFeeGlAccount, commissionIncomeGlAccount, active);
+        entity.replace(direction, switchPayableGlAccount, switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount, active);
         return entity;
     }
 
-    public void replace(GLAccount switchPayableGlAccount, GLAccount switchFeeGlAccount, GLAccount commissionIncomeGlAccount,
-            boolean active) {
+    public void replace(NipSwitchAccountingDirection direction, GLAccount switchPayableGlAccount, GLAccount switchFeeGlAccount,
+            GLAccount commissionIncomeGlAccount, GLAccount switchReceivableGlAccount, boolean active) {
+        this.direction = direction;
         this.switchPayableGlAccount = switchPayableGlAccount;
         this.switchFeeGlAccount = switchFeeGlAccount;
         this.commissionIncomeGlAccount = commissionIncomeGlAccount;
+        this.switchReceivableGlAccount = switchReceivableGlAccount;
         this.active = active;
     }
 
-    public NipSwitchAccountingConfigurationProvider.Configuration toConfiguration() {
-        return new NipSwitchAccountingConfigurationProvider.Configuration(switchId, switchPayableGlAccount.getId(),
+    public NipSwitchAccountingConfigurationProvider.OutboundConfiguration toOutboundConfiguration() {
+        return new NipSwitchAccountingConfigurationProvider.OutboundConfiguration(switchId, switchPayableGlAccount.getId(),
                 switchFeeGlAccount.getId(), commissionIncomeGlAccount.getId());
+    }
+
+    public NipSwitchAccountingConfigurationProvider.InboundConfiguration toInboundConfiguration() {
+        return new NipSwitchAccountingConfigurationProvider.InboundConfiguration(switchId, switchReceivableGlAccount.getId());
     }
 
     @PrePersist

@@ -19,11 +19,14 @@
 package org.apache.fineract.accounting.nipswitch.data;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.apache.fineract.accounting.nipswitch.domain.NipSwitchAccountingDirection;
 
 public record NipSwitchAccountingConfigurationData(
         @Schema(description = "Normalized switch identifier.", example = "NIBSS") String switchId,
-        @Schema(description = "GL credited for NIP principal.", example = "101") Long switchPayableGlAccountId,
+        @Schema(description = "Directions enabled for this switch.", example = "BOTH") NipSwitchAccountingDirection direction,
+        @Schema(description = "GL credited for outbound NIP principal.", example = "101") Long switchPayableGlAccountId,
         @Schema(description = "GL credited for the supplied Switch Fee leg.", example = "102") Long switchFeeGlAccountId,
         @Schema(description = "GL credited for the supplied Bank Commission leg.", example = "103") Long commissionIncomeGlAccountId,
-        @Schema(description = "Whether this mapping may be used for new NIP withdrawals.", example = "true") boolean active) {
+        @Schema(description = "GL debited for inbound NIP principal.", example = "104") Long switchReceivableGlAccountId,
+        @Schema(description = "Whether this mapping may be used for new NIP transactions.", example = "true") boolean active) {
 }

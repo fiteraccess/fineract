@@ -346,8 +346,8 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
 
     private void createNipPrincipalJournalEntries(final NipAccountingContext context) {
         final SavingsTransactionDTO transaction = context.transaction();
-        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
-                .require(transaction.getSwitchId());
+        final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireOutbound(transaction.getSwitchId());
         createBalancedJournalEntries(context, createDebitAllocations(context),
                 List.of(new SavingsJournalEntryAllocation(configuration.switchPayableGlAccountId(), transaction.getAmount())));
     }
@@ -355,8 +355,8 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
     private void createCommissionJournalEntries(final NipAccountingContext context) {
         final SavingsTransactionDTO transaction = context.transaction();
         final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation = requireBalancedCommissionAllocation(transaction);
-        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
-                .require(transaction.getSwitchId());
+        final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireOutbound(transaction.getSwitchId());
         final List<SavingsJournalEntryAllocation> creditAllocations = new ArrayList<>(2);
         if (commissionAllocation.switchFeeAmount().signum() > 0) {
             creditAllocations

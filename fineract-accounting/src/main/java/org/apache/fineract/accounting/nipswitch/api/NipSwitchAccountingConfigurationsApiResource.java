@@ -50,8 +50,9 @@ import org.springframework.stereotype.Component;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 @Component
-@Tag(name = "NIP Switch Accounting Configurations", description = "Tenant-scoped GL routing for outbound NIP switches. Configurations contain three GL identifiers and active "
-        + "status only; fee amounts remain owned and supplied by Synapse. VAT uses the separate tenant-wide VAT_PAYABLE "
+@Tag(name = "NIP Switch Accounting Configurations", description = "Tenant-scoped GL routing for inbound and outbound NIP switches. "
+        + "Configurations declare OUTBOUND, INBOUND, or BOTH and contain only the GL identifiers needed for that direction; "
+        + "fee amounts remain owned and supplied by Synapse. VAT uses the separate tenant-wide VAT_PAYABLE "
         + "Financial Activity mapping.")
 @RequiredArgsConstructor
 public class NipSwitchAccountingConfigurationsApiResource {
@@ -81,7 +82,7 @@ public class NipSwitchAccountingConfigurationsApiResource {
 
     @PUT
     @Path("{switchId}")
-    @Operation(summary = "Create or replace a NIP switch accounting configuration", operationId = "upsertNipSwitchAccountingConfiguration", description = "Atomically upserts the three GL mappings and active status. No fee or VAT amount is stored.")
+    @Operation(summary = "Create or replace a NIP switch accounting configuration", operationId = "upsertNipSwitchAccountingConfiguration", description = "Atomically replaces the complete directional GL mapping and active status. No fee or VAT amount is stored.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = NipSwitchAccountingConfigurationRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult upsert(

@@ -16,18 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.accounting.nipswitch.domain;
+package org.apache.fineract.accounting.nipswitch.exception;
 
-public interface NipSwitchAccountingConfigurationProvider {
+import org.apache.fineract.infrastructure.core.exception.AbstractPlatformDomainRuleException;
 
-    OutboundConfiguration requireOutbound(String switchId);
+public class NipSwitchAccountingConfigurationDirectionException extends AbstractPlatformDomainRuleException {
 
-    InboundConfiguration requireInbound(String switchId);
-
-    record OutboundConfiguration(String switchId, Long switchPayableGlAccountId, Long switchFeeGlAccountId,
-            Long commissionIncomeGlAccountId) {
-    }
-
-    record InboundConfiguration(String switchId, Long switchReceivableGlAccountId) {
+    public NipSwitchAccountingConfigurationDirectionException(String switchId, String direction) {
+        super("error.msg.nip.switch.accounting.configuration.direction.not.available",
+                "NIP switch accounting configuration for switch '" + switchId + "' does not support " + direction, switchId, direction);
     }
 }

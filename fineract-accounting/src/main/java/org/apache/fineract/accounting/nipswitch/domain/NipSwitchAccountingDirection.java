@@ -18,16 +18,15 @@
  */
 package org.apache.fineract.accounting.nipswitch.domain;
 
-public interface NipSwitchAccountingConfigurationProvider {
+public enum NipSwitchAccountingDirection {
 
-    OutboundConfiguration requireOutbound(String switchId);
+    OUTBOUND, INBOUND, BOTH;
 
-    InboundConfiguration requireInbound(String switchId);
-
-    record OutboundConfiguration(String switchId, Long switchPayableGlAccountId, Long switchFeeGlAccountId,
-            Long commissionIncomeGlAccountId) {
+    public boolean supportsOutbound() {
+        return this == OUTBOUND || this == BOTH;
     }
 
-    record InboundConfiguration(String switchId, Long switchReceivableGlAccountId) {
+    public boolean supportsInbound() {
+        return this == INBOUND || this == BOTH;
     }
 }

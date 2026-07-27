@@ -279,8 +279,8 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
             final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
             final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
             final BigDecimal overdraftAmount) {
-        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
-                .require(savingsTransactionDTO.getSwitchId());
+        final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireOutbound(savingsTransactionDTO.getSwitchId());
         final List<SavingsJournalEntryAllocation> debitAllocations = createDebitAllocations(savingsProductId, paymentTypeId, amount,
                 overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
@@ -294,8 +294,8 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
             final BigDecimal overdraftAmount) {
         final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation = requireBalancedCommissionAllocation(
                 savingsTransactionDTO, amount);
-        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
-                .require(savingsTransactionDTO.getSwitchId());
+        final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireOutbound(savingsTransactionDTO.getSwitchId());
         final List<SavingsJournalEntryAllocation> creditAllocations = new ArrayList<>(2);
         if (commissionAllocation.switchFeeAmount().signum() > 0) {
             creditAllocations

@@ -36,7 +36,7 @@ public class NipWithdrawalPreflight {
     private final FinancialActivityAccountRepositoryWrapper financialActivityAccountRepositoryWrapper;
 
     void validate(String switchId, List<ReferenceTransaction> references) {
-        this.switchConfigurationProvider.require(switchId);
+        this.switchConfigurationProvider.requireOutbound(switchId);
         if (references.stream().noneMatch(reference -> reference.type().isVat())) {
             return;
         }

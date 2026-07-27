@@ -289,8 +289,8 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     }
 
     private void configureSwitch() {
-        when(configurationProvider.require("NIBSS"))
-                .thenReturn(new NipSwitchAccountingConfigurationProvider.Configuration("NIBSS", 201L, 202L, 203L));
+        when(configurationProvider.requireOutbound("NIBSS"))
+                .thenReturn(new NipSwitchAccountingConfigurationProvider.OutboundConfiguration("NIBSS", 201L, 202L, 203L));
     }
 
     private GLAccount glAccount(final Long id) {
