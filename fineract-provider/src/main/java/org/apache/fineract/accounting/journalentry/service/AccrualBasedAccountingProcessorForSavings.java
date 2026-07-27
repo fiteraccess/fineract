@@ -332,7 +332,9 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
         if (StringUtils.isBlank(transaction.getSwitchId())) {
             return false;
         }
-        if (transaction.getTransactionType().isWithdrawal()) {
+        if (transaction.getTransactionType().isDeposit()) {
+            createNipDepositJournalEntries(context);
+        } else if (transaction.getTransactionType().isWithdrawal()) {
             createNipPrincipalJournalEntries(context);
         } else if (transaction.getTransactionType().isCommission()) {
             createCommissionJournalEntries(context);
@@ -348,8 +350,17 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
         final SavingsTransactionDTO transaction = context.transaction();
         final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
                 .requireOutbound(transaction.getSwitchId());
-        createBalancedJournalEntries(context, createDebitAllocations(context),
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
                 List.of(new SavingsJournalEntryAllocation(configuration.switchPayableGlAccountId(), transaction.getAmount())));
+    }
+
+    private void createNipDepositJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final NipSwitchAccountingConfigurationProvider.InboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireInbound(transaction.getSwitchId());
+        createBalancedJournalEntries(context,
+                List.of(new SavingsJournalEntryAllocation(configuration.switchReceivableGlAccountId(), transaction.getAmount())),
+                createCustomerControlAllocations(context));
     }
 
     private void createCommissionJournalEntries(final NipAccountingContext context) {
@@ -366,7 +377,7 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
             creditAllocations.add(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(),
                     commissionAllocation.bankCommissionAmount()));
         }
-        createBalancedJournalEntries(context, createDebitAllocations(context), creditAllocations);
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context), creditAllocations);
     }
 
     private SavingsAccountingBridgeCommissionAllocationDTO requireBalancedCommissionAllocation(final SavingsTransactionDTO transaction) {
@@ -391,11 +402,11 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
         final SavingsTransactionDTO transaction = context.transaction();
         final GLAccount vatPayableAccount = this.helper.getLinkedGLAccountForSavingsProduct(context.savingsProductId(),
                 FinancialActivity.VAT_PAYABLE.getValue(), transaction.getPaymentTypeId());
-        createBalancedJournalEntries(context, createDebitAllocations(context),
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
                 List.of(new SavingsJournalEntryAllocation(vatPayableAccount.getId(), transaction.getAmount())));
     }
 
-    private List<SavingsJournalEntryAllocation> createDebitAllocations(final NipAccountingContext context) {
+    private List<SavingsJournalEntryAllocation> createCustomerControlAllocations(final NipAccountingContext context) {
         final SavingsTransactionDTO transaction = context.transaction();
         final BigDecimal effectiveOverdraftAmount = transaction.getOverdraftAmount() == null ? BigDecimal.ZERO
                 : transaction.getOverdraftAmount();
