@@ -403,13 +403,26 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final boolean isAccountTransfer, final boolean isRegularTransaction, final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransactionType savingsAccountTransactionType = SavingsAccountTransactionType.DEPOSIT;
         return handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction,
-                savingsAccountTransactionType, backdatedTxnsAllowedTill);
+                savingsAccountTransactionType, null, backdatedTxnsAllowedTill);
+    }
+
+    @Transactional
+    @Override
+    public SavingsAccountTransaction handleNipDeposit(final SavingsAccount account, final DateTimeFormatter fmt,
+            final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail, final String switchId,
+            final List<ReferenceTransaction> references, final boolean isAccountTransfer, final boolean isRegularTransaction,
+            final boolean backdatedTxnsAllowedTill) {
+        final SavingsAccountTransaction deposit = handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                isAccountTransfer, isRegularTransaction, SavingsAccountTransactionType.DEPOSIT, switchId, backdatedTxnsAllowedTill);
+        applyReferenceTransactions(account, deposit, references, isAccountTransfer, backdatedTxnsAllowedTill, switchId);
+        return deposit;
     }
 
     private SavingsAccountTransaction handleDeposit(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final boolean isAccountTransfer, final boolean isRegularTransaction,
-            final SavingsAccountTransactionType savingsAccountTransactionType, final boolean backdatedTxnsAllowedTill) {
+            final SavingsAccountTransactionType savingsAccountTransactionType, final String switchId,
+            final boolean backdatedTxnsAllowedTill) {
         context.authenticatedUser();
         account.validateForAccountBlock();
         account.validateForCreditBlock();
@@ -424,7 +437,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // or past-dated transactions (which need running balance recalculation and interest reversal handling)
         if (isRegularTransaction && !DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
             return handleDepositOptimized(account, fmt, transactionDate, transactionAmount, paymentDetail, isAccountTransfer,
-                    savingsAccountTransactionType, backdatedTxnsAllowedTill);
+                    savingsAccountTransactionType, switchId, backdatedTxnsAllowedTill);
         }
 
         // Legacy path for backdated transactions
@@ -448,6 +461,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         UUID refNo = UUID.randomUUID();
         final SavingsAccountTransaction deposit = account.deposit(transactionDTO, savingsAccountTransactionType, backdatedTxnsAllowedTill,
                 relaxingDaysConfigForPivotDate, refNo.toString());
+        deposit.setSwitchId(switchId);
         final LocalDate postInterestOnDate = null;
         final MathContext mc = MathContext.DECIMAL64;
 
@@ -480,7 +494,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
      */
     private SavingsAccountTransaction handleDepositOptimized(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
-            final boolean isAccountTransfer, final SavingsAccountTransactionType savingsAccountTransactionType,
+            final boolean isAccountTransfer, final SavingsAccountTransactionType savingsAccountTransactionType, final String switchId,
             final boolean backdatedTxnsAllowedTill) {
 
         // --- O(1) business validations (mirroring SavingsAccount.deposit()) ---
@@ -540,6 +554,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final String refNo = UUID.randomUUID().toString();
         final SavingsAccountTransaction deposit = SavingsAccountTransaction.deposit(account, account.office(), paymentDetail,
                 transactionDate, amount, savingsAccountTransactionType, refNo);
+        deposit.setSwitchId(switchId);
 
         // Compute the post-deposit available balance for the running-balance field on the new transaction.
         // We do NOT mutate account.getSummary() — the JPQL UPDATE below applies the delta directly to the DB.
@@ -616,7 +631,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final boolean isRegularTransaction = true;
         final SavingsAccountTransactionType savingsAccountTransactionType = SavingsAccountTransactionType.DIVIDEND_PAYOUT;
         return handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction,
-                savingsAccountTransactionType, backdatedTxnsAllowedTill);
+                savingsAccountTransactionType, null, backdatedTxnsAllowedTill);
     }
 
     /**
@@ -662,6 +677,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final SavingsAccountTransaction referenceTransaction;
             if (ref.type().isEmtLevy()) {
                 referenceTransaction = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money, refNo);
+                referenceTransaction.setSwitchId(switchId);
             } else if (ref.type().isCommission()) {
                 referenceTransaction = SavingsAccountTransaction.commission(account, account.office(), transactionDate, money, refNo,
                         switchId);

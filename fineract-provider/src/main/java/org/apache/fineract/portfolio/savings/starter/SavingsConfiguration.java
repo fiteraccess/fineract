@@ -119,6 +119,7 @@ import org.apache.fineract.portfolio.savings.service.GSIMReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.GSIMReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.savings.service.GroupSavingsIndividualMonitoringWritePlatformService;
 import org.apache.fineract.portfolio.savings.service.GroupSavingsIndividualMonitoringWritePlatformServiceImpl;
+import org.apache.fineract.portfolio.savings.service.NipDepositPreflight;
 import org.apache.fineract.portfolio.savings.service.NipWithdrawalPreflight;
 import org.apache.fineract.portfolio.savings.service.RecurringDepositProductWritePlatformService;
 import org.apache.fineract.portfolio.savings.service.RecurringDepositProductWritePlatformServiceJpaRepositoryImpl;
@@ -401,7 +402,8 @@ public class SavingsConfiguration {
             ObjectProvider<SynapseChargePostingOutboxWriter> synapseChargePostingOutboxWriterProvider,
             ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider,
             ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider,
-            ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider, NipWithdrawalPreflight nipWithdrawalPreflight) {
+            ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider, NipWithdrawalPreflight nipWithdrawalPreflight,
+            NipDepositPreflight nipDepositPreflight) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -412,7 +414,7 @@ public class SavingsConfiguration {
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
                 synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
                 savingsDailyBalanceSyncRepository, synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider,
-                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider, nipWithdrawalPreflight);
+                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider, nipWithdrawalPreflight, nipDepositPreflight);
     }
 
     @Bean

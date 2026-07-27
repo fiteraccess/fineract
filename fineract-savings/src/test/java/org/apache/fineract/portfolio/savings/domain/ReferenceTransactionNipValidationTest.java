@@ -25,6 +25,7 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class ReferenceTransactionNipValidationTest {
@@ -172,7 +173,7 @@ class ReferenceTransactionNipValidationTest {
     }
 
     @Test
-    void rejectsNipFieldsOnDepositOrOtherUnsupportedPaths() {
+    void rejectsNipFieldsOnTransferPath() {
         assertThatThrownBy(() -> ReferenceTransaction.rejectNipFields(command("""
                 { "switchId": "NIBSS" }
                 """), java.util.List.of())).isInstanceOf(GeneralPlatformDomainRuleException.class);
@@ -185,6 +186,53 @@ class ReferenceTransactionNipValidationTest {
                     """);
             ReferenceTransaction.rejectNipFields(command, ReferenceTransaction.parseArray(command, "referenceTransactions"));
         }).isInstanceOf(GeneralPlatformDomainRuleException.class);
+    }
+
+    @Nested
+    class InboundNipDeposits {
+
+        @Test
+        void normalizesSwitchAndAcceptsExistingEmtLevy() {
+            ReferenceTransaction.NipDepositRequest request = ReferenceTransaction.parseNipDeposit(command("""
+                    { "switchId": " nibss ", "referenceTransactions": [
+                      { "type": "EMT_LEVY", "amount": 50 }
+                    ] }
+                    """));
+
+            assertThat(request.switchId()).isEqualTo("NIBSS");
+            assertThat(request.references()).extracting(ReferenceTransaction::type).containsExactly(SavingsAccountTransactionType.EMT_LEVY);
+        }
+
+        @Test
+        void preservesLegacyDepositWithoutSwitch() {
+            ReferenceTransaction.NipDepositRequest request = ReferenceTransaction.parseNipDeposit(command("""
+                    { "referenceTransactions": [
+                      { "type": "EMT_LEVY", "amount": 50 }
+                    ] }
+                    """));
+
+            assertThat(request.switchId()).isNull();
+            assertThat(request.references()).extracting(ReferenceTransaction::type).containsExactly(SavingsAccountTransactionType.EMT_LEVY);
+        }
+
+        @Test
+        void rejectsCommissionAndVatReferences() {
+            assertInvalidDeposit("""
+                    { "switchId": "NIBSS", "referenceTransactions": [
+                      { "type": "COMMISSION", "amount": 1 }
+                    ] }
+                    """);
+            assertInvalidDeposit("""
+                    { "switchId": "NIBSS", "referenceTransactions": [
+                      { "type": "VAT", "amount": 1 }
+                    ] }
+                    """);
+        }
+
+        private void assertInvalidDeposit(final String json) {
+            assertThatThrownBy(() -> ReferenceTransaction.parseNipDeposit(command(json)))
+                    .isInstanceOf(GeneralPlatformDomainRuleException.class);
+        }
     }
 
     private void assertInvalid(final String json) {

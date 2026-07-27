@@ -24,7 +24,6 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.amountPa
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargeIdParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.dueAsOfDateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.lienAllowedParamName;
-import static org.apache.fineract.portfolio.savings.SavingsApiConstants.referenceTransactionsParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.transactionAmountParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.transactionDateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withHoldTaxParamName;
@@ -195,6 +194,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider;
     private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
     private final NipWithdrawalPreflight nipWithdrawalPreflight;
+    private final NipDepositPreflight nipDepositPreflight;
 
     @Transactional
     @Override
@@ -323,8 +323,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.context.authenticatedUser();
 
         this.savingsAccountTransactionDataValidator.validate(command);
-        final List<ReferenceTransaction> referenceTransactions = ReferenceTransaction.parseArray(command, referenceTransactionsParamName);
-        ReferenceTransaction.rejectNipFields(command, referenceTransactions);
+        final ReferenceTransaction.NipDepositRequest nipRequest = ReferenceTransaction.parseNipDeposit(command);
+        final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
+        if (nipRequest.switchId() != null) {
+            this.nipDepositPreflight.validate(nipRequest.switchId());
+        }
         boolean isGsim = false;
 
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
@@ -365,13 +368,16 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         boolean isAccountTransfer = false;
         boolean isRegularTransaction = true;
-        final SavingsAccountTransaction deposit = this.savingsAccountDomainService.handleDeposit(account, fmt, transactionDate,
-                transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
+        final SavingsAccountTransaction deposit = nipRequest.switchId() == null
+                ? this.savingsAccountDomainService.handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                        isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill)
+                : this.savingsAccountDomainService.handleNipDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                        nipRequest.switchId(), referenceTransactions, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
 
         // AB-265: apply side-effect transactions (EMT Levy today; VAT-style in future) asserted by the caller.
         // Synapse pre-computed the amounts; Fineract just records them under the parent's refNo for atomic
         // bulk-reversal.
-        if (!referenceTransactions.isEmpty()) {
+        if (nipRequest.switchId() == null && !referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, deposit, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
         }
