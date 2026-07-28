@@ -24,6 +24,7 @@ import static org.apache.fineract.portfolio.account.AccountDetailConstants.toAcc
 import static org.apache.fineract.portfolio.account.AccountDetailConstants.toAccountTypeParamName;
 import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants.transferAmountParamName;
 import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants.transferDateParamName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -38,6 +39,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
@@ -125,6 +127,8 @@ class AccountTransfersWritePlatformServiceImplTest {
         SavingsAccountTransaction withdrawal = org.mockito.Mockito.mock(SavingsAccountTransaction.class);
         SavingsAccountTransaction deposit = org.mockito.Mockito.mock(SavingsAccountTransaction.class);
         AccountTransferDetails transferDetails = mockTransferDetails(91L);
+        when(withdrawal.getId()).thenReturn(501L);
+        when(deposit.getId()).thenReturn(502L);
 
         when(savingsAccountAssembler.assembleFromLightweight(11L)).thenReturn(fromSavings);
         when(savingsAccountAssembler.assembleFromLightweight(12L)).thenReturn(toSavings);
@@ -135,8 +139,9 @@ class AccountTransfersWritePlatformServiceImplTest {
         when(accountTransferAssembler.assembleSavingsToSavingsTransfer(command, fromSavings, toSavings, withdrawal, deposit))
                 .thenReturn(transferDetails);
 
-        underTest.create(command);
+        var result = underTest.create(command);
 
+        assertEquals(Map.of("fromSavingsTransactionId", 501L, "toSavingsTransactionId", 502L), result.getChanges());
         verify(accountTransferDetailRepository).saveAndFlush(transferDetails);
         verify(savingsAccountAssembler).assembleFromLightweight(11L);
         verify(savingsAccountAssembler).assembleFromLightweight(12L);

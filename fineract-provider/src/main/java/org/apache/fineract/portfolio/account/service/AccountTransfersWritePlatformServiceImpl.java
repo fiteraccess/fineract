@@ -22,6 +22,8 @@ import static org.apache.fineract.portfolio.account.AccountDetailConstants.fromA
 import static org.apache.fineract.portfolio.account.AccountDetailConstants.fromAccountTypeParamName;
 import static org.apache.fineract.portfolio.account.AccountDetailConstants.toAccountIdParamName;
 import static org.apache.fineract.portfolio.account.AccountDetailConstants.toAccountTypeParamName;
+import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants.fromSavingsTransactionIdResultName;
+import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants.toSavingsTransactionIdResultName;
 import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants.transferAmountParamName;
 import static org.apache.fineract.portfolio.account.api.AccountTransfersApiConstants.transferDateParamName;
 
@@ -115,6 +117,8 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
 
         final PaymentDetail paymentDetail = null;
         Long fromSavingsAccountId = null;
+        Long fromSavingsTransactionId = null;
+        Long toSavingsTransactionId = null;
         Long transferDetailId = null;
         boolean isInterestTransfer = false;
         boolean isAccountTransfer = true;
@@ -131,6 +135,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
                     isRegularTransaction, fromSavingsAccount.isWithdrawalFeeApplicableForTransfer(), isInterestTransfer, isWithdrawBalance);
             final SavingsAccountTransaction withdrawal = this.savingsAccountDomainService.handleWithdrawal(fromSavingsAccount, fmt,
                     transactionDate, transactionAmount, paymentDetail, transactionBooleanValues, backdatedTxnsAllowedTill);
+            fromSavingsTransactionId = withdrawal.getId();
 
             // AB-266: apply source-side reference transactions (EMT Levy on the WITHDRAW leg) asserted by Synapse.
             // Empty when the source product opts out, when the transfer is intra-client, or when the amount is
@@ -147,6 +152,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
 
             final SavingsAccountTransaction deposit = this.savingsAccountDomainService.handleDeposit(toSavingsAccount, fmt, transactionDate,
                     transactionAmount, paymentDetail, isAccountTransfer, isRegularTransaction, backdatedTxnsAllowedTill);
+            toSavingsTransactionId = deposit.getId();
 
             // AB-266: apply destination-side reference transactions (EMT Levy on the DEPOSIT leg) asserted by Synapse.
             final List<ReferenceTransaction> destinationRefs = ReferenceTransaction.parseArray(command,
@@ -218,6 +224,11 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
         }
 
         final CommandProcessingResultBuilder builder = new CommandProcessingResultBuilder().withEntityId(transferDetailId);
+
+        if (fromSavingsTransactionId != null && toSavingsTransactionId != null) {
+            builder.with(Map.of(fromSavingsTransactionIdResultName, fromSavingsTransactionId, toSavingsTransactionIdResultName,
+                    toSavingsTransactionId));
+        }
 
         if (fromAccountType.isSavingsAccount()) {
             builder.withSavingsId(fromSavingsAccountId);

@@ -43,6 +43,11 @@ public final class AccountTransfersApiConstants {
     public static final String sourceReferenceTransactionsParamName = "sourceReferenceTransactions";
     public static final String destinationReferenceTransactionsParamName = "destinationReferenceTransactions";
 
+    // Exact savings-account-transaction ids created by a savings-to-savings account transfer. Returned in the
+    // command result's changes map so downstream systems never confuse them with the account-transfer detail id.
+    public static final String fromSavingsTransactionIdResultName = "fromSavingsTransactionId";
+    public static final String toSavingsTransactionIdResultName = "toSavingsTransactionId";
+
     /**
      * These parameters will match the class level parameters of {@link AccountTransferData}. Where possible, we try to
      * get response parameters to match those of request parameters.

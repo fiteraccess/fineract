@@ -181,6 +181,17 @@ final class AccountTransfersApiResourceSwagger {
         public Long savingsId;
         @Schema(example = "1")
         public Long resourceId;
+        public PostAccountTransfersChanges changes;
+
+        static final class PostAccountTransfersChanges {
+
+            private PostAccountTransfersChanges() {}
+
+            @Schema(example = "501")
+            public Long fromSavingsTransactionId;
+            @Schema(example = "502")
+            public Long toSavingsTransactionId;
+        }
     }
 
     @Schema(description = "GetAccountTransfersResponse")
