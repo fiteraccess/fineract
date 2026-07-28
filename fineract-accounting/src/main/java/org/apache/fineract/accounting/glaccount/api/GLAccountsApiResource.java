@@ -40,14 +40,20 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingConstants;
 import org.apache.fineract.accounting.common.AccountingDropdownReadPlatformService;
 import org.apache.fineract.accounting.glaccount.command.GLAccountCommand;
+import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceData;
+import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceGranularity;
 import org.apache.fineract.accounting.glaccount.data.GLAccountData;
+import org.apache.fineract.accounting.glaccount.data.GLAccountDetailsData;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
+import org.apache.fineract.accounting.glaccount.service.GLAccountBalanceReadPlatformService;
 import org.apache.fineract.accounting.glaccount.service.GLAccountReadPlatformService;
 import org.apache.fineract.accounting.journalentry.data.JournalEntryAssociationParametersData;
 import org.apache.fineract.commands.domain.CommandWrapper;
@@ -59,7 +65,9 @@ import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookS
 import org.apache.fineract.infrastructure.codes.data.CodeValueData;
 import org.apache.fineract.infrastructure.codes.service.CodeValueReadPlatformService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
+import org.apache.fineract.infrastructure.core.api.DateParam;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.data.DateFormat;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.data.UploadRequest;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -80,8 +88,19 @@ public class GLAccountsApiResource {
 
     private static final String RESOURCE_NAME_FOR_PERMISSION = "GLACCOUNT";
 
+    /**
+     * The balance-by-code endpoint is served entirely from {@code acc_gl_journal_entry}, so it is gated on the
+     * journal-entry read permission rather than the chart-of-accounts one. It reveals strictly less than
+     * {@code GET journalentries?glAccountId=...}, which carries the same permission.
+     */
+    private static final String RESOURCE_NAME_FOR_PERMISSION_JOURNAL_ENTRY = "JOURNALENTRY";
+
+    private static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd";
+    private static final String DEFAULT_LOCALE = "en";
+
     private final PlatformSecurityContext context;
     private final GLAccountReadPlatformService glAccountReadPlatformService;
+    private final GLAccountBalanceReadPlatformService glAccountBalanceReadPlatformService;
     private final DefaultToApiJsonSerializer<GLAccountData> apiJsonSerializerService;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
@@ -237,6 +256,118 @@ public class GLAccountsApiResource {
             @FormDataParam("dateFormat") final String dateFormat) {
         return bulkImportWorkbookService.importWorkbook(GlobalEntityType.CHART_OF_ACCOUNTS.toString(), uploadedInputStream, fileDetail,
                 locale, dateFormat);
+    }
+
+    @GET
+    @Path("code/{glCode}")
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(tags = { "General Ledger Account" }, summary = "Retrieve a General Ledger Account by its GL code", description = """
+            Resolves a GL account by its unique `glCode` and returns its configuration together with a balance computed
+            live from raw journal entries (`acc_gl_journal_entry`).
+
+            The balance is NOT read from the `organization_running_balance` column, which is maintained by the
+            "Update Accounting Running Balances" batch job and is therefore up to a day stale. It is also returned at
+            full `decimal(19,6)` precision, unlike the `fetchRunningBalance=true` flag on the sibling endpoints, whose
+            field is a `Long`. Monetary fields are serialised as JSON **strings** so a consumer parsing JSON numbers as
+            binary floating point cannot silently lose precision on a bank-wide control account.
+
+            Sign convention is type-aware and matches Fineract's own running-balance rule: ASSET and EXPENSE accounts
+            increase on DEBIT, LIABILITY, EQUITY and INCOME increase on CREDIT. `totalDebits` and `totalCredits` are the
+            raw unsigned sums, so either convention can be reconciled.
+
+            Reversed entries AND their reversing counterparts are both included, because in Fineract a reversal is posted
+            as a new entry with the opposite type while the original is merely flagged. Excluding flagged originals would
+            keep the reversing entry and drop the one it cancels, understating the balance by exactly that amount.
+
+            `officeId` omitted means organisation-wide: all offices, exact match only, with no office-hierarchy roll-up.
+            `currencyCode` omitted means amounts are summed across every currency posted to the account — inspect
+            `currencies` before presenting a single figure. A HEADER account reports only entries posted directly to it;
+            child accounts are not rolled up. Accounting closures (`acc_gl_closure`) are not consulted: this is a live
+            ledger read, not a statutory statement.
+
+            `dateFormat` defaults to `yyyy-MM-dd` and `locale` to `en`.
+
+            Example Requests:
+
+            glaccounts/code/10101
+
+            glaccounts/code/10101?asOnDate=2026-07-28&currencyCode=NGN
+            """)
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLAccountDetailsData.class)))
+    public GLAccountDetailsData retrieveAccountByGlCode(
+            @PathParam("glCode") @Parameter(description = "Unique GL code from the chart of accounts") final String glCode,
+            @QueryParam("asOnDate") @Parameter(description = "Balance cut-off date; defaults to the current business date") final DateParam asOnDateParam,
+            @QueryParam("officeId") @Parameter(description = "Restrict to one office; omit for organisation-wide") final Long officeId,
+            @QueryParam("currencyCode") @Parameter(description = "Restrict to one currency; omit to sum all") final String currencyCode,
+            @QueryParam("dateFormat") @Parameter(description = "defaults to yyyy-MM-dd") final String dateFormat,
+            @QueryParam("locale") @Parameter(description = "defaults to en") final String locale) {
+        this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION);
+
+        final LocalDate asOnDate = parseQueryDate(asOnDateParam, "asOnDate", dateFormat, locale);
+        return this.glAccountBalanceReadPlatformService.retrieveGLAccountDetailsByCode(glCode, asOnDate, officeId, currencyCode);
+    }
+
+    @GET
+    @Path("code/{glCode}/balance")
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(tags = {
+            "General Ledger Account" }, summary = "Retrieve General Ledger Account movements and balances for a period", description = """
+                    Returns the opening balance and the debit/credit movement totals for the inclusive window
+                    [`fromDate`, `toDate`], computed from raw journal entries in a single grouped query.
+
+                    `granularity=PERIOD` (the default) returns exactly one bucket spanning the window, present even when
+                    there was no movement. `granularity=DAILY` returns one bucket per day that HAS movement, ascending
+                    by date — days with no entries are absent, and a caller wanting a zero-filled calendar fills the
+                    gaps itself. A DAILY window may span at most 400 days.
+
+                    Month-to-date and year-to-date are deliberately NOT accepted: they are anchored to a fiscal calendar
+                    that this endpoint does not own. Resolve the window yourself and request `PERIOD`.
+
+                    Sign convention, reversal handling, office scope, currency scope and the JSON-string encoding of
+                    monetary fields are all identical to `GET glaccounts/code/{glCode}`.
+
+                    Requires the `READ_JOURNALENTRY` permission, since the entire response is derived from journal
+                    entries and reveals strictly less than `GET journalentries?glAccountId=...`.
+
+                    Example Requests:
+
+                    glaccounts/code/10101/balance?fromDate=2026-07-01&toDate=2026-07-31
+
+                    glaccounts/code/10101/balance?fromDate=2026-07-01&toDate=2026-07-31&granularity=DAILY
+                    """)
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLAccountBalanceData.class)))
+    public GLAccountBalanceData retrieveAccountBalanceByGlCode(
+            @PathParam("glCode") @Parameter(description = "Unique GL code from the chart of accounts") final String glCode,
+            @QueryParam("fromDate") @Parameter(description = "Inclusive window start; defaults to toDate") final DateParam fromDateParam,
+            @QueryParam("toDate") @Parameter(description = "Inclusive window end; defaults to the current business date") final DateParam toDateParam,
+            @QueryParam("granularity") @Parameter(description = "PERIOD (default) or DAILY") final String granularity,
+            @QueryParam("officeId") @Parameter(description = "Restrict to one office; omit for organisation-wide") final Long officeId,
+            @QueryParam("currencyCode") @Parameter(description = "Restrict to one currency; omit to sum all") final String currencyCode,
+            @QueryParam("dateFormat") @Parameter(description = "defaults to yyyy-MM-dd") final String dateFormat,
+            @QueryParam("locale") @Parameter(description = "defaults to en") final String locale) {
+        this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION_JOURNAL_ENTRY);
+
+        final LocalDate fromDate = parseQueryDate(fromDateParam, DateParam.FROM_DATE_PARAM, dateFormat, locale);
+        final LocalDate toDate = parseQueryDate(toDateParam, DateParam.TO_DATE_PARAM, dateFormat, locale);
+        return this.glAccountBalanceReadPlatformService.retrieveGLAccountBalanceByCode(glCode, fromDate, toDate,
+                GLAccountBalanceGranularity.fromQueryParam(granularity), officeId, currencyCode);
+    }
+
+    /**
+     * {@link DateParam#getDate} requires both a dateFormat and a locale, so a caller sending a bare ISO date would
+     * otherwise get a validation error. Defaulting them here keeps plain {@code ?fromDate=2026-07-01} working while an
+     * explicit {@code dateFormat}/{@code locale} pair still behaves exactly as it does on the journal-entries
+     * endpoints.
+     */
+    private static LocalDate parseQueryDate(final DateParam dateParam, final String parameterName, final String dateFormat,
+            final String locale) {
+        if (dateParam == null) {
+            return null;
+        }
+        final DateFormat format = new DateFormat(StringUtils.isBlank(dateFormat) ? DEFAULT_DATE_FORMAT : dateFormat);
+        return dateParam.getDate(parameterName, format, StringUtils.isBlank(locale) ? DEFAULT_LOCALE : locale);
     }
 
     private GLAccountData handleTemplate(final GLAccountData glAccountData) {
