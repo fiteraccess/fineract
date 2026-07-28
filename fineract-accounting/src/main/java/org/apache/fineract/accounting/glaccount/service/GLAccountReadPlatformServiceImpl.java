@@ -149,10 +149,14 @@ public class GLAccountReadPlatformServiceImpl implements GLAccountReadPlatformSe
                 if (firstWhereConditionAdded) {
                     sql += SQL_AND;
                 }
-                sql += " ( name like %?% or gl_code like %?% )";
-                parameterArray[arrayPos] = searchParam;
+                // The wildcards belong in the bound value, not the SQL: `like %?%` is a syntax error on both
+                // PostgreSQL and MySQL, so any caller passing searchParam got a 500. Every in-tree caller passes
+                // null, which is why it went unnoticed.
+                sql += " ( name like ? or gl_code like ? )";
+                final String searchPattern = "%" + searchParam + "%";
+                parameterArray[arrayPos] = searchPattern;
                 arrayPos = arrayPos + 1;
-                parameterArray[arrayPos] = searchParam;
+                parameterArray[arrayPos] = searchPattern;
                 arrayPos = arrayPos + 1;
                 firstWhereConditionAdded = true;
             }
