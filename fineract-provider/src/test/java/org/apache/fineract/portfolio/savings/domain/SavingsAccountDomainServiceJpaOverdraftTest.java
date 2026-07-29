@@ -180,6 +180,49 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         mutationOrder.verify(account).syncAfterDeltaUpdate(BigDecimal.valueOf(5));
     }
 
+    @Test
+    void optimizedNipDepositShouldPersistSwitchAndClearedOverdraftOnPrincipalAndLinkedEmtLevy() {
+        SavingsAccount account = mock(SavingsAccount.class);
+        SavingsAccountSummary summary = mock(SavingsAccountSummary.class);
+        SavingsProduct savingsProduct = mock(SavingsProduct.class);
+        MonetaryCurrency currency = new MonetaryCurrency("NGN", 2, null);
+        Office office = mock(Office.class);
+        when(account.depositAccountType()).thenReturn(DepositAccountType.SAVINGS_DEPOSIT);
+        when(account.allowDeposit()).thenReturn(true);
+        when(account.getActivationDate()).thenReturn(BUSINESS_DATE.minusYears(1));
+        when(account.getSummary()).thenReturn(summary);
+        when(summary.getAccountBalance()).thenReturn(BigDecimal.valueOf(-30));
+        when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.valueOf(-30)));
+        when(account.getOnHoldFunds()).thenReturn(BigDecimal.ZERO);
+        when(account.getSavingsHoldAmount()).thenReturn(BigDecimal.ZERO);
+        when(account.getSubStatus()).thenReturn(0);
+        when(account.getVersion()).thenReturn(1);
+        when(account.getId()).thenReturn(11L);
+        when(account.productId()).thenReturn(22L);
+        when(account.office()).thenReturn(office);
+        when(account.getCurrency()).thenReturn(currency);
+        when(account.savingsProduct()).thenReturn(savingsProduct);
+        when(savingsProduct.isCashBasedAccountingEnabled()).thenReturn(true);
+        when(savingsProduct.isAccrualBasedAccountingEnabled()).thenReturn(false);
+        when(entityManager.getFlushMode()).thenReturn(FlushModeType.AUTO);
+        when(configurationDomainService.retrieveRelaxingDaysConfigForPivotDate()).thenReturn(0L);
+        when(cacheableSavingsProductConfigService.getSavingsProduct(22L))
+                .thenReturn(new CacheableSavingsProductConfig(22L, "Savings", "SAV", 2, BigDecimal.ZERO, true, false));
+        when(savingsAccountTransactionRepository.saveAndFlush(any(SavingsAccountTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.handleNipDeposit(account, DateTimeFormatter.ISO_LOCAL_DATE, BUSINESS_DATE, BigDecimal.valueOf(100), null, "NIBSS",
+                List.of(new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, BigDecimal.valueOf(50), null, null)), false, true,
+                false);
+
+        ArgumentCaptor<SavingsAccountTransaction> transactionCaptor = ArgumentCaptor.forClass(SavingsAccountTransaction.class);
+        verify(savingsAccountTransactionRepository, times(2)).saveAndFlush(transactionCaptor.capture());
+        assertThat(transactionCaptor.getAllValues()).allSatisfy(transaction -> assertThat(transaction.getSwitchId()).isEqualTo("NIBSS"));
+        assertThat(transactionCaptor.getAllValues().getFirst().getOverdraftAmount()).isEqualByComparingTo("30");
+        assertThat(transactionCaptor.getAllValues()).extracting(SavingsAccountTransaction::getRefNo).doesNotContainNull()
+                .containsOnly(transactionCaptor.getAllValues().getFirst().getRefNo());
+    }
+
     @ParameterizedTest
     @CsvSource({ "20, 10, 0", "10, 10, 0", "6, 10, 4", "0, 10, 10", "-7, 10, 10" })
     void incrementalOverdraftShouldCoverFundedCrossingAndAlreadyOverdrawnDebits(final BigDecimal availableBalanceBeforeDebit,

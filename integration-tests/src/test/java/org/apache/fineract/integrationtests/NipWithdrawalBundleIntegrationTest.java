@@ -280,6 +280,7 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         configuration.put("switchPayableGlAccountId", payable.getAccountID());
         configuration.put("switchFeeGlAccountId", switchFee.getAccountID());
         configuration.put("commissionIncomeGlAccountId", commissionIncome.getAccountID());
+        configuration.put("direction", "OUTBOUND");
         configuration.put("active", true);
         Utils.performServerPut(requestSpec, responseSpec,
                 "/fineract-provider/api/v1/nip-switch-accounting-configurations/" + switchId + "?" + Utils.TENANT_IDENTIFIER,

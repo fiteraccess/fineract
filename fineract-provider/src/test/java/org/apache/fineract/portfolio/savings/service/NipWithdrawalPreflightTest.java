@@ -48,7 +48,7 @@ class NipWithdrawalPreflightTest {
     void requiresSwitchConfigurationWithoutVatMappingForCommissionOnlyRequest() {
         preflight.validate("NIBSS", List.of(reference(SavingsAccountTransactionType.COMMISSION)));
 
-        verify(switchConfigurationProvider).require("NIBSS");
+        verify(switchConfigurationProvider).requireOutbound("NIBSS");
         verify(financialActivityAccountRepositoryWrapper, never()).findByFinancialActivityTypeWithNotFoundDetection(VAT_PAYABLE.getValue());
     }
 
@@ -56,7 +56,7 @@ class NipWithdrawalPreflightTest {
     void feeFreeRequestDoesNotRequireVatMapping() {
         preflight.validate("NIBSS", List.of());
 
-        verify(switchConfigurationProvider).require("NIBSS");
+        verify(switchConfigurationProvider).requireOutbound("NIBSS");
         verify(financialActivityAccountRepositoryWrapper, never()).findByFinancialActivityTypeWithNotFoundDetection(VAT_PAYABLE.getValue());
     }
 
@@ -71,7 +71,7 @@ class NipWithdrawalPreflightTest {
 
         preflight.validate("NIBSS", List.of(reference(SavingsAccountTransactionType.VAT)));
 
-        verify(switchConfigurationProvider).require("NIBSS");
+        verify(switchConfigurationProvider).requireOutbound("NIBSS");
         verify(financialActivityAccountRepositoryWrapper).findByFinancialActivityTypeWithNotFoundDetection(VAT_PAYABLE.getValue());
     }
 
@@ -90,7 +90,7 @@ class NipWithdrawalPreflightTest {
     @Test
     void switchConfigurationFailureShortCircuitsVatLookup() {
         RuntimeException failure = new RuntimeException("missing switch");
-        when(switchConfigurationProvider.require("NIBSS")).thenThrow(failure);
+        when(switchConfigurationProvider.requireOutbound("NIBSS")).thenThrow(failure);
 
         assertThatThrownBy(() -> preflight.validate("NIBSS", List.of(reference(SavingsAccountTransactionType.VAT)))).isSameAs(failure);
         verify(financialActivityAccountRepositoryWrapper, never()).findByFinancialActivityTypeWithNotFoundDetection(VAT_PAYABLE.getValue());

@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -173,12 +174,21 @@ public class SavingsAccountTransactionsApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a savings account transaction", description = "For command=withdrawal, a nonblank switchId identifies an outbound NIP withdrawal. FinProxy/Synapse "
-            + "supplies the authoritative ordered Commission/VAT references and Commission allocation; Fineract validates "
-            + "only persistence and balanced-accounting prerequisites. Existing product withdrawal fees and overdraft rules "
-            + "apply to the complete debit. Processing uses native command idempotency. Same-key/different-payload conflicts "
-            + "and automatic Commission/VAT reversal semantics are not defined by this API.")
-    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountTransactionsRequest.class)))
+    @Operation(summary = "Create a savings account transaction", description = "For command=withdrawal, a nonblank switchId identifies an outbound NIP withdrawal. For command=deposit, "
+            + "it identifies an inbound NIP deposit and selects the configured Receivable GL. FinProxy/Synapse supplies "
+            + "authoritative reference amounts; inbound supports only the existing optional EMT_LEVY reference, while outbound "
+            + "supports ordered Commission/VAT references and Commission allocation. Fineract validates persistence and "
+            + "balanced-accounting prerequisites. Processing uses native command idempotency.")
+    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountTransactionsRequest.class), examples = @ExampleObject(name = "Inbound NIP deposit", summary = "Principal-only inbound deposit supplied by Synapse", value = """
+            {
+              "transactionDate": "27 July 2026",
+              "transactionAmount": 1000.00,
+              "dateFormat": "dd MMMM yyyy",
+              "locale": "en",
+              "paymentTypeId": 1,
+              "switchId": "NIBSS"
+            }
+            """)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountTransactionsResponse.class)))
     public String transaction(@PathParam("savingsId") final Long savingsId, @QueryParam("command") final String commandParam,
             final String apiRequestBodyAsJson) {

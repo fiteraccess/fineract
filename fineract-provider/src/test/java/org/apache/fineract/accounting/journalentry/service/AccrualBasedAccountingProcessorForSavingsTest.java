@@ -44,6 +44,7 @@ import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeCommissionAllocationDTO;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -68,6 +69,86 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     void setUp() {
         when(helper.startJournalEntryProcessingBatch()).thenReturn(mock(AccountingProcessorHelper.JournalEntryProcessingBatch.class));
         processor = new AccrualBasedAccountingProcessorForSavings(helper, configurationProvider);
+    }
+
+    @Nested
+    class InboundNipDeposits {
+
+        @Test
+        void shouldDebitReceivableAndCreditSavingsControlForPositiveBalance() {
+            GLAccount savingsControl = glAccount(101L);
+            when(configurationProvider.requireInbound("NIBSS"))
+                    .thenReturn(new NipSwitchAccountingConfigurationProvider.InboundConfiguration("NIBSS", 401L));
+            when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                    .thenReturn(savingsControl);
+
+            processor.createJournalEntriesForSavings(
+                    savings(transaction(SavingsAccountTransactionType.DEPOSIT, "NIBSS", BigDecimal.valueOf(100), null, null)));
+
+            assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(401L, BigDecimal.valueOf(100))),
+                    List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(100))));
+            verify(helper, never()).getLinkedGLAccountForSavingsProduct(22L,
+                    AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), 44L);
+        }
+
+        @Test
+        void shouldCreditOnlyOverdraftControlWhenPrincipalFullyClearsOverdraft() {
+            GLAccount overdraftPortfolioControl = glAccount(102L);
+            when(configurationProvider.requireInbound("NIBSS"))
+                    .thenReturn(new NipSwitchAccountingConfigurationProvider.InboundConfiguration("NIBSS", 401L));
+            when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), 44L))
+                    .thenReturn(overdraftPortfolioControl);
+
+            processor.createJournalEntriesForSavings(savings(
+                    transaction(SavingsAccountTransactionType.DEPOSIT, "NIBSS", BigDecimal.valueOf(100), BigDecimal.valueOf(100), null)));
+
+            assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(401L, BigDecimal.valueOf(100))),
+                    List.of(new SavingsJournalEntryAllocation(102L, BigDecimal.valueOf(100))));
+            verify(helper, never()).getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L);
+        }
+
+        @Test
+        void shouldSplitCreditsWhenPrincipalPartiallyClearsOverdraft() {
+            GLAccount savingsControl = glAccount(101L);
+            GLAccount overdraftPortfolioControl = glAccount(102L);
+            when(configurationProvider.requireInbound("NIBSS"))
+                    .thenReturn(new NipSwitchAccountingConfigurationProvider.InboundConfiguration("NIBSS", 401L));
+            when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                    .thenReturn(savingsControl);
+            when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.OVERDRAFT_PORTFOLIO_CONTROL.getValue(), 44L))
+                    .thenReturn(overdraftPortfolioControl);
+
+            processor.createJournalEntriesForSavings(savings(
+                    transaction(SavingsAccountTransactionType.DEPOSIT, "NIBSS", BigDecimal.valueOf(100), BigDecimal.valueOf(30), null)));
+
+            assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(401L, BigDecimal.valueOf(100))),
+                    List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(70)),
+                            new SavingsJournalEntryAllocation(102L, BigDecimal.valueOf(30))));
+        }
+
+        @Test
+        void shouldKeepLegacyDepositOnSavingsReference() {
+            processor.createJournalEntriesForSavings(
+                    savings(transaction(SavingsAccountTransactionType.DEPOSIT, null, BigDecimal.valueOf(100), null, null)));
+
+            verify(helper).createCashBasedJournalEntriesAndReversalsForSavings(office, "NGN",
+                    AccrualAccountsForSavings.SAVINGS_REFERENCE.getValue(), AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 22L, 44L,
+                    11L, "55", TRANSACTION_DATE, BigDecimal.valueOf(100), false);
+            verifyNoInteractions(configurationProvider);
+            verify(helper, never()).createBalancedJournalEntriesForSavings(eq(office), eq("NGN"), eq(11L), eq("55"), eq(TRANSACTION_DATE),
+                    anyList(), anyList(), eq(false));
+        }
+
+        @Test
+        void shouldKeepLinkedEmtOnFinancialActivityMapping() {
+            processor.createJournalEntriesForSavings(
+                    savings(transaction(SavingsAccountTransactionType.EMT_LEVY, "NIBSS", BigDecimal.valueOf(50), null, null)));
+
+            verify(helper).createCashBasedJournalEntriesAndReversalsForSavings(office, "NGN",
+                    AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), FinancialActivity.EMT_LEVY.getValue(), 22L, 44L, 11L, "55",
+                    TRANSACTION_DATE, BigDecimal.valueOf(50), false);
+            verifyNoInteractions(configurationProvider);
+        }
     }
 
     @Test
@@ -289,8 +370,8 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     }
 
     private void configureSwitch() {
-        when(configurationProvider.require("NIBSS"))
-                .thenReturn(new NipSwitchAccountingConfigurationProvider.Configuration("NIBSS", 201L, 202L, 203L));
+        when(configurationProvider.requireOutbound("NIBSS"))
+                .thenReturn(new NipSwitchAccountingConfigurationProvider.OutboundConfiguration("NIBSS", 201L, 202L, 203L));
     }
 
     private GLAccount glAccount(final Long id) {

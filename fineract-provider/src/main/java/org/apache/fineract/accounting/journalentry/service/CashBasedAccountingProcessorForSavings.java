@@ -67,7 +67,10 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
 
                 this.helper.checkForBranchClosures(savingsDTO.getOfficeId(), transactionDate);
 
-                if (savingsTransactionDTO.getTransactionType().isWithdrawal()
+                if (savingsTransactionDTO.getTransactionType().isDeposit() && StringUtils.isNotBlank(savingsTransactionDTO.getSwitchId())) {
+                    createNipDepositJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, savingsTransactionDTO,
+                            transactionDate, transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);
+                } else if (savingsTransactionDTO.getTransactionType().isWithdrawal()
                         && StringUtils.isNotBlank(savingsTransactionDTO.getSwitchId())) {
                     createNipPrincipalJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, savingsTransactionDTO,
                             transactionDate, transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);
@@ -279,13 +282,26 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
             final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
             final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
             final BigDecimal overdraftAmount) {
-        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
-                .require(savingsTransactionDTO.getSwitchId());
-        final List<SavingsJournalEntryAllocation> debitAllocations = createDebitAllocations(savingsProductId, paymentTypeId, amount,
-                overdraftAmount);
+        final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireOutbound(savingsTransactionDTO.getSwitchId());
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
                 debitAllocations, List.of(new SavingsJournalEntryAllocation(configuration.switchPayableGlAccountId(), amount)), isReversal,
                 journalEntries);
+    }
+
+    private void createNipDepositJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
+            final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
+            final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
+            final BigDecimal overdraftAmount) {
+        final NipSwitchAccountingConfigurationProvider.InboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireInbound(savingsTransactionDTO.getSwitchId());
+        final List<SavingsJournalEntryAllocation> creditAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
+        this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
+                List.of(new SavingsJournalEntryAllocation(configuration.switchReceivableGlAccountId(), amount)), creditAllocations,
+                isReversal, journalEntries);
     }
 
     private void createCommissionJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
@@ -294,8 +310,8 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
             final BigDecimal overdraftAmount) {
         final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation = requireBalancedCommissionAllocation(
                 savingsTransactionDTO, amount);
-        final NipSwitchAccountingConfigurationProvider.Configuration configuration = this.nipSwitchAccountingConfigurationProvider
-                .require(savingsTransactionDTO.getSwitchId());
+        final NipSwitchAccountingConfigurationProvider.OutboundConfiguration configuration = this.nipSwitchAccountingConfigurationProvider
+                .requireOutbound(savingsTransactionDTO.getSwitchId());
         final List<SavingsJournalEntryAllocation> creditAllocations = new ArrayList<>(2);
         if (commissionAllocation.switchFeeAmount().signum() > 0) {
             creditAllocations
@@ -305,8 +321,8 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
             creditAllocations.add(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(),
                     commissionAllocation.bankCommissionAmount()));
         }
-        final List<SavingsJournalEntryAllocation> debitAllocations = createDebitAllocations(savingsProductId, paymentTypeId, amount,
-                overdraftAmount);
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
                 debitAllocations, creditAllocations, isReversal, journalEntries);
     }
@@ -335,14 +351,14 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
             final Long paymentTypeId, final boolean isReversal, final BigDecimal amount, final BigDecimal overdraftAmount) {
         final GLAccount vatPayableAccount = this.helper.getLinkedGLAccountForSavingsProduct(savingsProductId,
                 FinancialActivity.VAT_PAYABLE.getValue(), paymentTypeId);
-        final List<SavingsJournalEntryAllocation> debitAllocations = createDebitAllocations(savingsProductId, paymentTypeId, amount,
-                overdraftAmount);
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
                 debitAllocations, List.of(new SavingsJournalEntryAllocation(vatPayableAccount.getId(), amount)), isReversal,
                 journalEntries);
     }
 
-    private List<SavingsJournalEntryAllocation> createDebitAllocations(final Long savingsProductId, final Long paymentTypeId,
+    private List<SavingsJournalEntryAllocation> createCustomerControlAllocations(final Long savingsProductId, final Long paymentTypeId,
             final BigDecimal amount, final BigDecimal overdraftAmount) {
         final BigDecimal effectiveOverdraftAmount = overdraftAmount == null ? BigDecimal.ZERO : overdraftAmount;
         final BigDecimal customerFundedAmount = amount.subtract(effectiveOverdraftAmount);

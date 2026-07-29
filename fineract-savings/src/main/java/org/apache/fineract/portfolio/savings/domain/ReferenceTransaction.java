@@ -120,7 +120,25 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         return new NipWithdrawalRequest(switchId, references);
     }
 
-    /** Rejects NIP-specific request data on deposit and transfer paths. */
+    /**
+     * Parses inbound NIP additions accepted by a savings deposit. Existing deposit requests without a switch retain
+     * their original reference-transaction rules.
+     */
+    public static NipDepositRequest parseNipDeposit(final JsonCommand command) {
+        final List<ReferenceTransaction> references = parseArray(command, "referenceTransactions");
+        if (!command.parameterExists("switchId")) {
+            rejectNipFields(command, references);
+            return new NipDepositRequest(null, references);
+        }
+
+        final String switchId = normalizeSwitchId(command.stringValueOfParameterNamed("switchId"));
+        if (references.stream().anyMatch(reference -> !reference.type().isEmtLevy())) {
+            throw invalid("reference.transaction.type.not.supported", "Inbound NIP deposits support only EMT levy reference transactions");
+        }
+        return new NipDepositRequest(switchId, references);
+    }
+
+    /** Rejects NIP-specific request data on transfer paths. */
     public static void rejectNipFields(final JsonCommand command, final List<ReferenceTransaction> references) {
         if (command.parameterExists("switchId") || references.stream()
                 .anyMatch(reference -> reference.isNipFee() || reference.description() != null || reference.breakdown() != null)) {
@@ -188,6 +206,9 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
     }
 
     public record NipWithdrawalRequest(String switchId, List<ReferenceTransaction> references) {
+    }
+
+    public record NipDepositRequest(String switchId, List<ReferenceTransaction> references) {
     }
 
     public record CommissionBreakdown(CommissionBreakdownLeg switchFee, CommissionBreakdownLeg bankCommission) {

@@ -16,18 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.accounting.nipswitch.domain;
+package org.apache.fineract.portfolio.savings.service;
 
-public interface NipSwitchAccountingConfigurationProvider {
+import lombok.RequiredArgsConstructor;
+import org.apache.fineract.accounting.nipswitch.domain.NipSwitchAccountingConfigurationProvider;
+import org.springframework.stereotype.Component;
 
-    OutboundConfiguration requireOutbound(String switchId);
+@Component
+@RequiredArgsConstructor
+public class NipDepositPreflight {
 
-    InboundConfiguration requireInbound(String switchId);
+    private final NipSwitchAccountingConfigurationProvider switchConfigurationProvider;
 
-    record OutboundConfiguration(String switchId, Long switchPayableGlAccountId, Long switchFeeGlAccountId,
-            Long commissionIncomeGlAccountId) {
-    }
-
-    record InboundConfiguration(String switchId, Long switchReceivableGlAccountId) {
+    void validate(String switchId) {
+        this.switchConfigurationProvider.requireInbound(switchId);
     }
 }

@@ -47,6 +47,10 @@ public interface SavingsAccountDomainService {
             BigDecimal transactionAmount, PaymentDetail paymentDetail, boolean isAccountTransfer, boolean isRegularTransaction,
             boolean backdatedTxnsAllowedTill);
 
+    SavingsAccountTransaction handleNipDeposit(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
+            BigDecimal transactionAmount, PaymentDetail paymentDetail, String switchId, List<ReferenceTransaction> references,
+            boolean isAccountTransfer, boolean isRegularTransaction, boolean backdatedTxnsAllowedTill);
+
     void postJournalEntries(SavingsAccount savingsAccount, Set<Long> existingTransactionIds, Set<Long> existingReversedTransactionIds,
             boolean backdatedTxnsAllowedTill);
 
