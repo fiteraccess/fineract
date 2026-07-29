@@ -162,7 +162,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
                 .append(asOfSumOf(ENTRY_TYPE_CREDIT)).append(" as totalCredits, ")
                 .append(" count(case when je.entry_date <= :asOnDate then 1 end) as entryCount, ")
                 .append(" max(je.entry_date) as lastMovementDate ").append(" from acc_gl_journal_entry je ")
-                .append(" where je.account_id = :accountId").append(EXCLUDE_REVERSED);
+                .append(" where je.account_id = :accountId ").append(EXCLUDE_REVERSED);
         appendScopeFilters(sql, params, officeId, currencyCode);
 
         return this.jdbcTemplate.queryForObject(sql.toString(), params, (rs, rowNum) -> new CumulativeRow(rs.getBigDecimal("totalDebits"),
@@ -191,7 +191,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
                 .append(" as totalDebits, ").append(windowSumOf(ENTRY_TYPE_CREDIT)).append(" as totalCredits, ")
                 .append(" count(case when je.entry_date between :fromDate and :toDate then 1 end) as entryCount ")
                 .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
-                .append(" and je.entry_date <= :toDate").append(EXCLUDE_REVERSED);
+                .append(" and je.entry_date <= :toDate ").append(EXCLUDE_REVERSED);
         appendScopeFilters(sql, params, officeId, currencyCode);
 
         return this.jdbcTemplate.queryForObject(sql.toString(), params,
@@ -238,7 +238,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
 
         final StringBuilder sql = new StringBuilder(" select distinct je.currency_code as currencyCode ")
                 .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
-                .append(" and je.entry_date <= :windowEnd").append(EXCLUDE_REVERSED);
+                .append(" and je.entry_date <= :windowEnd ").append(EXCLUDE_REVERSED);
         if (windowStart != null) {
             sql.append(" and je.entry_date >= :windowStart");
             params.put("windowStart", windowStart);
