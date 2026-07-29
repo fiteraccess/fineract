@@ -303,6 +303,23 @@ class GLAccountBalanceReadPlatformServiceImplTest {
                     .contains("and je.currency_code = :currencyCode");
             assertThat(params.getAllValues().get(windowIndex)).containsEntry("officeId", 7L).containsEntry("currencyCode", "NGN");
         }
+
+        /**
+         * A balance request over a quiet window (e.g. today, when the account last posted yesterday) must still resolve
+         * the account's real currency: {@code openingBalance} is already computed from the account's entire history
+         * before {@code fromDate}, so scoping currency resolution to only the requested window would report a nonzero
+         * balance with no currency to name it in.
+         */
+        @Test
+        void resolvesCurrencyOverTheAccountsFullHistoryNotJustTheRequestedWindow() {
+            stubWindow("0", "0", "0", "0", 0);
+
+            balance(FROM, TO, null, null);
+
+            final ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).queryForList(sql.capture(), anyMap(), eq(String.class));
+            assertThat(sql.getValue()).contains("je.entry_date <= :windowEnd").doesNotContain(">=");
+        }
     }
 
     // ---------------------------------------------------------------------------------------------------- currency

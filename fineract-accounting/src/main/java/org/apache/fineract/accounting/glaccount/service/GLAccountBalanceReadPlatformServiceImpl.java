@@ -90,7 +90,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         final LocalDate cutOff = asOnDate == null ? DateUtils.getBusinessLocalDate() : asOnDate;
 
         final CumulativeRow cumulative = retrieveCumulative(account.id(), cutOff, officeId, currencyCode);
-        final String currency = resolveCurrency(glCode, account.id(), null, cutOff, officeId, currencyCode);
+        final String currency = resolveCurrency(glCode, account.id(), cutOff, officeId, currencyCode);
 
         return new GLAccountDetailsData(account.id(), account.glCode(), account.name(),
                 AccountingEnumerations.gLAccountType(account.type()), AccountingEnumerations.gLAccountUsage(account.usage()),
@@ -108,7 +108,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         validateWindow(fromDate, toDate);
 
         final WindowRow window = retrieveWindow(account.id(), fromDate, toDate, officeId, currencyCode);
-        final String currency = resolveCurrency(glCode, account.id(), fromDate, toDate, officeId, currencyCode);
+        final String currency = resolveCurrency(glCode, account.id(), toDate, officeId, currencyCode);
 
         final BigDecimal opening = GLAccountBalanceCalculator.signedNet(account.type(), window.openingDebits(), window.openingCredits());
         final BigDecimal net = GLAccountBalanceCalculator.signedNet(account.type(), window.totalDebits(), window.totalCredits());
@@ -206,21 +206,24 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
     // --------------------------------------------------------------------------------------------- currency resolution
 
     /**
-     * Fineract does not model a currency on a GL account, so it is derived from what has actually been posted.
+     * Fineract does not model a currency on a GL account, so it is derived from what has actually been posted — always
+     * over the account's <em>entire</em> history up to {@code windowEnd}, never scoped to a narrower request window. A
+     * balance request over a quiet window (no entries between its own {@code fromDate} and {@code toDate}) must still
+     * resolve to the account's real, established currency rather than {@code null}: the opening balance it is reported
+     * alongside is itself computed from that same unbounded history, so scoping currency to the request window would
+     * report a nonzero balance with no currency to name it in.
      *
-     * @param windowStart
-     *            null for the as-of-date details read; the inclusive window start for the balance read
      * @param windowEnd
      *            the as-of date, or the inclusive window end
      */
-    private String resolveCurrency(final String glCode, final Long accountId, final LocalDate windowStart, final LocalDate windowEnd,
-            final Long officeId, final String currencyCodeFilter) {
+    private String resolveCurrency(final String glCode, final Long accountId, final LocalDate windowEnd, final Long officeId,
+            final String currencyCodeFilter) {
         final String filter = trimToNull(currencyCodeFilter);
         if (filter != null) {
             return filter;
         }
 
-        final List<String> distinct = retrieveDistinctCurrencies(accountId, windowStart, windowEnd, officeId);
+        final List<String> distinct = retrieveDistinctCurrencies(accountId, windowEnd, officeId);
         if (distinct.isEmpty()) {
             return null;
         }
@@ -230,8 +233,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         throw new GLAccountMultipleCurrenciesException(glCode);
     }
 
-    private List<String> retrieveDistinctCurrencies(final Long accountId, final LocalDate windowStart, final LocalDate windowEnd,
-            final Long officeId) {
+    private List<String> retrieveDistinctCurrencies(final Long accountId, final LocalDate windowEnd, final Long officeId) {
         final Map<String, Object> params = new HashMap<>();
         params.put("accountId", accountId);
         params.put("windowEnd", windowEnd);
@@ -239,10 +241,6 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         final StringBuilder sql = new StringBuilder(" select distinct je.currency_code as currencyCode ")
                 .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
                 .append(" and je.entry_date <= :windowEnd ").append(EXCLUDE_REVERSED);
-        if (windowStart != null) {
-            sql.append(" and je.entry_date >= :windowStart");
-            params.put("windowStart", windowStart);
-        }
         appendScopeFilters(sql, params, officeId, null);
         sql.append(" order by je.currency_code");
 
