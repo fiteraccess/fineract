@@ -71,12 +71,13 @@ class GLAccountBalanceCalculatorTest {
         }
 
         /**
-         * A reversal in Fineract is a new entry with the opposite type while the original is only flagged, so both rows
-         * are summed and the pair must cancel exactly.
+         * A generic property of the identity, not reversal-specific: reversed entries are excluded before they ever
+         * reach this calculator (see {@code GLAccountBalanceReadPlatformServiceImplTest}), so this only pins that equal
+         * debits and credits net to zero regardless of which side "wins" for the account type.
          */
         @ParameterizedTest
         @EnumSource(GLAccountType.class)
-        void nettesAReversalPairToZero(final GLAccountType type) {
+        void nettesEqualDebitsAndCreditsToZero(final GLAccountType type) {
             final BigDecimal amount = new BigDecimal("1250.750000");
 
             assertThat(GLAccountBalanceCalculator.signedNet(type, amount, amount)).isEqualByComparingTo(BigDecimal.ZERO);

@@ -20,7 +20,6 @@ package org.apache.fineract.accounting.glaccount.service;
 
 import java.time.LocalDate;
 import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceData;
-import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceGranularity;
 import org.apache.fineract.accounting.glaccount.data.GLAccountDetailsData;
 
 /**
@@ -42,23 +41,27 @@ public interface GLAccountBalanceReadPlatformService {
      * @param officeId
      *            restrict to one office by exact match; null means organisation-wide
      * @param currencyCode
-     *            restrict to one currency; null sums every currency posted to the account
+     *            restrict to one currency; null resolves the account's sole currency, or throws if more than one
      * @throws org.apache.fineract.accounting.glaccount.exception.GLAccountNotFoundException
      *             when no account carries that code
+     * @throws org.apache.fineract.accounting.glaccount.exception.GLAccountMultipleCurrenciesException
+     *             when {@code currencyCode} is omitted and the account has been posted to in more than one currency
      */
     GLAccountDetailsData retrieveGLAccountDetailsByCode(String glCode, LocalDate asOnDate, Long officeId, String currencyCode);
 
     /**
      * @param fromDate
-     *            inclusive window start; defaults to {@code toDate} when null
+     *            inclusive window start
      * @param toDate
-     *            inclusive window end; defaults to the current business date when null
+     *            inclusive window end
      * @throws org.apache.fineract.accounting.glaccount.exception.GLAccountNotFoundException
      *             when no account carries that code
+     * @throws org.apache.fineract.accounting.glaccount.exception.GLAccountMultipleCurrenciesException
+     *             when {@code currencyCode} is omitted and the account has been posted to in more than one currency
+     *             within the window
      * @throws org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException
-     *             when {@code fromDate} is after {@code toDate}, or a DAILY window exceeds
-     *             {@link GLAccountBalanceReadPlatformServiceImpl#MAX_DAILY_BUCKETS} days
+     *             when {@code fromDate}, {@code toDate} are missing, or {@code fromDate} is after {@code toDate}
      */
-    GLAccountBalanceData retrieveGLAccountBalanceByCode(String glCode, LocalDate fromDate, LocalDate toDate,
-            GLAccountBalanceGranularity granularity, Long officeId, String currencyCode);
+    GLAccountBalanceData retrieveGLAccountBalanceByCode(String glCode, LocalDate fromDate, LocalDate toDate, Long officeId,
+            String currencyCode);
 }

@@ -23,29 +23,35 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 
 /**
- * GL account movements for a window, computed from raw journal entries in a single grouped query.
+ * GL account movements for the inclusive window {@code [fromDate, toDate]}, computed from raw journal entries in a
+ * single query. One flat aggregate row — the caller supplies the exact window it wants (there is no granularity concept
+ * at this layer; a caller wanting a daily, month-to-date or year-to-date view resolves that window itself before
+ * calling this endpoint).
  *
  * <p>
- * {@code openingBalance} plus the signed net of {@code buckets} gives the closing balance; the caller applies the
- * type-aware sign rule using {@link #type}, or reads {@code totalDebits}/{@code totalCredits} directly to reconcile
- * either way. Monetary fields serialise as JSON strings — see {@link GLAccountDetailsData}.
+ * {@code closingBalance} equals {@code openingBalance} plus the signed {@code netMovement}; {@code totalDebits} and
+ * {@code totalCredits} are the raw unsigned sums, so a caller can reconcile either sign convention. Monetary fields
+ * serialise as JSON strings — see {@link GLAccountDetailsData}.
  */
 public record GLAccountBalanceData(@Schema(example = "12") Long glAccountId, @Schema(example = "10101") String glCode,
         @Schema(example = "Cash at Main Vault") String name,
         @Schema(description = "GL classification. `value` is one of ASSET, LIABILITY, EQUITY, INCOME, EXPENSE.") EnumOptionData type,
         @Schema(description = "Echo of the `officeId` filter. Null means organisation-wide.", example = "1") Long officeId,
-        @Schema(description = "Echo of the `currencyCode` filter. Null means all currencies were summed.", example = "NGN") String currencyCode,
-        @Schema(description = "Inclusive window start, as resolved.", example = "2026-07-01") LocalDate fromDate,
-        @Schema(description = "Inclusive window end, as resolved.", example = "2026-07-31") LocalDate toDate,
-        GLAccountBalanceGranularity granularity,
-        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = """
-                Type-aware signed balance over every entry strictly before `fromDate`. Zero when there are none.""", example = "1000.000000") BigDecimal openingBalance,
         @Schema(description = """
-                For `granularity=PERIOD`, exactly one bucket spanning the window — present even when there was no
-                movement, in which case both totals are zero. For `granularity=DAILY`, one bucket per day that HAS
-                movement, ascending by date; days with no entries are absent and the caller zero-fills them.""") List<GLAccountBalanceBucketData> buckets) {
+                The single currency posted to this account within the window, derived from journal entries. Null when
+                there was no movement in the window. Echoes `currencyCode` when it was supplied; otherwise 409 if more
+                than one currency was posted in the window.""", example = "NGN") String currency,
+        @Schema(description = "Inclusive window start, as supplied.", example = "2026-07-01") LocalDate fromDate,
+        @Schema(description = "Inclusive window end, as supplied.", example = "2026-07-31") LocalDate toDate,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = """
+                Type-aware signed balance over every non-reversed entry strictly before `fromDate`. Zero when there are
+                none.""", example = "1000.000000") BigDecimal openingBalance,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Raw unsigned sum of non-reversed debit entries in the window.", example = "500.000000") BigDecimal totalDebits,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Raw unsigned sum of non-reversed credit entries in the window.", example = "250.000000") BigDecimal totalCredits,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Signed movement across the window, sided by GL account type.", example = "250.000000") BigDecimal netMovement,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "`openingBalance` plus `netMovement`.", example = "1250.000000") BigDecimal closingBalance,
+        @Schema(description = "Non-reversed journal entry rows in the window.", example = "17") Long entryCount) {
 }

@@ -22,21 +22,17 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingEnumerations;
-import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceBucketData;
 import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceData;
-import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceGranularity;
 import org.apache.fineract.accounting.glaccount.data.GLAccountDetailsData;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountUsage;
+import org.apache.fineract.accounting.glaccount.exception.GLAccountMultipleCurrenciesException;
 import org.apache.fineract.accounting.glaccount.exception.GLAccountNotFoundException;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
@@ -51,18 +47,23 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalanceReadPlatformService {
 
-    /**
-     * Guardrail on {@code granularity=DAILY}. A little over a year, so a full twelve-month daily report works, while
-     * {@code fromDate=1970-01-01} does not turn into a scan-and-serialise of twenty thousand buckets.
-     */
-    public static final int MAX_DAILY_BUCKETS = 400;
-
     private static final String VALIDATION_ERRORS_EXIST = "validation.msg.validation.errors.exist";
     private static final String VALIDATION_ERROR_MESSAGE = "Validation errors exist.";
 
     /** {@code acc_gl_journal_entry.type_enum}: see {@code JournalEntryType}. */
     private static final int ENTRY_TYPE_CREDIT = 1;
     private static final int ENTRY_TYPE_DEBIT = 2;
+
+    /**
+     * Excludes both legs of a reversal: {@code reversed = true} marks the original entry a reversal was posted against,
+     * and the {@code not exists} clause excludes the reversal entry itself, which is the row some other entry's
+     * {@code reversal_id} points at. A reversal is a deliberate correction — "this posting should not have happened" —
+     * so ignoring it entirely reflects what actually stands, rather than summing a cancelling pair that happens to net
+     * to the same total.
+     */
+    private static final String EXCLUDE_REVERSED = """
+            and je.reversed = false
+            and not exists (select 1 from acc_gl_journal_entry rev where rev.reversal_id = je.id)""";
 
     private static final String GL_ACCOUNT_SQL = """
             select gl.id                             as id,
@@ -89,7 +90,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         final LocalDate cutOff = asOnDate == null ? DateUtils.getBusinessLocalDate() : asOnDate;
 
         final CumulativeRow cumulative = retrieveCumulative(account.id(), cutOff, officeId, currencyCode);
-        final List<String> currencies = retrieveCurrencies(account.id(), cutOff, officeId);
+        final String currency = resolveCurrency(glCode, account.id(), null, cutOff, officeId, currencyCode);
 
         return new GLAccountDetailsData(account.id(), account.glCode(), account.name(),
                 AccountingEnumerations.gLAccountType(account.type()), AccountingEnumerations.gLAccountUsage(account.usage()),
@@ -97,23 +98,25 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
                 account.parentName(), cutOff,
                 GLAccountBalanceCalculator.signedNet(account.type(), cumulative.totalDebits(), cumulative.totalCredits()),
                 GLAccountBalanceCalculator.money(cumulative.totalDebits()), GLAccountBalanceCalculator.money(cumulative.totalCredits()),
-                cumulative.lastMovementDate(), currencies, cumulative.entryCount(), officeId, trimToNull(currencyCode));
+                cumulative.lastMovementDate(), currency, cumulative.entryCount(), officeId);
     }
 
     @Override
     public GLAccountBalanceData retrieveGLAccountBalanceByCode(final String glCode, final LocalDate fromDate, final LocalDate toDate,
-            final GLAccountBalanceGranularity granularity, final Long officeId, final String currencyCode) {
+            final Long officeId, final String currencyCode) {
         final GLAccountRow account = findAccountByCode(glCode);
+        validateWindow(fromDate, toDate);
 
-        final LocalDate windowEnd = toDate == null ? DateUtils.getBusinessLocalDate() : toDate;
-        final LocalDate windowStart = fromDate == null ? windowEnd : fromDate;
-        validateWindow(windowStart, windowEnd, granularity);
+        final WindowRow window = retrieveWindow(account.id(), fromDate, toDate, officeId, currencyCode);
+        final String currency = resolveCurrency(glCode, account.id(), fromDate, toDate, officeId, currencyCode);
 
-        final List<MovementRow> rows = retrieveMovements(account.id(), windowStart, windowEnd, officeId, currencyCode);
+        final BigDecimal opening = GLAccountBalanceCalculator.signedNet(account.type(), window.openingDebits(), window.openingCredits());
+        final BigDecimal net = GLAccountBalanceCalculator.signedNet(account.type(), window.totalDebits(), window.totalCredits());
 
         return new GLAccountBalanceData(account.id(), account.glCode(), account.name(),
-                AccountingEnumerations.gLAccountType(account.type()), officeId, trimToNull(currencyCode), windowStart, windowEnd,
-                granularity, openingBalance(account.type(), rows), buckets(granularity, windowStart, windowEnd, rows));
+                AccountingEnumerations.gLAccountType(account.type()), officeId, currency, fromDate, toDate, opening,
+                GLAccountBalanceCalculator.money(window.totalDebits()), GLAccountBalanceCalculator.money(window.totalCredits()), net,
+                opening.add(net), window.entryCount());
     }
 
     // -------------------------------------------------------------------------------------------- account master data
@@ -159,7 +162,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
                 .append(asOfSumOf(ENTRY_TYPE_CREDIT)).append(" as totalCredits, ")
                 .append(" count(case when je.entry_date <= :asOnDate then 1 end) as entryCount, ")
                 .append(" max(je.entry_date) as lastMovementDate ").append(" from acc_gl_journal_entry je ")
-                .append(" where je.account_id = :accountId");
+                .append(" where je.account_id = :accountId").append(EXCLUDE_REVERSED);
         appendScopeFilters(sql, params, officeId, currencyCode);
 
         return this.jdbcTemplate.queryForObject(sql.toString(), params, (rs, rowNum) -> new CumulativeRow(rs.getBigDecimal("totalDebits"),
@@ -169,111 +172,97 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
     private record CumulativeRow(BigDecimal totalDebits, BigDecimal totalCredits, Long entryCount, LocalDate lastMovementDate) {
     }
 
-    private List<String> retrieveCurrencies(final Long accountId, final LocalDate asOnDate, final Long officeId) {
-        final Map<String, Object> params = new HashMap<>();
-        params.put("accountId", accountId);
-        params.put("asOnDate", asOnDate);
-
-        final StringBuilder sql = new StringBuilder("""
-                select distinct je.currency_code as currencyCode
-                from acc_gl_journal_entry je
-                where je.account_id = :accountId
-                  and je.entry_date <= :asOnDate""");
-        appendScopeFilters(sql, params, officeId, null);
-        sql.append(" order by je.currency_code");
-
-        return this.jdbcTemplate.queryForList(sql.toString(), params, String.class);
-    }
-
     // ------------------------------------------------------------------------------------------------ window movement
 
     /**
-     * Opening balance and every in-window bucket from a single grouped statement. Entries before the window collapse
-     * into one {@code null}-keyed group, which is exactly the opening-balance basis, so no second round trip and no
-     * dependency on the once-daily {@code organization_running_balance} column.
+     * Opening basis and window totals from a single query with no {@code group by}: the opening side sums entries
+     * strictly before {@code fromDate}, the window side sums entries in {@code [fromDate, toDate]}, and both run over
+     * the same scan of {@code acc_gl_journal_entry} for the account.
      */
-    private List<MovementRow> retrieveMovements(final Long accountId, final LocalDate fromDate, final LocalDate toDate, final Long officeId,
+    private WindowRow retrieveWindow(final Long accountId, final LocalDate fromDate, final LocalDate toDate, final Long officeId,
             final String currencyCode) {
         final Map<String, Object> params = new HashMap<>();
         params.put("accountId", accountId);
         params.put("fromDate", fromDate);
         params.put("toDate", toDate);
 
-        final String bucketExpression = "case when je.entry_date < :fromDate then null else je.entry_date end";
-        final StringBuilder sql = new StringBuilder(" select ").append(bucketExpression).append(" as bucketDate, ")
-                .append(sumOf(ENTRY_TYPE_DEBIT)).append(" as totalDebits, ").append(sumOf(ENTRY_TYPE_CREDIT)).append(" as totalCredits, ")
-                .append(" count(*) as entryCount ").append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
-                .append(" and je.entry_date <= :toDate");
+        final StringBuilder sql = new StringBuilder(" select ").append(openingSumOf(ENTRY_TYPE_DEBIT)).append(" as openingDebits, ")
+                .append(openingSumOf(ENTRY_TYPE_CREDIT)).append(" as openingCredits, ").append(windowSumOf(ENTRY_TYPE_DEBIT))
+                .append(" as totalDebits, ").append(windowSumOf(ENTRY_TYPE_CREDIT)).append(" as totalCredits, ")
+                .append(" count(case when je.entry_date between :fromDate and :toDate then 1 end) as entryCount ")
+                .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
+                .append(" and je.entry_date <= :toDate").append(EXCLUDE_REVERSED);
         appendScopeFilters(sql, params, officeId, currencyCode);
-        sql.append(" group by ").append(bucketExpression);
 
-        return this.jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new MovementRow(JdbcSupport.getLocalDate(rs, "bucketDate"),
-                rs.getBigDecimal("totalDebits"), rs.getBigDecimal("totalCredits"), rs.getLong("entryCount")));
+        return this.jdbcTemplate.queryForObject(sql.toString(), params,
+                (rs, rowNum) -> new WindowRow(rs.getBigDecimal("openingDebits"), rs.getBigDecimal("openingCredits"),
+                        rs.getBigDecimal("totalDebits"), rs.getBigDecimal("totalCredits"), rs.getLong("entryCount")));
     }
 
-    /** {@code bucketDate == null} marks the pre-window group. */
-    private record MovementRow(LocalDate bucketDate, BigDecimal totalDebits, BigDecimal totalCredits, Long entryCount) {
+    private record WindowRow(BigDecimal openingDebits, BigDecimal openingCredits, BigDecimal totalDebits, BigDecimal totalCredits,
+            Long entryCount) {
     }
 
-    private static BigDecimal openingBalance(final GLAccountType type, final List<MovementRow> rows) {
-        for (final MovementRow row : rows) {
-            if (row.bucketDate() == null) {
-                return GLAccountBalanceCalculator.signedNet(type, row.totalDebits(), row.totalCredits());
-            }
-        }
-        return GLAccountBalanceCalculator.money(BigDecimal.ZERO);
-    }
-
-    private static List<GLAccountBalanceBucketData> buckets(final GLAccountBalanceGranularity granularity, final LocalDate fromDate,
-            final LocalDate toDate, final List<MovementRow> rows) {
-        return granularity == GLAccountBalanceGranularity.DAILY ? dailyBuckets(rows) : List.of(periodBucket(fromDate, toDate, rows));
-    }
+    // --------------------------------------------------------------------------------------------- currency resolution
 
     /**
-     * Ascending by date. The query has no {@code order by} — {@code nulls first} is not portable to MySQL and the
-     * pre-window group has to be filtered out here anyway — so the ordering is applied in Java.
+     * Fineract does not model a currency on a GL account, so it is derived from what has actually been posted.
+     *
+     * @param windowStart
+     *            null for the as-of-date details read; the inclusive window start for the balance read
+     * @param windowEnd
+     *            the as-of date, or the inclusive window end
      */
-    private static List<GLAccountBalanceBucketData> dailyBuckets(final List<MovementRow> rows) {
-        final List<GLAccountBalanceBucketData> buckets = new ArrayList<>();
-        for (final MovementRow row : rows) {
-            if (row.bucketDate() == null) {
-                continue;
-            }
-            buckets.add(
-                    new GLAccountBalanceBucketData(row.bucketDate(), row.bucketDate(), GLAccountBalanceCalculator.money(row.totalDebits()),
-                            GLAccountBalanceCalculator.money(row.totalCredits()), row.entryCount()));
+    private String resolveCurrency(final String glCode, final Long accountId, final LocalDate windowStart, final LocalDate windowEnd,
+            final Long officeId, final String currencyCodeFilter) {
+        final String filter = trimToNull(currencyCodeFilter);
+        if (filter != null) {
+            return filter;
         }
-        buckets.sort(Comparator.comparing(GLAccountBalanceBucketData::fromDate));
-        return buckets;
+
+        final List<String> distinct = retrieveDistinctCurrencies(accountId, windowStart, windowEnd, officeId);
+        if (distinct.isEmpty()) {
+            return null;
+        }
+        if (distinct.size() == 1) {
+            return distinct.get(0);
+        }
+        throw new GLAccountMultipleCurrenciesException(glCode);
     }
 
-    /** Always exactly one bucket, present even when the window had no movement. */
-    private static GLAccountBalanceBucketData periodBucket(final LocalDate fromDate, final LocalDate toDate, final List<MovementRow> rows) {
-        BigDecimal debits = BigDecimal.ZERO;
-        BigDecimal credits = BigDecimal.ZERO;
-        long entryCount = 0L;
-        for (final MovementRow row : rows) {
-            if (row.bucketDate() == null) {
-                continue;
-            }
-            debits = debits.add(GLAccountBalanceCalculator.money(row.totalDebits()));
-            credits = credits.add(GLAccountBalanceCalculator.money(row.totalCredits()));
-            entryCount += row.entryCount();
+    private List<String> retrieveDistinctCurrencies(final Long accountId, final LocalDate windowStart, final LocalDate windowEnd,
+            final Long officeId) {
+        final Map<String, Object> params = new HashMap<>();
+        params.put("accountId", accountId);
+        params.put("windowEnd", windowEnd);
+
+        final StringBuilder sql = new StringBuilder(" select distinct je.currency_code as currencyCode ")
+                .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
+                .append(" and je.entry_date <= :windowEnd").append(EXCLUDE_REVERSED);
+        if (windowStart != null) {
+            sql.append(" and je.entry_date >= :windowStart");
+            params.put("windowStart", windowStart);
         }
-        return new GLAccountBalanceBucketData(fromDate, toDate, GLAccountBalanceCalculator.money(debits),
-                GLAccountBalanceCalculator.money(credits), entryCount);
+        appendScopeFilters(sql, params, officeId, null);
+        sql.append(" order by je.currency_code");
+
+        return this.jdbcTemplate.queryForList(sql.toString(), params, String.class);
     }
 
     // ------------------------------------------------------------------------------------------------------- helpers
 
     /** Sum of one posting side over the whole filtered set. */
-    private static String sumOf(final int entryType) {
-        return " coalesce(sum(case when je.type_enum = " + entryType + " then je.amount else 0 end), 0) ";
+    private static String windowSumOf(final int entryType) {
+        return " coalesce(sum(case when je.entry_date between :fromDate and :toDate and je.type_enum = " + entryType
+                + " then je.amount else 0 end), 0) ";
     }
 
-    /**
-     * Same, restricted to entries on or before {@code :asOnDate}, so the cut-off does not cap {@code max(entry_date)}.
-     */
+    /** Same, restricted to entries strictly before {@code :fromDate} — the opening-balance basis. */
+    private static String openingSumOf(final int entryType) {
+        return " coalesce(sum(case when je.entry_date < :fromDate and je.type_enum = " + entryType + " then je.amount else 0 end), 0) ";
+    }
+
+    /** Restricted to entries on or before {@code :asOnDate}, so the cut-off does not cap {@code max(entry_date)}. */
     private static String asOfSumOf(final int entryType) {
         return " coalesce(sum(case when je.entry_date <= :asOnDate and je.type_enum = " + entryType + " then je.amount else 0 end), 0) ";
     }
@@ -296,19 +285,17 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         }
     }
 
-    private static void validateWindow(final LocalDate fromDate, final LocalDate toDate, final GLAccountBalanceGranularity granularity) {
+    private static void validateWindow(final LocalDate fromDate, final LocalDate toDate) {
+        if (fromDate == null) {
+            throw validationError("validation.msg.glaccount.balance.fromDate.required", "The parameter `fromDate` is required.",
+                    "fromDate");
+        }
+        if (toDate == null) {
+            throw validationError("validation.msg.glaccount.balance.toDate.required", "The parameter `toDate` is required.", "toDate");
+        }
         if (DateUtils.isAfter(fromDate, toDate)) {
             throw validationError("validation.msg.glaccount.balance.fromDate.after.toDate",
                     "The parameter `fromDate` must not be after `toDate`.", "fromDate", fromDate, toDate);
-        }
-        if (granularity != GLAccountBalanceGranularity.DAILY) {
-            return;
-        }
-        final long days = ChronoUnit.DAYS.between(fromDate, toDate) + 1;
-        if (days > MAX_DAILY_BUCKETS) {
-            throw validationError("validation.msg.glaccount.balance.daily.range.too.large",
-                    "A DAILY balance window may span at most " + MAX_DAILY_BUCKETS + " days; " + days + " were requested.", "fromDate",
-                    days, MAX_DAILY_BUCKETS);
         }
     }
 

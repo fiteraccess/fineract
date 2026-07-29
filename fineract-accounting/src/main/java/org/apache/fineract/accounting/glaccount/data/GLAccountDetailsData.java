@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 
 /**
@@ -44,19 +43,20 @@ public record GLAccountDetailsData(@Schema(example = "12") Long id, @Schema(exam
         @Schema(example = "101") String parentGlCode, @Schema(example = "Current Assets") String parentName,
         @Schema(description = "The as-of date the balance was computed at: either the supplied `asOnDate` or the current business date.") LocalDate asOnDate,
         @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = """
-                Type-aware signed balance over every entry up to and including `asOnDate`, at full stored precision.
-                ASSET and EXPENSE accounts increase on debit; LIABILITY, EQUITY and INCOME increase on credit.""", example = "10450000.550000") BigDecimal balance,
-        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Raw unsigned sum of debit entries up to `asOnDate`.", example = "20450000.550000") BigDecimal totalDebits,
-        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Raw unsigned sum of credit entries up to `asOnDate`.", example = "10000000.000000") BigDecimal totalCredits,
+                Type-aware signed balance over every non-reversed entry up to and including `asOnDate`, at full stored
+                precision. ASSET and EXPENSE accounts increase on debit; LIABILITY, EQUITY and INCOME increase on
+                credit.""", example = "10450000.550000") BigDecimal balance,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Raw unsigned sum of non-reversed debit entries up to `asOnDate`.", example = "20450000.550000") BigDecimal totalDebits,
+        @JsonSerialize(using = ToStringSerializer.class) @Schema(type = "string", description = "Raw unsigned sum of non-reversed credit entries up to `asOnDate`.", example = "10000000.000000") BigDecimal totalCredits,
         @Schema(description = """
-                The latest `entry_date` over ALL entries, deliberately not capped at `asOnDate`, so a forward-dated
-                posting is still visible. Null when the account has never been posted to.""", example = "2026-07-27") LocalDate lastMovementDate,
+                The latest `entry_date` over ALL non-reversed entries, deliberately not capped at `asOnDate`, so a
+                forward-dated posting is still visible. Null when the account has never been posted to.""", example = "2026-07-27") LocalDate lastMovementDate,
         @Schema(description = """
-                Distinct currency codes posted to this account up to `asOnDate`, ascending. Fineract does not model a
-                currency on a GL account, so this is derived from journal entries. Empty when never posted to; more than
-                one entry means `balance`, `totalDebits` and `totalCredits` mix currencies unless `currencyCode` was
-                supplied.""", example = "[\"NGN\"]") List<String> currencies,
-        @Schema(description = "Journal entry rows counted up to `asOnDate`. Reversals and their counterparts are both included.", example = "482") Long entryCount,
-        @Schema(description = "Echo of the `officeId` filter. Null means organisation-wide.", example = "1") Long officeId,
-        @Schema(description = "Echo of the `currencyCode` filter. Null means all currencies were summed.", example = "NGN") String currencyCode) {
+                The single currency posted to this account up to `asOnDate`, derived from journal entries since
+                Fineract does not model a currency on a GL account. Null when the account has never been posted to. If
+                `currencyCode` was supplied this simply echoes it; if it was omitted and more than one currency has been
+                posted, the request fails with 409 rather than silently summing across currencies — retry with
+                `currencyCode`.""", example = "NGN") String currency,
+        @Schema(description = "Non-reversed journal entry rows counted up to `asOnDate`.", example = "482") Long entryCount,
+        @Schema(description = "Echo of the `officeId` filter. Null means organisation-wide.", example = "1") Long officeId) {
 }

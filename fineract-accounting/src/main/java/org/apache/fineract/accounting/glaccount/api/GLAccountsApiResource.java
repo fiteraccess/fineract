@@ -49,7 +49,6 @@ import org.apache.fineract.accounting.common.AccountingConstants;
 import org.apache.fineract.accounting.common.AccountingDropdownReadPlatformService;
 import org.apache.fineract.accounting.glaccount.command.GLAccountCommand;
 import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceData;
-import org.apache.fineract.accounting.glaccount.data.GLAccountBalanceGranularity;
 import org.apache.fineract.accounting.glaccount.data.GLAccountData;
 import org.apache.fineract.accounting.glaccount.data.GLAccountDetailsData;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
@@ -276,15 +275,16 @@ public class GLAccountsApiResource {
             increase on DEBIT, LIABILITY, EQUITY and INCOME increase on CREDIT. `totalDebits` and `totalCredits` are the
             raw unsigned sums, so either convention can be reconciled.
 
-            Reversed entries AND their reversing counterparts are both included, because in Fineract a reversal is posted
-            as a new entry with the opposite type while the original is merely flagged. Excluding flagged originals would
-            keep the reversing entry and drop the one it cancels, understating the balance by exactly that amount.
+            Reversed entries are excluded entirely, together with the reversal entry posted against them: a reversal
+            means the original posting should not have happened, so neither leg contributes to the balance or the
+            totals.
 
             `officeId` omitted means organisation-wide: all offices, exact match only, with no office-hierarchy roll-up.
-            `currencyCode` omitted means amounts are summed across every currency posted to the account — inspect
-            `currencies` before presenting a single figure. A HEADER account reports only entries posted directly to it;
-            child accounts are not rolled up. Accounting closures (`acc_gl_closure`) are not consulted: this is a live
-            ledger read, not a statutory statement.
+            `currencyCode` omitted resolves the account's sole currency; if the account has been posted to in more than
+            one currency the request fails with 409 rather than silently summing across currencies — retry with
+            `currencyCode`. A HEADER account reports only entries posted directly to it; child accounts are not rolled
+            up. Accounting closures (`acc_gl_closure`) are not consulted: this is a live ledger read, not a statutory
+            statement.
 
             `dateFormat` defaults to `yyyy-MM-dd` and `locale` to `en`.
 
@@ -313,46 +313,38 @@ public class GLAccountsApiResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(tags = {
-            "General Ledger Account" }, summary = "Retrieve General Ledger Account movements and balances for a period", description = """
-                    Returns the opening balance and the debit/credit movement totals for the inclusive window
-                    [`fromDate`, `toDate`], computed from raw journal entries in a single grouped query.
+            "General Ledger Account" }, summary = "Retrieve General Ledger Account movements and balance for a period", description = """
+                    Returns the opening balance, the debit/credit movement totals, and the closing balance for the
+                    inclusive window [`fromDate`, `toDate`], computed from raw journal entries in a single query.
 
-                    `granularity=PERIOD` (the default) returns exactly one bucket spanning the window, present even when
-                    there was no movement. `granularity=DAILY` returns one bucket per day that HAS movement, ascending
-                    by date — days with no entries are absent, and a caller wanting a zero-filled calendar fills the
-                    gaps itself. A DAILY window may span at most 400 days.
+                    Both `fromDate` and `toDate` are required. This endpoint has no concept of granularity: a caller
+                    wanting a daily, month-to-date or year-to-date view resolves that window itself before calling —
+                    Fineract owns no fiscal-calendar policy, so anchoring "month" or "year" here would be a guess.
 
-                    Month-to-date and year-to-date are deliberately NOT accepted: they are anchored to a fiscal calendar
-                    that this endpoint does not own. Resolve the window yourself and request `PERIOD`.
-
-                    Sign convention, reversal handling, office scope, currency scope and the JSON-string encoding of
+                    Sign convention, reversal exclusion, office scope, currency scope and the JSON-string encoding of
                     monetary fields are all identical to `GET glaccounts/code/{glCode}`.
 
                     Requires the `READ_JOURNALENTRY` permission, since the entire response is derived from journal
                     entries and reveals strictly less than `GET journalentries?glAccountId=...`.
 
-                    Example Requests:
+                    Example Request:
 
                     glaccounts/code/10101/balance?fromDate=2026-07-01&toDate=2026-07-31
-
-                    glaccounts/code/10101/balance?fromDate=2026-07-01&toDate=2026-07-31&granularity=DAILY
                     """)
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLAccountBalanceData.class)))
     public GLAccountBalanceData retrieveAccountBalanceByGlCode(
             @PathParam("glCode") @Parameter(description = "Unique GL code from the chart of accounts") final String glCode,
-            @QueryParam("fromDate") @Parameter(description = "Inclusive window start; defaults to toDate") final DateParam fromDateParam,
-            @QueryParam("toDate") @Parameter(description = "Inclusive window end; defaults to the current business date") final DateParam toDateParam,
-            @QueryParam("granularity") @Parameter(description = "PERIOD (default) or DAILY") final String granularity,
+            @QueryParam("fromDate") @Parameter(description = "Inclusive window start; required") final DateParam fromDateParam,
+            @QueryParam("toDate") @Parameter(description = "Inclusive window end; required") final DateParam toDateParam,
             @QueryParam("officeId") @Parameter(description = "Restrict to one office; omit for organisation-wide") final Long officeId,
-            @QueryParam("currencyCode") @Parameter(description = "Restrict to one currency; omit to sum all") final String currencyCode,
+            @QueryParam("currencyCode") @Parameter(description = "Restrict to one currency; omit to resolve the account's sole currency") final String currencyCode,
             @QueryParam("dateFormat") @Parameter(description = "defaults to yyyy-MM-dd") final String dateFormat,
             @QueryParam("locale") @Parameter(description = "defaults to en") final String locale) {
         this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION_JOURNAL_ENTRY);
 
         final LocalDate fromDate = parseQueryDate(fromDateParam, DateParam.FROM_DATE_PARAM, dateFormat, locale);
         final LocalDate toDate = parseQueryDate(toDateParam, DateParam.TO_DATE_PARAM, dateFormat, locale);
-        return this.glAccountBalanceReadPlatformService.retrieveGLAccountBalanceByCode(glCode, fromDate, toDate,
-                GLAccountBalanceGranularity.fromQueryParam(granularity), officeId, currencyCode);
+        return this.glAccountBalanceReadPlatformService.retrieveGLAccountBalanceByCode(glCode, fromDate, toDate, officeId, currencyCode);
     }
 
     /**
