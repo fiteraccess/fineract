@@ -244,4 +244,5 @@
     <include file="parts/0223_add_nip_transfer_accounting_primitives.xml" relativeToChangelogFile="true" />
     <include file="parts/0225_add_read_reconciliation_permission.xml" relativeToChangelogFile="true" />
     <include file="parts/0224_evolve_nip_switch_accounting_configuration_for_inbound.xml" relativeToChangelogFile="true" />
+    <include file="parts/0226_add_acc_gl_journal_entry_account_entry_date_index.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
