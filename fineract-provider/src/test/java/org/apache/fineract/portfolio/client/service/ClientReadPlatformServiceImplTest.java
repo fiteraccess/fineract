@@ -39,6 +39,7 @@ import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.client.mapper.ClientMapper;
 import org.apache.fineract.portfolio.collateralmanagement.domain.ClientCollateralManagementRepositoryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -69,6 +70,8 @@ class ClientReadPlatformServiceImplTest {
     private ClientRepositoryWrapper clientRepositoryWrapper;
     @Mock
     private ClientMapper clientMapper;
+    @Mock
+    private SavingsProductRepository savingsProductRepository;
 
     @InjectMocks
     private ClientReadPlatformServiceImpl clientReadPlatformService;
