@@ -48,7 +48,7 @@ public interface ClientMapper {
     @Mapping(target = "staffName", source = "staff.displayName")
     @Mapping(target = "timeline", source = "source", qualifiedByName = "clientTimelineData")
     @Mapping(target = "savingsProductId", source = "savingsProductId")
-    @Mapping(target = "savingsProductName", source = "id")
+    @Mapping(target = "savingsProductName", ignore = true)
     @Mapping(target = "savingsAccountId", source = "savingsAccountId")
     @Mapping(target = "clientType", source = "source", qualifiedByName = "clientTypeCode")
     @Mapping(target = "clientClassification", source = "source", qualifiedByName = "clientClassificationCode")

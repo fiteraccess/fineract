@@ -227,7 +227,7 @@ final class ClientsApiResourceSwagger {
 
         @Schema(example = "27")
         public Long id;
-        @Schema(example = "000000027")
+        @Schema(description = "Internal client reference number. Defaults to the zero-padded client id unless a custom Account Number Format has been configured for the CLIENT entity type. This is not a customer-facing bank account number — that lives on the client's savings account(s), since a client can have more than one.", example = "000000027")
         public String accountNo;
         public GetClientsClientIdStatus status;
         @Schema(example = "true")
@@ -247,7 +247,7 @@ final class ClientsApiResourceSwagger {
         public GetClientsTimeline timeline;
         @Schema(example = "4")
         public Long savingsProductId;
-        @Schema(example = "account overdraft")
+        @Schema(description = "Name of the client's default savings product (resolved from savingsProductId). Null if the client has no default savings product set.", example = "Regular Savings")
         public String savingsProductName;
         @Schema(example = "[]")
         public List<GetClientsGroups> groups;
