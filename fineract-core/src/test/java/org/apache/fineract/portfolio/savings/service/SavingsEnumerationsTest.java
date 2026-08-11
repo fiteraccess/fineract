@@ -187,4 +187,14 @@ public class SavingsEnumerationsTest {
         Assertions.assertEquals(GLAccountType.LIABILITY, AccountingConstants.FinancialActivity.VAT_PAYABLE.getMappedGLAccountType());
     }
 
+    @Test
+    void mapsSignedStatementFeeTransactionType() {
+        var signedStatementFee = SavingsEnumerations.transactionType(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
+
+        Assertions.assertEquals("Signed E-Statement Fee", signedStatementFee.getValue());
+        Assertions.assertTrue(signedStatementFee.isSignedStatementFee());
+        Assertions.assertTrue(signedStatementFee.isDebit());
+        Assertions.assertTrue(signedStatementFee.isChargeTransaction());
+    }
+
 }

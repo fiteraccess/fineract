@@ -210,6 +210,11 @@ public final class SavingsEnumerations {
                 optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.VAT.getValue().longValue(),
                         SavingsAccountTransactionType.VAT.getCode(), "VAT");
             break;
+            case SIGNED_STATEMENT_FEE:
+                optionData = new SavingsAccountTransactionEnumData(
+                        SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getValue().longValue(),
+                        SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getCode(), "Signed E-Statement Fee");
+            break;
         }
         return optionData;
     }

@@ -274,6 +274,15 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return transaction;
     }
 
+    public static SavingsAccountTransaction signedStatementFee(final SavingsAccount savingsAccount, final Office office,
+            final LocalDate date, final Money amount, final String refNo) {
+        final boolean isReversed = false;
+        final boolean isManualTransaction = false;
+        final Boolean lienTransaction = false;
+        return new SavingsAccountTransaction(savingsAccount, office, SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getValue(), date,
+                amount, isReversed, isManualTransaction, lienTransaction, refNo);
+    }
+
     public static SavingsAccountTransaction annualFee(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
             final Money amount) {
         final boolean isReversed = false;

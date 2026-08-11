@@ -127,4 +127,14 @@ class SavingsAccountTransactionNipPrimitiveTest {
         assertThat(column.name()).isEqualTo("switch_id");
         assertThat(column.nullable()).isTrue();
     }
+
+    @Test
+    void signedStatementFeeFactoryHasNoSwitchIdentityAB339() {
+        SavingsAccountTransaction transaction = SavingsAccountTransaction.signedStatementFee(mock(SavingsAccount.class), mock(Office.class),
+                LocalDate.of(2026, 7, 25), mock(Money.class), "root-reference");
+
+        assertThat(transaction.getTransactionType()).isEqualTo(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
+        assertThat(transaction.getSwitchId()).isNull();
+        assertThat(transaction.getRefNo()).isEqualTo("root-reference");
+    }
 }

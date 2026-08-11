@@ -644,8 +644,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
      * <strong>not</strong> evaluate any rule — the amount and applicability decision were made upstream.
      *
      * <p>
-     * Today only {@link SavingsAccountTransactionType#EMT_LEVY} is accepted. Future side-effects (VAT, etc.) must add
-     * their own branch; an unsupported type fails fast so a partially-implemented sibling is never silently dropped.
+     * Accepted types today: {@link SavingsAccountTransactionType#EMT_LEVY},
+     * {@link SavingsAccountTransactionType#COMMISSION}, {@link SavingsAccountTransactionType#VAT},
+     * {@link SavingsAccountTransactionType#SIGNED_STATEMENT_FEE}. Each future side-effect must add its own branch; an
+     * unsupported type fails fast so a partially-implemented sibling is never silently dropped.
      */
     @Transactional
     @Override
@@ -686,6 +688,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                         switchId, ref.switchFeeAmount(), ref.bankCommissionAmount());
             } else if (ref.type().isVat()) {
                 referenceTransaction = SavingsAccountTransaction.vat(account, account.office(), transactionDate, money, refNo, switchId);
+            } else if (ref.type().isSignedStatementFee()) {
+                referenceTransaction = SavingsAccountTransaction.signedStatementFee(account, account.office(), transactionDate, money,
+                        refNo);
             } else {
                 throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
                         "Reference transaction type " + ref.type() + " is not supported", ref.type());

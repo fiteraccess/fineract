@@ -82,6 +82,9 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                         && StringUtils.isNotBlank(savingsTransactionDTO.getSwitchId())) {
                     createVatJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, transactionDate, transactionId,
                             office, paymentTypeId, isReversal, amount, overdraftAmount);
+                } else if (savingsTransactionDTO.getTransactionType().isSignedStatementFee()) {
+                    createSignedStatementFeeJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, transactionDate,
+                            transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);
                 } else if (savingsTransactionDTO.getTransactionType().isWithdrawal() && savingsTransactionDTO.isOverdraftTransaction()) {
                     boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;
                     if (savingsTransactionDTO.isAccountTransfer()) {
@@ -355,6 +358,18 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                 amount, overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
                 debitAllocations, List.of(new SavingsJournalEntryAllocation(vatPayableAccount.getId(), amount)), isReversal,
+                journalEntries);
+    }
+
+    private void createSignedStatementFeeJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
+            final List<JournalEntry> journalEntries, final LocalDate transactionDate, final String transactionId, final Office office,
+            final Long paymentTypeId, final boolean isReversal, final BigDecimal amount, final BigDecimal overdraftAmount) {
+        final GLAccount signedStatementFeeIncomeAccount = this.helper.getLinkedGLAccountForSavingsProduct(savingsProductId,
+                FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(), paymentTypeId);
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
+        this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
+                debitAllocations, List.of(new SavingsJournalEntryAllocation(signedStatementFeeIncomeAccount.getId(), amount)), isReversal,
                 journalEntries);
     }
 
