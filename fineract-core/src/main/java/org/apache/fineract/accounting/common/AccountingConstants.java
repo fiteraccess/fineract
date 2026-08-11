@@ -438,7 +438,8 @@ public final class AccountingConstants {
         ASSET_FUND_SOURCE(103, "fundSource", GLAccountType.ASSET), //
         PAYABLE_DIVIDENDS(201, "payableDividends", GLAccountType.LIABILITY), //
         EMT_LEVY(202, "emtLevy", GLAccountType.LIABILITY), //
-        VAT_PAYABLE(203, "vatPayable", GLAccountType.LIABILITY); //
+        VAT_PAYABLE(203, "vatPayable", GLAccountType.LIABILITY), //
+        SIGNED_STATEMENT_FEE_INCOME(204, "signedStatementFeeIncome", GLAccountType.INCOME); //
 
         private final Integer value;
         private final String code;

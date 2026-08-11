@@ -264,6 +264,23 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldRouteSignedStatementFeeToMappedIncomeAccountInAccrualAccountingAB339() {
+        GLAccount signedStatementFeeIncome = glAccount(401L);
+        GLAccount savingsControl = glAccount(101L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(), 44L))
+                .thenReturn(signedStatementFeeIncome);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(
+                savings(transaction(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, null, BigDecimal.valueOf(20), null, null)));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(20))),
+                List.of(new SavingsJournalEntryAllocation(401L, BigDecimal.valueOf(20))));
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
     void shouldSplitVatBetweenSavingsAndOverdraftControlsInAccrualAccounting() {
         GLAccount vatPayable = glAccount(301L);
         GLAccount savingsControl = glAccount(101L);

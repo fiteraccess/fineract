@@ -160,6 +160,11 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                     }
                 }
 
+                /** AB-339: DR Savings Control, CR Signed E-Statement Fee income (via FinancialActivity mapping). */
+                else if (savingsTransactionDTO.getTransactionType().isSignedStatementFee()) {
+                    createSignedStatementFeeJournalEntries(nipAccountingContext);
+                }
+
                 else if (savingsTransactionDTO.getTransactionType().isEscheat()) {
                     this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
                             AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), AccrualAccountsForSavings.ESCHEAT_LIABILITY.getValue(),
@@ -404,6 +409,14 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                 FinancialActivity.VAT_PAYABLE.getValue(), transaction.getPaymentTypeId());
         createBalancedJournalEntries(context, createCustomerControlAllocations(context),
                 List.of(new SavingsJournalEntryAllocation(vatPayableAccount.getId(), transaction.getAmount())));
+    }
+
+    private void createSignedStatementFeeJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final GLAccount signedStatementFeeIncomeAccount = this.helper.getLinkedGLAccountForSavingsProduct(context.savingsProductId(),
+                FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(), transaction.getPaymentTypeId());
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
+                List.of(new SavingsJournalEntryAllocation(signedStatementFeeIncomeAccount.getId(), transaction.getAmount())));
     }
 
     private List<SavingsJournalEntryAllocation> createCustomerControlAllocations(final NipAccountingContext context) {

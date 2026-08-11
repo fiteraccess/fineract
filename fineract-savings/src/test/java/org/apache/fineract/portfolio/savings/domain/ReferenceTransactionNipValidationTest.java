@@ -116,6 +116,19 @@ class ReferenceTransactionNipValidationTest {
     }
 
     @Test
+    void acceptsSignedStatementFeeWithoutSwitchAB339() {
+        ReferenceTransaction.NipWithdrawalRequest request = parse("""
+                { "referenceTransactions": [
+                  { "type": "SIGNED_STATEMENT_FEE", "amount": 20.00, "description": "Signed E-Statement Fee" }
+                ] }
+                """);
+
+        assertThat(request.switchId()).isNull();
+        assertThat(request.references()).extracting(ReferenceTransaction::type)
+                .containsExactly(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
+    }
+
+    @Test
     void rejectsMissingSwitchAndInvalidPersistenceOrAccountingPrerequisites() {
         assertInvalid("""
                 { "referenceTransactions": [

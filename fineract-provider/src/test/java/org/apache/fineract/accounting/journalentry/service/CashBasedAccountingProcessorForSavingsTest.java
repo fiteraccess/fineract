@@ -341,6 +341,24 @@ class CashBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldRouteSignedStatementFeeToMappedIncomeAccountAB339() {
+        GLAccount savingsControl = glAccount(101L);
+        GLAccount signedStatementFeeIncome = glAccount(401L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(), 44L))
+                .thenReturn(signedStatementFeeIncome);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+        SavingsTransactionDTO fee = transaction(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, null, BigDecimal.valueOf(20), null,
+                false);
+
+        processor.createJournalEntriesForSavings(savings(fee));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(20))),
+                List.of(new SavingsJournalEntryAllocation(401L, BigDecimal.valueOf(20))));
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
     void shouldSplitVatBetweenSavingsAndOverdraftControls() {
         GLAccount savingsControl = glAccount(101L);
         GLAccount overdraftPortfolioControl = glAccount(102L);
