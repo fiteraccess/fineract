@@ -20,6 +20,7 @@ package org.apache.fineract.accounting.journalentry.service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.apache.fineract.accounting.provisioning.domain.ProvisioningEntry;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -43,6 +44,8 @@ public interface JournalEntryWritePlatformService {
     void createJournalEntriesForSavings(SavingsAccountingBridgeDTO accountingBridgeData);
 
     void createJournalEntriesForSavings(SavingsAccountingBridgeDTO accountingBridgeData, Office office);
+
+    void linkSavingsReversalJournalEntries(List<Long> reversedSavingsTransactionIds);
 
     void createJournalEntriesForClientTransactions(Map<String, Object> accountingBridgeData);
 

@@ -37,7 +37,7 @@ class SavingsAccountWritePlatformServiceReversalSelectionTest {
         SavingsAccountTransaction vat = transaction(13L, SavingsAccountTransactionType.VAT);
 
         List<SavingsAccountTransaction> selected = SavingsAccountWritePlatformServiceJpaRepositoryImpl
-                .selectTransactionsForBulkReversal(10L, List.of(principal, emtLevy, commission, vat));
+                .selectTransactionsForBulkReversal(10L, List.of(principal, emtLevy, commission, vat), false);
 
         assertThat(selected).containsExactly(principal, emtLevy);
     }
@@ -49,9 +49,47 @@ class SavingsAccountWritePlatformServiceReversalSelectionTest {
         SavingsAccountTransaction vat = transaction(13L, SavingsAccountTransactionType.VAT);
 
         List<SavingsAccountTransaction> selected = SavingsAccountWritePlatformServiceJpaRepositoryImpl
-                .selectTransactionsForBulkReversal(12L, List.of(principal, commission, vat));
+                .selectTransactionsForBulkReversal(12L, List.of(principal, commission, vat), false);
 
         assertThat(selected).containsExactly(principal, commission);
+    }
+
+    @Test
+    void shouldSweepCommissionAndVatWhenFeesAreIncluded() {
+        SavingsAccountTransaction principal = transaction(10L, SavingsAccountTransactionType.WITHDRAWAL);
+        SavingsAccountTransaction emtLevy = transaction(11L, SavingsAccountTransactionType.EMT_LEVY);
+        SavingsAccountTransaction commission = transaction(12L, SavingsAccountTransactionType.COMMISSION);
+        SavingsAccountTransaction vat = transaction(13L, SavingsAccountTransactionType.VAT);
+
+        List<SavingsAccountTransaction> selected = SavingsAccountWritePlatformServiceJpaRepositoryImpl
+                .selectTransactionsForBulkReversal(10L, List.of(principal, emtLevy, commission, vat), true);
+
+        assertThat(selected).containsExactly(principal, emtLevy, commission, vat);
+    }
+
+    @Test
+    void shouldNeverSweepReversalMirrorSiblings() {
+        SavingsAccountTransaction principal = transaction(10L, SavingsAccountTransactionType.WITHDRAWAL);
+        SavingsAccountTransaction emtLevy = transaction(11L, SavingsAccountTransactionType.EMT_LEVY);
+        SavingsAccountTransaction priorMirror = transaction(14L, SavingsAccountTransactionType.WITHDRAWAL);
+        when(priorMirror.isReversalTransaction()).thenReturn(true);
+
+        List<SavingsAccountTransaction> selected = SavingsAccountWritePlatformServiceJpaRepositoryImpl
+                .selectTransactionsForBulkReversal(10L, List.of(principal, emtLevy, priorMirror), true);
+
+        assertThat(selected).containsExactly(principal, emtLevy);
+    }
+
+    @Test
+    void shouldAlwaysRetainTheRequestedTransactionSoTheAlreadyReversedGuardFires() {
+        SavingsAccountTransaction reversedPrincipal = transaction(10L, SavingsAccountTransactionType.WITHDRAWAL);
+        SavingsAccountTransaction mirror = transaction(14L, SavingsAccountTransactionType.WITHDRAWAL);
+        when(mirror.isReversalTransaction()).thenReturn(true);
+
+        List<SavingsAccountTransaction> selected = SavingsAccountWritePlatformServiceJpaRepositoryImpl
+                .selectTransactionsForBulkReversal(10L, List.of(reversedPrincipal, mirror), true);
+
+        assertThat(selected).containsExactly(reversedPrincipal);
     }
 
     private SavingsAccountTransaction transaction(final Long id, final SavingsAccountTransactionType type) {

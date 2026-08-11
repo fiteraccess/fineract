@@ -107,9 +107,12 @@ public final class SavingsAccountSummary {
 
         updateRunningBalanceAndPivotDate(false, transactions, null, null, null, currency);
 
+        // NIP reference debits (EMT levy/commission/VAT) are booked via a direct balance delta and live in no
+        // persisted component above, so the standing rows must be subtracted here or a recompute re-adds them.
         this.accountBalance = Money.of(currency, this.totalDeposits).plus(this.totalInterestPosted).minus(this.totalWithdrawals)
                 .minus(this.totalWithdrawalFees).minus(this.totalAnnualFees).minus(this.totalFeeCharge).minus(this.totalPenaltyCharge)
-                .minus(totalOverdraftInterestDerived).minus(totalWithholdTax).getAmount();
+                .minus(totalOverdraftInterestDerived).minus(totalWithholdTax)
+                .minus(wrapper.calculateTotalReferenceDebits(currency, transactions)).getAmount();
     }
 
     /**

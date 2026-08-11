@@ -104,6 +104,23 @@ public final class SavingsAccountTransactionSummaryWrapper {
         return total.getAmountDefaultedToNullIfZero();
     }
 
+    /**
+     * NIP reference debits (EMT levy, commission, VAT) hit the account balance through a direct JPQL delta when they
+     * are booked, without touching any persisted summary component. A full summary recompute must therefore subtract
+     * the standing rows explicitly or it silently re-adds them to the balance.
+     */
+    public BigDecimal calculateTotalReferenceDebits(final MonetaryCurrency currency, final List<SavingsAccountTransaction> transactions) {
+        Money total = Money.zero(currency);
+        for (final SavingsAccountTransaction transaction : transactions) {
+            final SavingsAccountTransactionType type = transaction.getTransactionType();
+            if ((type.isEmtLevy() || type.isCommission() || type.isVat()) && transaction.isNotReversed()
+                    && !transaction.isReversalTransaction()) {
+                total = total.plus(transaction.getAmount(currency));
+            }
+        }
+        return total.getAmount();
+    }
+
     public BigDecimal calculateTotalFeesChargeWaived(final MonetaryCurrency currency, final List<SavingsAccountTransaction> transactions) {
         Money total = Money.zero(currency);
         for (final SavingsAccountTransaction transaction : transactions) {

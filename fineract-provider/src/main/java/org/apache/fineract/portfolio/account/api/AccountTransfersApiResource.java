@@ -35,10 +35,12 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
@@ -142,6 +144,23 @@ public class AccountTransfersApiResource {
                 accountTransSearchParam.getFromAccountType(), accountTransSearchParam.getToOfficeId(),
                 accountTransSearchParam.getToClientId(), accountTransSearchParam.getToAccountId(),
                 accountTransSearchParam.getToAccountType());
+    }
+
+    @POST
+    @Path("{transferId}")
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Reverse an Account Transfer", description = "Reverses both savings legs of a completed savings-to-savings transfer, including each leg's linked reference transactions, and flags the transfer reversed. Body may carry isBulk/includeFees to control the per-leg sibling sweep.")
+    public String reverseAccountTransfer(@PathParam("transferId") @Parameter(description = "transferId") final Long transferId,
+            @QueryParam("command") @Parameter(description = "command") final String commandParam, final String apiRequestBodyAsJson) {
+
+        if (!"reverse".equalsIgnoreCase(commandParam)) {
+            throw new UnrecognizedQueryParamException("command", commandParam, new Object[] { "reverse" });
+        }
+        final String json = StringUtils.isBlank(apiRequestBodyAsJson) ? "{}" : apiRequestBodyAsJson;
+        final CommandWrapper commandRequest = new CommandWrapperBuilder().withJson(json).reverseAccountTransfer(transferId).build();
+        final CommandProcessingResult result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        return this.toApiJsonSerializer.serialize(result);
     }
 
     @POST

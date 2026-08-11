@@ -4122,6 +4122,25 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                 .toList();
     }
 
+    /**
+     * Reverses every live ACCRUAL row dated on-or-after the given date so the savings accrual job re-books those dates
+     * on the revised balances at its next run (its skip-guard only recomputes a date when all accruals on it are
+     * reversed). Returns the reversed rows so the caller can journal and link their contra entries.
+     */
+    public List<SavingsAccountTransaction> reverseAccrualsFrom(final LocalDate date, final boolean backdatedTxnsAllowedTill) {
+        final List<SavingsAccountTransaction> transactions = backdatedTxnsAllowedTill ? retrieveSortedTransactions()
+                : retrieveListOfTransactions();
+        final List<SavingsAccountTransaction> accrualsToReverse = selectAccrualsToReverse(transactions, date);
+        accrualsToReverse.forEach(SavingsAccountTransaction::reverse);
+        return accrualsToReverse;
+    }
+
+    static List<SavingsAccountTransaction> selectAccrualsToReverse(final List<SavingsAccountTransaction> transactions,
+            final LocalDate fromDate) {
+        return transactions.stream().filter(transaction -> transaction.getTransactionType() == SavingsAccountTransactionType.ACCRUAL
+                && transaction.isNotReversed() && !transaction.getDateOf().isBefore(fromDate)).toList();
+    }
+
     public void accrualsForSavingsReverse(SavingsAccountTransactionDTO transactionDTO, final boolean backdatedTxnsAllowedTill) {
         List<SavingsAccountTransaction> accountTransactionsSorted = null;
 

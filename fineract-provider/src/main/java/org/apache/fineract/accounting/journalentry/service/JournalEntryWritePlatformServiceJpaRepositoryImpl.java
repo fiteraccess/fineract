@@ -22,12 +22,15 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -564,6 +567,55 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
                     .determineProcessor(savingsDTO);
             accountingProcessorForSavings.createJournalEntriesForSavings(savingsDTO);
         }
+    }
+
+    /**
+     * Pairs each booking journal entry of the given reversed savings transactions with its freshly created reversal
+     * entry (same GL account and amount, opposite type, created later), setting {@code reversed} and
+     * {@code reversal_id} so the GL-balance enquiry's exclude-reversed predicate skips both legs. Must run in the same
+     * transaction that created the reversal entries.
+     */
+    @Transactional
+    @Override
+    public void linkSavingsReversalJournalEntries(final List<Long> reversedSavingsTransactionIds) {
+        for (final Long savingsTransactionId : reversedSavingsTransactionIds) {
+            final List<JournalEntry> entries = this.glJournalEntryRepository.findJournalEntries(
+                    AccountingProcessorHelper.SAVINGS_TRANSACTION_IDENTIFIER + savingsTransactionId,
+                    PortfolioProductType.SAVING.getValue());
+            this.helper.persistJournalEntries(linkReversalPairs(entries));
+        }
+    }
+
+    static List<JournalEntry> linkReversalPairs(final List<JournalEntry> entries) {
+        final List<JournalEntry> candidates = entries.stream()
+                .filter(entry -> !entry.isReversed() && entry.getReversalJournalEntry() == null)
+                .sorted(Comparator.comparing(JournalEntry::getId)).toList();
+        final Set<Long> consumed = new HashSet<>();
+        final List<JournalEntry> linked = new ArrayList<>();
+        for (final JournalEntry booking : candidates) {
+            if (consumed.contains(booking.getId())) {
+                continue;
+            }
+            for (final JournalEntry reversal : candidates) {
+                if (reversal.getId() <= booking.getId() || consumed.contains(reversal.getId())) {
+                    continue;
+                }
+                if (isReversalOf(booking, reversal)) {
+                    booking.setReversed(true);
+                    booking.setReversalJournalEntry(reversal);
+                    consumed.add(booking.getId());
+                    consumed.add(reversal.getId());
+                    linked.add(booking);
+                    break;
+                }
+            }
+        }
+        return linked;
+    }
+
+    private static boolean isReversalOf(final JournalEntry booking, final JournalEntry reversal) {
+        return booking.getGlAccount().getId().equals(reversal.getGlAccount().getId())
+                && booking.getAmount().compareTo(reversal.getAmount()) == 0 && booking.isDebitEntry() != reversal.isDebitEntry();
     }
 
     @Transactional
