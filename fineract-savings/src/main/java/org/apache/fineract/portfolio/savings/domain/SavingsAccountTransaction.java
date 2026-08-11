@@ -50,6 +50,7 @@ import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeChargePaymentDTO;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeCommissionAllocationDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTaxDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeTransactionDTO;
 import org.apache.fineract.portfolio.savings.domain.interest.EndOfDayBalance;
@@ -143,6 +144,12 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
 
     @Column(name = "switch_id", nullable = true, length = 64)
     private String switchId;
+
+    @Column(name = "switch_fee_amount", scale = 6, precision = 19, nullable = true)
+    private BigDecimal switchFeeAmount;
+
+    @Column(name = "bank_commission_amount", scale = 6, precision = 19, nullable = true)
+    private BigDecimal bankCommissionAmount;
 
     SavingsAccountTransaction() {}
 
@@ -249,10 +256,13 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
     }
 
     public static SavingsAccountTransaction commission(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
-            final Money amount, final String refNo, final String switchId) {
+            final Money amount, final String refNo, final String switchId, final BigDecimal switchFeeAmount,
+            final BigDecimal bankCommissionAmount) {
         final SavingsAccountTransaction transaction = new SavingsAccountTransaction(savingsAccount, office,
                 SavingsAccountTransactionType.COMMISSION.getValue(), date, amount, false, false, false, refNo);
         transaction.switchId = switchId;
+        transaction.switchFeeAmount = switchFeeAmount;
+        transaction.bankCommissionAmount = bankCommissionAmount;
         return transaction;
     }
 
@@ -680,7 +690,19 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return new SavingsAccountingBridgeTransactionDTO(getId(), this.office.getId(), transactionType, isReversed(), getTransactionDate(),
                 currencyCode, this.amount, this.overdraftAmount,
                 this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData,
-                this.switchId, null);
+                this.switchId, commissionAllocation());
+    }
+
+    /**
+     * Rebuilds the caller-supplied commission split persisted at booking time so reversal journals can produce the same
+     * two-leg allocation as the original posting. Non-commission rows and rows booked before the split was persisted
+     * return null.
+     */
+    private SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation() {
+        if (this.switchFeeAmount == null || this.bankCommissionAmount == null) {
+            return null;
+        }
+        return new SavingsAccountingBridgeCommissionAllocationDTO(this.switchFeeAmount, this.bankCommissionAmount);
     }
 
     public Map<String, Object> toMapData(final String currencyCode) {

@@ -56,6 +56,7 @@ import org.apache.fineract.portfolio.account.domain.AccountTransferDetails;
 import org.apache.fineract.portfolio.account.domain.AccountTransferRepository;
 import org.apache.fineract.portfolio.account.domain.AccountTransferTransaction;
 import org.apache.fineract.portfolio.account.domain.AccountTransferType;
+import org.apache.fineract.portfolio.account.exception.AccountTransferNotFoundException;
 import org.apache.fineract.portfolio.account.exception.DifferentCurrenciesException;
 import org.apache.fineract.portfolio.loanaccount.data.HolidayDetailDTO;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
@@ -540,6 +541,44 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
     private boolean isSavingsToSavingsAccountTransfer(final PortfolioAccountType fromAccountType,
             final PortfolioAccountType toAccountType) {
         return fromAccountType.isSavingsAccount() && toAccountType.isSavingsAccount();
+    }
+
+    /**
+     * Reverses both savings legs of a completed savings-to-savings transfer, each leg with its own refNo-linked sibling
+     * sweep, then flags the transfer row reversed. Both leg reversals and the flag flip share this method's
+     * transaction, so a failure on either leg leaves the transfer untouched.
+     */
+    @Transactional
+    @Override
+    public CommandProcessingResult reverseAccountTransfer(final Long transferId, final JsonCommand command) {
+        final AccountTransferTransaction transfer = this.accountTransferRepository.findById(transferId)
+                .orElseThrow(() -> new AccountTransferNotFoundException(transferId));
+        if (transfer.isReversed()) {
+            throw new GeneralPlatformDomainRuleException("error.msg.accounttransfer.already.reversed",
+                    "Account transfer " + transferId + " is already reversed", transferId);
+        }
+        final SavingsAccountTransaction withdrawal = transfer.getFromTransaction();
+        final SavingsAccountTransaction deposit = transfer.getToSavingsTransaction();
+        if (withdrawal == null || deposit == null) {
+            throw new GeneralPlatformDomainRuleException("error.msg.accounttransfer.reverse.savings.to.savings.only",
+                    "Only savings-to-savings account transfers can be reversed", transferId);
+        }
+
+        final Long depositReversalId = this.savingsAccountWritePlatformService
+                .reverseTransaction(deposit.getSavingsAccount().getId(), deposit.getId(), true, command).getResourceId();
+        final Long withdrawalReversalId = this.savingsAccountWritePlatformService
+                .reverseTransaction(withdrawal.getSavingsAccount().getId(), withdrawal.getId(), true, command).getResourceId();
+
+        transfer.reverse();
+        this.accountTransferRepository.save(transfer);
+
+        final Map<String, Object> changes = new LinkedHashMap<>();
+        changes.put("withdrawalReversalId", withdrawalReversalId);
+        changes.put("depositReversalId", depositReversalId);
+        return new CommandProcessingResultBuilder() //
+                .withEntityId(transferId) //
+                .with(changes) //
+                .build();
     }
 
     @Override

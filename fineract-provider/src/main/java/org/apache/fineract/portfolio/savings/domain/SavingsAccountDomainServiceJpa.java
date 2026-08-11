@@ -683,7 +683,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 referenceTransaction.setSwitchId(switchId);
             } else if (ref.type().isCommission()) {
                 referenceTransaction = SavingsAccountTransaction.commission(account, account.office(), transactionDate, money, refNo,
-                        switchId);
+                        switchId, ref.switchFeeAmount(), ref.bankCommissionAmount());
             } else if (ref.type().isVat()) {
                 referenceTransaction = SavingsAccountTransaction.vat(account, account.office(), transactionDate, money, refNo, switchId);
             } else {
@@ -919,6 +919,16 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
         }
 
+        // Booked daily accruals from the earliest reversed date onward were computed on balances that included the
+        // reversed rows. Reverse them (their contra entries post through the same journal batch below) so the accrual
+        // job re-books those dates on the revised balances and month-end posting reconciles with INTEREST_PAYABLE.
+        List<SavingsAccountTransaction> reversedAccruals = List.of();
+        if (account.savingsProduct().isAccrualBasedAccountingEnabled()) {
+            final LocalDate earliestReversedDate = savingsAccountTransactions.stream().map(SavingsAccountTransaction::getTransactionDate)
+                    .min(LocalDate::compareTo).orElseThrow();
+            reversedAccruals = account.reverseAccrualsFrom(earliestReversedDate, backdatedTxnsAllowedTill);
+        }
+
         boolean isInterestTransfer = false;
         LocalDate postInterestOnDate = null;
         final LocalDate today = DateUtils.getBusinessLocalDate();
@@ -942,6 +952,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         newTransactions.addAll(account.getSavingsAccountTransactionsWithPivotConfig());
         this.savingsAccountTransactionRepository.saveAll(newTransactions);
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, false, backdatedTxnsAllowedTill);
+
+        final List<Long> reversedTransactionIds = new ArrayList<>();
+        for (SavingsAccountTransaction savingsAccountTransaction : savingsAccountTransactions) {
+            reversedTransactionIds.add(savingsAccountTransaction.getId());
+        }
+        for (SavingsAccountTransaction reversedAccrual : reversedAccruals) {
+            reversedTransactionIds.add(reversedAccrual.getId());
+        }
+        this.journalEntryWritePlatformService.linkSavingsReversalJournalEntries(reversedTransactionIds);
 
         return reversal;
     }

@@ -61,6 +61,14 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         return type.isCommission() || type.isVat();
     }
 
+    public BigDecimal switchFeeAmount() {
+        return breakdown == null || breakdown.switchFee() == null ? null : breakdown.switchFee().amount();
+    }
+
+    public BigDecimal bankCommissionAmount() {
+        return breakdown == null || breakdown.bankCommission() == null ? null : breakdown.bankCommission().amount();
+    }
+
     /**
      * AB-266: shared JSON-array parser for {@code referenceTransactions}-style fields. Deposit / withdrawal use
      * {@code "referenceTransactions"}; the account-transfer path uses {@code "sourceReferenceTransactions"} and

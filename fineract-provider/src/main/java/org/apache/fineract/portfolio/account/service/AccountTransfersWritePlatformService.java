@@ -37,6 +37,8 @@ public interface AccountTransfersWritePlatformService {
 
     CommandProcessingResult refundByTransfer(JsonCommand command);
 
+    CommandProcessingResult reverseAccountTransfer(Long transferId, JsonCommand command);
+
     void reverseTransfersWithFromAccountTransactions(Collection<Long> fromTransactionIds, PortfolioAccountType accountTypeId);
 
     AccountTransferDetails repayLoanWithTopup(AccountTransferDTO accountTransferDTO);

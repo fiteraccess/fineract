@@ -742,6 +742,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
         final boolean isBulk = command.booleanPrimitiveValueOfParameterNamed("isBulk");
+        final boolean includeFees = command.booleanPrimitiveValueOfParameterNamed("includeFees");
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
 
         final SavingsAccountTransaction savingsAccountTransaction = this.savingsAccountTransactionRepository
@@ -752,8 +753,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         if (!allowAccountTransferModification
                 && this.accountTransfersReadPlatformService.isAccountTransfer(transactionId, PortfolioAccountType.SAVINGS)) {
-            throw new PlatformServiceUnavailableException("error.msg.saving.account.transfer.transaction.update.not.allowed",
-                    "Savings account transaction:" + transactionId + " update not allowed as it involves in account transfer",
+            throw new GeneralPlatformDomainRuleException("error.msg.saving.account.transfer.transaction.reverse.via.transfer.command",
+                    "Savings account transaction " + transactionId
+                            + " is an account-transfer leg; reverse the transfer via /accounttransfers/{transferId}?command=reverse",
                     transactionId);
         }
 
@@ -771,7 +773,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         if (isBulk) {
             String transactionRefNo = savingsAccountTransaction.getRefNo();
             savingsAccountTransactions = selectTransactionsForBulkReversal(transactionId,
-                    this.savingsAccountTransactionRepository.findByRefNo(transactionRefNo));
+                    this.savingsAccountTransactionRepository.findByRefNoAndSavingsAccountId(transactionRefNo, savingsId), includeFees);
             reversal = this.savingsAccountDomainService.handleReversal(account, savingsAccountTransactions, backdatedTxnsAllowedTill);
         } else {
             reversal = this.savingsAccountDomainService.handleReversal(account, Collections.singletonList(savingsAccountTransaction),
@@ -787,14 +789,23 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .build();
     }
 
+    /**
+     * The requested transaction is always retained so the already-reversed guard fires on idempotent retries. Reversal
+     * mirror rows share the parent's refNo but are never swept. Commission/VAT siblings join the sweep only when the
+     * caller asks for a fee-inclusive reversal.
+     */
     static List<SavingsAccountTransaction> selectTransactionsForBulkReversal(final Long requestedTransactionId,
-            final List<SavingsAccountTransaction> linkedTransactions) {
-        return linkedTransactions.stream()
-                .filter(transaction -> requestedTransactionId.equals(transaction.getId()) || !isNipFeeReference(transaction)).toList();
+            final List<SavingsAccountTransaction> linkedTransactions, final boolean includeFees) {
+        return linkedTransactions.stream().filter(transaction -> requestedTransactionId.equals(transaction.getId())
+                || (!transaction.isReversalTransaction() && (includeFees || !isNipFeeReference(transaction)))).toList();
     }
 
     private static boolean isNipFeeReference(final SavingsAccountTransaction transaction) {
         return transaction.getTransactionType().isCommission() || transaction.getTransactionType().isVat();
+    }
+
+    private static boolean isReferenceSibling(final SavingsAccountTransaction transaction) {
+        return transaction.isEmtLevy() || isNipFeeReference(transaction);
     }
 
     @Override
@@ -836,6 +847,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         if (account.isNotActive()) {
             throwValidationForActiveStatus(SavingsApiConstants.undoTransactionAction);
         }
+        final List<Long> undoneTransactionIds = new ArrayList<>();
+        undoneTransactionIds.add(transactionId);
         account.undoTransaction(transactionId);
         // Mark this (account, date) dirty so the hourly sync job (or the next interest tasklet's syncNow())
         // will refresh / delete the snapshot row. running_balance_derived is rewritten by the cascading recalculate
@@ -850,20 +863,26 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                     .findOneByIdAndSavingsAccountId(transactionId + 1, savingsId);
             if (nextSavingsAccountTransaction != null && nextSavingsAccountTransaction.isWithdrawalFeeAndNotReversed()) {
                 account.undoTransaction(transactionId + 1);
+                undoneTransactionIds.add(transactionId + 1);
             }
         }
-        // AB-265: EMT Levy reference rows share the parent transaction's ref_no. The web-app issues a
-        // single-tx undo (command=undo) rather than the bulk isBulk=true path, so reverseTransaction /
-        // handleReversal never runs — we must reverse the EMT sibling(s) here alongside the parent.
+        // Reference rows (EMT levy, commission, VAT) share the parent transaction's ref_no and cannot stand
+        // without it — an undo says the parent was posted in error, so its fee children were too. The web-app
+        // issues a single-tx undo (command=undo) rather than the bulk isBulk=true path, so reverseTransaction /
+        // handleReversal never runs — sweep the siblings here alongside the parent. (Fee retention as a policy
+        // choice belongs to command=reverse's includeFees flag, not to undo.)
         final String parentRefNo = savingsAccountTransaction.getRefNo();
         if (parentRefNo != null && !parentRefNo.isBlank()) {
-            final List<SavingsAccountTransaction> referenceTransactions = this.savingsAccountTransactionRepository.findByRefNo(parentRefNo);
+            final List<SavingsAccountTransaction> referenceTransactions = this.savingsAccountTransactionRepository
+                    .findByRefNoAndSavingsAccountId(parentRefNo, savingsId);
             for (final SavingsAccountTransaction referenceTransaction : referenceTransactions) {
                 if (referenceTransaction.getId().equals(transactionId)) {
                     continue;
                 }
-                if (referenceTransaction.isEmtLevy() && !referenceTransaction.isReversed()) {
+                if (isReferenceSibling(referenceTransaction) && !referenceTransaction.isReversed()
+                        && !referenceTransaction.isReversalTransaction()) {
                     account.undoTransaction(referenceTransaction.getId());
+                    undoneTransactionIds.add(referenceTransaction.getId());
                     this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), referenceTransaction.getTransactionDate());
                 }
             }
@@ -890,6 +909,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         account.activateAccountBasedOnBalance();
         this.savingAccountRepositoryWrapper.saveAndFlush(account);
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, false);
+        // Undo books the same contra journal entries as command=reverse; link them the same way so the
+        // GL-balance enquiry's exclude-reversed predicate treats undone pairs identically.
+        this.journalEntryWritePlatformService.linkSavingsReversalJournalEntries(undoneTransactionIds);
         return new CommandProcessingResultBuilder() //
                 .withEntityId(savingsId) //
                 .withOfficeId(account.officeId()) //
