@@ -341,6 +341,21 @@ class CashBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldRouteStandaloneVatWithoutSwitchToMappedPayableAB339() {
+        GLAccount savingsControl = glAccount(101L);
+        GLAccount vatPayable = glAccount(301L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L)).thenReturn(vatPayable);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+        SavingsTransactionDTO vat = transaction(SavingsAccountTransactionType.VAT, null, BigDecimal.valueOf(1.5), null, false);
+
+        processor.createJournalEntriesForSavings(savings(vat));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(1.5))),
+                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(1.5))));
+    }
+
+    @Test
     void shouldRouteSignedStatementFeeToMappedIncomeAccountAB339() {
         GLAccount savingsControl = glAccount(101L);
         GLAccount signedStatementFeeIncome = glAccount(401L);

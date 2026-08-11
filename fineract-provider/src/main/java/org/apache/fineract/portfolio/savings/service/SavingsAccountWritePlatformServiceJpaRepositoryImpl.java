@@ -440,6 +440,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
         final ReferenceTransaction.NipWithdrawalRequest nipRequest = ReferenceTransaction.parseNipWithdrawal(command);
+        final boolean isSignedStatementFee = command.booleanPrimitiveValueOfParameterNamed(SavingsApiConstants.signedStatementFeeParamName);
+
+        if (isSignedStatementFee && nipRequest.switchId() != null) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savings.signed.statement.fee.switch.not.supported",
+                    "signedStatementFee withdrawals do not support switchId");
+        }
 
         if (nipRequest.switchId() != null) {
             this.nipWithdrawalPreflight.validate(nipRequest.switchId(), nipRequest.references());
@@ -476,7 +482,10 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance);
         final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
         final SavingsAccountTransaction withdrawal;
-        if (nipRequest.switchId() != null) {
+        if (isSignedStatementFee) {
+            withdrawal = this.savingsAccountDomainService.handleSignedStatementFeeWithdrawal(account, fmt, transactionDate,
+                    transactionAmount, paymentDetail, transactionBooleanValues, referenceTransactions, backdatedTxnsAllowedTill);
+        } else if (nipRequest.switchId() != null) {
             withdrawal = this.savingsAccountDomainService.handleNipWithdrawal(account, fmt, transactionDate, transactionAmount,
                     paymentDetail, transactionBooleanValues, nipRequest.switchId(), referenceTransactions, backdatedTxnsAllowedTill);
         } else {
@@ -484,9 +493,10 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                     transactionBooleanValues, backdatedTxnsAllowedTill);
         }
 
-        // Legacy EMT side effects remain on their existing path. NIP rows are handled by the bundled domain operation
-        // so their principal, references, notes and completion event share one operation.
-        if (nipRequest.switchId() == null && !referenceTransactions.isEmpty()) {
+        // Legacy EMT side effects remain on their existing path. NIP and signed-statement-fee rows are handled by
+        // their own bundled domain operation so principal, references, notes and completion event share one
+        // operation.
+        if (!isSignedStatementFee && nipRequest.switchId() == null && !referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, withdrawal, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
         }

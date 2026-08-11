@@ -43,6 +43,15 @@ public interface SavingsAccountDomainService {
             BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
             String switchId, List<ReferenceTransaction> references, boolean backdatedTxnsAllowedTill);
 
+    /**
+     * AB-339: posts the signed e-statement fee as the withdrawal principal (its own {@code SIGNED_STATEMENT_FEE}
+     * transaction type, resolving a dedicated income GL) with VAT riding alongside as an ordinary {@code VAT} reference
+     * transaction.
+     */
+    SavingsAccountTransaction handleSignedStatementFeeWithdrawal(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
+            BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
+            List<ReferenceTransaction> references, boolean backdatedTxnsAllowedTill);
+
     SavingsAccountTransaction handleDeposit(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
             BigDecimal transactionAmount, PaymentDetail paymentDetail, boolean isAccountTransfer, boolean isRegularTransaction,
             boolean backdatedTxnsAllowedTill);

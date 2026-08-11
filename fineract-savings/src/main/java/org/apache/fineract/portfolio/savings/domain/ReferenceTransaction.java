@@ -61,6 +61,14 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         return type.isCommission() || type.isVat();
     }
 
+    /**
+     * AB-339: only Commission is intrinsically NIP-switch-scoped and requires a {@code switchId}. VAT can also ride
+     * standalone alongside a non-NIP principal (e.g. the signed e-statement fee), so it must not force a switch.
+     */
+    public boolean requiresSwitchId() {
+        return type.isCommission();
+    }
+
     public BigDecimal switchFeeAmount() {
         return breakdown == null || breakdown.switchFee() == null ? null : breakdown.switchFee().amount();
     }
@@ -112,10 +120,10 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         final List<ReferenceTransaction> references = parseArray(command, "referenceTransactions");
         final boolean switchIdPresent = command.parameterExists("switchId");
         final String switchId = switchIdPresent ? normalizeSwitchId(command.stringValueOfParameterNamed("switchId")) : null;
-        final boolean containsNipReference = references.stream().anyMatch(ReferenceTransaction::isNipFee);
+        final boolean requiresSwitch = references.stream().anyMatch(ReferenceTransaction::requiresSwitchId);
 
-        if (!switchIdPresent && containsNipReference) {
-            throw invalid("switchId.required", "switchId is required for Commission or VAT reference transactions");
+        if (!switchIdPresent && requiresSwitch) {
+            throw invalid("switchId.required", "switchId is required for Commission reference transactions");
         }
         if (!switchIdPresent) {
             return new NipWithdrawalRequest(null, references);

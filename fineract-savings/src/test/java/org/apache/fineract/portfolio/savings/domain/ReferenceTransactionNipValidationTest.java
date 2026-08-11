@@ -116,16 +116,21 @@ class ReferenceTransactionNipValidationTest {
     }
 
     @Test
-    void acceptsSignedStatementFeeWithoutSwitchAB339() {
+    void acceptsStandaloneVatWithoutSwitchButStillRequiresSwitchForCommissionAB339() {
         ReferenceTransaction.NipWithdrawalRequest request = parse("""
                 { "referenceTransactions": [
-                  { "type": "SIGNED_STATEMENT_FEE", "amount": 20.00, "description": "Signed E-Statement Fee" }
+                  { "type": "VAT", "amount": 1.50, "description": "VAT" }
                 ] }
                 """);
 
         assertThat(request.switchId()).isNull();
-        assertThat(request.references()).extracting(ReferenceTransaction::type)
-                .containsExactly(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
+        assertThat(request.references()).extracting(ReferenceTransaction::type).containsExactly(SavingsAccountTransactionType.VAT);
+        assertInvalid("""
+                { "referenceTransactions": [
+                  { "type": "COMMISSION", "amount": 1, "description": "Commission",
+                    "breakdown": { "switchFee": { "amount": 1 }, "bankCommission": { "amount": 0 } } }
+                ] }
+                """);
     }
 
     @Test
