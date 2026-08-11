@@ -264,6 +264,22 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldRouteStandaloneVatWithoutSwitchToMappedPayableInAccrualAccountingAB339() {
+        GLAccount vatPayable = glAccount(301L);
+        GLAccount savingsControl = glAccount(101L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, FinancialActivity.VAT_PAYABLE.getValue(), 44L)).thenReturn(vatPayable);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(
+                savings(transaction(SavingsAccountTransactionType.VAT, null, BigDecimal.valueOf(1.5), null, null)));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(1.5))),
+                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(1.5))));
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
     void shouldRouteSignedStatementFeeToMappedIncomeAccountInAccrualAccountingAB339() {
         GLAccount signedStatementFeeIncome = glAccount(401L);
         GLAccount savingsControl = glAccount(101L);

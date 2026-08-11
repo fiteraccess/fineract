@@ -165,6 +165,15 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                     createSignedStatementFeeJournalEntries(nipAccountingContext);
                 }
 
+                /**
+                 * AB-339: VAT also rides standalone (no switchId) alongside the signed e-statement fee — DR Savings
+                 * Control, CR VAT Payable (via FinancialActivity mapping). tryCreateNipJournalEntries only handles the
+                 * switch-scoped NIP-transfer VAT leg, so a switchless VAT reference falls through to here.
+                 */
+                else if (savingsTransactionDTO.getTransactionType().isVat()) {
+                    createVatJournalEntries(nipAccountingContext);
+                }
+
                 else if (savingsTransactionDTO.getTransactionType().isEscheat()) {
                     this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
                             AccrualAccountsForSavings.SAVINGS_CONTROL.getValue(), AccrualAccountsForSavings.ESCHEAT_LIABILITY.getValue(),

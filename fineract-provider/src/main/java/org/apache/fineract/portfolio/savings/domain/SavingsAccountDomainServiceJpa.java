@@ -103,7 +103,30 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final boolean backdatedTxnsAllowedTill) {
         return handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues, null,
-                backdatedTxnsAllowedTill, true);
+                backdatedTxnsAllowedTill, true, SavingsAccountTransactionType.WITHDRAWAL);
+    }
+
+    /**
+     * AB-339: the signed e-statement fee is the principal (a real, positive-amount withdrawal is required to carry any
+     * {@code referenceTransactions[]} at all — see {@link ReferenceTransaction} — and the fee needs its own
+     * configurable GL, which only the primary leg's transaction type can resolve; see
+     * {@link SavingsAccountTransaction#withdrawal(SavingsAccount, org.apache.fineract.organisation.office.domain.Office, PaymentDetail, LocalDate, Money, SavingsAccountTransactionType, String)}).
+     * VAT (7.5% of the fee) rides as an ordinary {@code VAT} reference transaction alongside it, exactly like a NIP
+     * transfer's VAT leg.
+     */
+    @Transactional
+    @Override
+    public SavingsAccountTransaction handleSignedStatementFeeWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
+            final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
+            final SavingsTransactionBooleanValues transactionBooleanValues, final List<ReferenceTransaction> references,
+            final boolean backdatedTxnsAllowedTill) {
+        final SavingsAccountTransaction fee = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
+                transactionBooleanValues, null, backdatedTxnsAllowedTill, false, SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
+        final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
+        applyReferenceTransactions(account, fee, references, transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill, null);
+        this.businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(fee));
+        return fee;
     }
 
     @Transactional
@@ -113,7 +136,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId,
             final List<ReferenceTransaction> references, final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction withdrawal = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
-                transactionBooleanValues, switchId, backdatedTxnsAllowedTill, false);
+                transactionBooleanValues, switchId, backdatedTxnsAllowedTill, false, SavingsAccountTransactionType.WITHDRAWAL);
         final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         // handleWithdrawal has already applied and validated the principal plus ordinary product withdrawal fees.
         // Validate
@@ -134,7 +157,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId, final boolean backdatedTxnsAllowedTill,
-            final boolean notifyBusinessEvent) {
+            final boolean notifyBusinessEvent, final SavingsAccountTransactionType primaryType) {
         context.authenticatedUser();
         account.validateForAccountBlock();
         account.validateForDebitBlock();
@@ -148,10 +171,12 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // past-dated transactions (which need running balance recalculation and interest reversal handling)
         if (!DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
             return handleWithdrawalOptimized(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues,
-                    relaxingDaysConfigForPivotDate, switchId, backdatedTxnsAllowedTill, notifyBusinessEvent);
+                    relaxingDaysConfigForPivotDate, switchId, backdatedTxnsAllowedTill, notifyBusinessEvent, primaryType);
         }
 
-        // Legacy path for backdated transactions
+        // Legacy path for backdated transactions. AB-339: primaryType is intentionally not threaded into this
+        // branch — a signed-statement-fee request is always same-day (see SignedStatementFeeHandler in Synapse)
+        // and never reaches here; if it ever did, this safely falls back to a plain WITHDRAWAL rather than failing.
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final boolean postReversals = this.configurationDomainService.isReversalTransactionAllowed();
@@ -217,7 +242,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private SavingsAccountTransaction handleWithdrawalOptimized(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final Long relaxingDaysConfigForPivotDate,
-            final String switchId, final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent) {
+            final String switchId, final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent,
+            final SavingsAccountTransactionType primaryType) {
 
         // --- O(1) business validations (mirroring SavingsAccount.withdraw()) ---
 
@@ -314,7 +340,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // Create transaction directly using static factory — bypass account.withdraw() which adds to collection
         final Money transactionAmountMoney = Money.of(account.getCurrency(), transactionAmount);
         final SavingsAccountTransaction withdrawal = SavingsAccountTransaction.withdrawal(account, account.office(), paymentDetail,
-                transactionDate, transactionAmountMoney, refNo);
+                transactionDate, transactionAmountMoney, primaryType, refNo);
         withdrawal.setSwitchId(switchId);
         final BigDecimal principalOverdraftAmount = calculateIncrementalOverdraftAmount(availableBalanceBeforeWithdrawal,
                 transactionAmount);
@@ -645,9 +671,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
      *
      * <p>
      * Accepted types today: {@link SavingsAccountTransactionType#EMT_LEVY},
-     * {@link SavingsAccountTransactionType#COMMISSION}, {@link SavingsAccountTransactionType#VAT},
-     * {@link SavingsAccountTransactionType#SIGNED_STATEMENT_FEE}. Each future side-effect must add its own branch; an
-     * unsupported type fails fast so a partially-implemented sibling is never silently dropped.
+     * {@link SavingsAccountTransactionType#COMMISSION}, {@link SavingsAccountTransactionType#VAT}. Each future
+     * side-effect must add its own branch; an unsupported type fails fast so a partially-implemented sibling is never
+     * silently dropped.
      */
     @Transactional
     @Override
@@ -688,9 +714,6 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                         switchId, ref.switchFeeAmount(), ref.bankCommissionAmount());
             } else if (ref.type().isVat()) {
                 referenceTransaction = SavingsAccountTransaction.vat(account, account.office(), transactionDate, money, refNo, switchId);
-            } else if (ref.type().isSignedStatementFee()) {
-                referenceTransaction = SavingsAccountTransaction.signedStatementFee(account, account.office(), transactionDate, money,
-                        refNo);
             } else {
                 throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
                         "Reference transaction type " + ref.type() + " is not supported", ref.type());

@@ -78,8 +78,9 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                         && StringUtils.isNotBlank(savingsTransactionDTO.getSwitchId())) {
                     createCommissionJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, savingsTransactionDTO,
                             transactionDate, transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);
-                } else if (savingsTransactionDTO.getTransactionType().isVat()
-                        && StringUtils.isNotBlank(savingsTransactionDTO.getSwitchId())) {
+                } else if (savingsTransactionDTO.getTransactionType().isVat()) {
+                    // AB-339: VAT also rides standalone (no switchId) alongside the signed e-statement fee, not only
+                    // a NIP transfer's switch-scoped VAT leg — createVatJournalEntries never reads switchId.
                     createVatJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, transactionDate, transactionId,
                             office, paymentTypeId, isReversal, amount, overdraftAmount);
                 } else if (savingsTransactionDTO.getTransactionType().isSignedStatementFee()) {

@@ -184,6 +184,11 @@ public class SavingsApiConstants {
     public static final String referenceTransactionsParamName = "referenceTransactions";
     public static final String switchIdParamName = "switchId";
 
+    // AB-339: routes a withdrawal through handleSignedStatementFeeWithdrawal instead of the plain withdrawal path,
+    // so the fee posts as its own SIGNED_STATEMENT_FEE transaction type (resolving a dedicated income GL) with VAT
+    // riding alongside as a referenceTransactions[] entry.
+    public static final String signedStatementFeeParamName = "signedStatementFee";
+
     // Savings account associations
     public static final String transactions = "transactions";
     public static final String charges = "charges";

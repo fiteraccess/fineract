@@ -211,6 +211,22 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
                 date, amount, isReversed, isManualTransaction, lienTransaction, refNo);
     }
 
+    /**
+     * AB-339: lets a caller-asserted withdrawal (e.g. the signed e-statement fee) post as its own transaction type
+     * instead of generic {@code WITHDRAWAL}, so its GL credit resolves via that type's own {@code FinancialActivity}
+     * mapping rather than the product's blanket withdrawal-control account. Mirrors
+     * {@link #deposit(SavingsAccount, Office, PaymentDetail, LocalDate, Money, SavingsAccountTransactionType, String)}.
+     */
+    public static SavingsAccountTransaction withdrawal(final SavingsAccount savingsAccount, final Office office,
+            final PaymentDetail paymentDetail, final LocalDate date, final Money amount,
+            final SavingsAccountTransactionType savingsAccountTransactionType, final String refNo) {
+        final boolean isReversed = false;
+        final boolean isManualTransaction = false;
+        final Boolean lienTransaction = false;
+        return new SavingsAccountTransaction(savingsAccount, office, paymentDetail, savingsAccountTransactionType.getValue(), date, amount,
+                isReversed, isManualTransaction, lienTransaction, refNo);
+    }
+
     public static SavingsAccountTransaction accrual(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
             final Money amount, final boolean isManualTransaction, final String refNo) {
         final boolean isReversed = false;
@@ -272,15 +288,6 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
                 SavingsAccountTransactionType.VAT.getValue(), date, amount, false, false, false, refNo);
         transaction.switchId = switchId;
         return transaction;
-    }
-
-    public static SavingsAccountTransaction signedStatementFee(final SavingsAccount savingsAccount, final Office office,
-            final LocalDate date, final Money amount, final String refNo) {
-        final boolean isReversed = false;
-        final boolean isManualTransaction = false;
-        final Boolean lienTransaction = false;
-        return new SavingsAccountTransaction(savingsAccount, office, SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getValue(), date,
-                amount, isReversed, isManualTransaction, lienTransaction, refNo);
     }
 
     public static SavingsAccountTransaction annualFee(final SavingsAccount savingsAccount, final Office office, final LocalDate date,

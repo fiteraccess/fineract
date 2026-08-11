@@ -129,9 +129,9 @@ class SavingsAccountTransactionNipPrimitiveTest {
     }
 
     @Test
-    void signedStatementFeeFactoryHasNoSwitchIdentityAB339() {
-        SavingsAccountTransaction transaction = SavingsAccountTransaction.signedStatementFee(mock(SavingsAccount.class), mock(Office.class),
-                LocalDate.of(2026, 7, 25), mock(Money.class), "root-reference");
+    void withdrawalFactoryAcceptsAnOverrideTransactionTypeAB339() {
+        SavingsAccountTransaction transaction = SavingsAccountTransaction.withdrawal(mock(SavingsAccount.class), mock(Office.class), null,
+                LocalDate.of(2026, 7, 25), mock(Money.class), SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "root-reference");
 
         assertThat(transaction.getTransactionType()).isEqualTo(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
         assertThat(transaction.getSwitchId()).isNull();
