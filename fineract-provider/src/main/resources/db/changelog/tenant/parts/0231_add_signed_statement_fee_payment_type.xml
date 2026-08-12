@@ -27,10 +27,16 @@
          (SavingsAccountTransactionDataValidator#validate), but the signed e-statement fee is a
          platform-initiated debit with no customer-chosen payment method. Seeds a system-defined payment
          type for it, mirroring the existing REPAYMENT_ADJUSTMENT_CHARGEBACK/REFUND rows added in
-         0052_loan_transaction_chargeback.xml. Looked up by codeName (not this row's autoincrement id,
-         which is not guaranteed identical across environments) via Synapse's PaymentTypeCache. -->
+         0052_loan_transaction_chargeback.xml. Looked up by codeName via Synapse's PaymentTypeCache, not
+         this row's id. The id is pinned explicitly (rather than left to autoincrement) because
+         PaymentTypeGlobalInitializerStep (fineract-e2e-tests-runner) dynamically creates several payment
+         types (AUTOPAY, DOWN_PAYMENT, ...) at E2E-suite startup using whichever id is next available;
+         Reporting.feature's fixtures hardcode AUTOPAY at id 103, which an autoincrement-assigned row
+         appended here would silently push to 104, breaking that unrelated E2E test as it did in CI. 9000
+         is far outside any range either Liquibase-seeded or dynamically E2E-created payment types reach. -->
     <changeSet author="fiteraccess" id="ab-339-add-signed-statement-fee-payment-type">
         <insert tableName="m_payment_type">
+            <column name="id" valueNumeric="9000"/>
             <column name="value" value="Signed Statement Fee"/>
             <column name="description" value="System-initiated payment type for the signed e-statement fee; not selectable by customers"/>
             <column name="is_cash_payment" valueBoolean="false"/>
