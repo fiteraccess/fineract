@@ -905,6 +905,24 @@ public class DataValidatorBuilder {
         return this;
     }
 
+    public DataValidatorBuilder isValidEmailAddress() {
+        if (this.value == null && this.ignoreNullValue) {
+            return this;
+        }
+
+        if (this.value != null && !this.value.toString().matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            String validationErrorCode = "validation.msg." + this.resource + "." + this.parameter + ".does.is.no.an.email.address";
+            String defaultEnglishMessage = "The parameter `" + this.parameter + "` must be a valid email address" + ".";
+
+            final ApiParameterError error = ApiParameterError.parameterError(validationErrorCode, defaultEnglishMessage, this.parameter,
+                    this.value);
+
+            this.dataValidationErrors.add(error);
+        }
+
+        return this;
+    }
+
     public DataValidatorBuilder matchesRegularExpression(final String expression, final String Message) {
         if (this.value == null && this.ignoreNullValue) {
             return this;

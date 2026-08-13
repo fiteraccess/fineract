@@ -540,6 +540,12 @@ public final class ClientDataValidator {
             baseDataValidator.reset().parameter("isStaff").value(isStaffFlag).notNull();
         }
 
+        if (this.fromApiJsonHelper.parameterExists(ClientApiConstants.emailAddressParamName, element)) {
+            atLeastOneParameterPassedForUpdate = true;
+            final String emailAddressParam = this.fromApiJsonHelper.extractStringNamed(ClientApiConstants.emailAddressParamName, element);
+            baseDataValidator.reset().parameter(ClientApiConstants.emailAddressParamName).value(emailAddressParam).isValidEmailAddress();
+        }
+
         Map<String, Object> parameterUpdateStatusDetails = getParameterUpdateStatusAndDataValidationErrorsForUpdateOnClientNonPerson(
                 element.getAsJsonObject().get(ClientApiConstants.clientNonPersonDetailsParamName));
         boolean atLeastOneParameterPassedForClientNonPersonUpdate = (boolean) parameterUpdateStatusDetails.get("parameterUpdateStatus");
