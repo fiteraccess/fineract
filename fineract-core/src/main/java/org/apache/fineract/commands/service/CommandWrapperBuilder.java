@@ -2933,6 +2933,14 @@ public class CommandWrapperBuilder {
         return this;
     }
 
+    public CommandWrapperBuilder upsertAggregatorAccountingConfiguration(final String aggregatorCode) {
+        this.actionName = "UPDATE";
+        this.entityName = "AGGREGATOR_ACCOUNTING_CONFIGURATION";
+        this.transactionId = aggregatorCode;
+        this.href = "/aggregator-accounting-configurations/" + aggregatorCode;
+        return this;
+    }
+
     public CommandWrapperBuilder createClientCharge(final Long clientId) {
         this.actionName = ClientApiConstants.CLIENT_CHARGE_ACTION_CREATE;
         this.entityName = ClientApiConstants.CLIENT_CHARGES_RESOURCE_NAME;

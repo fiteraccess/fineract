@@ -33,6 +33,7 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.apache.fineract.accounting.aggregatoraccounting.domain.AggregatorAccountingConfigurationProvider;
 import org.apache.fineract.accounting.common.AccountingConstants.CashAccountsForSavings;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
@@ -62,6 +63,8 @@ class CashBasedAccountingProcessorForSavingsTest {
     @Mock
     private NipSwitchAccountingConfigurationProvider configurationProvider;
     @Mock
+    private AggregatorAccountingConfigurationProvider aggregatorConfigurationProvider;
+    @Mock
     private Office office;
 
     private CashBasedAccountingProcessorForSavings processor;
@@ -69,7 +72,7 @@ class CashBasedAccountingProcessorForSavingsTest {
     @BeforeEach
     void setUp() {
         when(helper.startJournalEntryProcessingBatch()).thenReturn(mock(AccountingProcessorHelper.JournalEntryProcessingBatch.class));
-        processor = new CashBasedAccountingProcessorForSavings(helper, configurationProvider);
+        processor = new CashBasedAccountingProcessorForSavings(helper, configurationProvider, aggregatorConfigurationProvider);
     }
 
     @Nested
@@ -242,6 +245,60 @@ class CashBasedAccountingProcessorForSavingsTest {
 
         assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.TEN)),
                 List.of(new SavingsJournalEntryAllocation(203L, BigDecimal.TEN)));
+    }
+
+    @Test
+    void shouldRouteAggregatorPayableToConfiguredAggregatorAccount() {
+        GLAccount savingsControl = glAccount(101L);
+        configureAggregator("CORALPAY", 301L, 302L, 303L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(savings(aggregatorPayable("CORALPAY", BigDecimal.valueOf(4950), null)));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(4950))),
+                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(4950))));
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
+    void shouldRouteAggregatorScopedCommissionWithoutRequiringSwitchConfiguration() {
+        GLAccount savingsControl = glAccount(101L);
+        configureAggregator("CORALPAY", 301L, 302L, 303L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(savings(aggregatorCommission("CORALPAY", BigDecimal.valueOf(50), null)));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(50))),
+                List.of(new SavingsJournalEntryAllocation(302L, BigDecimal.valueOf(50))));
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
+    void shouldRouteConvenienceFeeToDedicatedAccountWhenConfigured() {
+        GLAccount savingsControl = glAccount(101L);
+        configureAggregator("CORALPAY", 301L, 302L, 303L);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(savings(convenienceFee("CORALPAY", BigDecimal.valueOf(100), null)));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(100))),
+                List.of(new SavingsJournalEntryAllocation(303L, BigDecimal.valueOf(100))));
+    }
+
+    @Test
+    void shouldFallBackToCommissionAccountForConvenienceFeeWhenNoDedicatedAccountConfigured() {
+        GLAccount savingsControl = glAccount(101L);
+        configureAggregator("NOMIWORLD", 301L, 302L, null);
+        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
+                .thenReturn(savingsControl);
+
+        processor.createJournalEntriesForSavings(savings(convenienceFee("NOMIWORLD", BigDecimal.valueOf(100), null)));
+
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(100))),
+                List.of(new SavingsJournalEntryAllocation(302L, BigDecimal.valueOf(100))));
     }
 
     @Test
@@ -507,12 +564,41 @@ class CashBasedAccountingProcessorForSavingsTest {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(Long.valueOf(type.getValue()),
                 type.getCode(), type.name());
         return new SavingsTransactionDTO(33L, 44L, transactionId, TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
-                overdraftAmount, accountTransfer, List.of(), switchId, commissionAllocation);
+                overdraftAmount, accountTransfer, List.of(), switchId, null, commissionAllocation);
     }
 
     private void configureSwitch() {
         when(configurationProvider.requireOutbound("NIBSS"))
                 .thenReturn(new NipSwitchAccountingConfigurationProvider.OutboundConfiguration("NIBSS", 201L, 202L, 203L));
+    }
+
+    private SavingsTransactionDTO aggregatorPayable(final String aggregatorCode, final BigDecimal amount,
+            final BigDecimal overdraftAmount) {
+        return aggregatorTransaction(SavingsAccountTransactionType.AGGREGATOR_PAYABLE, aggregatorCode, amount, overdraftAmount);
+    }
+
+    private SavingsTransactionDTO aggregatorCommission(final String aggregatorCode, final BigDecimal amount,
+            final BigDecimal overdraftAmount) {
+        return aggregatorTransaction(SavingsAccountTransactionType.COMMISSION, aggregatorCode, amount, overdraftAmount);
+    }
+
+    private SavingsTransactionDTO convenienceFee(final String aggregatorCode, final BigDecimal amount, final BigDecimal overdraftAmount) {
+        return aggregatorTransaction(SavingsAccountTransactionType.CONVENIENCE_FEE, aggregatorCode, amount, overdraftAmount);
+    }
+
+    private SavingsTransactionDTO aggregatorTransaction(final SavingsAccountTransactionType type, final String aggregatorCode,
+            final BigDecimal amount, final BigDecimal overdraftAmount) {
+        SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(Long.valueOf(type.getValue()),
+                type.getCode(), type.name());
+        return new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
+                overdraftAmount, false, List.of(), null, aggregatorCode, null);
+    }
+
+    private void configureAggregator(final String aggregatorCode, final Long aggregatorPayableGlAccountId,
+            final Long commissionIncomeGlAccountId, final Long convenienceFeeIncomeGlAccountId) {
+        when(aggregatorConfigurationProvider.requireConfiguration(aggregatorCode)).thenReturn(
+                new AggregatorAccountingConfigurationProvider.Configuration(aggregatorCode, aggregatorPayableGlAccountId,
+                        commissionIncomeGlAccountId, convenienceFeeIncomeGlAccountId));
     }
 
     private void assertNoCommissionJournalWork() {

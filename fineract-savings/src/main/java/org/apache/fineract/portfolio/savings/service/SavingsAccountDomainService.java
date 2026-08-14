@@ -52,6 +52,15 @@ public interface SavingsAccountDomainService {
             BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
             List<ReferenceTransaction> references, boolean backdatedTxnsAllowedTill);
 
+    /**
+     * AB-510: posts a bills/airtime withdrawal principal alongside its Aggregator Payable / Commission / Convenience
+     * Fee / VAT reference legs, all resolved against the aggregator identified by {@code aggregatorCode} — the
+     * counterparty-scoped counterpart of {@link #handleNipWithdrawal}.
+     */
+    SavingsAccountTransaction handleBillsPostingWithdrawal(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
+            BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
+            String aggregatorCode, List<ReferenceTransaction> references, boolean backdatedTxnsAllowedTill);
+
     SavingsAccountTransaction handleDeposit(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
             BigDecimal transactionAmount, PaymentDetail paymentDetail, boolean isAccountTransfer, boolean isRegularTransaction,
             boolean backdatedTxnsAllowedTill);

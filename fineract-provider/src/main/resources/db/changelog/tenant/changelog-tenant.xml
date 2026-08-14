@@ -251,4 +251,6 @@
     <include file="parts/0230_add_signed_statement_fee_accounting_primitives.xml" relativeToChangelogFile="true" />
     <include file="parts/0231_add_signed_statement_fee_payment_type.xml" relativeToChangelogFile="true" />
     <include file="parts/0232_add_chargeable_amount_to_savings_transaction.xml" relativeToChangelogFile="true" />
+    <include file="parts/0233_add_aggregator_accounting_configuration.xml" relativeToChangelogFile="true" />
+    <include file="parts/0234_add_bills_payment_transaction_types.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

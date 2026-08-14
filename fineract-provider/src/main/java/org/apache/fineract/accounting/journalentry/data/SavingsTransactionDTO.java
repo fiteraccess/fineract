@@ -48,6 +48,7 @@ public class SavingsTransactionDTO {
     private final boolean isAccountTransfer;
     private final List<TaxPaymentDTO> taxPayments;
     private final String switchId;
+    private final String aggregatorCode;
     private final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation;
 
     public boolean isOverdraftTransaction() {

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.accounting.aggregatoraccounting.domain.AggregatorAccountingConfigurationProvider;
 import org.apache.fineract.accounting.common.AccountingConstants.CashAccountsForSavings;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
@@ -44,6 +45,7 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
 
     private final AccountingProcessorHelper helper;
     private final NipSwitchAccountingConfigurationProvider nipSwitchAccountingConfigurationProvider;
+    private final AggregatorAccountingConfigurationProvider aggregatorAccountingConfigurationProvider;
 
     @Override
     public void createJournalEntriesForSavings(final SavingsDTO savingsDTO) {
@@ -86,6 +88,18 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                 } else if (savingsTransactionDTO.getTransactionType().isSignedStatementFee()) {
                     createSignedStatementFeeJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, transactionDate,
                             transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);
+                } else if (savingsTransactionDTO.getTransactionType().isAggregatorPayable()) {
+                    createAggregatorPayableJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, savingsTransactionDTO,
+                            transactionDate, transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);
+                } else if (savingsTransactionDTO.getTransactionType().isCommission()
+                        && StringUtils.isNotBlank(savingsTransactionDTO.getAggregatorCode())) {
+                    createAggregatorCommissionJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries,
+                            savingsTransactionDTO, transactionDate, transactionId, office, paymentTypeId, isReversal, amount,
+                            overdraftAmount);
+                } else if (savingsTransactionDTO.getTransactionType().isConvenienceFee()) {
+                    createAggregatorConvenienceFeeJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries,
+                            savingsTransactionDTO, transactionDate, transactionId, office, paymentTypeId, isReversal, amount,
+                            overdraftAmount);
                 } else if (savingsTransactionDTO.getTransactionType().isWithdrawal() && savingsTransactionDTO.isOverdraftTransaction()) {
                     boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;
                     if (savingsTransactionDTO.isAccountTransfer()) {
@@ -371,6 +385,60 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                 amount, overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
                 debitAllocations, List.of(new SavingsJournalEntryAllocation(signedStatementFeeIncomeAccount.getId(), amount)), isReversal,
+                journalEntries);
+    }
+
+    /**
+     * AB-510: the bills/airtime aggregator's payable leg — the amount owed to the aggregator (CoralPay, Nomiworld,
+     * ...), resolved by {@code aggregatorCode} via {@link AggregatorAccountingConfigurationProvider} rather than a
+     * Financial Activity mapping, since it varies per aggregator (see the NIP switch payable precedent this mirrors).
+     */
+    private void createAggregatorPayableJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
+            final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
+            final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
+            final BigDecimal overdraftAmount) {
+        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
+                .requireConfiguration(savingsTransactionDTO.getAggregatorCode());
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
+        this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
+                debitAllocations, List.of(new SavingsJournalEntryAllocation(configuration.aggregatorPayableGlAccountId(), amount)),
+                isReversal, journalEntries);
+    }
+
+    /**
+     * AB-510: a bills/airtime Commission leg — unlike a NIP switch's commission, this is a single flat amount owed to
+     * the bank with no switch-fee sub-split, resolved by {@code aggregatorCode} rather than {@code switchId}.
+     */
+    private void createAggregatorCommissionJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
+            final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
+            final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
+            final BigDecimal overdraftAmount) {
+        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
+                .requireConfiguration(savingsTransactionDTO.getAggregatorCode());
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
+        this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
+                debitAllocations, List.of(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(), amount)),
+                isReversal, journalEntries);
+    }
+
+    /**
+     * AB-510: the bills-only Convenience Fee leg (never posted for airtime/data). Falls back to the aggregator's
+     * commission income account when no dedicated convenience-fee account is configured — the ticket's own GL table
+     * shows both sharing one account for both aggregators today.
+     */
+    private void createAggregatorConvenienceFeeJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
+            final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
+            final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
+            final BigDecimal overdraftAmount) {
+        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
+                .requireConfiguration(savingsTransactionDTO.getAggregatorCode());
+        final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
+                amount, overdraftAmount);
+        this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
+                debitAllocations,
+                List.of(new SavingsJournalEntryAllocation(configuration.resolvedConvenienceFeeIncomeGlAccountId(), amount)), isReversal,
                 journalEntries);
     }
 

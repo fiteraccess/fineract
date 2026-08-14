@@ -183,6 +183,7 @@ public class SavingsApiConstants {
     // AB-265: side-effect transactions asserted by upstream system (e.g. Synapse) — currently EMT Levy.
     public static final String referenceTransactionsParamName = "referenceTransactions";
     public static final String switchIdParamName = "switchId";
+    public static final String aggregatorCodeParamName = "aggregatorCode";
 
     // AB-339: routes a withdrawal through handleSignedStatementFeeWithdrawal instead of the plain withdrawal path,
     // so the fee posts as its own SIGNED_STATEMENT_FEE transaction type (resolving a dedicated income GL) with VAT

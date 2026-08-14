@@ -65,7 +65,9 @@ public class SavingsAccountTransactionEnumData implements Serializable {
                 || transactionType == SavingsAccountTransactionType.WITHDRAWAL_FEE
                 || transactionType == SavingsAccountTransactionType.PAY_CHARGE || transactionType == SavingsAccountTransactionType.EMT_LEVY
                 || transactionType == SavingsAccountTransactionType.COMMISSION || transactionType == SavingsAccountTransactionType.VAT
-                || transactionType == SavingsAccountTransactionType.SIGNED_STATEMENT_FEE;
+                || transactionType == SavingsAccountTransactionType.SIGNED_STATEMENT_FEE
+                || transactionType == SavingsAccountTransactionType.AGGREGATOR_PAYABLE
+                || transactionType == SavingsAccountTransactionType.CONVENIENCE_FEE;
         this.initiateTransfer = transactionType == SavingsAccountTransactionType.INITIATE_TRANSFER;
         this.approveTransfer = transactionType == SavingsAccountTransactionType.APPROVE_TRANSFER;
         this.withdrawTransfer = transactionType == SavingsAccountTransactionType.WITHDRAW_TRANSFER;
@@ -121,6 +123,14 @@ public class SavingsAccountTransactionEnumData implements Serializable {
 
     public boolean isSignedStatementFee() {
         return Long.valueOf(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getValue()).equals(this.id);
+    }
+
+    public boolean isAggregatorPayable() {
+        return Long.valueOf(SavingsAccountTransactionType.AGGREGATOR_PAYABLE.getValue()).equals(this.id);
+    }
+
+    public boolean isConvenienceFee() {
+        return Long.valueOf(SavingsAccountTransactionType.CONVENIENCE_FEE.getValue()).equals(this.id);
     }
 
     public boolean isCredit() {

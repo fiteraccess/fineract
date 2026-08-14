@@ -45,8 +45,10 @@ public final class SavingsAccountingBridgeDataHelper {
     public static SavingsAccountingBridgeDTO buildAccountingBridgeData(final SavingsAccount account,
             final SavingsAccountTransaction transaction, final ReferenceTransaction referenceTransaction, final boolean isAccountTransfer) {
         final SavingsAccountingBridgeDTO accountingBridgeData = buildAccountingBridgeData(account, List.of(transaction), isAccountTransfer);
-        if (referenceTransaction.type().isCommission()) {
-            final ReferenceTransaction.CommissionBreakdown breakdown = referenceTransaction.breakdown();
+        final ReferenceTransaction.CommissionBreakdown breakdown = referenceTransaction.breakdown();
+        // AB-510: bills/airtime aggregator-scoped commission has no switch/bank-commission split — breakdown is
+        // legitimately null there (only NIP switch-scoped commission requires and validates one).
+        if (referenceTransaction.type().isCommission() && breakdown != null) {
             accountingBridgeData.getNewSavingsTransactions().get(0)
                     .setCommissionAllocation(new SavingsAccountingBridgeCommissionAllocationDTO(breakdown.switchFee().amount(),
                             breakdown.bankCommission().amount()));
