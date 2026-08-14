@@ -43,5 +43,6 @@ public class SavingsAccountingBridgeTransactionDTO {
     private List<SavingsAccountingBridgeChargePaymentDTO> savingsChargesPaid = new ArrayList<>();
     private List<SavingsAccountingBridgeTaxDTO> taxDetails = new ArrayList<>();
     private String switchId;
+    private String aggregatorCode;
     private SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation;
 }

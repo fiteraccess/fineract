@@ -439,12 +439,30 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");
         final BigDecimal transactionAmount = command.bigDecimalValueOfParameterNamed("transactionAmount");
-        final ReferenceTransaction.NipWithdrawalRequest nipRequest = ReferenceTransaction.parseNipWithdrawal(command);
+
+        // AB-510: aggregatorCode and switchId are mutually exclusive top-level fields on a withdrawal — a bills/
+        // airtime posting parses its own reference-transaction shape (Aggregator Payable/Commission/Convenience
+        // Fee/VAT) rather than the NIP one, so only one of nipRequest/billsRequest ever carries real data.
+        final boolean isBillsPosting = command.parameterExists("aggregatorCode");
+        if (isBillsPosting && command.parameterExists("switchId")) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savings.bills.posting.switch.not.supported",
+                    "A savings withdrawal cannot carry both switchId and aggregatorCode");
+        }
+        final ReferenceTransaction.NipWithdrawalRequest nipRequest = isBillsPosting
+                ? new ReferenceTransaction.NipWithdrawalRequest(null, List.of())
+                : ReferenceTransaction.parseNipWithdrawal(command);
+        final ReferenceTransaction.BillsPostingWithdrawalRequest billsRequest = isBillsPosting
+                ? ReferenceTransaction.parseBillsPostingWithdrawal(command)
+                : new ReferenceTransaction.BillsPostingWithdrawalRequest(null, List.of());
         final boolean isSignedStatementFee = command.booleanPrimitiveValueOfParameterNamed(SavingsApiConstants.signedStatementFeeParamName);
 
         if (isSignedStatementFee && nipRequest.switchId() != null) {
             throw new GeneralPlatformDomainRuleException("error.msg.savings.signed.statement.fee.switch.not.supported",
                     "signedStatementFee withdrawals do not support switchId");
+        }
+        if (isSignedStatementFee && billsRequest.aggregatorCode() != null) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savings.signed.statement.fee.aggregator.not.supported",
+                    "signedStatementFee withdrawals do not support aggregatorCode");
         }
 
         if (nipRequest.switchId() != null) {
@@ -481,7 +499,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final BigDecimal chargeableAmount = command.bigDecimalValueOfParameterNamed(SavingsApiConstants.chargeableAmountParamName);
         final SavingsTransactionBooleanValues transactionBooleanValues = new SavingsTransactionBooleanValues(isAccountTransfer,
                 isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance, chargeableAmount);
-        final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
+        final List<ReferenceTransaction> referenceTransactions = isBillsPosting ? billsRequest.references() : nipRequest.references();
         final SavingsAccountTransaction withdrawal;
         if (isSignedStatementFee) {
             withdrawal = this.savingsAccountDomainService.handleSignedStatementFeeWithdrawal(account, fmt, transactionDate,
@@ -489,15 +507,20 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         } else if (nipRequest.switchId() != null) {
             withdrawal = this.savingsAccountDomainService.handleNipWithdrawal(account, fmt, transactionDate, transactionAmount,
                     paymentDetail, transactionBooleanValues, nipRequest.switchId(), referenceTransactions, backdatedTxnsAllowedTill);
+        } else if (billsRequest.aggregatorCode() != null) {
+            withdrawal = this.savingsAccountDomainService.handleBillsPostingWithdrawal(account, fmt, transactionDate, transactionAmount,
+                    paymentDetail, transactionBooleanValues, billsRequest.aggregatorCode(), referenceTransactions,
+                    backdatedTxnsAllowedTill);
         } else {
             withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
                     transactionBooleanValues, backdatedTxnsAllowedTill);
         }
 
-        // Legacy EMT side effects remain on their existing path. NIP and signed-statement-fee rows are handled by
-        // their own bundled domain operation so principal, references, notes and completion event share one
-        // operation.
-        if (!isSignedStatementFee && nipRequest.switchId() == null && !referenceTransactions.isEmpty()) {
+        // Legacy EMT side effects remain on their existing path. NIP, signed-statement-fee, and bills/airtime rows
+        // are handled by their own bundled domain operation so principal, references, notes and completion event
+        // share one operation.
+        if (!isSignedStatementFee && nipRequest.switchId() == null && billsRequest.aggregatorCode() == null
+                && !referenceTransactions.isEmpty()) {
             this.savingsAccountDomainService.applyReferenceTransactions(account, withdrawal, referenceTransactions, isAccountTransfer,
                     backdatedTxnsAllowedTill);
         }

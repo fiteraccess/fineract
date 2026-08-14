@@ -215,6 +215,14 @@ public final class SavingsEnumerations {
                         SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getValue().longValue(),
                         SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getCode(), "Signed E-Statement Fee");
             break;
+            case AGGREGATOR_PAYABLE:
+                optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.AGGREGATOR_PAYABLE.getValue().longValue(),
+                        SavingsAccountTransactionType.AGGREGATOR_PAYABLE.getCode(), "Aggregator Payable");
+            break;
+            case CONVENIENCE_FEE:
+                optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.CONVENIENCE_FEE.getValue().longValue(),
+                        SavingsAccountTransactionType.CONVENIENCE_FEE.getCode(), "Convenience Fee");
+            break;
         }
         return optionData;
     }

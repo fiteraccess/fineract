@@ -55,7 +55,9 @@ public enum SavingsAccountTransactionType {
     EMT_LEVY(24, "savingsAccountTransactionType.emtLevy", TransactionEntryType.DEBIT), //
     COMMISSION(25, "savingsAccountTransactionType.commission", TransactionEntryType.DEBIT), //
     VAT(26, "savingsAccountTransactionType.vat", TransactionEntryType.DEBIT), //
-    SIGNED_STATEMENT_FEE(27, "savingsAccountTransactionType.signedStatementFee", TransactionEntryType.DEBIT); //
+    SIGNED_STATEMENT_FEE(27, "savingsAccountTransactionType.signedStatementFee", TransactionEntryType.DEBIT), //
+    AGGREGATOR_PAYABLE(28, "savingsAccountTransactionType.aggregatorPayable", TransactionEntryType.DEBIT), //
+    CONVENIENCE_FEE(29, "savingsAccountTransactionType.convenienceFee", TransactionEntryType.DEBIT); //
 
     private static final Map<Integer, SavingsAccountTransactionType> BY_ID = Arrays.stream(values())
             .collect(Collectors.toMap(SavingsAccountTransactionType::getValue, v -> v));
@@ -134,7 +136,8 @@ public enum SavingsAccountTransactionType {
     }
 
     public boolean isChargeTransaction() {
-        return isPayCharge() || isWithdrawalFee() || isAnnualFee() || isEmtLevy() || isCommission() || isVat() || isSignedStatementFee();
+        return isPayCharge() || isWithdrawalFee() || isAnnualFee() || isEmtLevy() || isCommission() || isVat() || isSignedStatementFee()
+                || isAggregatorPayable() || isConvenienceFee();
     }
 
     public boolean isEmtLevy() {
@@ -151,6 +154,14 @@ public enum SavingsAccountTransactionType {
 
     public boolean isSignedStatementFee() {
         return this == SIGNED_STATEMENT_FEE;
+    }
+
+    public boolean isAggregatorPayable() {
+        return this == AGGREGATOR_PAYABLE;
+    }
+
+    public boolean isConvenienceFee() {
+        return this == CONVENIENCE_FEE;
     }
 
     public boolean isWaiveCharge() {

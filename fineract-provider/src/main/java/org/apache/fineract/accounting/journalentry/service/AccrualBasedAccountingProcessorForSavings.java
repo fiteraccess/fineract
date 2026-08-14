@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.accounting.aggregatoraccounting.domain.AggregatorAccountingConfigurationProvider;
 import org.apache.fineract.accounting.common.AccountingConstants.AccrualAccountsForSavings;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
@@ -44,6 +45,7 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
 
     private final AccountingProcessorHelper helper;
     private final NipSwitchAccountingConfigurationProvider nipSwitchAccountingConfigurationProvider;
+    private final AggregatorAccountingConfigurationProvider aggregatorAccountingConfigurationProvider;
 
     @Override
     public void createJournalEntriesForSavings(final SavingsDTO savingsDTO) {
@@ -172,6 +174,26 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                  */
                 else if (savingsTransactionDTO.getTransactionType().isVat()) {
                     createVatJournalEntries(nipAccountingContext);
+                }
+
+                /** AB-510: DR Savings Control, CR the aggregator's payable account (via aggregatorCode). */
+                else if (savingsTransactionDTO.getTransactionType().isAggregatorPayable()) {
+                    createAggregatorPayableJournalEntries(nipAccountingContext);
+                }
+
+                /**
+                 * AB-510: a bills/airtime Commission leg — a single flat amount with no switch-fee sub-split, resolved
+                 * by aggregatorCode. NIP's switch-scoped Commission is handled above by tryCreateNipJournalEntries and
+                 * never reaches here.
+                 */
+                else if (savingsTransactionDTO.getTransactionType().isCommission()
+                        && StringUtils.isNotBlank(savingsTransactionDTO.getAggregatorCode())) {
+                    createAggregatorCommissionJournalEntries(nipAccountingContext);
+                }
+
+                /** AB-510: the bills-only Convenience Fee leg, resolved by aggregatorCode. */
+                else if (savingsTransactionDTO.getTransactionType().isConvenienceFee()) {
+                    createAggregatorConvenienceFeeJournalEntries(nipAccountingContext);
                 }
 
                 else if (savingsTransactionDTO.getTransactionType().isEscheat()) {
@@ -426,6 +448,43 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                 FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(), transaction.getPaymentTypeId());
         createBalancedJournalEntries(context, createCustomerControlAllocations(context),
                 List.of(new SavingsJournalEntryAllocation(signedStatementFeeIncomeAccount.getId(), transaction.getAmount())));
+    }
+
+    /**
+     * AB-510: the bills/airtime aggregator's payable leg, resolved by {@code aggregatorCode} via
+     * {@link AggregatorAccountingConfigurationProvider} rather than a Financial Activity mapping, since it varies per
+     * aggregator (mirrors {@link #createNipPrincipalJournalEntries}'s switch-payable precedent).
+     */
+    private void createAggregatorPayableJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
+                .requireConfiguration(transaction.getAggregatorCode());
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
+                List.of(new SavingsJournalEntryAllocation(configuration.aggregatorPayableGlAccountId(), transaction.getAmount())));
+    }
+
+    /**
+     * AB-510: a bills/airtime Commission leg — a single flat amount owed to the bank with no switch-fee sub-split,
+     * resolved by {@code aggregatorCode} rather than {@code switchId}.
+     */
+    private void createAggregatorCommissionJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
+                .requireConfiguration(transaction.getAggregatorCode());
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
+                List.of(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(), transaction.getAmount())));
+    }
+
+    /**
+     * AB-510: the bills-only Convenience Fee leg (never posted for airtime/data). Falls back to the aggregator's
+     * commission income account when no dedicated convenience-fee account is configured.
+     */
+    private void createAggregatorConvenienceFeeJournalEntries(final NipAccountingContext context) {
+        final SavingsTransactionDTO transaction = context.transaction();
+        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
+                .requireConfiguration(transaction.getAggregatorCode());
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context), List
+                .of(new SavingsJournalEntryAllocation(configuration.resolvedConvenienceFeeIncomeGlAccountId(), transaction.getAmount())));
     }
 
     private List<SavingsJournalEntryAllocation> createCustomerControlAllocations(final NipAccountingContext context) {
