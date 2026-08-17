@@ -177,8 +177,9 @@ public class SavingsAccountTransactionsApiResource {
     @Operation(summary = "Create a savings account transaction", description = "For command=withdrawal, a nonblank switchId identifies an outbound NIP withdrawal. For command=deposit, "
             + "it identifies an inbound NIP deposit and selects the configured Receivable GL. FinProxy/Synapse supplies "
             + "authoritative reference amounts; inbound supports only the existing optional EMT_LEVY reference, while outbound "
-            + "supports ordered Commission/VAT references and Commission allocation. Fineract validates persistence and "
-            + "balanced-accounting prerequisites. Processing uses native command idempotency.")
+            + "supports ordered EMT_LEVY, COMMISSION, and VAT references. EMT_LEVY descriptions are optional; Commission and VAT "
+            + "descriptions remain required. Fineract validates persistence and balanced-accounting prerequisites. Processing uses "
+            + "native command idempotency.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountTransactionsRequest.class), examples = @ExampleObject(name = "Inbound NIP deposit", summary = "Principal-only inbound deposit supplied by Synapse", value = """
             {
               "transactionDate": "27 July 2026",

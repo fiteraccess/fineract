@@ -37,14 +37,37 @@ public class NipWithdrawalPreflight {
 
     void validate(String switchId, List<ReferenceTransaction> references) {
         this.switchConfigurationProvider.requireOutbound(switchId);
-        if (references.stream().noneMatch(reference -> reference.type().isVat())) {
-            return;
+        if (containsEmtLevy(references)) {
+            requireUsableMapping(FinancialActivity.EMT_LEVY, "error.msg.savings.nip.emt.levy.not.usable", "EMT_LEVY");
         }
-        final GLAccount vatPayableGlAccount = this.financialActivityAccountRepositoryWrapper
-                .findByFinancialActivityTypeWithNotFoundDetection(FinancialActivity.VAT_PAYABLE.getValue()).getGlAccount();
-        if (vatPayableGlAccount.isDisabled() || !vatPayableGlAccount.isDetailAccount()) {
-            throw new GeneralPlatformDomainRuleException("error.msg.savings.nip.vat.payable.not.usable",
-                    "VAT_PAYABLE must map to an enabled detail GL account");
+        if (containsVat(references)) {
+            requireUsableMapping(FinancialActivity.VAT_PAYABLE, "error.msg.savings.nip.vat.payable.not.usable", "VAT_PAYABLE");
         }
+    }
+
+    private void requireUsableMapping(FinancialActivity financialActivity, String errorCode, String activityName) {
+        final GLAccount glAccount = this.financialActivityAccountRepositoryWrapper
+                .findByFinancialActivityTypeWithNotFoundDetection(financialActivity.getValue()).getGlAccount();
+        if (glAccount.isDisabled() || !glAccount.isDetailAccount()) {
+            throw new GeneralPlatformDomainRuleException(errorCode, activityName + " must map to an enabled detail GL account");
+        }
+    }
+
+    private static boolean containsEmtLevy(List<ReferenceTransaction> references) {
+        for (ReferenceTransaction reference : references) {
+            if (reference.type().isEmtLevy()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsVat(List<ReferenceTransaction> references) {
+        for (ReferenceTransaction reference : references) {
+            if (reference.type().isVat()) {
+                return true;
+            }
+        }
+        return false;
     }
 }

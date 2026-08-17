@@ -61,6 +61,14 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         return type.isCommission() || type.isVat();
     }
 
+    public boolean isSupportedNipWithdrawalReference() {
+        return type.isEmtLevy() || isNipFee();
+    }
+
+    public boolean hasNipWithdrawalNote() {
+        return isNipFee() || type.isEmtLevy() && StringUtils.isNotBlank(description);
+    }
+
     /**
      * AB-339: only Commission is intrinsically NIP-switch-scoped and requires a {@code switchId}. VAT can also ride
      * standalone alongside a non-NIP principal (e.g. the signed e-statement fee), so it must not force a switch.
@@ -111,11 +119,7 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         return refs;
     }
 
-    /**
-     * Parses and validates the NIP-only additions accepted by a savings withdrawal. Existing EMT references
-     * deliberately remain outside this branch so active deposit, transfer, and withdrawal payloads keep their current
-     * behavior.
-     */
+    /** Parses and validates reference transactions accepted by an outbound NIP savings withdrawal. */
     public static NipWithdrawalRequest parseNipWithdrawal(final JsonCommand command) {
         final List<ReferenceTransaction> references = parseArray(command, "referenceTransactions");
         final boolean switchIdPresent = command.parameterExists("switchId");
@@ -128,11 +132,11 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         if (!switchIdPresent) {
             return new NipWithdrawalRequest(null, references);
         }
-        if (references.stream().anyMatch(reference -> !reference.isNipFee())) {
+        if (references.stream().anyMatch(reference -> !reference.isSupportedNipWithdrawalReference())) {
             throw invalid("reference.transaction.type.not.supported",
-                    "NIP withdrawals support only Commission and VAT reference transactions");
+                    "NIP withdrawals support only EMT levy, Commission, and VAT reference transactions");
         }
-        references.forEach(ReferenceTransaction::validateNipFee);
+        references.stream().filter(ReferenceTransaction::isNipFee).forEach(ReferenceTransaction::validateNipFee);
         return new NipWithdrawalRequest(switchId, references);
     }
 
