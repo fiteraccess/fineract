@@ -102,7 +102,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     public SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final boolean backdatedTxnsAllowedTill) {
-        return handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues, null,
+        return handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues, null, null, null,
                 backdatedTxnsAllowedTill, true, SavingsAccountTransactionType.WITHDRAWAL);
     }
 
@@ -121,7 +121,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final SavingsTransactionBooleanValues transactionBooleanValues, final List<ReferenceTransaction> references,
             final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction fee = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
-                transactionBooleanValues, null, backdatedTxnsAllowedTill, false, SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
+                transactionBooleanValues, null, null, null, backdatedTxnsAllowedTill, false,
+                SavingsAccountTransactionType.SIGNED_STATEMENT_FEE);
         final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
         applyReferenceTransactions(account, fee, references, transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill, null,
@@ -137,7 +138,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId,
             final List<ReferenceTransaction> references, final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction withdrawal = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
-                transactionBooleanValues, switchId, backdatedTxnsAllowedTill, false, SavingsAccountTransactionType.WITHDRAWAL);
+                transactionBooleanValues, switchId, null, null, backdatedTxnsAllowedTill, false, SavingsAccountTransactionType.WITHDRAWAL);
         final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         // handleWithdrawal has already applied and validated the principal plus ordinary product withdrawal fees.
         // Validate
@@ -162,18 +163,22 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
     /**
      * AB-510: the bills/airtime counterpart of {@link #handleNipWithdrawal}. The primary leg posts as an ordinary
-     * {@code WITHDRAWAL} (no counterparty tag of its own — only the reference legs need {@code aggregatorCode} to
-     * resolve GL accounts); the Aggregator Payable / Commission / Convenience Fee / VAT reference legs ride alongside,
-     * each posted atomically with the principal.
+     * {@code WITHDRAWAL} tagged with {@code aggregatorCode} and {@code aggregatorCommissionAmount} — its own journal
+     * entry splits the credit side between the aggregator payable and commission income GL accounts (mirroring how
+     * {@link org.apache.fineract.accounting.journalentry.service.CashBasedAccountingProcessorForSavings}'s NIP
+     * commission method already splits one transaction's credit across two accounts, just applied to the primary leg
+     * instead of a reference leg). Only Convenience Fee and VAT ride as separate reference transactions on top.
      */
     @Transactional
     @Override
     public SavingsAccountTransaction handleBillsPostingWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final String aggregatorCode,
-            final List<ReferenceTransaction> references, final boolean backdatedTxnsAllowedTill) {
+            final BigDecimal aggregatorCommissionAmount, final List<ReferenceTransaction> references,
+            final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction withdrawal = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
-                transactionBooleanValues, null, backdatedTxnsAllowedTill, false, SavingsAccountTransactionType.WITHDRAWAL);
+                transactionBooleanValues, null, aggregatorCode, aggregatorCommissionAmount, backdatedTxnsAllowedTill, false,
+                SavingsAccountTransactionType.WITHDRAWAL);
         final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
         applyReferenceTransactions(account, withdrawal, references, transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill,
@@ -184,8 +189,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
     private SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
-            final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId, final boolean backdatedTxnsAllowedTill,
-            final boolean notifyBusinessEvent, final SavingsAccountTransactionType primaryType) {
+            final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId, final String aggregatorCode,
+            final BigDecimal aggregatorCommissionAmount, final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent,
+            final SavingsAccountTransactionType primaryType) {
         context.authenticatedUser();
         account.validateForAccountBlock();
         account.validateForDebitBlock();
@@ -199,7 +205,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // past-dated transactions (which need running balance recalculation and interest reversal handling)
         if (!DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
             return handleWithdrawalOptimized(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues,
-                    relaxingDaysConfigForPivotDate, switchId, backdatedTxnsAllowedTill, notifyBusinessEvent, primaryType);
+                    relaxingDaysConfigForPivotDate, switchId, aggregatorCode, aggregatorCommissionAmount, backdatedTxnsAllowedTill,
+                    notifyBusinessEvent, primaryType);
         }
 
         // Legacy path for backdated transactions. AB-339: primaryType is intentionally not threaded into this
@@ -227,6 +234,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo.toString(), transactionBooleanValues.chargeableAmount());
         withdrawal.setSwitchId(switchId);
         withdrawal.setChargeableAmount(transactionBooleanValues.chargeableAmount());
+        withdrawal.setAggregatorCode(aggregatorCode);
+        withdrawal.setAggregatorCommissionAmount(aggregatorCommissionAmount);
         final MathContext mc = MathContext.DECIMAL64;
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
@@ -271,8 +280,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private SavingsAccountTransaction handleWithdrawalOptimized(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final Long relaxingDaysConfigForPivotDate,
-            final String switchId, final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent,
-            final SavingsAccountTransactionType primaryType) {
+            final String switchId, final String aggregatorCode, final BigDecimal aggregatorCommissionAmount,
+            final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent, final SavingsAccountTransactionType primaryType) {
 
         // --- O(1) business validations (mirroring SavingsAccount.withdraw()) ---
 
@@ -374,6 +383,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 transactionDate, transactionAmountMoney, primaryType, refNo);
         withdrawal.setSwitchId(switchId);
         withdrawal.setChargeableAmount(transactionBooleanValues.chargeableAmount());
+        withdrawal.setAggregatorCode(aggregatorCode);
+        withdrawal.setAggregatorCommissionAmount(aggregatorCommissionAmount);
         final BigDecimal principalOverdraftAmount = calculateIncrementalOverdraftAmount(availableBalanceBeforeWithdrawal,
                 transactionAmount);
         if (principalOverdraftAmount.signum() > 0) {
@@ -744,21 +755,12 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             if (ref.type().isEmtLevy()) {
                 referenceTransaction = SavingsAccountTransaction.emtLevy(account, account.office(), transactionDate, money, refNo);
                 referenceTransaction.setSwitchId(switchId);
-            } else if (ref.type().isAggregatorPayable()) {
-                referenceTransaction = SavingsAccountTransaction.aggregatorPayable(account, account.office(), transactionDate, money, refNo,
-                        aggregatorCode);
             } else if (ref.type().isConvenienceFee()) {
                 referenceTransaction = SavingsAccountTransaction.convenienceFee(account, account.office(), transactionDate, money, refNo,
                         aggregatorCode);
             } else if (ref.type().isCommission()) {
-                // AB-510: Commission may be NIP-switch-scoped (switchId present) or bills/airtime aggregator-scoped
-                // (aggregatorCode present) — the two are mutually exclusive on a single withdrawal request, enforced
-                // upstream by ReferenceTransaction.parseNipWithdrawal/parseBillsPostingWithdrawal.
-                referenceTransaction = aggregatorCode != null
-                        ? SavingsAccountTransaction.aggregatorCommission(account, account.office(), transactionDate, money, refNo,
-                                aggregatorCode)
-                        : SavingsAccountTransaction.commission(account, account.office(), transactionDate, money, refNo, switchId,
-                                ref.switchFeeAmount(), ref.bankCommissionAmount());
+                referenceTransaction = SavingsAccountTransaction.commission(account, account.office(), transactionDate, money, refNo,
+                        switchId, ref.switchFeeAmount(), ref.bankCommissionAmount());
             } else if (ref.type().isVat()) {
                 referenceTransaction = SavingsAccountTransaction.vat(account, account.office(), transactionDate, money, refNo, switchId);
             } else {

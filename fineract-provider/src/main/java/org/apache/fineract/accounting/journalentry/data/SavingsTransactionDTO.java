@@ -49,6 +49,7 @@ public class SavingsTransactionDTO {
     private final List<TaxPaymentDTO> taxPayments;
     private final String switchId;
     private final String aggregatorCode;
+    private final BigDecimal aggregatorCommissionAmount;
     private final SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation;
 
     public boolean isOverdraftTransaction() {

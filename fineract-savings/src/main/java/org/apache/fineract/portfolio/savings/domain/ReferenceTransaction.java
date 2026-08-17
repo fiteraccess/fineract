@@ -78,19 +78,18 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
     }
 
     /**
-     * AB-510: Aggregator Payable and Convenience Fee are intrinsically aggregator-scoped and always require an
-     * {@code aggregatorCode}. Commission may ride under either a NIP switch ({@link #requiresSwitchId()}) or a
-     * bills/airtime aggregator depending on which top-level field the withdrawal request carries — the type alone
-     * doesn't distinguish the two, so {@link #parseBillsPostingWithdrawal(JsonCommand)} decides that itself. VAT never
-     * requires either — it resolves via the flat VAT_PAYABLE financial activity regardless of caller.
+     * AB-510: Convenience Fee is intrinsically aggregator-scoped and always requires an {@code aggregatorCode}. VAT
+     * never requires one — it resolves via the flat VAT_PAYABLE financial activity regardless of caller. The
+     * aggregator's payable amount and commission no longer ride as reference-transaction legs at all — both are derived
+     * on the primary withdrawal itself from its own {@code aggregatorCommissionAmount} field.
      */
     public boolean requiresAggregatorCode() {
-        return type.isAggregatorPayable() || type.isConvenienceFee();
+        return type.isConvenienceFee();
     }
 
     /** Reference transaction types a bills/airtime posting (AB-510) is allowed to carry. */
     public boolean isBillsPostingFee() {
-        return type.isAggregatorPayable() || type.isCommission() || type.isConvenienceFee() || type.isVat();
+        return type.isConvenienceFee() || type.isVat();
     }
 
     public BigDecimal switchFeeAmount() {
@@ -176,12 +175,14 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
 
     /**
      * Parses the aggregator-scoped additions accepted by a bills/airtime savings withdrawal (AB-510). Mirrors
-     * {@link #parseNipWithdrawal(JsonCommand)} exactly, keyed on {@code aggregatorCode} instead of {@code switchId} —
-     * the two are mutually exclusive on a single withdrawal request, so the caller (the write platform service) picks
-     * whichever of {@code parseNipWithdrawal}/{@code parseBillsPostingWithdrawal} applies based on which top-level
-     * field is present before falling back to the plain withdrawal path.
+     * {@link #parseNipWithdrawal(JsonCommand)}, keyed on {@code aggregatorCode} instead of {@code switchId} — the two
+     * are mutually exclusive on a single withdrawal request, so the caller (the write platform service) picks whichever
+     * of {@code parseNipWithdrawal}/{@code parseBillsPostingWithdrawal} applies based on which top-level field is
+     * present before falling back to the plain withdrawal path. Unlike NIP, a bills/airtime withdrawal also carries its
+     * own {@code aggregatorCommissionAmount} — the split between the aggregator's payable amount and the bank's
+     * commission is computed from the primary transaction itself, not from a separate reference leg.
      */
-    public static BillsPostingWithdrawalRequest parseBillsPostingWithdrawal(final JsonCommand command) {
+    public static BillsPostingWithdrawalRequest parseBillsPostingWithdrawal(final JsonCommand command, final BigDecimal transactionAmount) {
         final List<ReferenceTransaction> references = parseArray(command, "referenceTransactions");
         final boolean aggregatorCodePresent = command.parameterExists("aggregatorCode");
         final String aggregatorCode = aggregatorCodePresent ? normalizeAggregatorCode(command.stringValueOfParameterNamed("aggregatorCode"))
@@ -189,18 +190,33 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
         final boolean requiresAggregator = references.stream().anyMatch(ReferenceTransaction::requiresAggregatorCode);
 
         if (!aggregatorCodePresent && requiresAggregator) {
-            throw invalid("aggregatorCode.required",
-                    "aggregatorCode is required for Aggregator Payable and Convenience Fee reference transactions");
+            throw invalid("aggregatorCode.required", "aggregatorCode is required for Convenience Fee reference transactions");
         }
         if (!aggregatorCodePresent) {
-            return new BillsPostingWithdrawalRequest(null, references);
+            return new BillsPostingWithdrawalRequest(null, null, references);
         }
+        final BigDecimal commissionAmount = requireAggregatorCommissionAmount(command, transactionAmount);
         if (references.stream().anyMatch(reference -> !reference.isBillsPostingFee())) {
             throw invalid("reference.transaction.type.not.supported",
-                    "Bills/airtime postings support only Aggregator Payable, Commission, Convenience Fee, and VAT reference transactions");
+                    "Bills/airtime postings support only Convenience Fee and VAT reference transactions");
         }
         references.forEach(ReferenceTransaction::validateBillsPostingFee);
-        return new BillsPostingWithdrawalRequest(aggregatorCode, references);
+        return new BillsPostingWithdrawalRequest(aggregatorCode, commissionAmount, references);
+    }
+
+    private static BigDecimal requireAggregatorCommissionAmount(final JsonCommand command, final BigDecimal transactionAmount) {
+        if (!command.parameterExists("aggregatorCommissionAmount")) {
+            throw invalid("aggregatorCommissionAmount.required", "aggregatorCommissionAmount is required when aggregatorCode is present");
+        }
+        final BigDecimal commissionAmount = command.bigDecimalValueOfParameterNamed("aggregatorCommissionAmount");
+        if (commissionAmount == null || commissionAmount.signum() < 0) {
+            throw invalid("aggregatorCommissionAmount.not.negative", "aggregatorCommissionAmount must be zero or positive");
+        }
+        if (transactionAmount != null && commissionAmount.compareTo(transactionAmount) > 0) {
+            throw invalid("aggregatorCommissionAmount.exceeds.transaction.amount",
+                    "aggregatorCommissionAmount must not exceed the withdrawal transactionAmount");
+        }
+        return commissionAmount;
     }
 
     /** Rejects NIP-specific and bills/airtime-specific request data on transfer paths. */
@@ -290,7 +306,7 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
     public record NipDepositRequest(String switchId, List<ReferenceTransaction> references) {
     }
 
-    public record BillsPostingWithdrawalRequest(String aggregatorCode, List<ReferenceTransaction> references) {
+    public record BillsPostingWithdrawalRequest(String aggregatorCode, BigDecimal commissionAmount, List<ReferenceTransaction> references) {
     }
 
     public record CommissionBreakdown(CommissionBreakdownLeg switchFee, CommissionBreakdownLeg bankCommission) {

@@ -342,7 +342,8 @@ public class AccountingProcessorHelper {
             }
             final SavingsTransactionDTO transaction = new SavingsTransactionDTO(transactionOfficeId, paymentTypeId, transactionId,
                     transactionDate, transactionType, amount, reversed, feePayments, penaltyPayments, overdraftAmount, isAccountTransfer,
-                    taxPayments, map.getSwitchId(), map.getAggregatorCode(), map.getCommissionAllocation());
+                    taxPayments, map.getSwitchId(), map.getAggregatorCode(), map.getAggregatorCommissionAmount(),
+                    map.getCommissionAllocation());
 
             newSavingsTransactions.add(transaction);
 
