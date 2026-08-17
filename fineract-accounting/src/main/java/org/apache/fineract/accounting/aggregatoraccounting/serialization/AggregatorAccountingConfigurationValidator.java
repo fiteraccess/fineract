@@ -65,11 +65,8 @@ public class AggregatorAccountingConfigurationValidator {
         validator.reset().parameter("aggregatorCode").value(aggregatorCode).notBlank().notExceedingLengthOf(64);
         validator.reset().parameter(AGGREGATOR_PAYABLE_GL_ACCOUNT_ID).value(aggregatorPayableGlAccountId).notNull().longGreaterThanZero();
         validator.reset().parameter(COMMISSION_INCOME_GL_ACCOUNT_ID).value(commissionIncomeGlAccountId).notNull().longGreaterThanZero();
-        DataValidatorBuilder convenienceFeeValidator = validator.reset().parameter(CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID)
-                .value(convenienceFeeIncomeGlAccountId);
-        if (convenienceFeeIncomeGlAccountId != null) {
-            convenienceFeeValidator.longGreaterThanZero();
-        }
+        validator.reset().parameter(CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID).value(convenienceFeeIncomeGlAccountId).notNull()
+                .longGreaterThanZero();
         validator.reset().parameter(ACTIVE).value(active).notNull();
 
         if (!errors.isEmpty()) {

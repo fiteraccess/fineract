@@ -478,16 +478,13 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
         createBalancedJournalEntries(context, createCustomerControlAllocations(context), creditAllocations);
     }
 
-    /**
-     * AB-510: the bills-only Convenience Fee leg (never posted for airtime/data). Falls back to the aggregator's
-     * commission income account when no dedicated convenience-fee account is configured.
-     */
+    /** AB-510: the bills-only Convenience Fee leg (never posted for airtime/data). */
     private void createAggregatorConvenienceFeeJournalEntries(final NipAccountingContext context) {
         final SavingsTransactionDTO transaction = context.transaction();
         final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
                 .requireConfiguration(transaction.getAggregatorCode());
-        createBalancedJournalEntries(context, createCustomerControlAllocations(context), List
-                .of(new SavingsJournalEntryAllocation(configuration.resolvedConvenienceFeeIncomeGlAccountId(), transaction.getAmount())));
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
+                List.of(new SavingsJournalEntryAllocation(configuration.convenienceFeeIncomeGlAccountId(), transaction.getAmount())));
     }
 
     private List<SavingsJournalEntryAllocation> createCustomerControlAllocations(final NipAccountingContext context) {

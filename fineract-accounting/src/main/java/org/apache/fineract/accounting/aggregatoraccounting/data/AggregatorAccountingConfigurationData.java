@@ -24,7 +24,6 @@ public record AggregatorAccountingConfigurationData(
         @Schema(description = "Normalized aggregator identifier.", example = "CORALPAY") String aggregatorCode,
         @Schema(description = "GL credited for the aggregator payable principal leg.", example = "101") Long aggregatorPayableGlAccountId,
         @Schema(description = "GL credited for the bank's commission income leg.", example = "102") Long commissionIncomeGlAccountId,
-        @Schema(description = "GL credited for the convenience fee income leg; falls back to the commission "
-                + "income account when not configured.", example = "103") Long convenienceFeeIncomeGlAccountId,
+        @Schema(description = "GL credited for the convenience fee income leg.", example = "103") Long convenienceFeeIncomeGlAccountId,
         @Schema(description = "Whether this mapping may be used for new bills/airtime postings.", example = "true") boolean active) {
 }

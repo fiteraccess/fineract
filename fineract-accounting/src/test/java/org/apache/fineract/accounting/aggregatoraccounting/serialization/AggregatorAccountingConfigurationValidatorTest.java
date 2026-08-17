@@ -45,12 +45,6 @@ class AggregatorAccountingConfigurationValidatorTest {
                     """))).doesNotThrowAnyException();
         }
 
-        @Test
-        void acceptsAConfigurationWithoutAConvenienceFeeAccount() {
-            assertThatCode(() -> validator.validateForUpsert("NOMIWORLD", command("""
-                    { "aggregatorPayableGlAccountId": 1, "commissionIncomeGlAccountId": 2, "active": true }
-                    """))).doesNotThrowAnyException();
-        }
     }
 
     @Nested
@@ -66,10 +60,17 @@ class AggregatorAccountingConfigurationValidatorTest {
         @Test
         void rejectsMissingRequiredGlAccounts() {
             assertThatThrownBy(() -> validator.validateForUpsert("CORALPAY", command("""
-                    { "commissionIncomeGlAccountId": 2, "active": true }
+                    { "commissionIncomeGlAccountId": 2, "convenienceFeeIncomeGlAccountId": 3, "active": true }
                     """))).isInstanceOf(PlatformApiDataValidationException.class);
             assertThatThrownBy(() -> validator.validateForUpsert("CORALPAY", command("""
-                    { "aggregatorPayableGlAccountId": 1, "active": true }
+                    { "aggregatorPayableGlAccountId": 1, "convenienceFeeIncomeGlAccountId": 3, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+        }
+
+        @Test
+        void rejectsMissingConvenienceFeeAccount() {
+            assertThatThrownBy(() -> validator.validateForUpsert("CORALPAY", command("""
+                    { "aggregatorPayableGlAccountId": 1, "commissionIncomeGlAccountId": 2, "active": true }
                     """))).isInstanceOf(PlatformApiDataValidationException.class);
         }
 

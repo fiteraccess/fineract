@@ -292,19 +292,6 @@ class CashBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
-    void shouldFallBackToCommissionAccountForConvenienceFeeWhenNoDedicatedAccountConfigured() {
-        GLAccount savingsControl = glAccount(101L);
-        configureAggregator("NOMIWORLD", 301L, 302L, null);
-        when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
-                .thenReturn(savingsControl);
-
-        processor.createJournalEntriesForSavings(savings(convenienceFee("NOMIWORLD", BigDecimal.valueOf(100), null)));
-
-        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(100))),
-                List.of(new SavingsJournalEntryAllocation(302L, BigDecimal.valueOf(100))));
-    }
-
-    @Test
     void shouldOmitZeroBankCommissionLeg() {
         GLAccount savingsControl = glAccount(101L);
         configureSwitch();

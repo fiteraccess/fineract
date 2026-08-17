@@ -109,9 +109,6 @@ public class AggregatorAccountingConfigurationService implements AggregatorAccou
     }
 
     private GLAccount requireUsableGlAccount(Long glAccountId, String parameterName) {
-        if (glAccountId == null) {
-            return null;
-        }
         GLAccount glAccount = glAccountRepository.findOneWithNotFoundDetection(glAccountId);
         if (glAccount.isDisabled() || !glAccount.isDetailAccount()) {
             throw new PlatformApiDataValidationException("error.msg.aggregator.accounting.configuration.gl.account.not.usable",
@@ -121,11 +118,7 @@ public class AggregatorAccountingConfigurationService implements AggregatorAccou
     }
 
     private AggregatorAccountingConfigurationData toData(AggregatorAccountingConfigurationEntity entity) {
-        return new AggregatorAccountingConfigurationData(entity.getAggregatorCode(), idOf(entity.getAggregatorPayableGlAccount()),
-                idOf(entity.getCommissionIncomeGlAccount()), idOf(entity.getConvenienceFeeIncomeGlAccount()), entity.isActive());
-    }
-
-    private Long idOf(GLAccount glAccount) {
-        return glAccount == null ? null : glAccount.getId();
+        return new AggregatorAccountingConfigurationData(entity.getAggregatorCode(), entity.getAggregatorPayableGlAccount().getId(),
+                entity.getCommissionIncomeGlAccount().getId(), entity.getConvenienceFeeIncomeGlAccount().getId(), entity.isActive());
     }
 }

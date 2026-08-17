@@ -52,7 +52,7 @@ public class AggregatorAccountingConfigurationEntity extends AbstractPersistable
     private GLAccount commissionIncomeGlAccount;
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "convenience_fee_income_gl_account_id")
+    @JoinColumn(name = "convenience_fee_income_gl_account_id", nullable = false)
     private GLAccount convenienceFeeIncomeGlAccount;
 
     @Column(name = "active", nullable = false)
@@ -82,11 +82,7 @@ public class AggregatorAccountingConfigurationEntity extends AbstractPersistable
 
     public AggregatorAccountingConfigurationProvider.Configuration toConfiguration() {
         return new AggregatorAccountingConfigurationProvider.Configuration(aggregatorCode, aggregatorPayableGlAccount.getId(),
-                commissionIncomeGlAccount.getId(), idOf(convenienceFeeIncomeGlAccount));
-    }
-
-    private static Long idOf(GLAccount glAccount) {
-        return glAccount == null ? null : glAccount.getId();
+                commissionIncomeGlAccount.getId(), convenienceFeeIncomeGlAccount.getId());
     }
 
     @PrePersist

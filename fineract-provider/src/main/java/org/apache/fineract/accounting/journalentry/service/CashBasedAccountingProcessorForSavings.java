@@ -415,11 +415,7 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
                 debitAllocations, creditAllocations, isReversal, journalEntries);
     }
 
-    /**
-     * AB-510: the bills-only Convenience Fee leg (never posted for airtime/data). Falls back to the aggregator's
-     * commission income account when no dedicated convenience-fee account is configured — the ticket's own GL table
-     * shows both sharing one account for both aggregators today.
-     */
+    /** AB-510: the bills-only Convenience Fee leg (never posted for airtime/data). */
     private void createAggregatorConvenienceFeeJournalEntries(final Long savingsProductId, final Long savingsId, final String currencyCode,
             final List<JournalEntry> journalEntries, final SavingsTransactionDTO savingsTransactionDTO, final LocalDate transactionDate,
             final String transactionId, final Office office, final Long paymentTypeId, final boolean isReversal, final BigDecimal amount,
@@ -429,9 +425,8 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
         final List<SavingsJournalEntryAllocation> debitAllocations = createCustomerControlAllocations(savingsProductId, paymentTypeId,
                 amount, overdraftAmount);
         this.helper.createBalancedJournalEntriesForSavings(office, currencyCode, savingsId, transactionId, transactionDate,
-                debitAllocations,
-                List.of(new SavingsJournalEntryAllocation(configuration.resolvedConvenienceFeeIncomeGlAccountId(), amount)), isReversal,
-                journalEntries);
+                debitAllocations, List.of(new SavingsJournalEntryAllocation(configuration.convenienceFeeIncomeGlAccountId(), amount)),
+                isReversal, journalEntries);
     }
 
     private List<SavingsJournalEntryAllocation> createCustomerControlAllocations(final Long savingsProductId, final Long paymentTypeId,
