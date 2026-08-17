@@ -196,8 +196,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 paymentDetail, null, accountType);
         UUID refNo = UUID.randomUUID();
         final SavingsAccountTransaction withdrawal = account.withdraw(transactionDTO, transactionBooleanValues.isApplyWithdrawFee(),
-                backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo.toString());
+                backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo.toString(), transactionBooleanValues.chargeableAmount());
         withdrawal.setSwitchId(switchId);
+        withdrawal.setChargeableAmount(transactionBooleanValues.chargeableAmount());
         final MathContext mc = MathContext.DECIMAL64;
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
@@ -303,13 +304,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final String refNo = UUID.randomUUID().toString();
 
         if (transactionBooleanValues.isApplyWithdrawFee()) {
+            // AB-243: fees may be based on a caller-supplied chargeable amount rather than the full withdrawal.
+            final BigDecimal withdrawalFeeBase = transactionBooleanValues.withdrawalFeeBase(transactionAmount);
             for (SavingsAccountCharge charge : account.charges()) {
                 if (charge.isWithdrawalFee() && charge.isActive()) {
                     if (charge.getFreeWithdrawalCount() == null) {
                         charge.setFreeWithdrawalCount(0);
                     }
 
-                    BigDecimal feeAmount = calculateWithdrawalFeeForOptimizedPath(charge, transactionAmount, paymentDetail, account);
+                    BigDecimal feeAmount = calculateWithdrawalFeeForOptimizedPath(charge, withdrawalFeeBase, paymentDetail, account);
 
                     if (feeAmount.compareTo(BigDecimal.ZERO) > 0) {
                         totalFeeAmount = totalFeeAmount.add(feeAmount);
@@ -342,6 +345,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final SavingsAccountTransaction withdrawal = SavingsAccountTransaction.withdrawal(account, account.office(), paymentDetail,
                 transactionDate, transactionAmountMoney, primaryType, refNo);
         withdrawal.setSwitchId(switchId);
+        withdrawal.setChargeableAmount(transactionBooleanValues.chargeableAmount());
         final BigDecimal principalOverdraftAmount = calculateIncrementalOverdraftAmount(availableBalanceBeforeWithdrawal,
                 transactionAmount);
         if (principalOverdraftAmount.signum() > 0) {
@@ -358,7 +362,6 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // so the snapshot derived from running_balance_derived is hold-aware. See plan §10.2.
         final BigDecimal currentHold = (account.getOnHoldFunds() != null ? account.getOnHoldFunds() : BigDecimal.ZERO)
                 .add(account.getSavingsHoldAmount() != null ? account.getSavingsHoldAmount() : BigDecimal.ZERO);
-        final BigDecimal newAvailableBalance = newPostedBalance.subtract(currentHold);
 
         // Compute sub_status locally: reset to NONE if INACTIVE or DORMANT
         final Integer currentSubStatus = account.getSubStatus();
@@ -366,16 +369,20 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 || currentSubStatus.equals(SavingsAccountSubStatusEnum.DORMANT.getValue()))) ? SavingsAccountSubStatusEnum.NONE.getValue()
                         : currentSubStatus;
 
-        // Set running balance on the withdrawal transaction (available balance — hold-aware)
-        withdrawal.setRunningBalance(Money.of(account.getCurrency(), newAvailableBalance));
+        // Progressive running balances (available, hold-aware): the withdrawal row reflects the principal
+        // alone; each fee row then steps the balance down. The last row therefore carries the post-everything
+        // balance — the value the daily snapshot sync reads (latest transaction per account/date).
+        BigDecimal runningBalance = (s.getAccountBalance() != null ? s.getAccountBalance() : BigDecimal.ZERO).subtract(transactionAmount)
+                .subtract(currentHold);
+        withdrawal.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
 
         // Save withdrawal transaction with explicit flush to generate ID via IDENTITY strategy INSERT.
         // Must happen BEFORE entering COMMIT flush mode so the INSERT is not deferred.
         this.savingsAccountTransactionRepository.saveAndFlush(withdrawal);
 
-        // Save fee transactions and set running balance (available balance — hold-aware)
         for (SavingsAccountTransaction feeTransaction : feeTransactions) {
-            feeTransaction.setRunningBalance(Money.of(account.getCurrency(), newAvailableBalance));
+            runningBalance = runningBalance.subtract(feeTransaction.getAmount());
+            feeTransaction.setRunningBalance(Money.of(account.getCurrency(), runningBalance));
             this.savingsAccountTransactionRepository.saveAndFlush(feeTransaction);
         }
 

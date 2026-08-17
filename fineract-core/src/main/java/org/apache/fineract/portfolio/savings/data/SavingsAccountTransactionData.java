@@ -103,6 +103,9 @@ public class SavingsAccountTransactionData implements Serializable {
     private final transient List<TaxDetailsData> taxDetails = new ArrayList<>();
     private Integer balanceNumberOfDays;
     private BigDecimal overdraftAmount;
+    // AB-243: base the withdrawal fees were computed on when the caller supplied one (0 = fee-exempt);
+    // null (and omitted from the response) when fees were computed on the transaction amount as always.
+    private BigDecimal chargeableAmount;
     private transient Long modifiedId;
     private transient String refNo;
     private Boolean isOverdraft;
@@ -418,6 +421,10 @@ public class SavingsAccountTransactionData implements Serializable {
 
     public void setRefNo(final String uuid) {
         this.refNo = uuid;
+    }
+
+    public void setChargeableAmount(final BigDecimal chargeableAmount) {
+        this.chargeableAmount = chargeableAmount;
     }
 
     public void setBalanceNumberOfDays(final Integer balanceNumberOfDays) {

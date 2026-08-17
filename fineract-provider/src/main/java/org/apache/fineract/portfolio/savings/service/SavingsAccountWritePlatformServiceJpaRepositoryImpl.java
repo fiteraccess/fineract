@@ -478,8 +478,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final boolean isApplyWithdrawFee = true;
         final boolean isInterestTransfer = false;
         final boolean isWithdrawBalance = false;
+        final BigDecimal chargeableAmount = command.bigDecimalValueOfParameterNamed(SavingsApiConstants.chargeableAmountParamName);
         final SavingsTransactionBooleanValues transactionBooleanValues = new SavingsTransactionBooleanValues(isAccountTransfer,
-                isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance);
+                isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isWithdrawBalance, chargeableAmount);
         final List<ReferenceTransaction> referenceTransactions = nipRequest.references();
         final SavingsAccountTransaction withdrawal;
         if (isSignedStatementFee) {
