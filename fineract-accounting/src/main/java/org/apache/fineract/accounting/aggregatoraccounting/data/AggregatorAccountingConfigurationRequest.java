@@ -24,8 +24,7 @@ import java.io.Serializable;
 public record AggregatorAccountingConfigurationRequest(
         @Schema(description = "Enabled detail liability GL credited for the aggregator payable principal leg.", example = "101") Long aggregatorPayableGlAccountId,
         @Schema(description = "Enabled detail income GL credited for the bank's commission income leg.", example = "102") Long commissionIncomeGlAccountId,
-        @Schema(description = "Enabled detail income GL credited for the convenience fee income leg; optional, "
-                + "falls back to the commission income account when omitted.", example = "103") Long convenienceFeeIncomeGlAccountId,
+        @Schema(description = "Enabled detail income GL credited for the convenience fee income leg. Required.", example = "103") Long convenienceFeeIncomeGlAccountId,
         @Schema(description = "Whether this aggregator configuration may be used for new bills/airtime postings.", example = "true") Boolean active)
         implements
             Serializable {

@@ -24,9 +24,5 @@ public interface AggregatorAccountingConfigurationProvider {
 
     record Configuration(String aggregatorCode, Long aggregatorPayableGlAccountId, Long commissionIncomeGlAccountId,
             Long convenienceFeeIncomeGlAccountId) {
-
-        public Long resolvedConvenienceFeeIncomeGlAccountId() {
-            return convenienceFeeIncomeGlAccountId != null ? convenienceFeeIncomeGlAccountId : commissionIncomeGlAccountId;
-        }
     }
 }

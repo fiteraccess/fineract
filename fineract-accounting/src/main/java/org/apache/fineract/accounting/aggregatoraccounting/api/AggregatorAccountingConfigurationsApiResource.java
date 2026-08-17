@@ -52,9 +52,8 @@ import org.springframework.stereotype.Component;
 @Produces(MediaType.APPLICATION_JSON)
 @Component
 @Tag(name = "Aggregator Accounting Configurations", description = "Tenant-scoped GL routing for bills payment and airtime "
-        + "aggregators (e.g. CoralPay, Nomiworld). Every configuration is always outbound (the customer pays); the payable "
-        + "and commission income accounts are required, and the convenience fee income account is optional and falls back "
-        + "to the commission income account when omitted.")
+        + "aggregators (e.g. CoralPay, Nomiworld). Every configuration is always outbound (the customer pays); the payable, "
+        + "commission income, and convenience fee income accounts are all required.")
 @RequiredArgsConstructor
 public class AggregatorAccountingConfigurationsApiResource {
 
@@ -85,18 +84,11 @@ public class AggregatorAccountingConfigurationsApiResource {
     @Path("{aggregatorCode}")
     @Operation(summary = "Create or replace an aggregator accounting configuration", operationId = "upsertAggregatorAccountingConfiguration", description = "Atomically replaces the complete GL mapping and active status for an aggregator.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = AggregatorAccountingConfigurationRequest.class), examples = {
-            @ExampleObject(name = "WITH_CONVENIENCE_FEE", summary = "Aggregator with its own convenience fee account", value = """
+            @ExampleObject(name = "DEFAULT", summary = "Aggregator GL mapping", value = """
                     {
                       "aggregatorPayableGlAccountId": 101,
                       "commissionIncomeGlAccountId": 102,
                       "convenienceFeeIncomeGlAccountId": 103,
-                      "active": true
-                    }
-                    """),
-            @ExampleObject(name = "WITHOUT_CONVENIENCE_FEE", summary = "Aggregator that reuses the commission account for convenience fee", value = """
-                    {
-                      "aggregatorPayableGlAccountId": 101,
-                      "commissionIncomeGlAccountId": 102,
                       "active": true
                     }
                     """) }))

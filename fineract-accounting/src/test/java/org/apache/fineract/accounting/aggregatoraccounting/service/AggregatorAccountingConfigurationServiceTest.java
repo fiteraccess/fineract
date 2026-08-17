@@ -72,23 +72,12 @@ class AggregatorAccountingConfigurationServiceTest {
             AggregatorAccountingConfigurationProvider.Configuration configuration = service.requireConfiguration(" coralpay ");
 
             assertThat(configuration).isEqualTo(new AggregatorAccountingConfigurationProvider.Configuration("CORALPAY", 1L, 2L, 3L));
-            assertThat(configuration.resolvedConvenienceFeeIncomeGlAccountId()).isEqualTo(3L);
-        }
-
-        @Test
-        void fallsBackToCommissionIncomeAccountWhenConvenienceFeeAccountIsNotConfigured() {
-            AggregatorAccountingConfigurationEntity entity = configuration("NOMIWORLD", true, detailAccount(1), detailAccount(2), null);
-            when(repository.findByAggregatorCodeAndActiveTrue("NOMIWORLD")).thenReturn(Optional.of(entity));
-
-            AggregatorAccountingConfigurationProvider.Configuration configuration = service.requireConfiguration("nomiworld");
-
-            assertThat(configuration.convenienceFeeIncomeGlAccountId()).isNull();
-            assertThat(configuration.resolvedConvenienceFeeIncomeGlAccountId()).isEqualTo(2L);
         }
 
         @Test
         void distinguishesInactiveFromMissingConfiguration() {
-            AggregatorAccountingConfigurationEntity inactive = configuration("CORALPAY", false, detailAccount(1), detailAccount(2), null);
+            AggregatorAccountingConfigurationEntity inactive = configuration("CORALPAY", false, detailAccount(1), detailAccount(2),
+                    detailAccount(3));
             when(repository.findByAggregatorCodeAndActiveTrue("CORALPAY")).thenReturn(Optional.empty());
             when(repository.findByAggregatorCode("CORALPAY")).thenReturn(Optional.of(inactive));
 
@@ -108,7 +97,8 @@ class AggregatorAccountingConfigurationServiceTest {
         void retrievesOneAndListsConfigurationsInRepositoryOrder() {
             AggregatorAccountingConfigurationEntity first = configuration("CORALPAY", true, detailAccount(1), detailAccount(2),
                     detailAccount(3));
-            AggregatorAccountingConfigurationEntity second = configuration("NOMIWORLD", false, detailAccount(4), detailAccount(5), null);
+            AggregatorAccountingConfigurationEntity second = configuration("NOMIWORLD", false, detailAccount(4), detailAccount(5),
+                    detailAccount(6));
             when(repository.findByAggregatorCode("CORALPAY")).thenReturn(Optional.of(first));
             when(repository.findAllByOrderByAggregatorCodeAsc()).thenReturn(List.of(first, second));
 
@@ -121,7 +111,8 @@ class AggregatorAccountingConfigurationServiceTest {
         @Test
         void replacesAnExistingConfigurationWithItsCompleteGlMapping() {
             JsonCommand command = command(1L, 2L, 3L, true);
-            AggregatorAccountingConfigurationEntity existing = configuration("CORALPAY", true, detailAccount(9), detailAccount(9), null);
+            AggregatorAccountingConfigurationEntity existing = configuration("CORALPAY", true, detailAccount(9), detailAccount(9),
+                    detailAccount(9));
             when(repository.findByAggregatorCode("CORALPAY")).thenReturn(Optional.of(existing));
             when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
             when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
@@ -137,7 +128,7 @@ class AggregatorAccountingConfigurationServiceTest {
 
         @Test
         void rejectsADisabledOrHeaderGlAccountBeforePersistence() {
-            JsonCommand command = command(1L, 2L, null, true);
+            JsonCommand command = command(1L, 2L, 3L, true);
             when(glAccountRepository.findOneWithNotFoundDetection(1L))
                     .thenReturn(account(1, HEADER.getValue(), LIABILITY.getValue(), false));
 
@@ -150,14 +141,15 @@ class AggregatorAccountingConfigurationServiceTest {
         }
 
         @Test
-        void allowsOmittingTheOptionalConvenienceFeeAccount() {
-            JsonCommand command = command(1L, 2L, null, true);
+        void resolvesTheNowMandatoryConvenienceFeeAccountOnEveryUpsert() {
+            JsonCommand command = command(1L, 2L, 3L, true);
             when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
             when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
+            when(glAccountRepository.findOneWithNotFoundDetection(3L)).thenReturn(detailAccount(3));
 
             service.upsert("CORALPAY", command);
 
-            verify(glAccountRepository, never()).findOneWithNotFoundDetection(3L);
+            verify(glAccountRepository).findOneWithNotFoundDetection(eq(3L));
         }
     }
 
