@@ -218,13 +218,13 @@ final class SavingsAccountTransactionsApiResourceSwagger {
 
             private PostSavingsReferenceTransaction() {}
 
-            @Schema(allowableValues = { "EMT_LEVY", "COMMISSION", "VAT" }, example = "COMMISSION")
+            @Schema(allowableValues = { "EMT_LEVY", "COMMISSION", "VAT", "CONVENIENCE_FEE" }, example = "COMMISSION")
             public String type;
             @Schema(description = "Positive caller-supplied debit amount.", example = "22.00")
             public BigDecimal amount;
-            @Schema(description = "Optional for EMT_LEVY and required for COMMISSION and VAT. Nonblank values are persisted verbatim as the transaction note.", example = "NIP transfer commission")
+            @Schema(description = "Optional for EMT_LEVY and required for COMMISSION, VAT, and Convenience Fee. Nonblank values are persisted verbatim as the transaction note.", example = "NIP transfer commission")
             public String description;
-            @Schema(description = "Required for COMMISSION and ignored for EMT_LEVY and VAT.")
+            @Schema(description = "Required for COMMISSION and ignored for EMT_LEVY, VAT, and Convenience Fee.")
             public PostNipCommissionBreakdown breakdown;
         }
 
@@ -242,9 +242,13 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public String reasonForBlock;
         @Schema(example = "1")
         public Integer paymentTypeId;
-        @Schema(description = "Nonblank switch identifier for an outbound NIP withdrawal or inbound NIP deposit. Fineract trims and uppercases it.", example = "NIBSS")
+        @Schema(description = "Nonblank switch identifier for an outbound NIP withdrawal or inbound NIP deposit. Fineract trims and uppercases it. Mutually exclusive with aggregatorCode.", example = "NIBSS")
         public String switchId;
-        @Schema(description = "Optional references recorded in supplied order. NIP withdrawals accept EMT_LEVY, COMMISSION, and VAT; inbound NIP deposits accept only EMT_LEVY.")
+        @Schema(description = "AB-510: nonblank aggregator identifier for a bills/airtime/data withdrawal. Fineract trims and uppercases it. Mutually exclusive with switchId.", example = "CORALPAY")
+        public String aggregatorCode;
+        @Schema(description = "AB-510: required whenever aggregatorCode is present — the bank's commission cut of transactionAmount (0 <= amount <= transactionAmount). Fineract derives the aggregator's payable amount as transactionAmount minus this value.", example = "50.00")
+        public BigDecimal aggregatorCommissionAmount;
+        @Schema(description = "Optional references recorded in supplied order. NIP withdrawals accept EMT_LEVY, Commission, and VAT; bills/airtime withdrawals accept Convenience Fee and VAT; inbound NIP deposits accept only EMT_LEVY.")
         public List<PostSavingsReferenceTransaction> referenceTransactions;
     }
 

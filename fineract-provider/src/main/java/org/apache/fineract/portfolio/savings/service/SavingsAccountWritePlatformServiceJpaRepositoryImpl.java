@@ -452,8 +452,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 ? new ReferenceTransaction.NipWithdrawalRequest(null, List.of())
                 : ReferenceTransaction.parseNipWithdrawal(command);
         final ReferenceTransaction.BillsPostingWithdrawalRequest billsRequest = isBillsPosting
-                ? ReferenceTransaction.parseBillsPostingWithdrawal(command)
-                : new ReferenceTransaction.BillsPostingWithdrawalRequest(null, List.of());
+                ? ReferenceTransaction.parseBillsPostingWithdrawal(command, transactionAmount)
+                : new ReferenceTransaction.BillsPostingWithdrawalRequest(null, null, List.of());
         final boolean isSignedStatementFee = command.booleanPrimitiveValueOfParameterNamed(SavingsApiConstants.signedStatementFeeParamName);
 
         if (isSignedStatementFee && nipRequest.switchId() != null) {
@@ -509,8 +509,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                     paymentDetail, transactionBooleanValues, nipRequest.switchId(), referenceTransactions, backdatedTxnsAllowedTill);
         } else if (billsRequest.aggregatorCode() != null) {
             withdrawal = this.savingsAccountDomainService.handleBillsPostingWithdrawal(account, fmt, transactionDate, transactionAmount,
-                    paymentDetail, transactionBooleanValues, billsRequest.aggregatorCode(), referenceTransactions,
-                    backdatedTxnsAllowedTill);
+                    paymentDetail, transactionBooleanValues, billsRequest.aggregatorCode(), billsRequest.commissionAmount(),
+                    referenceTransactions, backdatedTxnsAllowedTill);
         } else {
             withdrawal = this.savingsAccountDomainService.handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
                     transactionBooleanValues, backdatedTxnsAllowedTill);

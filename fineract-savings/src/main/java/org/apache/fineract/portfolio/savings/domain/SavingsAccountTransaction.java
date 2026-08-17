@@ -153,6 +153,15 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
     @Column(name = "aggregator_code", nullable = true, length = 64)
     private String aggregatorCode;
 
+    /**
+     * AB-510: the bank's commission carved out of the aggregator payable on this (primary, {@code WITHDRAWAL}-typed)
+     * bills/airtime leg's own journal entry — analogous to {@link #switchFeeAmount}/{@link #bankCommissionAmount}
+     * splitting a NIP {@code COMMISSION} reference transaction's credit, except here the split lives on the primary
+     * transaction itself, since a bills posting has no separate Aggregator Payable/Commission reference legs.
+     */
+    @Column(name = "aggregator_commission_amount", scale = 6, precision = 19, nullable = true)
+    private BigDecimal aggregatorCommissionAmount;
+
     @Column(name = "switch_fee_amount", scale = 6, precision = 19, nullable = true)
     private BigDecimal switchFeeAmount;
 
@@ -301,28 +310,6 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         final SavingsAccountTransaction transaction = new SavingsAccountTransaction(savingsAccount, office,
                 SavingsAccountTransactionType.VAT.getValue(), date, amount, false, false, false, refNo);
         transaction.switchId = switchId;
-        return transaction;
-    }
-
-    /**
-     * AB-510: the bills/airtime aggregator's commission leg — the aggregator-scoped counterpart of
-     * {@link #commission(SavingsAccount, Office, LocalDate, Money, String, String, BigDecimal, BigDecimal)}. Unlike a
-     * NIP switch's commission, a bills/airtime commission is a single flat amount owed to the bank with no switch-fee
-     * sub-split, so it carries no breakdown.
-     */
-    public static SavingsAccountTransaction aggregatorCommission(final SavingsAccount savingsAccount, final Office office,
-            final LocalDate date, final Money amount, final String refNo, final String aggregatorCode) {
-        final SavingsAccountTransaction transaction = new SavingsAccountTransaction(savingsAccount, office,
-                SavingsAccountTransactionType.COMMISSION.getValue(), date, amount, false, false, false, refNo);
-        transaction.aggregatorCode = aggregatorCode;
-        return transaction;
-    }
-
-    public static SavingsAccountTransaction aggregatorPayable(final SavingsAccount savingsAccount, final Office office,
-            final LocalDate date, final Money amount, final String refNo, final String aggregatorCode) {
-        final SavingsAccountTransaction transaction = new SavingsAccountTransaction(savingsAccount, office,
-                SavingsAccountTransactionType.AGGREGATOR_PAYABLE.getValue(), date, amount, false, false, false, refNo);
-        transaction.aggregatorCode = aggregatorCode;
         return transaction;
     }
 
@@ -585,6 +572,14 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         this.aggregatorCode = aggregatorCode;
     }
 
+    public BigDecimal getAggregatorCommissionAmount() {
+        return this.aggregatorCommissionAmount;
+    }
+
+    public void setAggregatorCommissionAmount(final BigDecimal aggregatorCommissionAmount) {
+        this.aggregatorCommissionAmount = aggregatorCommissionAmount;
+    }
+
     public PaymentDetail getPaymentDetail() {
         return this.paymentDetail;
     }
@@ -766,7 +761,7 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
         return new SavingsAccountingBridgeTransactionDTO(getId(), this.office.getId(), transactionType, isReversed(), getTransactionDate(),
                 currencyCode, this.amount, this.overdraftAmount,
                 this.paymentDetail == null ? null : this.paymentDetail.getPaymentType().getId(), savingsChargesPaidData, taxData,
-                this.switchId, this.aggregatorCode, commissionAllocation());
+                this.switchId, this.aggregatorCode, this.aggregatorCommissionAmount, commissionAllocation());
     }
 
     /**

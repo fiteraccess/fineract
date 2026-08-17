@@ -248,30 +248,33 @@ class CashBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
-    void shouldRouteAggregatorPayableToConfiguredAggregatorAccount() {
+    void shouldSplitBillsPostingPrincipalBetweenAggregatorPayableAndCommissionIncome() {
         GLAccount savingsControl = glAccount(101L);
         configureAggregator("CORALPAY", 301L, 302L, 303L);
         when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
                 .thenReturn(savingsControl);
 
-        processor.createJournalEntriesForSavings(savings(aggregatorPayable("CORALPAY", BigDecimal.valueOf(4950), null)));
+        processor.createJournalEntriesForSavings(
+                savings(billsPostingWithdrawal("CORALPAY", BigDecimal.valueOf(5000), BigDecimal.valueOf(50), null)));
 
-        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(4950))),
-                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(4950))));
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(5000))),
+                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(4950)),
+                        new SavingsJournalEntryAllocation(302L, BigDecimal.valueOf(50))));
         verifyNoInteractions(configurationProvider);
     }
 
     @Test
-    void shouldRouteAggregatorScopedCommissionWithoutRequiringSwitchConfiguration() {
+    void shouldOmitZeroCommissionCreditForBillsPostingPrincipalWithNoCommission() {
         GLAccount savingsControl = glAccount(101L);
-        configureAggregator("CORALPAY", 301L, 302L, 303L);
+        configureAggregator("NOMIWORLD", 301L, 302L, 303L);
         when(helper.getLinkedGLAccountForSavingsProduct(22L, CashAccountsForSavings.SAVINGS_CONTROL.getValue(), 44L))
                 .thenReturn(savingsControl);
 
-        processor.createJournalEntriesForSavings(savings(aggregatorCommission("CORALPAY", BigDecimal.valueOf(50), null)));
+        processor.createJournalEntriesForSavings(
+                savings(billsPostingWithdrawal("NOMIWORLD", BigDecimal.valueOf(1000), BigDecimal.ZERO, null)));
 
-        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(50))),
-                List.of(new SavingsJournalEntryAllocation(302L, BigDecimal.valueOf(50))));
+        assertBalancedAllocations(List.of(new SavingsJournalEntryAllocation(101L, BigDecimal.valueOf(1000))),
+                List.of(new SavingsJournalEntryAllocation(301L, BigDecimal.valueOf(1000))));
         verifyNoInteractions(configurationProvider);
     }
 
@@ -564,7 +567,7 @@ class CashBasedAccountingProcessorForSavingsTest {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(Long.valueOf(type.getValue()),
                 type.getCode(), type.name());
         return new SavingsTransactionDTO(33L, 44L, transactionId, TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
-                overdraftAmount, accountTransfer, List.of(), switchId, null, commissionAllocation);
+                overdraftAmount, accountTransfer, List.of(), switchId, null, null, commissionAllocation);
     }
 
     private void configureSwitch() {
@@ -572,14 +575,13 @@ class CashBasedAccountingProcessorForSavingsTest {
                 .thenReturn(new NipSwitchAccountingConfigurationProvider.OutboundConfiguration("NIBSS", 201L, 202L, 203L));
     }
 
-    private SavingsTransactionDTO aggregatorPayable(final String aggregatorCode, final BigDecimal amount,
-            final BigDecimal overdraftAmount) {
-        return aggregatorTransaction(SavingsAccountTransactionType.AGGREGATOR_PAYABLE, aggregatorCode, amount, overdraftAmount);
-    }
-
-    private SavingsTransactionDTO aggregatorCommission(final String aggregatorCode, final BigDecimal amount,
-            final BigDecimal overdraftAmount) {
-        return aggregatorTransaction(SavingsAccountTransactionType.COMMISSION, aggregatorCode, amount, overdraftAmount);
+    private SavingsTransactionDTO billsPostingWithdrawal(final String aggregatorCode, final BigDecimal amount,
+            final BigDecimal aggregatorCommissionAmount, final BigDecimal overdraftAmount) {
+        SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(
+                Long.valueOf(SavingsAccountTransactionType.WITHDRAWAL.getValue()), SavingsAccountTransactionType.WITHDRAWAL.getCode(),
+                SavingsAccountTransactionType.WITHDRAWAL.name());
+        return new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
+                overdraftAmount, false, List.of(), null, aggregatorCode, aggregatorCommissionAmount, null);
     }
 
     private SavingsTransactionDTO convenienceFee(final String aggregatorCode, final BigDecimal amount, final BigDecimal overdraftAmount) {
@@ -591,7 +593,7 @@ class CashBasedAccountingProcessorForSavingsTest {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(Long.valueOf(type.getValue()),
                 type.getCode(), type.name());
         return new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
-                overdraftAmount, false, List.of(), null, aggregatorCode, null);
+                overdraftAmount, false, List.of(), null, aggregatorCode, null, null);
     }
 
     private void configureAggregator(final String aggregatorCode, final Long aggregatorPayableGlAccountId,

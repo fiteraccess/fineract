@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
@@ -29,20 +30,25 @@ import org.junit.jupiter.api.Test;
 
 /**
  * AB-510: mirrors {@link ReferenceTransactionNipValidationTest}, keyed on {@code aggregatorCode} instead of
- * {@code switchId}.
+ * {@code switchId}. The aggregator's payable amount and the bank's commission no longer ride as reference-transaction
+ * legs — both are derived from the withdrawal's own {@code aggregatorCommissionAmount} field, so only Convenience Fee
+ * and VAT remain valid reference types here.
  */
 class ReferenceTransactionBillsPostingValidationTest {
+
+    private static final BigDecimal DEFAULT_TRANSACTION_AMOUNT = BigDecimal.valueOf(100000);
 
     @Test
     void acceptsOmittedOrEmptyFeeReferencesAndNormalizesAggregatorCode() {
         ReferenceTransaction.BillsPostingWithdrawalRequest omittedReferences = parse("""
-                { "aggregatorCode": " coralpay " }
+                { "aggregatorCode": " coralpay ", "aggregatorCommissionAmount": 50 }
                 """);
         ReferenceTransaction.BillsPostingWithdrawalRequest emptyReferences = parse("""
-                { "aggregatorCode": " coralpay ", "referenceTransactions": [] }
+                { "aggregatorCode": " coralpay ", "aggregatorCommissionAmount": 50, "referenceTransactions": [] }
                 """);
 
         assertThat(omittedReferences.aggregatorCode()).isEqualTo("CORALPAY");
+        assertThat(omittedReferences.commissionAmount()).isEqualByComparingTo("50");
         assertThat(omittedReferences.references()).isEmpty();
         assertThat(emptyReferences.references()).isEmpty();
     }
@@ -50,31 +56,26 @@ class ReferenceTransactionBillsPostingValidationTest {
     @Test
     void acceptsTheFullWorkedExampleLegShape() {
         ReferenceTransaction.BillsPostingWithdrawalRequest request = parse("""
-                { "aggregatorCode": "CORALPAY", "referenceTransactions": [
-                  { "type": "AGGREGATOR_PAYABLE", "amount": 4950, "description": "Aggregator Payable" },
-                  { "type": "COMMISSION", "amount": 50, "description": "Commission" },
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
                   { "type": "CONVENIENCE_FEE", "amount": 100, "description": "Convenience Fee" },
                   { "type": "VAT", "amount": 7.5, "description": "VAT" }
                 ] }
                 """);
 
-        assertThat(request.references()).extracting(ReferenceTransaction::type).containsExactly(
-                SavingsAccountTransactionType.AGGREGATOR_PAYABLE, SavingsAccountTransactionType.COMMISSION,
-                SavingsAccountTransactionType.CONVENIENCE_FEE, SavingsAccountTransactionType.VAT);
+        assertThat(request.commissionAmount()).isEqualByComparingTo("50");
+        assertThat(request.references()).extracting(ReferenceTransaction::type)
+                .containsExactly(SavingsAccountTransactionType.CONVENIENCE_FEE, SavingsAccountTransactionType.VAT);
     }
 
     @Test
     void acceptsAirtimeShapeWithNoConvenienceFeeOrVat() {
         ReferenceTransaction.BillsPostingWithdrawalRequest request = parse("""
-                { "aggregatorCode": "NOMIWORLD", "referenceTransactions": [
-                  { "type": "AGGREGATOR_PAYABLE", "amount": 964.50, "description": "Aggregator Payable" },
-                  { "type": "COMMISSION", "amount": 35.50, "description": "Commission" }
-                ] }
+                { "aggregatorCode": "NOMIWORLD", "aggregatorCommissionAmount": 35.50 }
                 """);
 
         assertThat(request.aggregatorCode()).isEqualTo("NOMIWORLD");
-        assertThat(request.references()).extracting(ReferenceTransaction::type)
-                .containsExactly(SavingsAccountTransactionType.AGGREGATOR_PAYABLE, SavingsAccountTransactionType.COMMISSION);
+        assertThat(request.commissionAmount()).isEqualByComparingTo("35.50");
+        assertThat(request.references()).isEmpty();
     }
 
     @Test
@@ -86,16 +87,8 @@ class ReferenceTransactionBillsPostingValidationTest {
                 """);
 
         assertThat(request.aggregatorCode()).isNull();
+        assertThat(request.commissionAmount()).isNull();
         assertThat(request.references()).extracting(ReferenceTransaction::type).containsExactly(SavingsAccountTransactionType.EMT_LEVY);
-    }
-
-    @Test
-    void rejectsMissingAggregatorCodeWhenAggregatorPayableIsPresent() {
-        assertInvalid("""
-                { "referenceTransactions": [
-                  { "type": "AGGREGATOR_PAYABLE", "amount": 4950, "description": "Aggregator Payable" }
-                ] }
-                """);
     }
 
     @Test
@@ -108,15 +101,46 @@ class ReferenceTransactionBillsPostingValidationTest {
     }
 
     @Test
+    void rejectsMissingAggregatorCommissionAmountWhenAggregatorCodeIsPresent() {
+        assertInvalid("""
+                { "aggregatorCode": "CORALPAY" }
+                """);
+    }
+
+    @Test
+    void rejectsNegativeAggregatorCommissionAmount() {
+        assertInvalid("""
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": -1 }
+                """);
+    }
+
+    @Test
+    void rejectsAggregatorCommissionAmountExceedingTransactionAmount() {
+        assertThatThrownBy(() -> ReferenceTransaction.parseBillsPostingWithdrawal(command("""
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 200 }
+                """), BigDecimal.valueOf(100))).isInstanceOf(GeneralPlatformDomainRuleException.class);
+    }
+
+    @Test
     void rejectsUnsupportedReferenceTypesWhenAggregatorCodeIsPresent() {
         assertInvalid("""
-                { "aggregatorCode": "CORALPAY", "referenceTransactions": [
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
                   { "type": "EMT_LEVY", "amount": 50 }
                 ] }
                 """);
         assertInvalid("""
-                { "aggregatorCode": "CORALPAY", "referenceTransactions": [
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
                   { "type": "WITHDRAWAL", "amount": 1 }
+                ] }
+                """);
+        assertInvalid("""
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
+                  { "type": "AGGREGATOR_PAYABLE", "amount": 4950, "description": "Aggregator Payable" }
+                ] }
+                """);
+        assertInvalid("""
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
+                  { "type": "COMMISSION", "amount": 50, "description": "Commission" }
                 ] }
                 """);
     }
@@ -124,8 +148,8 @@ class ReferenceTransactionBillsPostingValidationTest {
     @Test
     void rejectsBlankDescription() {
         assertInvalid("""
-                { "aggregatorCode": "CORALPAY", "referenceTransactions": [
-                  { "type": "AGGREGATOR_PAYABLE", "amount": 4950, "description": " " }
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
+                  { "type": "CONVENIENCE_FEE", "amount": 100, "description": " " }
                 ] }
                 """);
     }
@@ -137,7 +161,7 @@ class ReferenceTransactionBillsPostingValidationTest {
         // documented here so the invariant has a test even though parseBillsPostingWithdrawal itself never sees
         // switchId.
         ReferenceTransaction.BillsPostingWithdrawalRequest request = parse("""
-                { "aggregatorCode": "CORALPAY" }
+                { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50 }
                 """);
         assertThat(request.aggregatorCode()).isEqualTo("CORALPAY");
     }
@@ -154,7 +178,7 @@ class ReferenceTransactionBillsPostingValidationTest {
     }
 
     private ReferenceTransaction.BillsPostingWithdrawalRequest parse(final String json) {
-        return ReferenceTransaction.parseBillsPostingWithdrawal(command(json));
+        return ReferenceTransaction.parseBillsPostingWithdrawal(command(json), DEFAULT_TRANSACTION_AMOUNT);
     }
 
     private JsonCommand command(final String json) {

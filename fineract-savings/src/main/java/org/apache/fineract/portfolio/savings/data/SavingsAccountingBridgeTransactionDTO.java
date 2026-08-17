@@ -44,5 +44,6 @@ public class SavingsAccountingBridgeTransactionDTO {
     private List<SavingsAccountingBridgeTaxDTO> taxDetails = new ArrayList<>();
     private String switchId;
     private String aggregatorCode;
+    private BigDecimal aggregatorCommissionAmount;
     private SavingsAccountingBridgeCommissionAllocationDTO commissionAllocation;
 }

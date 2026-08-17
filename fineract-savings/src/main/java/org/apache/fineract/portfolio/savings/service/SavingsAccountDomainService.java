@@ -59,7 +59,8 @@ public interface SavingsAccountDomainService {
      */
     SavingsAccountTransaction handleBillsPostingWithdrawal(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
             BigDecimal transactionAmount, PaymentDetail paymentDetail, SavingsTransactionBooleanValues transactionBooleanValues,
-            String aggregatorCode, List<ReferenceTransaction> references, boolean backdatedTxnsAllowedTill);
+            String aggregatorCode, BigDecimal aggregatorCommissionAmount, List<ReferenceTransaction> references,
+            boolean backdatedTxnsAllowedTill);
 
     SavingsAccountTransaction handleDeposit(SavingsAccount account, DateTimeFormatter fmt, LocalDate transactionDate,
             BigDecimal transactionAmount, PaymentDetail paymentDetail, boolean isAccountTransfer, boolean isRegularTransaction,

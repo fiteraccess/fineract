@@ -72,6 +72,9 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                 if (tryCreateNipJournalEntries(nipAccountingContext)) {
                     continue;
                 }
+                if (tryCreateBillsPostingJournalEntries(nipAccountingContext)) {
+                    continue;
+                }
 
                 if (savingsTransactionDTO.getTransactionType().isWithdrawal() && savingsTransactionDTO.isOverdraftTransaction()) {
                     boolean isPositive = amount.subtract(overdraftAmount).compareTo(BigDecimal.ZERO) > 0;
@@ -174,21 +177,6 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                  */
                 else if (savingsTransactionDTO.getTransactionType().isVat()) {
                     createVatJournalEntries(nipAccountingContext);
-                }
-
-                /** AB-510: DR Savings Control, CR the aggregator's payable account (via aggregatorCode). */
-                else if (savingsTransactionDTO.getTransactionType().isAggregatorPayable()) {
-                    createAggregatorPayableJournalEntries(nipAccountingContext);
-                }
-
-                /**
-                 * AB-510: a bills/airtime Commission leg — a single flat amount with no switch-fee sub-split, resolved
-                 * by aggregatorCode. NIP's switch-scoped Commission is handled above by tryCreateNipJournalEntries and
-                 * never reaches here.
-                 */
-                else if (savingsTransactionDTO.getTransactionType().isCommission()
-                        && StringUtils.isNotBlank(savingsTransactionDTO.getAggregatorCode())) {
-                    createAggregatorCommissionJournalEntries(nipAccountingContext);
                 }
 
                 /** AB-510: the bills-only Convenience Fee leg, resolved by aggregatorCode. */
@@ -451,28 +439,43 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
     }
 
     /**
-     * AB-510: the bills/airtime aggregator's payable leg, resolved by {@code aggregatorCode} via
-     * {@link AggregatorAccountingConfigurationProvider} rather than a Financial Activity mapping, since it varies per
-     * aggregator (mirrors {@link #createNipPrincipalJournalEntries}'s switch-payable precedent).
+     * AB-510: mirrors {@link #tryCreateNipJournalEntries}'s early-intercept shape — a bills/airtime withdrawal carries
+     * {@code aggregatorCode} instead of {@code switchId} on the same WITHDRAWAL transaction type, so it must be
+     * intercepted here too, before the generic {@code isWithdrawal()} branch further down would otherwise credit the
+     * plain savings-reference account.
      */
-    private void createAggregatorPayableJournalEntries(final NipAccountingContext context) {
+    private boolean tryCreateBillsPostingJournalEntries(final NipAccountingContext context) {
         final SavingsTransactionDTO transaction = context.transaction();
-        final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
-                .requireConfiguration(transaction.getAggregatorCode());
-        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
-                List.of(new SavingsJournalEntryAllocation(configuration.aggregatorPayableGlAccountId(), transaction.getAmount())));
+        if (StringUtils.isBlank(transaction.getAggregatorCode()) || !transaction.getTransactionType().isWithdrawal()) {
+            return false;
+        }
+        createBillsPostingPrincipalJournalEntries(context);
+        return true;
     }
 
     /**
-     * AB-510: a bills/airtime Commission leg — a single flat amount owed to the bank with no switch-fee sub-split,
-     * resolved by {@code aggregatorCode} rather than {@code switchId}.
+     * AB-510: the bills/airtime withdrawal's principal leg splits the single customer debit into two credits — the
+     * amount owed to the aggregator (bill amount minus the bank's commission) and the bank's own commission income —
+     * resolved by {@code aggregatorCode} via {@link AggregatorAccountingConfigurationProvider}, mirroring
+     * {@link #createCommissionJournalEntries}'s multi-credit-allocation shape. Unlike a NIP transfer, bills posting
+     * never sends a separate reference-transaction leg for the commission — it rides on the primary withdrawal's own
+     * {@code aggregatorCommissionAmount} field instead.
      */
-    private void createAggregatorCommissionJournalEntries(final NipAccountingContext context) {
+    private void createBillsPostingPrincipalJournalEntries(final NipAccountingContext context) {
         final SavingsTransactionDTO transaction = context.transaction();
         final AggregatorAccountingConfigurationProvider.Configuration configuration = this.aggregatorAccountingConfigurationProvider
                 .requireConfiguration(transaction.getAggregatorCode());
-        createBalancedJournalEntries(context, createCustomerControlAllocations(context),
-                List.of(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(), transaction.getAmount())));
+        final BigDecimal commissionAmount = transaction.getAggregatorCommissionAmount() == null ? BigDecimal.ZERO
+                : transaction.getAggregatorCommissionAmount();
+        final BigDecimal aggregatorPayableAmount = transaction.getAmount().subtract(commissionAmount);
+        final List<SavingsJournalEntryAllocation> creditAllocations = new ArrayList<>(2);
+        if (aggregatorPayableAmount.signum() > 0) {
+            creditAllocations.add(new SavingsJournalEntryAllocation(configuration.aggregatorPayableGlAccountId(), aggregatorPayableAmount));
+        }
+        if (commissionAmount.signum() > 0) {
+            creditAllocations.add(new SavingsJournalEntryAllocation(configuration.commissionIncomeGlAccountId(), commissionAmount));
+        }
+        createBalancedJournalEntries(context, createCustomerControlAllocations(context), creditAllocations);
     }
 
     /**

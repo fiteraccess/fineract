@@ -114,7 +114,7 @@ class AccountingProcessorHelperTest {
                 LocalDate.of(2026, 2, 3), "USD", BigDecimal.TEN, BigDecimal.ONE, 77L,
                 new ArrayList<>(List.of(new SavingsAccountingBridgeChargePaymentDTO(88L, 99L, true, BigDecimal.TWO),
                         new SavingsAccountingBridgeChargePaymentDTO(111L, 222L, false, BigDecimal.valueOf(3)))),
-                new ArrayList<>(List.of(new SavingsAccountingBridgeTaxDTO(BigDecimal.valueOf(4), 333L, 444L))), "NIBSS", null,
+                new ArrayList<>(List.of(new SavingsAccountingBridgeTaxDTO(BigDecimal.valueOf(4), 333L, 444L))), "NIBSS", null, null,
                 commissionAllocation);
         SavingsAccountingBridgeDTO accountingBridgeData = new SavingsAccountingBridgeDTO(11L, 22L, 33L, "USD", true, false, false,
                 List.of(transactionDTO));
@@ -153,7 +153,7 @@ class AccountingProcessorHelperTest {
                 Long.valueOf(SavingsAccountTransactionType.WITHDRAWAL.getValue()), "withdrawal", "Withdrawal");
         SavingsAccountingBridgeTransactionDTO transactionDTO = new SavingsAccountingBridgeTransactionDTO(55L, 66L, transactionType, false,
                 LocalDate.of(2026, 2, 3), "USD", BigDecimal.TEN, BigDecimal.ZERO, null, new ArrayList<>(), new ArrayList<>(), null, null,
-                null);
+                null, null);
         SavingsAccountingBridgeDTO accountingBridgeData = new SavingsAccountingBridgeDTO(11L, 22L, 33L, "USD", true, false, true,
                 List.of(transactionDTO));
 
