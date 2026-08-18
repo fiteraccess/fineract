@@ -66,7 +66,7 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
     }
 
     public boolean hasNipWithdrawalNote() {
-        return isNipFee() || type.isEmtLevy() && StringUtils.isNotBlank(description);
+        return isNipFee() || (type.isEmtLevy() && StringUtils.isNotBlank(description));
     }
 
     /**
