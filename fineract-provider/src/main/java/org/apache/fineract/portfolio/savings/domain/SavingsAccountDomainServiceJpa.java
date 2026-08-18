@@ -162,9 +162,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     }
 
     /**
-     * AB-510: the bills/airtime counterpart of {@link #handleNipWithdrawal}. The primary leg posts as an ordinary
-     * {@code WITHDRAWAL} tagged with {@code aggregatorCode} and {@code aggregatorCommissionAmount} — its own journal
-     * entry splits the credit side between the aggregator payable and commission income GL accounts (mirroring how
+     * AB-510: the bills/airtime counterpart of {@link #handleNipWithdrawal}. The primary leg posts as a
+     * {@code BILL_PAYMENT} transaction tagged with {@code aggregatorCode} and {@code aggregatorCommissionAmount} — its
+     * own journal entry splits the credit side between the aggregator payable and commission income GL accounts
+     * (mirroring how
      * {@link org.apache.fineract.accounting.journalentry.service.CashBasedAccountingProcessorForSavings}'s NIP
      * commission method already splits one transaction's credit across two accounts, just applied to the primary leg
      * instead of a reference leg). Only Convenience Fee and VAT ride as separate reference transactions on top.
@@ -178,7 +179,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction withdrawal = handleWithdrawal(account, fmt, transactionDate, transactionAmount, paymentDetail,
                 transactionBooleanValues, null, aggregatorCode, aggregatorCommissionAmount, backdatedTxnsAllowedTill, false,
-                SavingsAccountTransactionType.WITHDRAWAL);
+                SavingsAccountTransactionType.BILL_PAYMENT);
         final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
         applyReferenceTransactions(account, withdrawal, references, transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill,

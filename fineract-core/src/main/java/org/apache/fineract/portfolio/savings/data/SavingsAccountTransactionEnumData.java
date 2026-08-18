@@ -59,14 +59,15 @@ public class SavingsAccountTransactionEnumData implements Serializable {
         this.deposit = transactionType == SavingsAccountTransactionType.DEPOSIT;
         this.dividendPayout = transactionType == SavingsAccountTransactionType.DIVIDEND_PAYOUT;
         this.accrual = transactionType == SavingsAccountTransactionType.ACCRUAL;
-        this.withdrawal = transactionType == SavingsAccountTransactionType.WITHDRAWAL;
+        this.withdrawal = transactionType == SavingsAccountTransactionType.WITHDRAWAL
+                || transactionType == SavingsAccountTransactionType.BILL_PAYMENT;
         this.interestPosting = transactionType == SavingsAccountTransactionType.INTEREST_POSTING;
         this.feeDeduction = transactionType == SavingsAccountTransactionType.ANNUAL_FEE
                 || transactionType == SavingsAccountTransactionType.WITHDRAWAL_FEE
                 || transactionType == SavingsAccountTransactionType.PAY_CHARGE || transactionType == SavingsAccountTransactionType.EMT_LEVY
                 || transactionType == SavingsAccountTransactionType.COMMISSION || transactionType == SavingsAccountTransactionType.VAT
                 || transactionType == SavingsAccountTransactionType.SIGNED_STATEMENT_FEE
-                || transactionType == SavingsAccountTransactionType.AGGREGATOR_PAYABLE
+                || transactionType == SavingsAccountTransactionType.BILL_PAYMENT
                 || transactionType == SavingsAccountTransactionType.CONVENIENCE_FEE;
         this.initiateTransfer = transactionType == SavingsAccountTransactionType.INITIATE_TRANSFER;
         this.approveTransfer = transactionType == SavingsAccountTransactionType.APPROVE_TRANSFER;
@@ -125,8 +126,8 @@ public class SavingsAccountTransactionEnumData implements Serializable {
         return Long.valueOf(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE.getValue()).equals(this.id);
     }
 
-    public boolean isAggregatorPayable() {
-        return Long.valueOf(SavingsAccountTransactionType.AGGREGATOR_PAYABLE.getValue()).equals(this.id);
+    public boolean isBillPayment() {
+        return Long.valueOf(SavingsAccountTransactionType.BILL_PAYMENT.getValue()).equals(this.id);
     }
 
     public boolean isConvenienceFee() {
