@@ -135,7 +135,7 @@ class ReferenceTransactionBillsPostingValidationTest {
                 """);
         assertInvalid("""
                 { "aggregatorCode": "CORALPAY", "aggregatorCommissionAmount": 50, "referenceTransactions": [
-                  { "type": "AGGREGATOR_PAYABLE", "amount": 4950, "description": "Aggregator Payable" }
+                  { "type": "BILL_PAYMENT", "amount": 4950, "description": "Bill Payment" }
                 ] }
                 """);
         assertInvalid("""

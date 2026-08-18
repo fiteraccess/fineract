@@ -565,8 +565,8 @@ class CashBasedAccountingProcessorForSavingsTest {
     private SavingsTransactionDTO billsPostingWithdrawal(final String aggregatorCode, final BigDecimal amount,
             final BigDecimal aggregatorCommissionAmount, final BigDecimal overdraftAmount) {
         SavingsAccountTransactionEnumData transactionType = new SavingsAccountTransactionEnumData(
-                Long.valueOf(SavingsAccountTransactionType.WITHDRAWAL.getValue()), SavingsAccountTransactionType.WITHDRAWAL.getCode(),
-                SavingsAccountTransactionType.WITHDRAWAL.name());
+                Long.valueOf(SavingsAccountTransactionType.BILL_PAYMENT.getValue()), SavingsAccountTransactionType.BILL_PAYMENT.getCode(),
+                SavingsAccountTransactionType.BILL_PAYMENT.name());
         return new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, transactionType, amount, false, List.of(), List.of(),
                 overdraftAmount, false, List.of(), null, aggregatorCode, aggregatorCommissionAmount, null);
     }

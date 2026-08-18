@@ -56,7 +56,7 @@ public enum SavingsAccountTransactionType {
     COMMISSION(25, "savingsAccountTransactionType.commission", TransactionEntryType.DEBIT), //
     VAT(26, "savingsAccountTransactionType.vat", TransactionEntryType.DEBIT), //
     SIGNED_STATEMENT_FEE(27, "savingsAccountTransactionType.signedStatementFee", TransactionEntryType.DEBIT), //
-    AGGREGATOR_PAYABLE(28, "savingsAccountTransactionType.aggregatorPayable", TransactionEntryType.DEBIT), //
+    BILL_PAYMENT(28, "savingsAccountTransactionType.billPayment", TransactionEntryType.DEBIT), //
     CONVENIENCE_FEE(29, "savingsAccountTransactionType.convenienceFee", TransactionEntryType.DEBIT); //
 
     private static final Map<Integer, SavingsAccountTransactionType> BY_ID = Arrays.stream(values())
@@ -108,7 +108,9 @@ public enum SavingsAccountTransactionType {
     }
 
     public boolean isWithdrawal() {
-        return this == WITHDRAWAL;
+        // BILL_PAYMENT is the primary leg of a bills/airtime posting (AB-510) and must count toward
+        // withdrawal totals and interest-recalculation the same way an ordinary WITHDRAWAL does.
+        return this == WITHDRAWAL || this == BILL_PAYMENT;
     }
 
     public boolean isInterestPosting() {
@@ -137,7 +139,7 @@ public enum SavingsAccountTransactionType {
 
     public boolean isChargeTransaction() {
         return isPayCharge() || isWithdrawalFee() || isAnnualFee() || isEmtLevy() || isCommission() || isVat() || isSignedStatementFee()
-                || isAggregatorPayable() || isConvenienceFee();
+                || isBillPayment() || isConvenienceFee();
     }
 
     public boolean isEmtLevy() {
@@ -156,8 +158,8 @@ public enum SavingsAccountTransactionType {
         return this == SIGNED_STATEMENT_FEE;
     }
 
-    public boolean isAggregatorPayable() {
-        return this == AGGREGATOR_PAYABLE;
+    public boolean isBillPayment() {
+        return this == BILL_PAYMENT;
     }
 
     public boolean isConvenienceFee() {

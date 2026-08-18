@@ -255,4 +255,5 @@
     <include file="parts/0234_add_bills_payment_transaction_types.xml" relativeToChangelogFile="true" />
     <include file="parts/0235_add_aggregator_commission_amount.xml" relativeToChangelogFile="true" />
     <include file="parts/0236_require_aggregator_convenience_fee_gl_account.xml" relativeToChangelogFile="true" />
+    <include file="parts/0237_rename_aggregator_payable_to_bill_payment.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

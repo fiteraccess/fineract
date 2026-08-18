@@ -222,7 +222,7 @@ public record ReferenceTransaction(SavingsAccountTransactionType type, BigDecima
     /** Rejects NIP-specific and bills/airtime-specific request data on transfer paths. */
     public static void rejectNipFields(final JsonCommand command, final List<ReferenceTransaction> references) {
         if (command.parameterExists("switchId") || command.parameterExists("aggregatorCode")
-                || references.stream().anyMatch(reference -> reference.isNipFee() || reference.type().isAggregatorPayable()
+                || references.stream().anyMatch(reference -> reference.isNipFee() || reference.type().isBillPayment()
                         || reference.type().isConvenienceFee() || reference.description() != null || reference.breakdown() != null)) {
             throw invalid("not.supported", "NIP and bills/airtime request fields are supported only on savings withdrawals");
         }

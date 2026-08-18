@@ -439,8 +439,8 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
     }
 
     /**
-     * AB-510: mirrors {@link #tryCreateNipJournalEntries}'s early-intercept shape — a bills/airtime withdrawal carries
-     * {@code aggregatorCode} instead of {@code switchId} on the same WITHDRAWAL transaction type, so it must be
+     * AB-510: mirrors {@link #tryCreateNipJournalEntries}'s early-intercept shape — a bills/airtime withdrawal posts as
+     * {@code BILL_PAYMENT} (which counts as {@code isWithdrawal()}) and carries {@code aggregatorCode}, so it must be
      * intercepted here too, before the generic {@code isWithdrawal()} branch further down would otherwise credit the
      * plain savings-reference account.
      */
