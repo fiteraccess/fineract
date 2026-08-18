@@ -184,6 +184,9 @@ public class SavingsApiConstants {
     public static final String referenceTransactionsParamName = "referenceTransactions";
     public static final String switchIdParamName = "switchId";
     public static final String aggregatorCodeParamName = "aggregatorCode";
+    // AB-510: the bank's commission cut of a bills/airtime withdrawal's transactionAmount; required whenever
+    // aggregatorCode is present. See ReferenceTransaction.parseBillsPostingWithdrawal.
+    public static final String aggregatorCommissionAmountParamName = "aggregatorCommissionAmount";
 
     // AB-339: routes a withdrawal through handleSignedStatementFeeWithdrawal instead of the plain withdrawal path,
     // so the fee posts as its own SIGNED_STATEMENT_FEE transaction type (resolving a dedicated income GL) with VAT
