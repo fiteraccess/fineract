@@ -112,6 +112,13 @@ public class SavingsAccountTransactionDataValidator {
         final BigDecimal transactionAmount = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed(transactionAmountParamName, element);
         baseDataValidator.reset().parameter(transactionAmountParamName).value(transactionAmount).notNull().positiveAmount();
 
+        if (this.fromApiJsonHelper.parameterExists(SavingsApiConstants.chargeableAmountParamName, element)) {
+            final BigDecimal chargeableAmount = this.fromApiJsonHelper
+                    .extractBigDecimalWithLocaleNamed(SavingsApiConstants.chargeableAmountParamName, element);
+            baseDataValidator.reset().parameter(SavingsApiConstants.chargeableAmountParamName).value(chargeableAmount).notNull()
+                    .zeroOrPositiveAmount();
+        }
+
         final Integer paymentType = this.fromApiJsonHelper.extractIntegerWithLocaleNamed(paymentTypeIdParamName, element);
         baseDataValidator.reset().parameter(paymentTypeIdParamName).value(paymentType).notNull();
 

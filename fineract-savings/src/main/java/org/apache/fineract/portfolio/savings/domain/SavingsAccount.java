@@ -1419,6 +1419,16 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public SavingsAccountTransaction withdraw(final SavingsAccountTransactionDTO transactionDTO, final boolean applyWithdrawFee,
             final boolean backdatedTxnsAllowedTill, final Long relaxingDaysConfigForPivotDate, String refNo) {
+        return withdraw(transactionDTO, applyWithdrawFee, backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo, null);
+    }
+
+    /**
+     * AB-243: {@code withdrawalFeeBase} is the amount withdrawal fees are calculated on when it differs from the
+     * withdrawal amount; {@code null} keeps the historical behavior of charging on the full transaction amount.
+     */
+    public SavingsAccountTransaction withdraw(final SavingsAccountTransactionDTO transactionDTO, final boolean applyWithdrawFee,
+            final boolean backdatedTxnsAllowedTill, final Long relaxingDaysConfigForPivotDate, String refNo,
+            final BigDecimal withdrawalFeeBase) {
         if (!isTransactionsAllowed()) {
 
             final String defaultUserMessage = "Transaction is not allowed. Account is not active.";
@@ -1474,8 +1484,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         if (applyWithdrawFee) {
             // auto pay withdrawal fee
-            payWithdrawalFee(transactionDTO.getTransactionAmount(), transactionDTO.getTransactionDate(), transactionDTO.getPaymentDetail(),
-                    backdatedTxnsAllowedTill, refNo);
+            final BigDecimal feeBase = withdrawalFeeBase == null ? transactionDTO.getTransactionAmount() : withdrawalFeeBase;
+            payWithdrawalFee(feeBase, transactionDTO.getTransactionDate(), transactionDTO.getPaymentDetail(), backdatedTxnsAllowedTill,
+                    refNo);
         }
 
         final Money transactionAmountMoney = Money.of(this.currency, transactionDTO.getTransactionAmount());

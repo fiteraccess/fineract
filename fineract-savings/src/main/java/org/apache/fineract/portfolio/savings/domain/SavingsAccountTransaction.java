@@ -151,6 +151,12 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
     @Column(name = "bank_commission_amount", scale = 6, precision = 19, nullable = true)
     private BigDecimal bankCommissionAmount;
 
+    // AB-243: caller-supplied base the withdrawal fees were computed on when it differs from the transaction
+    // amount (0 = fee-exempt). Recorded on the principal withdrawal row so back office can explain the fee
+    // without the command audit; null = fees on the transaction amount as always.
+    @Column(name = "chargeable_amount", scale = 6, precision = 19, nullable = true)
+    private BigDecimal chargeableAmount;
+
     SavingsAccountTransaction() {}
 
     private SavingsAccountTransaction(final SavingsAccount savingsAccount, final Office office, final PaymentDetail paymentDetail,
@@ -523,6 +529,14 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
 
     public void setSwitchId(final String switchId) {
         this.switchId = switchId;
+    }
+
+    public BigDecimal getChargeableAmount() {
+        return this.chargeableAmount;
+    }
+
+    public void setChargeableAmount(final BigDecimal chargeableAmount) {
+        this.chargeableAmount = chargeableAmount;
     }
 
     public PaymentDetail getPaymentDetail() {

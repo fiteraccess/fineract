@@ -189,6 +189,11 @@ public class SavingsApiConstants {
     // riding alongside as a referenceTransactions[] entry.
     public static final String signedStatementFeeParamName = "signedStatementFee";
 
+    // AB-243: optional base for withdrawal-fee calculation when it differs from the withdrawal amount (e.g. a
+    // combined debit where only part of it is fee-bearing). Absent = fees on the transaction amount as always;
+    // 0 = no withdrawal charges at all; > 0 = flat fees as configured, percentage fees computed on this base.
+    public static final String chargeableAmountParamName = "chargeableAmount";
+
     // Savings account associations
     public static final String transactions = "transactions";
     public static final String charges = "charges";

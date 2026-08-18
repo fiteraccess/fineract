@@ -250,4 +250,5 @@
     <include file="parts/0229_add_reverse_account_transfer_permission.xml" relativeToChangelogFile="true" />
     <include file="parts/0230_add_signed_statement_fee_accounting_primitives.xml" relativeToChangelogFile="true" />
     <include file="parts/0231_add_signed_statement_fee_payment_type.xml" relativeToChangelogFile="true" />
+    <include file="parts/0232_add_chargeable_amount_to_savings_transaction.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
