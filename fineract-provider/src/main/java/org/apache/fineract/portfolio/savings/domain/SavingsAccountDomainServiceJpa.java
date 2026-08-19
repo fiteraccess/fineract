@@ -210,9 +210,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                     notifyBusinessEvent, primaryType);
         }
 
-        // Legacy path for backdated transactions. AB-339: primaryType is intentionally not threaded into this
-        // branch — a signed-statement-fee request is always same-day (see SignedStatementFeeHandler in Synapse)
-        // and never reaches here; if it ever did, this safely falls back to a plain WITHDRAWAL rather than failing.
+        // Legacy path for backdated transactions. AB-510: primaryType is threaded into account.withdraw(...) via its
+        // own type-override overload (mirroring SavingsAccountTransaction.withdrawal(..., type, ...) on the
+        // optimized path above) — a plain WITHDRAWAL previously always won here regardless of primaryType, which
+        // silently mis-tagged a backdated bills-posting withdrawal as generic WITHDRAWAL (caught by live testing).
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final boolean postReversals = this.configurationDomainService.isReversalTransactionAllowed();
@@ -232,7 +233,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 paymentDetail, null, accountType);
         UUID refNo = UUID.randomUUID();
         final SavingsAccountTransaction withdrawal = account.withdraw(transactionDTO, transactionBooleanValues.isApplyWithdrawFee(),
-                backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo.toString(), transactionBooleanValues.chargeableAmount());
+                backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo.toString(), transactionBooleanValues.chargeableAmount(),
+                primaryType);
         withdrawal.setSwitchId(switchId);
         withdrawal.setChargeableAmount(transactionBooleanValues.chargeableAmount());
         withdrawal.setAggregatorCode(aggregatorCode);

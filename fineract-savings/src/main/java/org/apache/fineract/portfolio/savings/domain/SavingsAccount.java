@@ -1429,6 +1429,21 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     public SavingsAccountTransaction withdraw(final SavingsAccountTransactionDTO transactionDTO, final boolean applyWithdrawFee,
             final boolean backdatedTxnsAllowedTill, final Long relaxingDaysConfigForPivotDate, String refNo,
             final BigDecimal withdrawalFeeBase) {
+        return withdraw(transactionDTO, applyWithdrawFee, backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, refNo,
+                withdrawalFeeBase, SavingsAccountTransactionType.WITHDRAWAL);
+    }
+
+    /**
+     * AB-510: lets a caller-asserted withdrawal (e.g. bills/airtime posting) post as its own transaction type instead
+     * of generic {@code WITHDRAWAL} on the legacy/backdated path too — mirroring
+     * {@link #deposit(SavingsAccountTransactionDTO, SavingsAccountTransactionType, boolean, Long, String)}'s existing
+     * type-override overload. The optimized (same-day) path already threads {@code primaryType} via
+     * {@code SavingsAccountTransaction.withdrawal(...,
+     * SavingsAccountTransactionType, ...)}; this closes the same gap for backdated transactions.
+     */
+    public SavingsAccountTransaction withdraw(final SavingsAccountTransactionDTO transactionDTO, final boolean applyWithdrawFee,
+            final boolean backdatedTxnsAllowedTill, final Long relaxingDaysConfigForPivotDate, String refNo,
+            final BigDecimal withdrawalFeeBase, final SavingsAccountTransactionType savingsAccountTransactionType) {
         if (!isTransactionsAllowed()) {
 
             final String defaultUserMessage = "Transaction is not allowed. Account is not active.";
@@ -1491,7 +1506,8 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
         final Money transactionAmountMoney = Money.of(this.currency, transactionDTO.getTransactionAmount());
         final SavingsAccountTransaction transaction = SavingsAccountTransaction.withdrawal(this, office(),
-                transactionDTO.getPaymentDetail(), transactionDTO.getTransactionDate(), transactionAmountMoney, refNo);
+                transactionDTO.getPaymentDetail(), transactionDTO.getTransactionDate(), transactionAmountMoney,
+                savingsAccountTransactionType, refNo);
 
         if (backdatedTxnsAllowedTill) {
             addTransactionToExisting(transaction);
