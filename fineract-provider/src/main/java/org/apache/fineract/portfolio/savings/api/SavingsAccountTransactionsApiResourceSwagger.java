@@ -213,7 +213,7 @@ final class SavingsAccountTransactionsApiResourceSwagger {
             public PostNipCommissionAllocationLeg bankCommission;
         }
 
-        @Schema(description = "A reference debit supplied in authoritative order. NIP withdrawals support COMMISSION and VAT; inbound NIP deposits support only the existing optional EMT_LEVY reference.")
+        @Schema(description = "A reference debit supplied in authoritative order. NIP withdrawals support EMT_LEVY, COMMISSION, and VAT; inbound NIP deposits support only EMT_LEVY.")
         public static final class PostSavingsReferenceTransaction {
 
             private PostSavingsReferenceTransaction() {}
@@ -222,9 +222,9 @@ final class SavingsAccountTransactionsApiResourceSwagger {
             public String type;
             @Schema(description = "Positive caller-supplied debit amount.", example = "22.00")
             public BigDecimal amount;
-            @Schema(description = "Required for Commission and VAT and persisted verbatim as the transaction note.", example = "NIP transfer commission")
+            @Schema(description = "Optional for EMT_LEVY and required for COMMISSION and VAT. Nonblank values are persisted verbatim as the transaction note.", example = "NIP transfer commission")
             public String description;
-            @Schema(description = "Required for Commission and ignored for VAT.")
+            @Schema(description = "Required for COMMISSION and ignored for EMT_LEVY and VAT.")
             public PostNipCommissionBreakdown breakdown;
         }
 
@@ -244,7 +244,7 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public Integer paymentTypeId;
         @Schema(description = "Nonblank switch identifier for an outbound NIP withdrawal or inbound NIP deposit. Fineract trims and uppercases it.", example = "NIBSS")
         public String switchId;
-        @Schema(description = "Optional references recorded in supplied order. Withdrawals accept Commission/VAT; inbound deposits accept only EMT_LEVY.")
+        @Schema(description = "Optional references recorded in supplied order. NIP withdrawals accept EMT_LEVY, COMMISSION, and VAT; inbound NIP deposits accept only EMT_LEVY.")
         public List<PostSavingsReferenceTransaction> referenceTransactions;
     }
 

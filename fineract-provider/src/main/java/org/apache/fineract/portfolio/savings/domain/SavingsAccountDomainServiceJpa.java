@@ -144,14 +144,19 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
         final List<SavingsAccountTransaction> createdReferences = applyReferenceTransactions(account, withdrawal, references,
                 transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill, switchId);
+        saveNipWithdrawalReferenceNotes(account, references, createdReferences);
+        this.businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+        return withdrawal;
+    }
+
+    void saveNipWithdrawalReferenceNotes(final SavingsAccount account, final List<ReferenceTransaction> references,
+            final List<SavingsAccountTransaction> createdReferences) {
         for (int index = 0; index < createdReferences.size(); index++) {
             final ReferenceTransaction reference = references.get(index);
-            if (reference.isNipFee()) {
+            if (reference.hasNipWithdrawalNote()) {
                 this.noteRepository.save(Note.savingsTransactionNote(account, createdReferences.get(index), reference.description()));
             }
         }
-        this.businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
-        return withdrawal;
     }
 
     private SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,

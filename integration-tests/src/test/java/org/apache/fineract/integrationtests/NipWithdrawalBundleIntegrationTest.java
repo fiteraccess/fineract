@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.ChargeRequest;
 import org.apache.fineract.client.models.GetFinancialActivityAccountsResponse;
@@ -45,6 +46,7 @@ import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.savings.base.BaseSavingsIntegrationTest;
 import org.apache.fineract.integrationtests.support.TenantJdbcSupport;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -64,34 +66,38 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         runAt(date, () -> {
             final String configuredSwitchId = uniqueSwitchId();
             final SwitchAccounting switchAccounting = configureSwitch(configuredSwitchId);
+            final Account emtLevyLiability = configureEmtLevyMapping();
             final Account vatPayable = configureVatPayableMapping();
             final SavingsAccounting savingsAccounting = createSavingsAccounting();
             final Long savingsId = createActiveCashBasedSavingsAccount(date, savingsAccounting);
             deposit(savingsId, date, new BigDecimal("1000.00"));
 
             withdraw(savingsId, date, "100.00", "  " + configuredSwitchId.toLowerCase() + "  ",
-                    List.of(vat("7.00", "  First VAT journal note  "), commission("3.00", "Commission journal note", "1.00", "2.00"),
-                            vat("2.00", "Last VAT journal note")));
+                    List.of(emtLevy("5.00"), vat("7.00", "  First VAT journal note  "),
+                            commission("3.00", "Commission journal note", "1.00", "2.00"), vat("2.00", "Last VAT journal note")));
 
             final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
-            assertThat(transactions).hasSize(4);
+            assertThat(transactions).hasSize(5);
             assertTransaction(transactions.get(0), WITHDRAWAL, "100.00", "900.00");
-            assertTransaction(transactions.get(1), VAT, "7.00", "893.00");
-            assertTransaction(transactions.get(2), COMMISSION, "3.00", "890.00");
-            assertTransaction(transactions.get(3), VAT, "2.00", "888.00");
+            assertTransaction(transactions.get(1), EMT_LEVY, "5.00", "895.00");
+            assertTransaction(transactions.get(2), VAT, "7.00", "888.00");
+            assertTransaction(transactions.get(3), COMMISSION, "3.00", "885.00");
+            assertTransaction(transactions.get(4), VAT, "2.00", "883.00");
             assertSharedReferenceAndSwitch(transactions, configuredSwitchId);
             assertThat(referenceNotes(savingsId))
                     .isEqualTo(List.of("  First VAT journal note  ", "Commission journal note", "Last VAT journal note"));
-            assertThat(accountBalance(savingsId)).isEqualByComparingTo("888.00");
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("883.00");
 
             assertJournalEntries(transactions.get(0), journalPosting("DEBIT", savingsAccounting.savingsControl(), "100.00"),
                     journalPosting("CREDIT", switchAccounting.payable(), "100.00"));
-            assertJournalEntries(transactions.get(1), journalPosting("DEBIT", savingsAccounting.savingsControl(), "7.00"),
+            assertJournalEntries(transactions.get(1), journalPosting("DEBIT", savingsAccounting.savingsControl(), "5.00"),
+                    journalPosting("CREDIT", emtLevyLiability, "5.00"));
+            assertJournalEntries(transactions.get(2), journalPosting("DEBIT", savingsAccounting.savingsControl(), "7.00"),
                     journalPosting("CREDIT", vatPayable, "7.00"));
-            assertJournalEntries(transactions.get(2), journalPosting("DEBIT", savingsAccounting.savingsControl(), "3.00"),
+            assertJournalEntries(transactions.get(3), journalPosting("DEBIT", savingsAccounting.savingsControl(), "3.00"),
                     journalPosting("CREDIT", switchAccounting.switchFee(), "1.00"),
                     journalPosting("CREDIT", switchAccounting.commissionIncome(), "2.00"));
-            assertJournalEntries(transactions.get(3), journalPosting("DEBIT", savingsAccounting.savingsControl(), "2.00"),
+            assertJournalEntries(transactions.get(4), journalPosting("DEBIT", savingsAccounting.savingsControl(), "2.00"),
                     journalPosting("CREDIT", vatPayable, "2.00"));
         });
     }
@@ -134,24 +140,92 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         });
     }
 
-    @Test
-    void feeFreeRequestCreatesOnlyPrincipalAndNoReferenceNotes() {
-        final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
-        runAt(date, () -> {
-            final String configuredSwitchId = uniqueSwitchId();
-            configureSwitch(configuredSwitchId);
-            final Long savingsId = createActiveSavingsAccount(date, false);
-            deposit(savingsId, date, new BigDecimal("100.00"));
+    @Nested
+    class EmtLevyMappingBoundary {
 
-            withdraw(savingsId, date, "25.00", configuredSwitchId, List.of());
+        @Test
+        @SuppressWarnings("unchecked")
+        void missingMappingRejectsEmtBundleWithoutFinancialMutation() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final String configuredSwitchId = uniqueSwitchId();
+                configureSwitch(configuredSwitchId);
+                final SavingsAccounting savingsAccounting = createSavingsAccounting();
+                final Long savingsId = createActiveCashBasedSavingsAccount(date, savingsAccounting);
+                deposit(savingsId, date, new BigDecimal("100.00"));
+                final List<Long> transactionIdsBefore = transactionIds(savingsId);
+                final List<Long> journalEntryIdsBefore = journalEntryIds(savingsId);
+                final BigDecimal balanceBefore = accountBalance(savingsId);
+                final Optional<FinancialActivityMapping> removedMapping = removeEmtLevyMapping();
+                final ResponseSpecification notFound = new ResponseSpecBuilder().expectStatusCode(404).build();
 
-            final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
-            assertThat(transactions).hasSize(1);
-            assertTransaction(transactions.get(0), WITHDRAWAL, "25.00", "75.00");
-            assertThat(value(transactions.get(0), "switch_id")).isEqualTo(configuredSwitchId);
-            assertThat(accountBalance(savingsId)).isEqualByComparingTo("75.00");
-            assertThat(referenceNotes(savingsId)).isEmpty();
-        });
+                try {
+                    final List<Map<String, Object>> errors = (List<Map<String, Object>>) withdraw(savingsId, date, "25.00",
+                            configuredSwitchId, List.of(emtLevy("5.00")), notFound, CommonConstants.RESPONSE_ERROR);
+
+                    assertThat(errors.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE))
+                            .isEqualTo("error.msg.financialActivityAccount.not.found");
+                    assertThat(accountBalance(savingsId)).isEqualByComparingTo(balanceBefore);
+                    assertThat(transactionIds(savingsId)).isEqualTo(transactionIdsBefore);
+                    assertThat(journalEntryIds(savingsId)).isEqualTo(journalEntryIdsBefore);
+                    assertThat(referenceNotes(savingsId)).isEmpty();
+                } finally {
+                    restoreEmtLevyMapping(removedMapping);
+                }
+            });
+        }
+
+        @Test
+        void commissionAndVatBundleDoesNotRequireEmtMapping() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final String configuredSwitchId = uniqueSwitchId();
+                configureSwitch(configuredSwitchId);
+                configureVatPayableMapping();
+                final Long savingsId = createActiveSavingsAccount(date, false);
+                deposit(savingsId, date, new BigDecimal("100.00"));
+                final Optional<FinancialActivityMapping> removedMapping = removeEmtLevyMapping();
+
+                try {
+                    withdraw(savingsId, date, "25.00", configuredSwitchId, List.of(
+                            commission("3.00", "Commission without EMT mapping", "1.00", "2.00"), vat("2.00", "VAT without EMT mapping")));
+
+                    final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
+                    assertThat(transactions).hasSize(3);
+                    assertTransaction(transactions.get(0), WITHDRAWAL, "25.00", "75.00");
+                    assertTransaction(transactions.get(1), COMMISSION, "3.00", "72.00");
+                    assertTransaction(transactions.get(2), VAT, "2.00", "70.00");
+                    assertThat(accountBalance(savingsId)).isEqualByComparingTo("70.00");
+                } finally {
+                    restoreEmtLevyMapping(removedMapping);
+                }
+            });
+        }
+
+        @Test
+        void feeFreeRequestDoesNotRequireEmtMapping() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final String configuredSwitchId = uniqueSwitchId();
+                configureSwitch(configuredSwitchId);
+                final Long savingsId = createActiveSavingsAccount(date, false);
+                deposit(savingsId, date, new BigDecimal("100.00"));
+                final Optional<FinancialActivityMapping> removedMapping = removeEmtLevyMapping();
+
+                try {
+                    withdraw(savingsId, date, "25.00", configuredSwitchId, List.of());
+
+                    final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
+                    assertThat(transactions).hasSize(1);
+                    assertTransaction(transactions.get(0), WITHDRAWAL, "25.00", "75.00");
+                    assertThat(value(transactions.get(0), "switch_id")).isEqualTo(configuredSwitchId);
+                    assertThat(accountBalance(savingsId)).isEqualByComparingTo("75.00");
+                    assertThat(referenceNotes(savingsId)).isEmpty();
+                } finally {
+                    restoreEmtLevyMapping(removedMapping);
+                }
+            });
+        }
     }
 
     @Test
@@ -302,6 +376,40 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         return vatPayable;
     }
 
+    private Account configureEmtLevyMapping() {
+        final FinancialActivityAccountHelper helper = new FinancialActivityAccountHelper(requestSpec);
+        final long emtLevyActivityId = FinancialActivity.EMT_LEVY.getValue();
+        for (final GetFinancialActivityAccountsResponse mapping : helper.getAllFinancialActivityAccounts()) {
+            if (mapping.getFinancialActivityData().getId() == emtLevyActivityId) {
+                return new Account(mapping.getGlAccountData().getId().intValue(), Account.AccountType.LIABILITY);
+            }
+        }
+        final Account emtLevyLiability = new AccountHelper(requestSpec, responseSpec).createLiabilityAccount("NIP EMT Levy Liability");
+        helper.createFinancialActivityAccount(new PostFinancialActivityAccountsRequest().financialActivityId(emtLevyActivityId)
+                .glAccountId(emtLevyLiability.getAccountID().longValue()));
+        return emtLevyLiability;
+    }
+
+    private Optional<FinancialActivityMapping> removeEmtLevyMapping() {
+        final FinancialActivityAccountHelper helper = new FinancialActivityAccountHelper(requestSpec);
+        final long emtLevyActivityId = FinancialActivity.EMT_LEVY.getValue();
+        for (final GetFinancialActivityAccountsResponse mapping : helper.getAllFinancialActivityAccounts()) {
+            if (mapping.getFinancialActivityData().getId() == emtLevyActivityId) {
+                helper.deleteFinancialActivityAccount(mapping.getId());
+                return Optional.of(new FinancialActivityMapping(mapping.getGlAccountData().getId()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private void restoreEmtLevyMapping(final Optional<FinancialActivityMapping> removedMapping) {
+        if (removedMapping.isPresent()) {
+            new FinancialActivityAccountHelper(requestSpec).createFinancialActivityAccount(
+                    new PostFinancialActivityAccountsRequest().financialActivityId((long) FinancialActivity.EMT_LEVY.getValue())
+                            .glAccountId(removedMapping.orElseThrow().glAccountId()));
+        }
+    }
+
     private SavingsAccounting createSavingsAccounting() {
         final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
         final Account savingsReference = accountHelper.createAssetAccount("NIP Savings Reference");
@@ -376,9 +484,9 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
                   FROM m_note n
                   JOIN m_savings_account_transaction t ON t.id = n.savings_account_transaction_id
                  WHERE n.savings_account_id = ?
-                   AND t.transaction_type_enum IN (?, ?)
+                   AND t.transaction_type_enum IN (?, ?, ?)
                  ORDER BY t.id
-                """, String.class, savingsId, COMMISSION, VAT);
+                """, String.class, savingsId, EMT_LEVY, COMMISSION, VAT);
     }
 
     private BigDecimal accountBalance(final Long savingsId) {
@@ -389,6 +497,16 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
     private List<Long> transactionIds(final Long savingsId) {
         return tenantJdbc().queryForList("SELECT id FROM m_savings_account_transaction WHERE savings_account_id = ? ORDER BY id",
                 Long.class, savingsId);
+    }
+
+    private List<Long> journalEntryIds(final Long savingsId) {
+        return tenantJdbc().queryForList("""
+                SELECT je.id
+                  FROM acc_gl_journal_entry je
+                  JOIN m_savings_account_transaction t ON t.id = je.savings_transaction_id
+                 WHERE t.savings_account_id = ?
+                 ORDER BY je.id
+                """, Long.class, savingsId);
     }
 
     @SuppressWarnings({ "rawtypes", "removal" })
@@ -450,6 +568,9 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
         Account[] productAccounts() {
             return new Account[] { savingsReference, savingsControl, feeIncome, interestExpense };
         }
+    }
+
+    private record FinancialActivityMapping(Long glAccountId) {
     }
 
     private record JournalPosting(String entryType, Integer glAccountId, BigDecimal amount) {

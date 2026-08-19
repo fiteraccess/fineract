@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
@@ -204,6 +205,62 @@ class ReferenceTransactionNipValidationTest {
                     """);
             ReferenceTransaction.rejectNipFields(command, ReferenceTransaction.parseArray(command, "referenceTransactions"));
         }).isInstanceOf(GeneralPlatformDomainRuleException.class);
+    }
+
+    @Nested
+    class OutboundEmtLevy {
+
+        @Test
+        void acceptsOptionalDescriptionsWithSwitchId() {
+            ReferenceTransaction.NipWithdrawalRequest request = parse("""
+                    { "switchId": "NIBSS", "referenceTransactions": [
+                      { "type": "EMT_LEVY", "amount": 50 },
+                      { "type": "EMT_LEVY", "amount": 40, "description": null },
+                      { "type": "EMT_LEVY", "amount": 30, "description": "  " },
+                      { "type": "EMT_LEVY", "amount": 20, "description": "  EMT journal note  " }
+                    ] }
+                    """);
+
+            assertThat(request.references()).extracting(ReferenceTransaction::description).containsExactly(null, null, "  ",
+                    "  EMT journal note  ");
+        }
+
+        @Test
+        void classifiesEmtAsSupportedButNotNipFee() {
+            ReferenceTransaction reference = new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, new BigDecimal("50"), null,
+                    null);
+
+            assertThat(reference.isSupportedNipWithdrawalReference()).isTrue();
+            assertThat(reference.isNipFee()).isFalse();
+        }
+
+        @Test
+        void preservesMixedSupportedReferenceOrder() {
+            ReferenceTransaction.NipWithdrawalRequest request = parse("""
+                    { "switchId": "NIBSS", "referenceTransactions": [
+                      { "type": "EMT_LEVY", "amount": 50 },
+                      { "type": "COMMISSION", "amount": 22, "description": "Commission",
+                        "breakdown": { "switchFee": { "amount": 3.75 }, "bankCommission": { "amount": 18.25 } } },
+                      { "type": "VAT", "amount": 1.50, "description": "VAT" },
+                      { "type": "EMT_LEVY", "amount": 25 }
+                    ] }
+                    """);
+
+            assertThat(request.references()).extracting(ReferenceTransaction::type).containsExactly(SavingsAccountTransactionType.EMT_LEVY,
+                    SavingsAccountTransactionType.COMMISSION, SavingsAccountTransactionType.VAT, SavingsAccountTransactionType.EMT_LEVY);
+        }
+
+        @Test
+        void doesNotApplyCommissionBreakdownValidation() {
+            ReferenceTransaction.NipWithdrawalRequest request = parse("""
+                    { "switchId": "NIBSS", "referenceTransactions": [
+                      { "type": "EMT_LEVY", "amount": 50,
+                        "breakdown": { "switchFee": { "amount": -100 } } }
+                    ] }
+                    """);
+
+            assertThat(request.references()).extracting(ReferenceTransaction::amount).containsExactly(new BigDecimal("50"));
+        }
     }
 
     @Nested

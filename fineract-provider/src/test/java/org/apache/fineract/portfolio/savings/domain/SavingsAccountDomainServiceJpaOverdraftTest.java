@@ -46,6 +46,7 @@ import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.organisation.office.domain.Office;
+import org.apache.fineract.portfolio.note.domain.Note;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -56,6 +57,7 @@ import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -221,6 +223,43 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         assertThat(transactionCaptor.getAllValues().getFirst().getOverdraftAmount()).isEqualByComparingTo("30");
         assertThat(transactionCaptor.getAllValues()).extracting(SavingsAccountTransaction::getRefNo).doesNotContainNull()
                 .containsOnly(transactionCaptor.getAllValues().getFirst().getRefNo());
+    }
+
+    @Nested
+    class NipWithdrawalNotes {
+
+        @Test
+        void savesOnlyNonblankEmtDescriptionVerbatim() {
+            SavingsAccount account = mock(SavingsAccount.class);
+            List<ReferenceTransaction> references = List.of(
+                    new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, BigDecimal.valueOf(50), null, null),
+                    new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, BigDecimal.valueOf(40), "  ", null),
+                    new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, BigDecimal.valueOf(30), "  EMT note  ", null));
+            List<SavingsAccountTransaction> createdReferences = List.of(mock(SavingsAccountTransaction.class),
+                    mock(SavingsAccountTransaction.class), mock(SavingsAccountTransaction.class));
+
+            service.saveNipWithdrawalReferenceNotes(account, references, createdReferences);
+
+            ArgumentCaptor<Note> noteCaptor = ArgumentCaptor.forClass(Note.class);
+            verify(noteRepository).save(noteCaptor.capture());
+            assertThat(noteCaptor.getValue().getNote()).isEqualTo("  EMT note  ");
+        }
+
+        @Test
+        void preservesCommissionAndVatNotes() {
+            SavingsAccount account = mock(SavingsAccount.class);
+            List<ReferenceTransaction> references = List.of(
+                    new ReferenceTransaction(SavingsAccountTransactionType.COMMISSION, BigDecimal.valueOf(22), "Commission note", null),
+                    new ReferenceTransaction(SavingsAccountTransactionType.VAT, BigDecimal.valueOf(2), "VAT note", null));
+            List<SavingsAccountTransaction> createdReferences = List.of(mock(SavingsAccountTransaction.class),
+                    mock(SavingsAccountTransaction.class));
+
+            service.saveNipWithdrawalReferenceNotes(account, references, createdReferences);
+
+            ArgumentCaptor<Note> noteCaptor = ArgumentCaptor.forClass(Note.class);
+            verify(noteRepository, times(2)).save(noteCaptor.capture());
+            assertThat(noteCaptor.getAllValues()).extracting(Note::getNote).containsExactly("Commission note", "VAT note");
+        }
     }
 
     @ParameterizedTest
