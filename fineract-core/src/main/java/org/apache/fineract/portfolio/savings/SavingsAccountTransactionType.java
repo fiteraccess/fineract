@@ -166,6 +166,23 @@ public enum SavingsAccountTransactionType {
         return this == CONVENIENCE_FEE;
     }
 
+    /**
+     * AB-540: the side-effect debit legs a caller may attach to a primary savings transaction (see
+     * {@code SavingsAccountDomainService#applyReferenceTransactions}). These carry no persisted summary component of
+     * their own, so every place that rebuilds a balance from scratch has to subtract them explicitly.
+     *
+     * <p>
+     * This lives on the enum rather than being spelled out at each site because the two sites that must agree —
+     * {@code applyReferenceTransactions}, which creates the rows, and
+     * {@code SavingsAccountTransactionSummaryWrapper#calculateTotalReferenceDebits}, which subtracts them on a full
+     * recompute — previously enumerated the types independently. {@link #CONVENIENCE_FEE} was added to the former and
+     * missed in the latter, so its amount silently vanished from {@code account_balance_derived} the next time anything
+     * triggered a full summary rebuild (a backdated posting, an interest posting, or a reversal).
+     */
+    public boolean isReferenceDebit() {
+        return isEmtLevy() || isCommission() || isVat() || isConvenienceFee();
+    }
+
     public boolean isWaiveCharge() {
         return this == WAIVE_CHARGES;
     }
