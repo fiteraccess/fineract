@@ -20,6 +20,8 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
@@ -37,6 +39,7 @@ public class SynapseTransactionClient {
 
     private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
     private static final String DORMANCY_ENDPOINT_PATH = "/api/v1/proxy/savings/dormancy-statuses";
+    private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
 
     private final RestTemplate restTemplate;
     private final String postUrl;
@@ -92,8 +95,22 @@ public class SynapseTransactionClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set(HttpHeaders.AUTHORIZATION, apiKey);
+        headers.set(TENANT_HEADER, tenantIdentifier());
         HttpEntity<ReqT> request = new HttpEntity<>(body, headers);
         ResponseEntity<ResT> response = restTemplate.postForEntity(url, request, responseType);
         return response.getBody();
+    }
+
+    /**
+     * Synapse rejects any request without a tenant indication, so dispatching without a tenant context would only
+     * produce an opaque 400 downstream; fail here with the actual cause instead. The outbox executor propagates the
+     * scheduler's tenant context via {@code ContextAwareTaskDecorator}.
+     */
+    private static String tenantIdentifier() {
+        FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
+        if (tenant == null) {
+            throw new SynapsePostingException("No tenant context available for Synapse dispatch");
+        }
+        return tenant.getTenantIdentifier();
     }
 }

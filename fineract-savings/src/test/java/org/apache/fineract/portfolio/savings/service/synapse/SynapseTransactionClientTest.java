@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
@@ -41,6 +43,7 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPosting
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -59,6 +62,8 @@ class SynapseTransactionClientTest {
     private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
     private static final String DORMANCY_ENDPOINT_PATH = "/api/v1/proxy/savings/dormancy-statuses";
     private static final String FULL_URL = BASE_URL + BATCH_ENDPOINT_PATH;
+    private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
+    private static final String TENANT_ID = "default";
 
     private MockRestServiceServer mockServer;
     private SynapseTransactionClient client;
@@ -74,6 +79,12 @@ class SynapseTransactionClientTest {
 
         mockServer = MockRestServiceServer.createServer(restTemplate);
         client = new SynapseTransactionClient(restTemplate, BASE_URL, "Bearer test-token");
+        ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, TENANT_ID, "Default Tenant", "Africa/Lagos", null));
+    }
+
+    @AfterEach
+    void tearDown() {
+        ThreadLocalContextUtil.clearTenant();
     }
 
     @Test
@@ -139,6 +150,28 @@ class SynapseTransactionClientTest {
     }
 
     @Test
+    void requestIncludesTenantHeaderFromContext() throws Exception {
+        SynapseInterestPostingBatch batch = buildBatch("batch-tenant");
+        SynapseBatchPostingResponse response = new SynapseBatchPostingResponse("batch-tenant", 1, 0, List.of());
+
+        mockServer.expect(requestTo(FULL_URL)).andExpect(method(HttpMethod.POST)).andExpect(header(TENANT_HEADER, TENANT_ID))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(response), MediaType.APPLICATION_JSON));
+
+        client.postBatch(batch);
+        mockServer.verify();
+    }
+
+    @Test
+    void missingTenantContextFailsBeforeAnyRequest() {
+        ThreadLocalContextUtil.clearTenant();
+        SynapseInterestPostingBatch batch = buildBatch("batch-no-tenant");
+
+        assertThatThrownBy(() -> client.postBatch(batch)).isInstanceOf(SynapsePostingException.class)
+                .hasMessageContaining("tenant context");
+        mockServer.verify();
+    }
+
+    @Test
     void constructorThrowsWhenApiKeyIsBlank() {
         RestTemplate restTemplate = new RestTemplate();
         assertThatThrownBy(() -> new SynapseTransactionClient(restTemplate, BASE_URL, "")).isInstanceOf(IllegalStateException.class)
@@ -193,7 +226,7 @@ class SynapseTransactionClientTest {
             SynapseDormancyStatusResponse expected = new SynapseDormancyStatusResponse(TRACE_ID, "ACCEPTED", null, null, null);
 
             mockServer.expect(requestTo(FULL_DORMANCY_URL)).andExpect(method(HttpMethod.POST))
-                    .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
+                    .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token")).andExpect(header(TENANT_HEADER, TENANT_ID))
                     .andRespond(withSuccess(objectMapper.writeValueAsString(expected), MediaType.APPLICATION_JSON));
 
             client.postDormancyStatus(instruction);
