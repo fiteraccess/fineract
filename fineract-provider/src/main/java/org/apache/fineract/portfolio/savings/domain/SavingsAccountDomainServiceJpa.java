@@ -146,9 +146,32 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
         final List<SavingsAccountTransaction> createdReferences = applyReferenceTransactions(account, withdrawal, references,
                 transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill, switchId, null);
+        rechainRunningBalancesIfBackdated(account, transactionDate, backdatedTxnsAllowedTill);
         saveNipWithdrawalReferenceNotes(account, references, createdReferences);
         this.businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
         return withdrawal;
+    }
+
+    /**
+     * AB-540: rebuilds the per-transaction running balances once the reference legs are attached, but only when the
+     * parent is backdated.
+     *
+     * <p>
+     * The same-day path needs nothing: no transaction follows the parent, so the incremental balances
+     * {@code applyReferenceTransactions} stamps are already final. A backdated parent is the broken case — its
+     * recalculation ran inside {@code handleWithdrawal}, before the legs existed, leaving every later row high by the
+     * batch's fee total. Note this is deliberately not {@code calculateInterestUsing}: only the derived balances need
+     * rebuilding, and re-running interest here would be both wasteful and a second set of side effects.
+     */
+    private void rechainRunningBalancesIfBackdated(final SavingsAccount account, final LocalDate transactionDate,
+            final boolean backdatedTxnsAllowedTill) {
+        if (!DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
+            return;
+        }
+        final boolean postReversals = this.configurationDomainService.isReversalTransactionAllowed();
+        account.recalculateRunningBalancesAfterReferenceLegs(DateUtils.getBusinessLocalDate(), backdatedTxnsAllowedTill, postReversals);
+        saveUpdatedTransactionsOfSavingsAccount(account.getSavingsAccountTransactionsWithPivotConfig());
+        this.savingsAccountRepository.save(account);
     }
 
     void saveNipWithdrawalReferenceNotes(final SavingsAccount account, final List<ReferenceTransaction> references,
@@ -184,6 +207,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         this.balanceValidationService.validateBalance(account, referenceDebit, transactionBooleanValues.isExceptionForBalanceCheck());
         applyReferenceTransactions(account, withdrawal, references, transactionBooleanValues.isAccountTransfer(), backdatedTxnsAllowedTill,
                 null, aggregatorCode);
+        rechainRunningBalancesIfBackdated(account, transactionDate, backdatedTxnsAllowedTill);
         this.businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
         return withdrawal;
     }
@@ -719,10 +743,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
      * <strong>not</strong> evaluate any rule — the amount and applicability decision were made upstream.
      *
      * <p>
-     * Accepted types today: {@link SavingsAccountTransactionType#EMT_LEVY},
-     * {@link SavingsAccountTransactionType#COMMISSION}, {@link SavingsAccountTransactionType#VAT}. Each future
-     * side-effect must add its own branch; an unsupported type fails fast so a partially-implemented sibling is never
-     * silently dropped.
+     * Accepted types are exactly {@link SavingsAccountTransactionType#isReferenceDebit()}. Each future side-effect must
+     * add its own branch here <em>and</em> its type to that predicate; an unsupported type fails fast so a
+     * partially-implemented sibling is never silently dropped — which is precisely what happened to
+     * {@link SavingsAccountTransactionType#CONVENIENCE_FEE}, wired here but missing from the summary's subtraction
+     * until AB-540.
      */
     @Transactional
     @Override
@@ -751,6 +776,13 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
         final List<SavingsAccountTransaction> created = new ArrayList<>(references.size());
         for (final ReferenceTransaction ref : references) {
+            // AB-540: reject up front anything the summary would not know how to subtract on a full recompute. The
+            // branches below and SavingsAccountTransactionSummaryWrapper#calculateTotalReferenceDebits must cover the
+            // same set of types; routing both through isReferenceDebit() is what keeps them from drifting apart.
+            if (!ref.type().isReferenceDebit()) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.reference.transaction.type.not.supported",
+                        "Reference transaction type " + ref.type() + " is not supported", ref.type());
+            }
             final BigDecimal amount = ref.amount();
             final BigDecimal balanceBeforeReference = transactionRunningBalance;
             final Money money = Money.of(account.getCurrency(), amount);

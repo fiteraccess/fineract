@@ -113,8 +113,7 @@ public final class SavingsAccountTransactionSummaryWrapper {
         Money total = Money.zero(currency);
         for (final SavingsAccountTransaction transaction : transactions) {
             final SavingsAccountTransactionType type = transaction.getTransactionType();
-            if ((type.isEmtLevy() || type.isCommission() || type.isVat()) && transaction.isNotReversed()
-                    && !transaction.isReversalTransaction()) {
+            if (type.isReferenceDebit() && transaction.isNotReversed() && !transaction.isReversalTransaction()) {
                 total = total.plus(transaction.getAmount(currency));
             }
         }

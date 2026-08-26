@@ -1176,6 +1176,28 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return listOfTransactionsSorted;
     }
 
+    /**
+     * AB-540: re-chains every transaction's running balance after reference (fee) legs have been attached to an
+     * already-posted parent.
+     *
+     * <p>
+     * {@code applyReferenceTransactions} stamps each leg's running balance by stepping down from the parent's, which is
+     * correct only when nothing follows the parent in the ledger. On a <strong>backdated</strong> parent the primary
+     * posting has already run its own recalculation — before the legs existed — so every later row keeps a chain that
+     * never saw them and ends up high by the batch's total fee amount. Replaying two backdated NIP withdrawals onto a
+     * restored Access Dev account left 29 rows each overstated by exactly the last batch's commission + VAT.
+     *
+     * <p>
+     * Only the derived per-transaction balances are rebuilt here; the summary is maintained incrementally by
+     * {@code applyReferenceTransactionDelta} and must not be recomputed from this path.
+     */
+    public void recalculateRunningBalancesAfterReferenceLegs(final LocalDate upToDate, final boolean backdatedTxnsAllowedTill,
+            final boolean postReversals) {
+        final Money openingAccountBalance = backdatedTxnsAllowedTill ? Money.of(this.currency, this.summary.getRunningBalanceOnPivotDate())
+                : Money.zero(this.currency);
+        recalculateDailyBalances(openingAccountBalance, upToDate, backdatedTxnsAllowedTill, postReversals);
+    }
+
     protected void recalculateDailyBalances(final Money openingAccountBalance, final LocalDate interestPostingUpToDate,
             final boolean backdatedTxnsAllowedTill, boolean postReversals) {
         Money runningBalance = openingAccountBalance;
