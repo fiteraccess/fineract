@@ -198,6 +198,13 @@ public class SavingsApiConstants {
     // 0 = no withdrawal charges at all; > 0 = flat fees as configured, percentage fees computed on this base.
     public static final String chargeableAmountParamName = "chargeableAmount";
 
+    // AB-414: marks the debit leg that zeroes an account being closed. Fineract asserts the amount equals the whole
+    // balance, posts the withdrawal, then runs the ordinary close in the same transaction — Synapse cannot do this in
+    // two calls because its sweep reaches Fineract asynchronously. See AccountClosureTransfer.
+    public static final String isAccountClosureTransferParamName = "isAccountClosureTransfer";
+    // The nested savings-close payload (closedOnDate, withdrawBalance, note, dateFormat, locale) carried alongside it.
+    public static final String closureParamName = "closure";
+
     // Savings account associations
     public static final String transactions = "transactions";
     public static final String charges = "charges";
