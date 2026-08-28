@@ -110,6 +110,7 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDataV
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
+import org.apache.fineract.portfolio.savings.domain.AccountClosureTransfer;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransaction;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.GSIMRepositoy;
@@ -456,6 +457,25 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 : new ReferenceTransaction.BillsPostingWithdrawalRequest(null, null, List.of());
         final boolean isSignedStatementFee = command.booleanPrimitiveValueOfParameterNamed(SavingsApiConstants.signedStatementFeeParamName);
 
+        // AB-414: a closing sweep is an ordinary debit that additionally retires the account. It is deliberately
+        // incompatible with the specialised withdrawal flavours — each of those posts its own fee/reference shape,
+        // and a closure must leave the balance at exactly zero for the close that follows it.
+        final AccountClosureTransfer closureTransfer = AccountClosureTransfer.parse(command);
+        if (closureTransfer.requested()) {
+            if (nipRequest.switchId() != null) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.account.closure.switch.not.supported",
+                        "An account closure transfer does not support switchId");
+            }
+            if (isBillsPosting) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.account.closure.aggregator.not.supported",
+                        "An account closure transfer does not support aggregatorCode");
+            }
+            if (isSignedStatementFee) {
+                throw new GeneralPlatformDomainRuleException("error.msg.savings.account.closure.signed.statement.fee.not.supported",
+                        "An account closure transfer does not support signedStatementFee");
+            }
+        }
+
         if (isSignedStatementFee && nipRequest.switchId() != null) {
             throw new GeneralPlatformDomainRuleException("error.msg.savings.signed.statement.fee.switch.not.supported",
                     "signedStatementFee withdrawals do not support switchId");
@@ -491,9 +511,16 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         this.savingsAccountTransactionDataValidator.validateTransactionWithPivotDate(transactionDate, account);
 
+        // Reject before posting anything: if a queued transaction for this account has not been applied yet the
+        // amounts disagree, and the caller retries rather than closing on a stale balance.
+        if (closureTransfer.requested()) {
+            closureTransfer.assertClearsBalance(transactionAmount, account.getSummary().getAccountBalance());
+        }
+
         final boolean isAccountTransfer = false;
         final boolean isRegularTransaction = true;
-        final boolean isApplyWithdrawFee = true;
+        // A closing sweep is fee-free — the customer is being paid out, not charged to leave.
+        final boolean isApplyWithdrawFee = !closureTransfer.requested();
         final boolean isInterestTransfer = false;
         final boolean isWithdrawBalance = false;
         final BigDecimal chargeableAmount = command.bigDecimalValueOfParameterNamed(SavingsApiConstants.chargeableAmountParamName);
@@ -537,6 +564,13 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         if (StringUtils.isNotBlank(noteText)) {
             final Note note = Note.savingsTransactionNote(account, withdrawal, noteText);
             this.noteRepository.save(note);
+        }
+
+        // The balance is now zero, so the ordinary close applies unchanged — including its own guards for holds,
+        // blocked sub-status, linked active accounts and the closure date. Self-invocation is intentional: this
+        // method's transaction is the one the close must join.
+        if (closureTransfer.requested()) {
+            close(savingsId, closureTransfer.closureCommand(command));
         }
 
         return new CommandProcessingResultBuilder() //
