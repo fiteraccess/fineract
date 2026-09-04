@@ -22,18 +22,23 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
 /**
- * What Synapse reports after enqueueing a monthly statement run (AB-358, R-D-24).
+ * What Synapse reports after accepting a monthly statement run (AB-358, R-D-24).
  *
  * <p>
- * {@code enqueued} counts rows created, not statements delivered — Synapse's own worker renders and emails them
- * afterwards. A repeat run for a month already enqueued reports {@code 0} rather than failing, because the unique index
- * on the document table rejects the duplicates.
+ * {@code started} says the run was accepted — nothing more. Synapse enqueues the accounts on a background planner and
+ * then renders and emails them on its own workers, so neither the enqueued count nor the delivered count is known when
+ * this response is written. Both are reported by Synapse: the count in its log and the
+ * {@code fin.proxy.access.statement.monthly.enqueued} metric, delivery by {@code m_statement_document.status}.
+ *
+ * <p>
+ * {@code false} means Synapse was already planning this month and ignored the duplicate request. That is a normal
+ * outcome for a second press of Run Selected Jobs, not an error.
  */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SynapseMonthlyStatementPlanResponse {
 
-    private Integer enqueued;
+    private Boolean started;
     private String periodFrom;
     private String periodTo;
 }

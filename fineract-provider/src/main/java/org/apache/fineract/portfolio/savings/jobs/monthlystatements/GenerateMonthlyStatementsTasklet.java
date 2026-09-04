@@ -28,7 +28,7 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 
 /**
- * AB-358 (R-D-24): asks Synapse to enqueue the previous month's customer statements.
+ * AB-358 (R-D-24): asks Synapse to start the previous month's customer statement run.
  *
  * <p>
  * Unlike the other Synapse-related jobs, the work itself does not happen here — Synapse owns the statement documents,
@@ -36,14 +36,15 @@ import org.springframework.batch.repeat.RepeatStatus;
  * in the web-app's Manage Jobs page, which is what lets an operator see the last run and re-run a month by hand.
  *
  * <p>
- * <b>Success means enqueued, not delivered.</b> Rendering and emailing happen afterwards in Synapse's own worker, and
- * are reported by {@code m_statement_document.status} rather than by this job's history. Blocking until delivery
- * finished is not an option: a full run takes hours and the client read timeout is 30 seconds, so the job would record
- * a failure on every real run while the work carried on regardless.
+ * <b>Success means the run was accepted — not enqueued, and not delivered.</b> Synapse selects the accounts on a
+ * background planner and renders and emails them on its own workers. Neither stage can be waited for here: selecting
+ * millions of accounts takes minutes and delivering them takes hours, against a 30-second client read timeout, so a
+ * blocking job would record a failure on every real run while the work carried on regardless. Progress is visible in
+ * Synapse's logs and metrics, and per-account outcomes in {@code m_statement_document.status}.
  *
  * <p>
- * Re-running is safe. Synapse's unique index over account and period makes a second run for the same month enqueue
- * nothing.
+ * Re-running is safe, and is also how a run interrupted by a restart is resumed: Synapse ignores a request for a month
+ * it is already planning, and its unique index over account and period means re-selecting an account enqueues nothing.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -55,13 +56,18 @@ public class GenerateMonthlyStatementsTasklet implements Tasklet {
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         SynapseMonthlyStatementPlanResponse response = synapseClient.postMonthlyStatementPlan();
         if (response == null) {
-            // A 2xx with no body means the request was accepted but we cannot say what it enqueued. Treat it
-            // as a failure rather than logging a misleading count — the run is idempotent, so retrying costs
+            // A 2xx with no body means we cannot say which month was accepted, or whether anything was. Treat it
+            // as a failure rather than logging a misleading success — the run is idempotent, so retrying costs
             // one wasted sweep and nothing worse.
             throw new IllegalStateException("Synapse accepted the monthly statement plan but returned no body");
         }
-        log.info("Monthly statement run enqueued {} account(s) for {} to {}", response.getEnqueued(), response.getPeriodFrom(),
-                response.getPeriodTo());
+        if (Boolean.FALSE.equals(response.getStarted())) {
+            log.info("Monthly statement run for {} to {} was already in progress; nothing further started", response.getPeriodFrom(),
+                    response.getPeriodTo());
+        } else {
+            log.info("Monthly statement run started for {} to {}; Synapse reports the account count and delivery", response.getPeriodFrom(),
+                    response.getPeriodTo());
+        }
         return RepeatStatus.FINISHED;
     }
 }
