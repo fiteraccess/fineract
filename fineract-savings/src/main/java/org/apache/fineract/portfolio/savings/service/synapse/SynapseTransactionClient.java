@@ -39,11 +39,13 @@ public class SynapseTransactionClient {
 
     private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
     private static final String DORMANCY_ENDPOINT_PATH = "/api/v1/proxy/savings/dormancy-statuses";
+    private static final String MONTHLY_STATEMENT_PLAN_PATH = "/api/v1/proxy/statements/monthly:plan";
     private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
 
     private final RestTemplate restTemplate;
     private final String postUrl;
     private final String dormancyUrl;
+    private final String monthlyStatementPlanUrl;
     private final String apiKey;
 
     @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW")
@@ -55,6 +57,7 @@ public class SynapseTransactionClient {
         this.restTemplate = restTemplate;
         this.postUrl = baseUrl + BATCH_ENDPOINT_PATH;
         this.dormancyUrl = baseUrl + DORMANCY_ENDPOINT_PATH;
+        this.monthlyStatementPlanUrl = baseUrl + MONTHLY_STATEMENT_PLAN_PATH;
         this.apiKey = apiKey;
     }
 
@@ -88,6 +91,33 @@ public class SynapseTransactionClient {
                     "Synapse posting failed: connection error to " + dormancyUrl + " traceId=" + instruction.getTraceId(), e);
         }
         log.debug("Dormancy status traceId={} response: status={}", instruction.getTraceId(), body != null ? body.getStatus() : "null");
+        return body;
+    }
+
+    /**
+     * Asks Synapse to enqueue the previous month's statement run (AB-358, R-D-24).
+     *
+     * <p>
+     * Sends no period: Synapse derives the month itself so the two services cannot disagree about which month "now"
+     * belongs to — this fires at 02:00 on the 1st, close enough to a boundary for two independently-read clocks to land
+     * in different months.
+     *
+     * <p>
+     * Returns once the rows exist, well inside the read timeout. Delivery happens afterwards in Synapse's own worker,
+     * so a success here means <em>enqueued</em>.
+     */
+    public SynapseMonthlyStatementPlanResponse postMonthlyStatementPlan() {
+        log.debug("Requesting monthly statement plan from {}", monthlyStatementPlanUrl);
+        SynapseMonthlyStatementPlanResponse body;
+        try {
+            body = post(monthlyStatementPlanUrl, null, SynapseMonthlyStatementPlanResponse.class);
+        } catch (RestClientResponseException e) {
+            throw new SynapsePostingException(
+                    "Synapse monthly statement planning failed with HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new SynapsePostingException("Synapse monthly statement planning failed: connection error to " + monthlyStatementPlanUrl,
+                    e);
+        }
         return body;
     }
 

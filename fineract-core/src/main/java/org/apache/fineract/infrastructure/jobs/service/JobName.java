@@ -63,6 +63,7 @@ public enum JobName {
     DISPATCH_SYNAPSE_OUTBOX("Dispatch Synapse Outbox"), //
     PURGE_SYNAPSE_OUTBOX("Purge Synapse Outbox"), //
     SYNC_SAVINGS_DAILY_BALANCE("Sync Savings Daily Balance"), //
+    GENERATE_MONTHLY_STATEMENTS("Generate Monthly Statements"), //
     ; //
 
     private final String name;
