@@ -40,6 +40,7 @@ public class SavingsApiConstants {
     public static final String applyAnnualFeeTransactionAction = ".applyannualfee";
     public static final String adjustTransactionAction = ".adjusttransaction";
     public static final String closeAction = ".close";
+    public static final String reopenAction = ".reopen";
     public static final String payChargeTransactionAction = ".paycharge";
     public static final String waiveChargeTransactionAction = ".waivecharge";
     public static final String updateMaturityDetailsAction = ".updateMaturityDetails";
@@ -59,6 +60,7 @@ public class SavingsApiConstants {
     public static final String COMMAND_INACTIVATE_CHARGE = "inactivate";
     public static final String COMMAND_HOLD_AMOUNT = "holdAmount";
     public static final String COMMAND_RELEASE_AMOUNT = "releaseAmount";
+    public static final String COMMAND_REOPEN = "reopen";
     public static final String COMMAND_UNBLOCK_ACCOUNT = "unblock";
     public static final String COMMAND_BLOCK_ACCOUNT = "block";
     public static final String COMMAND_BLOCK_CREDIT = "blockCredit";

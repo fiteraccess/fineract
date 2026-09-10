@@ -1230,6 +1230,34 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .build();
     }
 
+    @Transactional
+    @Override
+    public CommandProcessingResult reopen(final Long savingsId, final JsonCommand command) {
+        this.context.authenticatedUser();
+
+        final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
+
+        final Map<String, Object> changes = account.reopen();
+        if (!changes.isEmpty()) {
+            this.savingAccountRepositoryWrapper.save(account);
+            final String noteText = command.stringValueOfParameterNamed("note");
+            if (StringUtils.isNotBlank(noteText)) {
+                final Note note = Note.savingNote(account, noteText);
+                changes.put("note", noteText);
+                this.noteRepository.save(note);
+            }
+        }
+
+        return new CommandProcessingResultBuilder() //
+                .withEntityId(savingsId) //
+                .withOfficeId(account.officeId()) //
+                .withClientId(account.clientId()) //
+                .withGroupId(account.groupId()) //
+                .withSavingsId(savingsId) //
+                .with(changes) //
+                .build();
+    }
+
     @Override
     public SavingsAccountTransaction initiateSavingsTransfer(final SavingsAccount savingsAccount, final LocalDate transferDate) {
         getAppUserIfPresent();
