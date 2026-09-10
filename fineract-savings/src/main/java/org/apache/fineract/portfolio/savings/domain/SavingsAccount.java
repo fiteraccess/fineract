@@ -3076,6 +3076,47 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return actualChanges;
     }
 
+    /**
+     * Returns a closed account to ACTIVE, keeping its account number, balance and transaction history. The row is
+     * mutated in place, so nothing about the account's identity or its transactions changes.
+     *
+     * <p>
+     * The closure stamps are cleared because an ACTIVE account carrying a closedOnDate is contradictory to every reader
+     * of this entity, including Fineract's own reports. The reopen is not lost by clearing them: the caller records
+     * reason and actor as a {@link org.apache.fineract.portfolio.note.domain.Note}, and Synapse persists its own
+     * closure/reopen audit row.
+     *
+     * <p>
+     * Standing instructions disabled by the closure are deliberately <em>not</em> re-enabled. Fineract records no
+     * marker of which instructions its close disabled, so flipping every DISABLED instruction back to ACTIVE would
+     * resurrect ones that were switched off on purpose before the account was ever closed. They need re-activating by
+     * hand.
+     */
+    public Map<String, Object> reopen() {
+        final Map<String, Object> actualChanges = new LinkedHashMap<>();
+
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
+                .resource(SAVINGS_ACCOUNT_RESOURCE_NAME + SavingsApiConstants.reopenAction);
+
+        final SavingsAccountStatusType currentStatus = getStatus();
+        if (!SavingsAccountStatusType.CLOSED.hasStateOf(currentStatus)) {
+            baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("not.in.closed.state");
+            if (!dataValidationErrors.isEmpty()) {
+                throw new PlatformApiDataValidationException(dataValidationErrors);
+            }
+        }
+
+        this.status = SavingsAccountStatusType.ACTIVE.getValue();
+        actualChanges.put(SavingsApiConstants.statusParamName, SavingsEnumerations.status(this.status));
+
+        this.closedOnDate = null;
+        this.closedBy = null;
+        this.closedByUserId = null;
+
+        return actualChanges;
+    }
+
     protected void validateActivityNotBeforeClientOrGroupTransferDate(final SavingsEvent event, final LocalDate activityDate) {
         if (this.client != null) {
             final LocalDate clientOfficeJoiningDate = this.client.getOfficeJoiningDate();

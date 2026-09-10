@@ -1544,6 +1544,15 @@ public class CommandWrapperBuilder {
         return this;
     }
 
+    public CommandWrapperBuilder reopenSavingsAccount(final Long accountId) {
+        this.actionName = "REOPEN";
+        this.entityName = "SAVINGSACCOUNT";
+        this.entityId = accountId;
+        this.savingsId = accountId;
+        this.href = "/savingsaccounts/" + accountId + "?command=reopen";
+        return this;
+    }
+
     public CommandWrapperBuilder closeGSIMApplication(final Long accountId) {
         this.actionName = "CLOSE";
         this.entityName = "GSIMACCOUNT";

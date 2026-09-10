@@ -50,6 +50,8 @@ public interface SavingsAccountWritePlatformService {
 
     CommandProcessingResult close(Long savingsId, JsonCommand command);
 
+    CommandProcessingResult reopen(Long savingsId, JsonCommand command);
+
     SavingsAccountTransaction initiateSavingsTransfer(SavingsAccount account, LocalDate transferDate);
 
     SavingsAccountTransaction withdrawSavingsTransfer(SavingsAccount account, LocalDate transferDate);

@@ -537,6 +537,9 @@ public class SavingsAccountsApiResource {
         } else if (is(commandParam, "close")) {
             final CommandWrapper commandRequest = builder.closeSavingsAccountApplication(accountId).build();
             result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        } else if (is(commandParam, SavingsApiConstants.COMMAND_REOPEN)) {
+            final CommandWrapper commandRequest = builder.reopenSavingsAccount(accountId).build();
+            result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
         } else if (is(commandParam, "assignSavingsOfficer")) {
             final CommandWrapper commandRequest = builder.assignSavingsOfficer(accountId).build();
             result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
@@ -569,7 +572,7 @@ public class SavingsAccountsApiResource {
             //
             throw new UnrecognizedQueryParamException("command", commandParam,
                     new Object[] { "reject", "withdrawnByApplicant", "approve", "undoapproval", "activate", "calculateInterest",
-                            "postInterest", "close", "assignSavingsOfficer", "unassignSavingsOfficer",
+                            "postInterest", "close", SavingsApiConstants.COMMAND_REOPEN, "assignSavingsOfficer", "unassignSavingsOfficer",
                             SavingsApiConstants.COMMAND_BLOCK_DEBIT, SavingsApiConstants.COMMAND_UNBLOCK_DEBIT,
                             SavingsApiConstants.COMMAND_BLOCK_CREDIT, SavingsApiConstants.COMMAND_UNBLOCK_CREDIT,
                             SavingsApiConstants.COMMAND_BLOCK_ACCOUNT, SavingsApiConstants.COMMAND_UNBLOCK_ACCOUNT });
