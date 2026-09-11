@@ -36,6 +36,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.service.aggregationjob.JournalEntryAggregationJobConstant;
 import org.apache.fineract.infrastructure.jobs.service.aggregationjob.data.JournalEntryAggregationTrackingData;
 import org.apache.fineract.infrastructure.jobs.service.aggregationjob.services.JournalEntryAggregationWriterService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -90,6 +91,18 @@ class JournalEntryAggregationTrackingTaskletTest {
         // spotless:off
         return Stream.of(Arguments.of(1L), Arguments.of(0L));
         // spotless:on
+    }
+
+    /**
+     * This test sets {@link ActionContext#COB}, which lives in its own thread local that {@code setBusinessDates} does
+     * not clear. Without this reset it leaks into every later test on the same thread, where
+     * {@code ThreadLocalContextUtil.getBusinessDate()} then resolves {@code COB_DATE} instead of {@code BUSINESS_DATE}
+     * and fails with "Business date with type `COB_DATE` is not initialised!" — in a test that passes on its own and
+     * only breaks as part of the suite.
+     */
+    @AfterEach
+    void resetThreadLocalContext() {
+        ThreadLocalContextUtil.reset();
     }
 
     @ParameterizedTest
