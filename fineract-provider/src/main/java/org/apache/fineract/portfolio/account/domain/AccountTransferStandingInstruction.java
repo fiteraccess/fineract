@@ -72,6 +72,14 @@ public class AccountTransferStandingInstruction extends AbstractPersistableCusto
     @Column(name = "status")
     private Integer status;
 
+    /**
+     * Whether this instruction was disabled by its savings account being closed, as opposed to being switched off
+     * deliberately. Only a closure sets it, and only a reopening clears it — that is what lets a reopening restore
+     * exactly the instructions its closure took down and leave every other disabled one alone (AB-548).
+     */
+    @Column(name = "disabled_by_closure", nullable = false)
+    private boolean disabledByClosure;
+
     @Column(name = "amount", scale = 6, precision = 19, nullable = true)
     private BigDecimal amount;
 
@@ -278,6 +286,30 @@ public class AccountTransferStandingInstruction extends AbstractPersistableCusto
 
     public void updateStatus(Integer status) {
         this.status = status;
+    }
+
+    /** Flips ACTIVE -> DISABLED and records that a closure is what did it. */
+    public void disableForClosure() {
+        this.status = StandingInstructionStatus.DISABLED.getValue();
+        this.disabledByClosure = true;
+    }
+
+    /** Flips back to ACTIVE and clears the marker, so a later deliberate disable is not mistaken for a closure's. */
+    public void restoreAfterReopening() {
+        this.status = StandingInstructionStatus.ACTIVE.getValue();
+        this.disabledByClosure = false;
+    }
+
+    public boolean isDisabledByClosure() {
+        return this.disabledByClosure;
+    }
+
+    public boolean isActive() {
+        return StandingInstructionStatus.ACTIVE.getValue().equals(this.status);
+    }
+
+    public boolean isDisabled() {
+        return StandingInstructionStatus.DISABLED.getValue().equals(this.status);
     }
 
     /**
