@@ -259,4 +259,5 @@
     <include file="parts/0238_add_generate_customer_statement_permission.xml" relativeToChangelogFile="true" />
     <include file="parts/0239_add_generate_monthly_statements_job.xml" relativeToChangelogFile="true" />
     <include file="parts/0240_add_reopen_savingsaccount_permission.xml" relativeToChangelogFile="true" />
+    <include file="parts/0241_add_si_disabled_by_closure.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

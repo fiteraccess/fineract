@@ -1238,6 +1238,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
 
         final Map<String, Object> changes = account.reopen();
+        changes.put("standingInstructionsReactivated", restoreStandingInstructionsDisabledByClosure(account));
         if (!changes.isEmpty()) {
             this.savingAccountRepositoryWrapper.save(account);
             final String noteText = command.stringValueOfParameterNamed("note");
@@ -2017,6 +2018,32 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
      *
      **/
     @Transactional
+    /**
+     * Re-enables the standing instructions that this account's closure disabled, and only those.
+     *
+     * <p>
+     * A DISABLED instruction carries no history of its own, so without the marker set by
+     * {@link #disableStandingInstructionsLinkedToClosedSavings} a reopening could not tell a closure's work from an
+     * instruction someone switched off on purpose beforehand — and restoring the latter would restart money movement
+     * nobody asked to restart.
+     *
+     * @return how many instructions were restored, so the caller can report it
+     */
+    private int restoreStandingInstructionsDisabledByClosure(final SavingsAccount savingsAccount) {
+        final Collection<AccountTransferStandingInstruction> disabled = this.standingInstructionRepository
+                .findBySavingsAccountAndStatus(savingsAccount, StandingInstructionStatus.DISABLED.getValue());
+        int restored = 0;
+        for (final AccountTransferStandingInstruction instruction : disabled) {
+            if (!instruction.isDisabledByClosure()) {
+                continue;
+            }
+            instruction.restoreAfterReopening();
+            this.standingInstructionRepository.save(instruction);
+            restored++;
+        }
+        return restored;
+    }
+
     private void disableStandingInstructionsLinkedToClosedSavings(final SavingsAccount savingsAccount) {
         if (savingsAccount != null && savingsAccount.isClosed()) {
             final Integer standingInstructionStatus = StandingInstructionStatus.ACTIVE.getValue();
@@ -2025,7 +2052,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
             if (!accountTransferStandingInstructions.isEmpty()) {
                 for (AccountTransferStandingInstruction accountTransferStandingInstruction : accountTransferStandingInstructions) {
-                    accountTransferStandingInstruction.updateStatus(StandingInstructionStatus.DISABLED.getValue());
+                    // Marks the instruction as disabled *by this closure*, so a reopening can restore exactly
+                    // these and leave instructions that were already switched off untouched (AB-548).
+                    accountTransferStandingInstruction.disableForClosure();
                     this.standingInstructionRepository.save(accountTransferStandingInstruction);
                 }
             }
