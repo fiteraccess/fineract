@@ -68,6 +68,49 @@ class AccountTransferStandingInstructionClosureTest {
         }
     }
 
+    /**
+     * The hole this closes: the marker was only ever cleared by a reopening, so an instruction reactivated by hand
+     * after a closure kept {@code disabledByClosure = true}. Disabling it deliberately afterwards then looked identical
+     * to a closure having done it, and the next reopening switched it back on.
+     */
+    @Nested
+    class ReactivatedByHandAfterAClosure {
+
+        @Test
+        void losesTheClosureMarker() {
+            AccountTransferStandingInstruction instruction = active();
+            instruction.disableForClosure();
+
+            instruction.updateStatus(StandingInstructionStatus.ACTIVE.getValue());
+
+            assertThat(instruction.isActive()).isTrue();
+            assertThat(instruction.isDisabledByClosure()).isFalse();
+        }
+
+        @Test
+        void isNotRestoredByALaterReopeningOnceDisabledOnPurpose() {
+            AccountTransferStandingInstruction instruction = active();
+            instruction.disableForClosure();
+            instruction.updateStatus(StandingInstructionStatus.ACTIVE.getValue());
+
+            instruction.updateStatus(StandingInstructionStatus.DISABLED.getValue());
+
+            // A reopening restores only instructions still marked as closure-disabled, so this one is left alone.
+            assertThat(instruction.isDisabled()).isTrue();
+            assertThat(instruction.isDisabledByClosure()).isFalse();
+        }
+
+        @Test
+        void aDeletionAlsoClearsTheMarker() {
+            AccountTransferStandingInstruction instruction = active();
+            instruction.disableForClosure();
+
+            instruction.delete();
+
+            assertThat(instruction.isDisabledByClosure()).isFalse();
+        }
+    }
+
     @Nested
     class DisabledDeliberately {
 

@@ -182,7 +182,7 @@ public class AccountTransferStandingInstruction extends AbstractPersistableCusto
         if (command.isChangeInIntegerParameterNamed(statusParamName, this.status)) {
             final Integer newValue = command.integerValueOfParameterNamed(statusParamName);
             actualChanges.put(statusParamName, newValue);
-            this.status = newValue;
+            updateStatus(newValue);
         }
 
         if (command.isChangeInIntegerParameterNamed(priorityParamName, this.priority)) {
@@ -284,8 +284,19 @@ public class AccountTransferStandingInstruction extends AbstractPersistableCusto
         this.latsRunDate = latsRunDate;
     }
 
+    /**
+     * The only status transition that is not a closure's. It clears {@code disabledByClosure}, because anything that
+     * moves the status for another reason makes the closure's provenance stale.
+     *
+     * <p>
+     * Every non-closure path funnels through here rather than assigning the field, so a stale marker cannot survive.
+     * Without that, an instruction a closure disabled, an operator then re-activated, and an operator later disabled on
+     * purpose would still look closure-disabled — and the next reopening would switch it back on, restarting money
+     * movement nobody asked to restart. That is the exact outcome the marker exists to prevent (AB-548).
+     */
     public void updateStatus(Integer status) {
         this.status = status;
+        this.disabledByClosure = false;
     }
 
     /** Flips ACTIVE -> DISABLED and records that a closure is what did it. */
@@ -316,7 +327,7 @@ public class AccountTransferStandingInstruction extends AbstractPersistableCusto
      * delete the standing instruction by setting the status to 3 and appending "_deleted_" and the id to the name
      **/
     public void delete() {
-        this.status = StandingInstructionStatus.DELETED.getValue();
+        updateStatus(StandingInstructionStatus.DELETED.getValue());
         this.name = this.name + "_deleted_" + this.getId();
     }
 }
