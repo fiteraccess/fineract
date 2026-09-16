@@ -38,6 +38,7 @@ import org.apache.fineract.infrastructure.accountnumberformat.domain.AccountNumb
 import org.apache.fineract.infrastructure.accountnumberformat.domain.EntityAccountType;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -79,6 +80,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
     private final SavingsAccountDomainService savingsAccountDomainService;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
     private final ConfigurationDomainService configurationDomainService;
+    private final FineractProperties fineractProperties;
     private final AccountNumberFormatRepositoryWrapper accountNumberFormatRepository;
     private final CalendarInstanceRepository calendarInstanceRepository;
     private final ExternalIdFactory externalIdFactory;
@@ -460,6 +462,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
         Long savingsTransactionId = null;
 
+        rejectIfCreditRestricted(account);
         // post interest
         account.postPreMaturityInterest(closedDate, isPreMatureClosure, isSavingsInterestPostingAtCurrentPeriodEnd,
                 financialYearBeginningMonth);
@@ -516,6 +519,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final Locale locale = command.extractLocale();
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
         Long savingsTransactionId = null;
+        rejectIfCreditRestricted(account);
         // post interest
         account.postPreMaturityInterest(closedDate, isPreMatureClosure, isSavingsInterestPostingAtCurrentPeriodEnd,
                 financialYearBeginningMonth, postReversals);
@@ -545,6 +549,19 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         this.savingsAccountRepository.save(account);
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, isAccountTransfer);
         return savingsTransactionId;
+    }
+
+    /**
+     * Closing a deposit posts its remaining interest natively, outside the Synapse interest path — the only place FD/RD
+     * interest can reach an account the scheduled job has skipped. Refused, not skipped: the closure would otherwise
+     * sweep out a balance that was never allowed to receive the credit.
+     */
+    private void rejectIfCreditRestricted(final SavingsAccount account) {
+        if (fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled()
+                && account.isSynapseCreditRestricted()) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savingsaccount.interest.posting.credit.restricted",
+                    "Interest posting is withheld while account " + account.getId() + " is credit-restricted", account.getId());
+        }
     }
 
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,

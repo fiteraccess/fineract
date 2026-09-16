@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    The reasons an account restriction may be LIFTED with, as a Manage Codes list beside the four placement
+    lists seeded in 0009 — so a lift is reportable by reason the way a placement is, with the free-text
+    narration carrying the case detail. Empty here; ops populate the values in Manage Codes. Synapse serves it
+    through GET /access/api/v1/restrictions/lift-reasons and validates every lift's reasonCode against it.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(1) FROM m_code WHERE code_name = 'SavingsAccountUnblockReasons'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_code">
+            <column name="code_name" value="SavingsAccountUnblockReasons"/>
+            <column name="is_system_defined" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

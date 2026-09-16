@@ -378,6 +378,13 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "accrued_till_date")
     private LocalDate accruedTillDate;
 
+    /**
+     * Synapse-owned, inert: written only by {@code ?command=replayCreditRestriction}, read only by the interest
+     * engine's account selection and the manual/closure interest posts. Never consulted by transaction validation.
+     */
+    @Column(name = "synapse_credit_restricted", nullable = false)
+    private boolean synapseCreditRestricted;
+
     @Column(name = "last_closed_business_date")
     private LocalDate lastClosedBusinessDate;
 
@@ -4040,6 +4047,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public Integer getSubStatus() {
         return this.sub_status;
+    }
+
+    public boolean isSynapseCreditRestricted() {
+        return this.synapseCreditRestricted;
+    }
+
+    public void setSynapseCreditRestricted(final boolean synapseCreditRestricted) {
+        this.synapseCreditRestricted = synapseCreditRestricted;
     }
 
     public void validateForAccountBlock() {

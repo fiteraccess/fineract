@@ -34,6 +34,7 @@ import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
 import org.apache.fineract.accounting.glaccount.data.GLAccountData;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
@@ -104,11 +105,14 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
     private final SavingsAccountAssembler savingAccountAssembler;
 
     private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
+    private final FineractProperties fineractProperties;
 
     public SavingsAccountReadPlatformServiceImpl(final PlatformSecurityContext context, final JdbcTemplate jdbcTemplate,
             final SavingsAccountAssembler savingAccountAssembler, PaginationHelper paginationHelper, ColumnValidator columnValidator,
-            DatabaseSpecificSQLGenerator sqlGenerator, SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper) {
+            DatabaseSpecificSQLGenerator sqlGenerator, SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper,
+            FineractProperties fineractProperties) {
         this.context = context;
+        this.fineractProperties = fineractProperties;
         this.jdbcTemplate = jdbcTemplate;
         this.sqlGenerator = sqlGenerator;
         this.savingsAccountRepositoryWrapper = savingsAccountRepositoryWrapper;
@@ -234,12 +238,21 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         return this.jdbcTemplate.query(String.format(sql, inSql), this.savingsAccountTransactionsForBatchMapper, params);
     }
 
+    private boolean isCreditRestrictionEnabled() {
+        return fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled();
+    }
+
     @Override
     public List<SavingsAccountData> retrieveAllSavingsDataForInterestPosting(final boolean backdatedTxnsAllowedTill, final int pageSize,
             final Integer status, final Long maxSavingsId) {
         LocalDate yesterday = DateUtils.getBusinessLocalDate().minusDays(1);
+        // A credit-restricted account is left out here, before any cursor is built for it: interest_posted_till_date
+        // must not move, so the ordinary catch-up credits the missed periods — correctly compounded — once the
+        // restriction is lifted. Filtering any later (inside the outbox writer) would still advance the cursor.
+        final String creditRestrictionFilter = isCreditRestrictionEnabled() ? "and a.synapse_credit_restricted = false " : "";
         String sql = "select " + this.savingAccountMapperForInterestPosting.schema()
-                + "join (select a.id from m_savings_account a where a.id > ? and a.status_enum = ? limit ?) b on b.id = sa.id ";
+                + "join (select a.id from m_savings_account a where a.id > ? and a.status_enum = ? " + creditRestrictionFilter
+                + "limit ?) b on b.id = sa.id ";
         if (backdatedTxnsAllowedTill) {
             sql = sql
                     + "where (CASE WHEN sa.interest_posted_till_date is not null THEN tr.transaction_date >= sa.interest_posted_till_date ELSE tr.transaction_date >= sa.activatedon_date END) ";
@@ -1431,6 +1444,12 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
     }
 
     @Override
+    /**
+     * Deliberately NOT filtered on {@code synapse_credit_restricted}, unlike the interest-posting selection. A credit
+     * restriction pauses the credit, not the accrual: the interest is still owed, so accrual keeps booking Cr
+     * INTEREST_PAYABLE daily, and the catch-up posting on lift debits that same payable. Skipping accrual here while
+     * the catch-up still posted the full period would leave the payable short by exactly the withheld interest.
+     */
     public List<SavingsAccrualData> retrievePeriodicAccrualData(LocalDate tillDate, SavingsAccount savings) {
         Long savingsId = (savings != null) ? savings.getId() : null;
         Integer status = SavingsAccountStatusType.ACTIVE.getValue();

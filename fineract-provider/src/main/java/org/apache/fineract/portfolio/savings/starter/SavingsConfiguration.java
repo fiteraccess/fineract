@@ -151,6 +151,7 @@ import org.apache.fineract.portfolio.savings.service.synapse.ChargePostingTaskHa
 import org.apache.fineract.portfolio.savings.service.synapse.DormancyStatusTaskHandler;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseCreditRestrictionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyStateApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInstructionMapper;
@@ -253,7 +254,7 @@ public class SavingsConfiguration {
             CalendarInstanceRepository calendarInstanceRepository, ConfigurationDomainService configurationDomainService,
             HolidayRepositoryWrapper holidayRepository, WorkingDaysRepositoryWrapper workingDaysRepository,
             DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository,
-            CacheableSavingsProductConfigService cacheableSavingsProductConfigService
+            CacheableSavingsProductConfigService cacheableSavingsProductConfigService, FineractProperties fineractProperties
 
     ) {
         return new DepositAccountWritePlatformServiceJpaRepositoryImpl(context, savingAccountRepositoryWrapper,
@@ -262,7 +263,7 @@ public class SavingsConfiguration {
                 depositAccountDomainService, noteRepository, accountTransfersReadPlatformService, chargeRepository,
                 savingsAccountChargeRepository, accountAssociationsReadPlatformService, accountTransfersWritePlatformService,
                 calendarInstanceRepository, configurationDomainService, holidayRepository, workingDaysRepository,
-                depositAccountOnHoldTransactionRepository, cacheableSavingsProductConfigService);
+                depositAccountOnHoldTransactionRepository, cacheableSavingsProductConfigService, fineractProperties);
     }
 
     @Bean
@@ -359,9 +360,10 @@ public class SavingsConfiguration {
     @ConditionalOnMissingBean(SavingsAccountReadPlatformService.class)
     public SavingsAccountReadPlatformService savingsAccountReadPlatformService(PlatformSecurityContext context, JdbcTemplate jdbcTemplate,
             SavingsAccountAssembler savingAccountAssembler, PaginationHelper paginationHelper, DatabaseSpecificSQLGenerator sqlGenerator,
-            SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper, ColumnValidator columnValidator) {
+            SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper, ColumnValidator columnValidator,
+            FineractProperties fineractProperties) {
         return new SavingsAccountReadPlatformServiceImpl(context, jdbcTemplate, savingAccountAssembler, paginationHelper, columnValidator,
-                sqlGenerator, savingsAccountRepositoryWrapper);
+                sqlGenerator, savingsAccountRepositoryWrapper, fineractProperties);
     }
 
     @Bean
@@ -403,7 +405,8 @@ public class SavingsConfiguration {
             ObjectProvider<SynapseChargeTransactionApplier> chargePostingReplayServiceProvider,
             ObjectProvider<SynapseDormancyPostingOutboxWriter> synapseDormancyPostingOutboxWriterProvider,
             ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider, NipWithdrawalPreflight nipWithdrawalPreflight,
-            NipDepositPreflight nipDepositPreflight) {
+            NipDepositPreflight nipDepositPreflight, ObjectProvider<SynapseCreditRestrictionApplier> creditRestrictionApplierProvider,
+            FineractProperties fineractProperties) {
         return new SavingsAccountWritePlatformServiceJpaRepositoryImpl(context, fromApiJsonDeserializer, savingAccountRepositoryWrapper,
                 staffRepository, savingsAccountTransactionRepository, savingAccountAssembler, savingsAccountTransactionDataValidator,
                 savingsAccountChargeDataValidator, paymentDetailWritePlatformService, journalEntryWritePlatformService,
@@ -414,7 +417,8 @@ public class SavingsConfiguration {
                 errorHandler, interestPostingReplayServiceProvider, savingsAccountReadPlatformService,
                 synapseInterestPostingServiceProvider, jdbcTemplate, cacheableSavingsProductConfigService,
                 savingsDailyBalanceSyncRepository, synapseChargePostingOutboxWriterProvider, chargePostingReplayServiceProvider,
-                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider, nipWithdrawalPreflight, nipDepositPreflight);
+                synapseDormancyPostingOutboxWriterProvider, dormancyStateApplierProvider, nipWithdrawalPreflight, nipDepositPreflight,
+                creditRestrictionApplierProvider, fineractProperties);
     }
 
     @Bean
@@ -552,6 +556,13 @@ public class SavingsConfiguration {
     @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
     public DormancyStatusTaskHandler dormancyStatusTaskHandler(SynapseTransactionClient client, ObjectMapper objectMapper) {
         return new DormancyStatusTaskHandler(client, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
+    public SynapseCreditRestrictionApplier synapseCreditRestrictionApplier(
+            SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper) {
+        return new SynapseCreditRestrictionApplier(savingsAccountRepositoryWrapper);
     }
 
     @Bean

@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
@@ -66,6 +67,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private final SavingsAccountTransactionRepository savingsAccountTransactionRepository;
     private final JournalEntryWritePlatformService journalEntryWritePlatformService;
     private final ConfigurationDomainService configurationDomainService;
+    private final FineractProperties fineractProperties;
     private final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final BalanceValidationService balanceValidationService;
@@ -82,7 +84,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository,
             final BusinessEventNotifierService businessEventNotifierService, final BalanceValidationService balanceValidationService,
             final EntityManager entityManager, CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
-            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository, NoteRepository noteRepository) {
+            SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository, NoteRepository noteRepository,
+            FineractProperties fineractProperties) {
+        this.fineractProperties = fineractProperties;
         this.savingsAccountRepository = savingsAccountRepository;
         this.savingsAccountTransactionRepository = savingsAccountTransactionRepository;
         this.journalEntryWritePlatformService = journalEntryWritePlatformService;
@@ -212,6 +216,15 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         return withdrawal;
     }
 
+    /**
+     * A backdated transaction normally re-posts interest from its date forward; while the account is credit-restricted
+     * that must only recalculate, or the withheld periods would land through the side door.
+     */
+    private boolean isCreditRestricted(final SavingsAccount account) {
+        return fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled()
+                && account.isSynapseCreditRestricted();
+    }
+
     private SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId, final String aggregatorCode,
@@ -267,7 +280,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
 
-        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill)) {
+        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && !isCreditRestricted(account)) {
             account.postInterest(mc, today, transactionBooleanValues.isInterestTransfer(), isSavingsInterestPostingAtCurrentPeriodEnd,
                     financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
         } else {
@@ -566,7 +579,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
         boolean postReversals = this.configurationDomainService.isReversalTransactionAllowed();
-        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill)) {
+        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && !isCreditRestricted(account)) {
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
         } else {
@@ -1047,7 +1060,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final MathContext mc = new MathContext(15, MoneyHelper.getRoundingMode());
         for (SavingsAccountTransaction savingsAccountTransaction : savingsAccountTransactions) {
             if (savingsAccountTransaction.isPostInterestCalculationRequired()
-                    && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), backdatedTxnsAllowedTill)) {
+                    && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), backdatedTxnsAllowedTill)
+                    && !isCreditRestricted(account)) {
 
                 account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                         postInterestOnDate, backdatedTxnsAllowedTill, postReversals);

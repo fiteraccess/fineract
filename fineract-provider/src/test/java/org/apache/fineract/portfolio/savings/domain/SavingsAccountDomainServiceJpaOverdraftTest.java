@@ -38,6 +38,7 @@ import java.util.Map;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
@@ -107,7 +108,7 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         service = new SavingsAccountDomainServiceJpa(savingsAccountRepository, savingsAccountTransactionRepository,
                 journalEntryWritePlatformService, configurationDomainService, context, depositAccountOnHoldTransactionRepository,
                 businessEventNotifierService, balanceValidationService, entityManager, cacheableSavingsProductConfigService,
-                savingsDailyBalanceSyncRepository, noteRepository);
+                savingsDailyBalanceSyncRepository, noteRepository, new FineractProperties());
     }
 
     @AfterEach

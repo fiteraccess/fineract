@@ -747,5 +747,6 @@ public class FineractProperties {
         private int outboxThreadPoolSize = 4;
         private int outboxRetentionDays = 30;
         private int outboxStaleDispatchedMinutes = 5;
+        private boolean creditRestrictionEnabled;
     }
 }
