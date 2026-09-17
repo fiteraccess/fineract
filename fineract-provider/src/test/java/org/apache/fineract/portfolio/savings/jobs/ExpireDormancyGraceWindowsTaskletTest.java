@@ -36,6 +36,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.repeat.RepeatStatus;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +48,12 @@ class ExpireDormancyGraceWindowsTaskletTest {
 
     @Mock
     private SavingsAccountWritePlatformService writePlatformService;
+
+    @Mock
+    private StepContribution stepContribution;
+
+    @Mock
+    private ChunkContext chunkContext;
 
     private ExpireDormancyGraceWindowsTasklet tasklet;
 
@@ -64,7 +72,7 @@ class ExpireDormancyGraceWindowsTaskletTest {
     void proposesARevertForEveryLapsedAccount() throws Exception {
         when(readPlatformService.retrieveSavingsIdsWithLapsedDormancyGrace(any(LocalDateTime.class))).thenReturn(List.of(11L, 22L));
 
-        RepeatStatus status = tasklet.execute(null, null);
+        RepeatStatus status = tasklet.execute(stepContribution, chunkContext);
 
         verify(writePlatformService).revertLapsedDormancyGrace(11L);
         verify(writePlatformService).revertLapsedDormancyGrace(22L);
@@ -75,7 +83,7 @@ class ExpireDormancyGraceWindowsTaskletTest {
     void doesNothingWhenNoWindowHasLapsed() throws Exception {
         when(readPlatformService.retrieveSavingsIdsWithLapsedDormancyGrace(any(LocalDateTime.class))).thenReturn(List.of());
 
-        tasklet.execute(null, null);
+        tasklet.execute(stepContribution, chunkContext);
 
         verify(writePlatformService, never()).revertLapsedDormancyGrace(any());
     }
@@ -84,7 +92,7 @@ class ExpireDormancyGraceWindowsTaskletTest {
     void toleratesANullResultRatherThanFailingTheRun() throws Exception {
         when(readPlatformService.retrieveSavingsIdsWithLapsedDormancyGrace(any(LocalDateTime.class))).thenReturn(null);
 
-        tasklet.execute(null, null);
+        tasklet.execute(stepContribution, chunkContext);
 
         verify(writePlatformService, never()).revertLapsedDormancyGrace(any());
     }
