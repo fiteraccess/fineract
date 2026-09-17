@@ -46,6 +46,7 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
+import org.apache.fineract.portfolio.savings.service.synapse.CreditRestrictionPageGuard;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -169,7 +170,15 @@ public class SavingsSchedularInterestPoster {
     }
 
     @SuppressWarnings("unused")
-    private void batchUpdate(final List<SavingsAccountData> savingsAccountDataList) throws DataAccessException {
+    private void batchUpdate(final List<SavingsAccountData> page) throws DataAccessException {
+        // Still inside this page's transaction: lock the rows and drop anything credit-restricted since selection,
+        // before either branch writes a posting or moves a cursor.
+        final List<SavingsAccountData> savingsAccountDataList = isCreditRestrictionEnabled()
+                ? new CreditRestrictionPageGuard(jdbcTemplate).dropRestricted(page)
+                : page;
+        if (savingsAccountDataList.isEmpty()) {
+            return;
+        }
         if (isSynapseEnabled()) {
             Long userId = platformSecurityContext.authenticatedUser().getId();
             SynapsePostResult result = synapseInterestPostingOutboxWriter.postInterestBatch(savingsAccountDataList);
@@ -278,6 +287,11 @@ public class SavingsSchedularInterestPoster {
         return "UPDATE m_savings_account_transaction "
                 + "SET is_reversed=?, amount=?, overdraft_amount_derived=?, balance_end_date_derived=?, balance_number_of_days_derived=?, running_balance_derived=?, cumulative_balance_derived=?, is_reversal=?, "
                 + LAST_MODIFIED_DATE_DB_FIELD + " = ?, " + LAST_MODIFIED_BY_DB_FIELD + " = ? " + "WHERE id=?";
+    }
+
+    private boolean isCreditRestrictionEnabled() {
+        return fineractProperties != null && fineractProperties.getSynapse() != null
+                && fineractProperties.getSynapse().isCreditRestrictionEnabled();
     }
 
     private boolean isSynapseEnabled() {

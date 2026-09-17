@@ -54,6 +54,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
@@ -138,6 +139,7 @@ import org.apache.fineract.portfolio.savings.exception.SavingsOfficerUnassignmen
 import org.apache.fineract.portfolio.savings.exception.TransactionUpdateNotAllowedException;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargePostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseChargeTransactionApplier;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseCreditRestrictionApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyPostingOutboxWriter;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseDormancyStateApplier;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseInterestPostingOutboxWriter;
@@ -196,6 +198,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final ObjectProvider<SynapseDormancyStateApplier> dormancyStateApplierProvider;
     private final NipWithdrawalPreflight nipWithdrawalPreflight;
     private final NipDepositPreflight nipDepositPreflight;
+    private final ObjectProvider<SynapseCreditRestrictionApplier> creditRestrictionApplierProvider;
+    private final FineractProperties fineractProperties;
 
     @Transactional
     @Override
@@ -655,6 +659,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
         checkClientOrGroupActive(account);
+        rejectIfCreditRestricted(account);
 
         this.savingsAccountTransactionDataValidator.validateTransactionWithPivotDate(transactionDate, account);
 
@@ -960,7 +965,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         boolean postReversals = false;
         checkClientOrGroupActive(account);
         if (savingsAccountTransaction.isPostInterestCalculationRequired()
-                && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false)) {
+                && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false)
+                && !isCreditRestricted(account)) {
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, false, postReversals);
         } else {
@@ -1066,8 +1072,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final Long newtransactionId = saveTransactionToGenerateTransactionId(transaction);
         final LocalDate postInterestOnDate = null;
         boolean postReversals = false;
-        if (account.isBeforeLastPostingPeriod(transactionDate, false)
-                || account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false)) {
+        if ((account.isBeforeLastPostingPeriod(transactionDate, false)
+                || account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false))
+                && !isCreditRestricted(account)) {
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, false, postReversals);
         } else {
@@ -1512,7 +1519,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         LocalDate postInterestOnDate = null;
         final MathContext mc = MathContext.DECIMAL64;
         boolean postReversals = false;
-        if (account.isBeforeLastPostingPeriod(savingsAccountCharge.getDueDate(), backdatedTxnsAllowedTill)) {
+        if (account.isBeforeLastPostingPeriod(savingsAccountCharge.getDueDate(), backdatedTxnsAllowedTill)
+                && !isCreditRestricted(account)) {
             final LocalDate today = DateUtils.getBusinessLocalDate();
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
@@ -1703,7 +1711,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         LocalDate postInterestOnDate = null;
         final MathContext mc = MathContext.DECIMAL64;
         boolean postReversals = false;
-        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill)) {
+        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && !isCreditRestricted(account)) {
             final LocalDate today = DateUtils.getBusinessLocalDate();
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, isInterestTransfer, postReversals);
@@ -2382,12 +2390,52 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         return builder.build();
     }
 
+    @Override
+    public CommandProcessingResult replayCreditRestriction(final Long savingsId, final JsonCommand command) {
+        final SynapseCreditRestrictionApplier applier = creditRestrictionApplierProvider.getIfAvailable();
+        if (applier == null || !configurationDomainService.isSynapseInterestPostingEnabled()) {
+            throw new PlatformServiceUnavailableException("error.msg.synapse.not.enabled",
+                    "Synapse integration is not enabled. Cannot replay credit restriction.");
+        }
+
+        final boolean restricted = SynapseCreditRestrictionApplier.requiredRestricted(command);
+        final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+
+        applier.apply(account, restricted);
+
+        return new CommandProcessingResultBuilder().withSavingsId(savingsId).withOfficeId(account.officeId())
+                .withClientId(account.clientId()).build();
+    }
+
+    /**
+     * A backdated transaction normally re-posts interest from its date forward; while the account is credit-restricted
+     * that must only recalculate, or the withheld periods would land through the side door.
+     */
+    private boolean isCreditRestricted(final SavingsAccount account) {
+        return fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled()
+                && account.isSynapseCreditRestricted();
+    }
+
+    /**
+     * A manual "Post Interest" on a credit-restricted account is refused rather than silently skipped: the operator
+     * asked for an outcome that policy forbids and should hear so. The scheduled job never sees such an account — its
+     * selection SQL excludes the flag — so this guard is only reachable from the single-account command.
+     */
+    private void rejectIfCreditRestricted(final SavingsAccount account) {
+        if (fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled()
+                && account.isSynapseCreditRestricted()) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savingsaccount.interest.posting.credit.restricted",
+                    "Interest posting is withheld while account " + account.getId() + " is credit-restricted", account.getId());
+        }
+    }
+
     private CommandProcessingResult postInterestViaSynapse(Long savingsId, JsonCommand command,
             SynapseInterestPostingOutboxWriter synapseService) {
         // 1. Validate: load JPA entity for validation only (client/group active, pivot date)
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
         checkClientOrGroupActive(account);
+        rejectIfCreditRestricted(account);
 
         final boolean postInterestAs = command.booleanPrimitiveValueOfParameterNamed("isPostInterestAsOn");
         final LocalDate transactionDate = command.localDateValueOfParameterNamed("transactionDate");

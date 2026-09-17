@@ -43,11 +43,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.PlatformServiceUnavailableException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -138,6 +140,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository;
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
+    private final FineractProperties fineractProperties;
 
     @Transactional
     @Override
@@ -483,6 +486,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
         final SavingsAccount account = this.depositAccountAssembler.assembleFrom(savingsId, depositAccountType);
         checkClientOrGroupActive(account);
+        rejectIfCreditRestricted(account);
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
         final boolean postReversals = false;
@@ -509,6 +513,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
         final SavingsAccount account = this.depositAccountAssembler.assembleFrom(savingsId, depositAccountType);
         checkClientOrGroupActive(account);
+        rejectIfCreditRestricted(account);
         postInterest(account);
         return new CommandProcessingResultBuilder() //
                 .withEntityId(savingsId) //
@@ -517,6 +522,26 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
                 .withGroupId(account.groupId()) //
                 .withSavingsId(savingsId) //
                 .build();
+    }
+
+    /**
+     * A backdated transaction normally re-posts interest from its date forward; while the account is credit-restricted
+     * that must only recalculate, or the withheld periods would land through the side door.
+     */
+    private boolean isCreditRestricted(final SavingsAccount account) {
+        return fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled()
+                && account.isSynapseCreditRestricted();
+    }
+
+    /**
+     * Refused, not skipped: the operator asked for a credit the restriction forbids. Mirrors the savings write service.
+     */
+    private void rejectIfCreditRestricted(final SavingsAccount account) {
+        if (fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isCreditRestrictionEnabled()
+                && account.isSynapseCreditRestricted()) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savingsaccount.interest.posting.credit.restricted",
+                    "Interest posting is withheld while account " + account.getId() + " is credit-restricted", account.getId());
+        }
     }
 
     @Transactional
@@ -587,7 +612,8 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         checkClientOrGroupActive(account);
         final boolean postReversals = false;
         if (savingsAccountTransaction.isPostInterestCalculationRequired()
-                && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false)) {
+                && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false)
+                && !isCreditRestricted(account)) {
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, false, postReversals);
         } else {
@@ -698,8 +724,9 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         boolean isInterestTransfer = false;
         final LocalDate postInterestOnDate = null;
         final boolean postReversals = false;
-        if (account.isBeforeLastPostingPeriod(transactionDate, false)
-                || account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false)) {
+        if ((account.isBeforeLastPostingPeriod(transactionDate, false)
+                || account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), false))
+                && !isCreditRestricted(account)) {
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, false, postReversals);
         } else {
@@ -1138,7 +1165,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         LocalDate postInterestOnDate = null;
         final MathContext mc = MathContext.DECIMAL64;
         final boolean postReversals = false;
-        if (account.isBeforeLastPostingPeriod(savingsAccountCharge.getDueDate(), false)) {
+        if (account.isBeforeLastPostingPeriod(savingsAccountCharge.getDueDate(), false) && !isCreditRestricted(account)) {
             final LocalDate today = DateUtils.getBusinessLocalDate();
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, false, postReversals);
@@ -1276,7 +1303,7 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         LocalDate postInterestOnDate = null;
         final MathContext mc = MathContext.DECIMAL64;
         final boolean postReversals = false;
-        if (account.isBeforeLastPostingPeriod(transactionDate, false)) {
+        if (account.isBeforeLastPostingPeriod(transactionDate, false) && !isCreditRestricted(account)) {
             final LocalDate today = DateUtils.getBusinessLocalDate();
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, false, postReversals);
