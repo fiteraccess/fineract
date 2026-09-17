@@ -89,7 +89,6 @@ import org.apache.fineract.portfolio.savings.domain.RecurringDepositProductRepos
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeRepositoryWrapper;
-import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
@@ -556,8 +555,8 @@ public class SavingsConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
     public DormancyStatusTaskHandler dormancyStatusTaskHandler(SynapseTransactionClient client, ObjectMapper objectMapper,
-            SavingsAccountRepository savingsAccountRepository) {
-        return new DormancyStatusTaskHandler(client, objectMapper, savingsAccountRepository);
+            JdbcTemplate jdbcTemplate) {
+        return new DormancyStatusTaskHandler(client, objectMapper, jdbcTemplate);
     }
 
     @Bean

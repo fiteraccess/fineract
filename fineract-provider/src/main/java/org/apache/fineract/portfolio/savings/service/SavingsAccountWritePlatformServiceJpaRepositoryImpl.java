@@ -2010,7 +2010,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 && configurationDomainService.isSynapseInterestPostingEnabled();
     }
 
-    private static final String GRACE_LAPSE_TRANSITION_REASON = "Reactivation grace window lapsed without a qualifying transaction";
+    // Machine-readable on purpose: Synapse keys its grace re-check off this exact value to tell a lapse proposal
+    // apart from ordinary threshold dormancy, and prose here would make that a brittle string match.
+    private static final String GRACE_LAPSE_TRANSITION_REASON = "GRACE_WINDOW_LAPSE";
 
     private String inactiveTransitionReason(SavingsAccount account) {
         Long days = account.savingsProduct().getDaysToInactive();

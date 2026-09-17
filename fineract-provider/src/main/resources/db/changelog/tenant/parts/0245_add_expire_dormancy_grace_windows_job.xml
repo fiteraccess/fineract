@@ -39,7 +39,7 @@
         <insert tableName="job">
             <column name="name" value="Expire Dormancy Grace Windows"/>
             <column name="display_name" value="Expire Dormancy Grace Windows"/>
-            <column name="short_name" value="DORM_GRACE"/>
+            <column name="short_name" value="DORM_GRC"/>
             <column name="cron_expression" value="0 0/5 * * * ?"/>
             <column name="create_time" valueDate="${current_datetime}"/>
             <column name="task_priority" valueNumeric="5"/>
