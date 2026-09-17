@@ -33,6 +33,7 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,6 +45,7 @@ import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlat
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
@@ -137,7 +139,7 @@ class SynapseDormancyStateApplierTest {
             SavingsAccount account = buildAccount(1L, STARTING_BALANCE, SavingsAccountSubStatusEnum.NONE.getValue());
 
             ApplyResult result = applier.apply(account, "trace-inactive-1", SavingsAccountSubStatusEnum.INACTIVE, EFFECTIVE_DATE, null,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(account.getSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.INACTIVE.getValue());
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.INACTIVE);
@@ -152,7 +154,7 @@ class SynapseDormancyStateApplierTest {
             SavingsAccount account = buildAccount(2L, STARTING_BALANCE, SavingsAccountSubStatusEnum.INACTIVE.getValue());
 
             ApplyResult result = applier.apply(account, "trace-inactive-2", SavingsAccountSubStatusEnum.INACTIVE, EFFECTIVE_DATE, null,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.INACTIVE);
             assertThat(result.escheatTransaction()).isNull();
@@ -170,7 +172,7 @@ class SynapseDormancyStateApplierTest {
             SavingsAccount account = buildAccount(3L, STARTING_BALANCE, SavingsAccountSubStatusEnum.INACTIVE.getValue());
 
             ApplyResult result = applier.apply(account, "trace-dormant-1", SavingsAccountSubStatusEnum.DORMANT, EFFECTIVE_DATE, null,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(account.getSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.DORMANT.getValue());
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.DORMANT);
@@ -185,7 +187,7 @@ class SynapseDormancyStateApplierTest {
             SavingsAccount account = buildAccount(4L, STARTING_BALANCE, SavingsAccountSubStatusEnum.DORMANT.getValue());
 
             ApplyResult result = applier.apply(account, "trace-dormant-2", SavingsAccountSubStatusEnum.DORMANT, EFFECTIVE_DATE, null,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.DORMANT);
             assertThat(result.escheatTransaction()).isNull();
@@ -207,7 +209,7 @@ class SynapseDormancyStateApplierTest {
             stubTxnSaveAssignsId(999L);
 
             ApplyResult result = applier.apply(account, "trace-escheat-1", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY);
+                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY, null);
 
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.ESCHEAT);
             assertThat(result.alreadyApplied()).isFalse();
@@ -264,7 +266,8 @@ class SynapseDormancyStateApplierTest {
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
             stubTxnSaveAssignsId(424242L);
 
-            applier.apply(account, "trace-id-prop", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT, ACCOUNT_CURRENCY);
+            applier.apply(account, "trace-id-prop", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT, ACCOUNT_CURRENCY,
+                    null);
 
             ArgumentCaptor<SavingsAccountingBridgeDTO> bridgeCaptor = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
             verify(journalEntryWritePlatformService).createJournalEntriesForSavings(bridgeCaptor.capture());
@@ -279,7 +282,8 @@ class SynapseDormancyStateApplierTest {
             when(appUserRepository.fetchSystemUser()).thenReturn(mock(AppUser.class));
             stubTxnSaveAssignsId(111L);
 
-            applier.apply(account, "trace-escheat-mismatch", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT, "EUR");
+            applier.apply(account, "trace-escheat-mismatch", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT, "EUR",
+                    null);
 
             ArgumentCaptor<SavingsAccountingBridgeDTO> bridgeCaptor = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
             verify(journalEntryWritePlatformService).createJournalEntriesForSavings(bridgeCaptor.capture());
@@ -296,7 +300,7 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-dup")).thenReturn(List.of(existing));
 
             ApplyResult result = applier.apply(account, "trace-dup", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.ESCHEAT);
             assertThat(result.alreadyApplied()).isTrue();
@@ -315,7 +319,7 @@ class SynapseDormancyStateApplierTest {
             BigDecimal mismatchedAmount = ESCHEAT_AMOUNT.add(BigDecimal.ONE);
 
             ApplyResult result = applier.apply(account, "trace-precheck", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    mismatchedAmount, ACCOUNT_CURRENCY);
+                    mismatchedAmount, ACCOUNT_CURRENCY, null);
 
             assertThat(result.alreadyApplied()).isTrue();
             assertThat(result.escheatTransaction()).isSameAs(existing);
@@ -335,7 +339,7 @@ class SynapseDormancyStateApplierTest {
             stubTxnSaveAssignsId(131L);
 
             ApplyResult result = applier.apply(account, "trace-x", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertEscheatProceeded(account, result, otherAccountEscheat, 13L, "trace-x");
         }
@@ -351,7 +355,7 @@ class SynapseDormancyStateApplierTest {
             stubTxnSaveAssignsId(141L);
 
             ApplyResult result = applier.apply(account, "trace-rev", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertEscheatProceeded(account, result, reversedEscheat, 14L, "trace-rev");
         }
@@ -367,7 +371,7 @@ class SynapseDormancyStateApplierTest {
             stubTxnSaveAssignsId(151L);
 
             ApplyResult result = applier.apply(account, "trace-charge", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertEscheatProceeded(account, result, chargeTxn, 15L, "trace-charge");
         }
@@ -380,7 +384,7 @@ class SynapseDormancyStateApplierTest {
             when(appUserRepository.fetchSystemUser()).thenReturn(systemUser);
 
             ApplyResult result = applier.apply(account, "trace-zero", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, BigDecimal.ZERO,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.ESCHEAT);
             assertThat(result.alreadyApplied()).isFalse();
@@ -413,7 +417,7 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-multi")).thenReturn(List.of(otherAccountEscheat, reversedEscheat, validEscheat));
 
             ApplyResult result = applier.apply(account, "trace-multi", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, ESCHEAT_AMOUNT,
-                    ACCOUNT_CURRENCY);
+                    ACCOUNT_CURRENCY, null);
 
             assertThat(result.alreadyApplied()).isTrue();
             assertThat(result.escheatTransaction()).isSameAs(validEscheat);
@@ -434,7 +438,7 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-backdated")).thenReturn(Collections.emptyList());
 
             assertThatThrownBy(() -> applier.apply(account, "trace-backdated", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
+                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY, null)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
                             ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
                                     .containsExactly("error.msg.savings.escheat.backdated"));
 
@@ -456,7 +460,7 @@ class SynapseDormancyStateApplierTest {
             stubTxnSaveAssignsId(231L);
 
             ApplyResult result = applier.apply(account, "trace-equal-date", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY);
+                    ESCHEAT_AMOUNT, ACCOUNT_CURRENCY, null);
 
             assertEscheatProceeded(account, result, sameDayCharge, 23L, "trace-equal-date");
         }
@@ -468,7 +472,7 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-mismatch")).thenReturn(Collections.emptyList());
 
             assertThatThrownBy(() -> applier.apply(account, "trace-mismatch", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE,
-                    mismatchedAmount, ACCOUNT_CURRENCY)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
+                    mismatchedAmount, ACCOUNT_CURRENCY, null)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
                             ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
                                     .containsExactly("error.msg.savings.escheat.amount.mismatch"));
 
@@ -485,7 +489,7 @@ class SynapseDormancyStateApplierTest {
             when(transactionRepository.findByRefNo("trace-under")).thenReturn(Collections.emptyList());
 
             assertThatThrownBy(() -> applier.apply(account, "trace-under", SavingsAccountSubStatusEnum.ESCHEAT, EFFECTIVE_DATE, underPaid,
-                    ACCOUNT_CURRENCY)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
+                    ACCOUNT_CURRENCY, null)).isInstanceOfSatisfying(PlatformApiDataValidationException.class,
                             ex -> assertThat(ex.getErrors()).extracting(ApiParameterError::getUserMessageGlobalisationCode)
                                     .containsExactly("error.msg.savings.escheat.amount.mismatch"));
 
@@ -523,30 +527,46 @@ class SynapseDormancyStateApplierTest {
     }
 
     @Nested
-    class ApplyUnsupported {
+    class ApplyNone {
 
         @Test
-        void target_NONE_throwsIllegalArgument() throws Exception {
-            SavingsAccount account = buildAccount(20L, STARTING_BALANCE, SavingsAccountSubStatusEnum.NONE.getValue());
+        void clearsDormancyAndStoresGraceDeadline() throws Exception {
+            SavingsAccount account = buildAccount(20L, STARTING_BALANCE, SavingsAccountSubStatusEnum.DORMANT.getValue());
+            LocalDateTime graceExpiresAt = LocalDateTime.of(2026, 9, 18, 6, 30);
 
-            assertThatThrownBy(
-                    () -> applier.apply(account, "trace-none", SavingsAccountSubStatusEnum.NONE, EFFECTIVE_DATE, null, ACCOUNT_CURRENCY))
-                    .isInstanceOf(IllegalArgumentException.class).hasMessage("Unsupported dormancy target sub-status: NONE");
+            ApplyResult result = applier.apply(account, "trace-reactivate", SavingsAccountSubStatusEnum.NONE, EFFECTIVE_DATE, null,
+                    ACCOUNT_CURRENCY, graceExpiresAt);
 
-            verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, transactionRepository,
-                    appUserRepository);
+            assertThat(result.appliedSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.NONE);
+            assertThat(result.alreadyApplied()).isFalse();
+            assertThat(account.getSubStatus()).isEqualTo(SavingsAccountSubStatusEnum.NONE.getValue());
+            assertThat(account.getDormancyGraceExpiresAt()).isEqualTo(graceExpiresAt);
         }
 
         @Test
-        void target_BLOCK_throwsIllegalArgument() throws Exception {
+        void isIdempotentButStillRefreshesTheDeadline() throws Exception {
             SavingsAccount account = buildAccount(21L, STARTING_BALANCE, SavingsAccountSubStatusEnum.NONE.getValue());
+            LocalDateTime graceExpiresAt = LocalDateTime.of(2026, 9, 18, 6, 30);
 
-            assertThatThrownBy(
-                    () -> applier.apply(account, "trace-block", SavingsAccountSubStatusEnum.BLOCK, EFFECTIVE_DATE, null, ACCOUNT_CURRENCY))
-                    .isInstanceOf(IllegalArgumentException.class).hasMessage("Unsupported dormancy target sub-status: BLOCK");
+            ApplyResult result = applier.apply(account, "trace-reactivate-2", SavingsAccountSubStatusEnum.NONE, EFFECTIVE_DATE, null,
+                    ACCOUNT_CURRENCY, graceExpiresAt);
 
-            verifyNoInteractions(savingsAccountRepositoryWrapper, journalEntryWritePlatformService, transactionRepository,
-                    appUserRepository);
+            assertThat(result.alreadyApplied()).isTrue();
+            assertThat(account.getDormancyGraceExpiresAt()).isEqualTo(graceExpiresAt);
+        }
+    }
+
+    @Nested
+    class ApplyUnsupported {
+
+        @Test
+        void target_BLOCK_isRejectedAsADomainRuleViolation() throws Exception {
+            SavingsAccount account = buildAccount(22L, STARTING_BALANCE, SavingsAccountSubStatusEnum.NONE.getValue());
+
+            assertThatThrownBy(() -> applier.apply(account, "trace-block", SavingsAccountSubStatusEnum.BLOCK, EFFECTIVE_DATE, null,
+                    ACCOUNT_CURRENCY, null)).isInstanceOf(GeneralPlatformDomainRuleException.class);
+
+            verifyNoInteractions(journalEntryWritePlatformService, transactionRepository, appUserRepository);
         }
     }
 

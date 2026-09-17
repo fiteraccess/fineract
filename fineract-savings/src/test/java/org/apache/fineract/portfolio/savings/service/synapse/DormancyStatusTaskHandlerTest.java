@@ -32,6 +32,7 @@ import java.time.LocalDate;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -60,14 +61,19 @@ class DormancyStatusTaskHandlerTest {
             }
             """;
 
+    private static final Long SAVINGS_ACCOUNT_ID = 4242L;
+
     @Mock
     private SynapseTransactionClient client;
+
+    @Mock
+    private SavingsAccountRepository savingsAccountRepository;
 
     private DormancyStatusTaskHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new DormancyStatusTaskHandler(client, OBJECT_MAPPER);
+        handler = new DormancyStatusTaskHandler(client, OBJECT_MAPPER, savingsAccountRepository);
     }
 
     @Test
@@ -120,6 +126,29 @@ class DormancyStatusTaskHandlerTest {
             handler.dispatch(entry);
 
             verify(client, times(1)).postDormancyStatus(any(SynapseDormancyStatusInstruction.class));
+        }
+
+        @Test
+        void dispatch_rejectedAsGraceAlreadySatisfied_clearsTheStoredDeadline() {
+            OutboxEntry entry = buildEntry(VALID_PAYLOAD);
+            when(client.postDormancyStatus(any(SynapseDormancyStatusInstruction.class)))
+                    .thenReturn(new SynapseDormancyStatusResponse(TRACE_ID, "REJECTED", null, "GRACE_ALREADY_SATISFIED", null));
+
+            handler.dispatch(entry);
+
+            // without this the sweep re-proposes the same revert on every run
+            verify(savingsAccountRepository, times(1)).clearDormancyGraceExpiry(SAVINGS_ACCOUNT_ID);
+        }
+
+        @Test
+        void dispatch_rejectedAsGraceStillOpen_leavesTheDeadlineForTheNextSweep() {
+            OutboxEntry entry = buildEntry(VALID_PAYLOAD);
+            when(client.postDormancyStatus(any(SynapseDormancyStatusInstruction.class)))
+                    .thenReturn(new SynapseDormancyStatusResponse(TRACE_ID, "REJECTED", null, "GRACE_WINDOW_STILL_OPEN", null));
+
+            handler.dispatch(entry);
+
+            verifyNoInteractions(savingsAccountRepository);
         }
 
         @Test

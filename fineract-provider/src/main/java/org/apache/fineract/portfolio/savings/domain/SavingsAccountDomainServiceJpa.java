@@ -231,6 +231,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final BigDecimal aggregatorCommissionAmount, final boolean backdatedTxnsAllowedTill, final boolean notifyBusinessEvent,
             final SavingsAccountTransactionType primaryType) {
         context.authenticatedUser();
+        account.validateForDormancy();
         account.validateForAccountBlock();
         account.validateForDebitBlock();
         final Long relaxingDaysConfigForPivotDate = this.configurationDomainService.retrieveRelaxingDaysConfigForPivotDate();
@@ -536,6 +537,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final SavingsAccountTransactionType savingsAccountTransactionType, final String switchId,
             final boolean backdatedTxnsAllowedTill) {
         context.authenticatedUser();
+        account.validateForDormancy();
         account.validateForAccountBlock();
         account.validateForCreditBlock();
 

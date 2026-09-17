@@ -89,6 +89,9 @@ public interface SavingsAccountWritePlatformService {
 
     void escheat(Long savingsId);
 
+    /** AB-550: propose a revert to DORMANT for an account whose reactivation grace window lapsed. */
+    void revertLapsedDormancyGrace(Long savingsId);
+
     CommandProcessingResult postInterest(JsonCommand command);
 
     void postInterest(SavingsAccount account, boolean postInterestAs, LocalDate transactionDate, boolean backdatedTxnsAllowedTill);

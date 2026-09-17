@@ -20,11 +20,13 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -59,13 +61,32 @@ public class SynapseDormancyStateApplier {
     }
 
     public ApplyResult apply(final SavingsAccount account, final String traceId, final SavingsAccountSubStatusEnum target,
-            final LocalDate effectiveDate, final BigDecimal escheatAmount, final String currencyCode) {
+            final LocalDate effectiveDate, final BigDecimal escheatAmount, final String currencyCode, final LocalDateTime graceExpiresAt) {
         return switch (target) {
+            case NONE -> applyNone(account, target, graceExpiresAt);
             case INACTIVE -> applyInactive(account, target);
             case DORMANT -> applyDormant(account, target);
             case ESCHEAT -> applyEscheat(account, traceId, target, effectiveDate, escheatAmount, currencyCode);
-            default -> throw new IllegalArgumentException("Unsupported dormancy target sub-status: " + target);
+            default -> throw new GeneralPlatformDomainRuleException("error.msg.savings.dormancy.target.not.supported",
+                    "Unsupported dormancy target sub-status: " + target, target);
         };
+    }
+
+    /**
+     * AB-550 reactivation. The grace deadline rides in on this same callback so it inherits its retry; the job that
+     * later proposes a revert selects on it.
+     */
+    private ApplyResult applyNone(final SavingsAccount account, final SavingsAccountSubStatusEnum target,
+            final LocalDateTime graceExpiresAt) {
+        account.setDormancyGraceExpiresAt(graceExpiresAt);
+        if (target.getValue().equals(account.getSubStatus())) {
+            log.debug("Dormancy replay no-op: account={} already NONE", account.getId());
+            savingsAccountRepositoryWrapper.saveAndFlush(account);
+            return new ApplyResult(target, null, true);
+        }
+        account.resetSubStatusOnTransaction();
+        savingsAccountRepositoryWrapper.saveAndFlush(account);
+        return new ApplyResult(target, null, false);
     }
 
     private ApplyResult applyInactive(final SavingsAccount account, final SavingsAccountSubStatusEnum target) {
@@ -84,6 +105,7 @@ public class SynapseDormancyStateApplier {
             return new ApplyResult(target, null, true);
         }
         account.setSubStatusDormant();
+        account.setDormancyGraceExpiresAt(null);
         savingsAccountRepositoryWrapper.saveAndFlush(account);
         return new ApplyResult(target, null, false);
     }

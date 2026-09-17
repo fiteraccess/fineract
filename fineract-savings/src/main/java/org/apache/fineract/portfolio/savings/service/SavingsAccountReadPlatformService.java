@@ -19,6 +19,7 @@
 package org.apache.fineract.portfolio.savings.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
@@ -58,6 +59,9 @@ public interface SavingsAccountReadPlatformService {
     List<Long> retrieveSavingsIdsPendingDormant(LocalDate tenantLocalDate);
 
     List<Long> retrieveSavingsIdsPendingEscheat(LocalDate tenantLocalDate);
+
+    /** AB-550: reactivated accounts whose 24-hour grace window has elapsed without a qualifying transaction. */
+    List<Long> retrieveSavingsIdsWithLapsedDormancyGrace(LocalDateTime asOf);
 
     boolean isAccountBelongsToClient(Long clientId, Long accountId, DepositAccountType depositAccountType, String currencyCode);
 
