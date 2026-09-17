@@ -21,6 +21,8 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,7 +34,6 @@ import java.time.LocalDate;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
-import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class DormancyStatusTaskHandlerTest {
@@ -67,13 +69,13 @@ class DormancyStatusTaskHandlerTest {
     private SynapseTransactionClient client;
 
     @Mock
-    private SavingsAccountRepository savingsAccountRepository;
+    private JdbcTemplate jdbcTemplate;
 
     private DormancyStatusTaskHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new DormancyStatusTaskHandler(client, OBJECT_MAPPER, savingsAccountRepository);
+        handler = new DormancyStatusTaskHandler(client, OBJECT_MAPPER, jdbcTemplate);
     }
 
     @Test
@@ -137,7 +139,7 @@ class DormancyStatusTaskHandlerTest {
             handler.dispatch(entry);
 
             // without this the sweep re-proposes the same revert on every run
-            verify(savingsAccountRepository, times(1)).clearDormancyGraceExpiry(SAVINGS_ACCOUNT_ID);
+            verify(jdbcTemplate, times(1)).update(anyString(), eq(SAVINGS_ACCOUNT_ID));
         }
 
         @Test
@@ -148,7 +150,7 @@ class DormancyStatusTaskHandlerTest {
 
             handler.dispatch(entry);
 
-            verifyNoInteractions(savingsAccountRepository);
+            verifyNoInteractions(jdbcTemplate);
         }
 
         @Test
