@@ -62,6 +62,17 @@ public enum SavingsAccountTransactionType {
     private static final Map<Integer, SavingsAccountTransactionType> BY_ID = Arrays.stream(values())
             .collect(Collectors.toMap(SavingsAccountTransactionType::getValue, v -> v));
 
+    private static final List<SavingsAccountTransactionType> CUSTOMER_ACTIVITY_TYPES = List.of(DEPOSIT, WITHDRAWAL, BILL_PAYMENT);
+
+    /**
+     * Comma-separated type ids that count as customer activity for dormancy tracking (AB-550): a customer-initiated
+     * debit or credit. System-generated postings — interest, charges, levies, VAT — are excluded so they never reset
+     * the dormancy clock. BILL_PAYMENT belongs here because it is the primary leg of a bills/airtime posting, not a fee
+     * leg.
+     */
+    public static final String CUSTOMER_ACTIVITY_TYPE_IDS = CUSTOMER_ACTIVITY_TYPES.stream().map(t -> String.valueOf(t.getValue()))
+            .collect(Collectors.joining(","));
+
     private final int value;
     @Getter
     private final String code;

@@ -35,8 +35,11 @@ import io.github.resilience4j.retry.annotation.Retry;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -920,6 +923,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         if (account.isNotActive()) {
             throwValidationForActiveStatus(SavingsApiConstants.undoTransactionAction);
         }
+        // AB-550 requires reversals to be blocked too; operations reactivate the account first if one is genuinely
+        // needed.
+        account.validateForDormancy();
         final List<Long> undoneTransactionIds = new ArrayList<>();
         undoneTransactionIds.add(transactionId);
         account.undoTransaction(transactionId);
@@ -1972,6 +1978,15 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     }
 
     @Override
+    public void revertLapsedDormancyGrace(Long savingsId) {
+        // Synapse is the authority on whether the window was satisfied, so this only ever proposes: it may come back
+        // rejected because the customer transacted after this run selected the account.
+        final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
+        synapseDormancyPostingOutboxWriterProvider.getObject().postDormancy(account, SavingsAccountSubStatusEnum.DORMANT,
+                DateUtils.getBusinessLocalDate(), GRACE_LAPSE_TRANSITION_REASON);
+    }
+
+    @Override
     public void escheat(Long savingsId) {
         if (isSynapseDormancyPostingEnabled()) {
             // Journal entries (Dr SAVINGS_CONTROL / Cr ESCHEAT_LIABILITY) post on the Synapse callback via
@@ -1994,6 +2009,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         return synapseDormancyPostingOutboxWriterProvider.getIfAvailable() != null
                 && configurationDomainService.isSynapseInterestPostingEnabled();
     }
+
+    private static final String GRACE_LAPSE_TRANSITION_REASON = "Reactivation grace window lapsed without a qualifying transaction";
 
     private String inactiveTransitionReason(SavingsAccount account) {
         Long days = account.savingsProduct().getDaysToInactive();
@@ -2376,11 +2393,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final LocalDate effectiveDate = command.localDateValueOfParameterNamed("effectiveDate");
         final BigDecimal escheatAmount = command.bigDecimalValueOfParameterNamed("escheatAmount");
         final String currencyCode = command.stringValueOfParameterNamed("currencyCode");
+        final LocalDateTime graceExpiresAt = parseGraceExpiresAt(command.stringValueOfParameterNamed("graceExpiresAt"));
 
         final SavingsAccount account = this.savingAccountAssembler.assembleFromLightweight(savingsId);
 
         final SynapseDormancyStateApplier.ApplyResult result = applier.apply(account, traceId, appliedSubStatus, effectiveDate,
-                escheatAmount, currencyCode);
+                escheatAmount, currencyCode, graceExpiresAt);
 
         final CommandProcessingResultBuilder builder = new CommandProcessingResultBuilder().withSavingsId(savingsId)
                 .withOfficeId(account.officeId()).withClientId(account.clientId());
@@ -2388,6 +2406,19 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             builder.withEntityId(result.escheatTransaction().getId());
         }
         return builder.build();
+    }
+
+    /** Synapse emits RFC 3339 with an explicit offset; the job compares against UTC, so normalise here. */
+    private LocalDateTime parseGraceExpiresAt(final String value) {
+        if (StringUtils.isBlank(value)) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        } catch (DateTimeParseException e) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savings.dormancy.grace.expiry.invalid",
+                    "graceExpiresAt must be an RFC 3339 timestamp with an offset: " + value, e);
+        }
     }
 
     @Override

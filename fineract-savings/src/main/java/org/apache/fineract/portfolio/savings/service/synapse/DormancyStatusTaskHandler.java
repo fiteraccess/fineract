@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
+import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepository;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -32,9 +33,12 @@ public class DormancyStatusTaskHandler implements SynapseTaskHandler {
     private static final String ACCEPTED_STATUS = "ACCEPTED";
     private static final String REJECTED_STATUS = "REJECTED";
     private static final String INFLIGHT_REASON = "ACCOUNT_HAS_INFLIGHT_TRANSACTIONS";
+    private static final String GRACE_SATISFIED_REASON = "GRACE_ALREADY_SATISFIED";
+    private static final String GRACE_STILL_OPEN_REASON = "GRACE_WINDOW_STILL_OPEN";
 
     private final SynapseTransactionClient client;
     private final ObjectMapper objectMapper;
+    private final SavingsAccountRepository savingsAccountRepository;
 
     @Override
     public String taskType() {
@@ -71,6 +75,20 @@ public class DormancyStatusTaskHandler implements SynapseTaskHandler {
             log.warn("Dormancy status rejected due to inflight transactions traceId={} savingsAccountId={} inflightCount={}",
                     response.getTraceId(), instruction.getSavingsAccountId(), response.getInflightCount());
             // self-healing: dormancy job re-emits next tick if still eligible
+            return;
+        }
+        if (GRACE_SATISFIED_REASON.equals(response.getReason())) {
+            // The customer transacted after the sweep selected this account. Dropping our copy of the deadline is what
+            // stops the sweep proposing the same revert on every run.
+            log.info("Dormancy revert declined, grace window already satisfied traceId={} savingsAccountId={}", response.getTraceId(),
+                    instruction.getSavingsAccountId());
+            savingsAccountRepository.clearDormancyGraceExpiry(instruction.getSavingsAccountId());
+            return;
+        }
+        if (GRACE_STILL_OPEN_REASON.equals(response.getReason())) {
+            // Clock skew between the two services; the next sweep re-proposes once Synapse agrees it has elapsed.
+            log.info("Dormancy revert declined, grace window still open traceId={} savingsAccountId={}", response.getTraceId(),
+                    instruction.getSavingsAccountId());
             return;
         }
         throw new SynapsePostingException(

@@ -25,6 +25,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -52,6 +53,7 @@ import org.apache.fineract.portfolio.group.data.GroupGeneralData;
 import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
@@ -343,7 +345,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("(select COALESCE(max(sat.transaction_date),sa.activatedon_date) ");
             sqlBuilder.append("from m_savings_account_transaction as sat ");
             sqlBuilder.append("where sat.is_reversed = false and sat.is_reversal = false ");
-            sqlBuilder.append("and sat.transaction_type_enum in (1,2) ");
+            sqlBuilder.append("and sat.transaction_type_enum in (" + SavingsAccountTransactionType.CUSTOMER_ACTIVITY_TYPE_IDS + ") ");
             sqlBuilder.append("and sat.savings_account_id = sa.id) as lastActiveTransactionDate, ");
             sqlBuilder.append("sp.id as productId, ");
             sqlBuilder.append("sp.is_dormancy_tracking_active as isDormancyTrackingActive, ");
@@ -791,7 +793,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("(select COALESCE(max(sat.transaction_date),sa.activatedon_date) ");
             sqlBuilder.append("from m_savings_account_transaction as sat ");
             sqlBuilder.append("where sat.is_reversed = false and sat.is_reversal = false ");
-            sqlBuilder.append("and sat.transaction_type_enum in (1,2) ");
+            sqlBuilder.append("and sat.transaction_type_enum in (" + SavingsAccountTransactionType.CUSTOMER_ACTIVITY_TYPE_IDS + ") ");
             sqlBuilder.append("and sat.savings_account_id = sa.id) as lastActiveTransactionDate, ");
             sqlBuilder.append("sp.is_dormancy_tracking_active as isDormancyTrackingActive, ");
             sqlBuilder.append("sp.days_to_inactive as daysToInactive, ");
@@ -1318,7 +1320,8 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         sql.append(" and sa.sub_status_enum = 0 ");
         String compareDate = "(select COALESCE(max(sat.transaction_date), sa.activatedon_date) "
                 + "from m_savings_account_transaction as sat where sat.is_reversed = false and sat.is_reversal = false"
-                + " and sat.transaction_type_enum in (1,2) and sat.savings_account_id = sa.id)";
+                + " and sat.transaction_type_enum in (" + SavingsAccountTransactionType.CUSTOMER_ACTIVITY_TYPE_IDS
+                + ") and sat.savings_account_id = sa.id)";
         sql.append(" and ").append(sqlGenerator.dateDiff("?", compareDate)).append(" >= sp.days_to_inactive ");
 
         try {
@@ -1339,9 +1342,12 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         sql.append(" from m_savings_account as sa ");
         sql.append(" inner join m_savings_product as sp on (sa.product_id = sp.id and sp.is_dormancy_tracking_active = true) ");
         sql.append(" where sa.status_enum = 300 ");
-        sql.append(" and sa.sub_status_enum = 100 ");
+        // AB-550: Access Bank has no INACTIVE rung, so accounts go straight from NONE to DORMANT; 100 is still
+        // accepted so accounts left at INACTIVE by the retired pass drain out rather than stranding there.
+        sql.append(" and sa.sub_status_enum in (0, 100) ");
         sql.append(" and " + sqlGenerator.dateDiff("?",
-                "(select COALESCE(max(sat.transaction_date),sa.activatedon_date) from m_savings_account_transaction as sat where sat.is_reversed = false and sat.is_reversal = false and sat.transaction_type_enum in (1,2) and sat.savings_account_id = sa.id)")
+                "(select COALESCE(max(sat.transaction_date),sa.activatedon_date) from m_savings_account_transaction as sat where sat.is_reversed = false and sat.is_reversal = false and sat.transaction_type_enum in ("
+                        + SavingsAccountTransactionType.CUSTOMER_ACTIVITY_TYPE_IDS + ") and sat.savings_account_id = sa.id)")
                 + " ");
         sql.append(" >= sp.days_to_dormancy ");
 
@@ -1357,6 +1363,20 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
     }
 
     @Override
+    public List<Long> retrieveSavingsIdsWithLapsedDormancyGrace(final LocalDateTime asOf) {
+        // sub_status 0 only: a reverted or re-dormant account has already left the window, and its deadline is cleared.
+        final String sql = "select sa.id from m_savings_account as sa "
+                + "inner join m_savings_product as sp on (sa.product_id = sp.id and sp.is_dormancy_tracking_active = true) "
+                + "where sa.status_enum = 300 and sa.sub_status_enum = 0 "
+                + "and sa.dormancy_grace_expires_at is not null and sa.dormancy_grace_expires_at <= ?";
+        try {
+            return this.jdbcTemplate.queryForList(sql, Long.class, asOf);
+        } catch (EmptyResultDataAccessException e) {
+            return List.of();
+        }
+    }
+
+    @Override
     public List<Long> retrieveSavingsIdsPendingEscheat(LocalDate tenantLocalDate) {
         List<Long> ret = null;
         StringBuilder sql = new StringBuilder("select sa.id ");
@@ -1365,7 +1385,8 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         sql.append(" where sa.status_enum = 300 ");
         sql.append(" and sa.sub_status_enum = 200 ");
         sql.append(" and " + sqlGenerator.dateDiff("?",
-                "(select COALESCE(max(sat.transaction_date),sa.activatedon_date) from m_savings_account_transaction as sat where sat.is_reversed = false and sat.is_reversal = false and sat.transaction_type_enum in (1,2) and sat.savings_account_id = sa.id)")
+                "(select COALESCE(max(sat.transaction_date),sa.activatedon_date) from m_savings_account_transaction as sat where sat.is_reversed = false and sat.is_reversal = false and sat.transaction_type_enum in ("
+                        + SavingsAccountTransactionType.CUSTOMER_ACTIVITY_TYPE_IDS + ") and sat.savings_account_id = sa.id)")
                 + " ");
         sql.append(" >= sp.days_to_escheat ");
 

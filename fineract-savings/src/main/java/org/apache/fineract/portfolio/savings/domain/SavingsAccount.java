@@ -57,6 +57,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -115,6 +116,7 @@ import org.apache.fineract.portfolio.savings.exception.InsufficientAccountBalanc
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountBlockedException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountCreditsBlockedException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountDebitsBlockedException;
+import org.apache.fineract.portfolio.savings.exception.SavingsAccountDormantException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountTransactionNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.SavingsActivityPriorToClientTransferException;
 import org.apache.fineract.portfolio.savings.exception.SavingsOfficerAssignmentDateException;
@@ -384,6 +386,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
      */
     @Column(name = "synapse_credit_restricted", nullable = false)
     private boolean synapseCreditRestricted;
+
+    /**
+     * AB-550: Fineract's copy of the reactivation grace deadline Synapse owns, kept only so the Expire Dormancy Grace
+     * Windows job can select accounts to propose a revert for. Synapse remains the authority on whether the window was
+     * satisfied, since it observes a transaction before Fineract does.
+     */
+    @Column(name = "dormancy_grace_expires_at")
+    private LocalDateTime dormancyGraceExpiresAt;
 
     @Column(name = "last_closed_business_date")
     private LocalDate lastClosedBusinessDate;
@@ -4055,6 +4065,25 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public void setSynapseCreditRestricted(final boolean synapseCreditRestricted) {
         this.synapseCreditRestricted = synapseCreditRestricted;
+    }
+
+    public LocalDateTime getDormancyGraceExpiresAt() {
+        return this.dormancyGraceExpiresAt;
+    }
+
+    public void setDormancyGraceExpiresAt(final LocalDateTime dormancyGraceExpiresAt) {
+        this.dormancyGraceExpiresAt = dormancyGraceExpiresAt;
+    }
+
+    /**
+     * AB-550: DORMANT blocks every transaction type with no exceptions, reversals included. Interest and charges never
+     * reach the deposit/withdrawal chokepoints that call this, so they keep posting as the ticket requires.
+     */
+    public void validateForDormancy() {
+        final SavingsAccountSubStatusEnum currentSubStatus = SavingsAccountSubStatusEnum.fromInt(this.getSubStatus());
+        if (SavingsAccountSubStatusEnum.DORMANT.hasStateOf(currentSubStatus)) {
+            throw new SavingsAccountDormantException(this.getId());
+        }
     }
 
     public void validateForAccountBlock() {

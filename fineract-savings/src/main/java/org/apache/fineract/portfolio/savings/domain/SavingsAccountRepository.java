@@ -243,6 +243,14 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
             @Param("feeAmount") BigDecimal feeAmount, @Param("subStatus") Integer subStatus, @Param("version") int version);
 
     /**
+     * AB-550: drops the grace deadline once Synapse reports the window was already satisfied. Without this the sweep
+     * would keep re-proposing the same revert every run and Synapse would keep rejecting it.
+     */
+    @Modifying
+    @Query("UPDATE SavingsAccount sa SET sa.dormancyGraceExpiresAt = NULL WHERE sa.id = :id")
+    int clearDormancyGraceExpiry(@Param("id") Long id);
+
+    /**
      * AB-265: narrow O(1) delta for an EMT Levy (or any reference transaction) appended to a primary transaction.
      * Subtracts the levy amount from {@code accountBalance} and adds it to {@code totalFeeCharge} (kept in the fee
      * aggregate so admin views of "total charges" include EMT). Optimistic-locked on {@code version}; bumps it on

@@ -36,6 +36,7 @@ import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.accountdetails.data.SavingsSummaryCustom;
 import org.apache.fineract.portfolio.accountdetails.service.AccountEnumerations;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
+import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.data.GSIMContainer;
 import org.apache.fineract.portfolio.savings.data.GroupSavingsIndividualMonitoringAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountApplicationTimelineData;
@@ -268,7 +269,7 @@ public class GSIMReadPlatformServiceImpl implements GSIMReadPlatformService {
             accountsSummary.append("(select coalesce(max(sat.transaction_date),sa.activatedon_date) ");
             accountsSummary.append("from m_savings_account_transaction as sat ");
             accountsSummary.append("where sat.is_reversed = false ");
-            accountsSummary.append("and sat.transaction_type_enum in (1,2) ");
+            accountsSummary.append("and sat.transaction_type_enum in (" + SavingsAccountTransactionType.CUSTOMER_ACTIVITY_TYPE_IDS + ") ");
             accountsSummary.append("and sat.savings_account_id = sa.id) as lastActiveTransactionDate, ");
 
             accountsSummary.append("sa.closedon_date as closedOnDate,");
