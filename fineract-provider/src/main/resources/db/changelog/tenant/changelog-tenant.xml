@@ -265,4 +265,5 @@
     <include file="parts/0244_add_dormancy_grace_window.xml" relativeToChangelogFile="true" />
     <include file="parts/0245_add_expire_dormancy_grace_windows_job.xml" relativeToChangelogFile="true" />
     <include file="parts/0246_widen_generate_monthly_statements_cron.xml" relativeToChangelogFile="true" />
+    <include file="parts/0247_add_read_regulatory_report_permission.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
