@@ -46,6 +46,8 @@ final class OfficesApiResourceSwagger {
         public LocalDate openingDate;
         @Schema(example = ".")
         public String hierarchy;
+        @Schema(example = "PLOT 1665, OYIN JOLAYEMI STREET, VICTORIA ISLAND, LAGOS, LAGOS STATE")
+        public String address;
         @Schema(example = "dd MMMM yyyy")
         public String dateFormat;
         @Schema(example = "en")
@@ -85,6 +87,8 @@ final class OfficesApiResourceSwagger {
         public Long parentId;
         @Schema(example = "SYS54-88")
         public String externalId;
+        @Schema(example = "PLOT 1665, OYIN JOLAYEMI STREET, VICTORIA ISLAND, LAGOS, LAGOS STATE")
+        public String address;
 
     }
 
@@ -119,6 +123,8 @@ final class OfficesApiResourceSwagger {
         public String openingDate;
         @Schema(example = "SYS54-88")
         public String externalId;
+        @Schema(example = "PLOT 1665, OYIN JOLAYEMI STREET, VICTORIA ISLAND, LAGOS, LAGOS STATE")
+        public String address;
     }
 
     @Schema(description = "PutOfficesOfficeIdResponse")

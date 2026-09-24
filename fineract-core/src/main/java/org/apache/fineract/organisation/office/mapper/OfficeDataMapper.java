@@ -41,6 +41,6 @@ public interface OfficeDataMapper {
         }
         return new OfficeData(office.getId(), office.getName(), nameDecorated, office.getExternalId(), office.getOpeningDate(),
                 office.getHierarchy(), office.getParent() != null ? office.getParent().getId() : null,
-                office.getParent() != null ? office.getParent().getName() : null, null);
+                office.getParent() != null ? office.getParent().getName() : null, office.getAddress(), null);
     }
 }
