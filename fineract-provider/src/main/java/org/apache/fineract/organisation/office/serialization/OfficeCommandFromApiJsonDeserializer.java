@@ -47,13 +47,14 @@ public final class OfficeCommandFromApiJsonDeserializer {
     public static final String NAME = "name";
     public static final String OPENING_DATE = "openingDate";
     public static final String EXTERNAL_ID = "externalId";
+    public static final String ADDRESS = "address";
     public static final String LOCALE = "locale";
     public static final String DATE_FORMAT = "dateFormat";
     /**
      * The parameters supported for this command.
      */
     private static final Set<String> SUPPORTED_PARAMETERS = new HashSet<>(
-            Arrays.asList(NAME, PARENT_ID, OPENING_DATE, EXTERNAL_ID, LOCALE, DATE_FORMAT));
+            Arrays.asList(NAME, PARENT_ID, OPENING_DATE, EXTERNAL_ID, ADDRESS, LOCALE, DATE_FORMAT));
 
     private final FromJsonHelper fromApiJsonHelper;
 
@@ -84,6 +85,11 @@ public final class OfficeCommandFromApiJsonDeserializer {
         if (this.fromApiJsonHelper.parameterExists(EXTERNAL_ID, element)) {
             final String externalId = this.fromApiJsonHelper.extractStringNamed(EXTERNAL_ID, element);
             baseDataValidator.reset().parameter(EXTERNAL_ID).value(externalId).notExceedingLengthOf(100);
+        }
+
+        if (this.fromApiJsonHelper.parameterExists(ADDRESS, element)) {
+            final String address = this.fromApiJsonHelper.extractStringNamed(ADDRESS, element);
+            baseDataValidator.reset().parameter(ADDRESS).value(address).ignoreIfNull().notExceedingLengthOf(500);
         }
 
         if (this.fromApiJsonHelper.parameterExists(PARENT_ID, element)) {
@@ -127,6 +133,11 @@ public final class OfficeCommandFromApiJsonDeserializer {
         if (this.fromApiJsonHelper.parameterExists(EXTERNAL_ID, element)) {
             final String externalId = this.fromApiJsonHelper.extractStringNamed(EXTERNAL_ID, element);
             baseDataValidator.reset().parameter(EXTERNAL_ID).value(externalId).notExceedingLengthOf(100);
+        }
+
+        if (this.fromApiJsonHelper.parameterExists(ADDRESS, element)) {
+            final String address = this.fromApiJsonHelper.extractStringNamed(ADDRESS, element);
+            baseDataValidator.reset().parameter(ADDRESS).value(address).ignoreIfNull().notExceedingLengthOf(500);
         }
 
         if (this.fromApiJsonHelper.parameterExists(PARENT_ID, element)) {

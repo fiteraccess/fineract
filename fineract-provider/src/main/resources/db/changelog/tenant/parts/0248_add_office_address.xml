@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    AB-341. The CBN "Weekly Returns on Newly Opened Bank Accounts" files a Branch Address per account, which
+    nothing in Fineract recorded: m_office carries only name, hierarchy and external_id, and the m_address
+    tables are client-scoped and unused here (enable-address is off).
+
+    One free-text column rather than a structured address, because the return files the branch address as a
+    single line and a regulator-facing format is the only consumer.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="m_office" columnName="address"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="m_office">
+            <column name="address" type="varchar(500)"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

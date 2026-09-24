@@ -41,6 +41,8 @@ public class OfficeData implements Serializable {
     private final String hierarchy;
     private final Long parentId;
     private final String parentName;
+    // AB-341: the branch address the CBN weekly new-accounts return files.
+    private final String address;
     private final Collection<OfficeData> allowedParents;
 
     // import fields
@@ -50,7 +52,7 @@ public class OfficeData implements Serializable {
 
     public static OfficeData importInstance(final String name, final Long parentId, final LocalDate openingDate,
             final ExternalId externalId) {
-        return new OfficeData(null, name, null, externalId, openingDate, null, parentId, null, null);
+        return new OfficeData(null, name, null, externalId, openingDate, null, parentId, null, null, null);
     }
 
     public void setImportFields(final Integer rowIndex, final String locale, final String dateFormat) {
@@ -60,20 +62,20 @@ public class OfficeData implements Serializable {
     }
 
     public static OfficeData testInstance(final Long id, final String name) {
-        return new OfficeData(id, name, null, null, null, null, null, null, null);
+        return new OfficeData(id, name, null, null, null, null, null, null, null, null);
     }
 
     public static OfficeData dropdown(final Long id, final String name, final String nameDecorated) {
-        return new OfficeData(id, name, nameDecorated, null, null, null, null, null, null);
+        return new OfficeData(id, name, nameDecorated, null, null, null, null, null, null, null);
     }
 
     public static OfficeData template(final List<OfficeData> parentLookups, final LocalDate defaultOpeningDate) {
-        return new OfficeData(null, null, null, null, defaultOpeningDate, null, null, null, parentLookups);
+        return new OfficeData(null, null, null, null, defaultOpeningDate, null, null, null, null, parentLookups);
     }
 
     public static OfficeData appendedTemplate(final OfficeData office, final Collection<OfficeData> allowedParents) {
         return new OfficeData(office.id, office.name, office.nameDecorated, office.externalId, office.openingDate, office.hierarchy,
-                office.parentId, office.parentName, allowedParents);
+                office.parentId, office.parentName, office.address, allowedParents);
     }
 
     @JsonCreator
@@ -81,7 +83,7 @@ public class OfficeData implements Serializable {
             @JsonProperty("nameDecorated") final String nameDecorated, @JsonProperty("externalId") final ExternalId externalId,
             @JsonProperty("openingDate") final LocalDate openingDate, @JsonProperty("hierarchy") final String hierarchy,
             @JsonProperty("parentId") final Long parentId, @JsonProperty("parentName") final String parentName,
-            @JsonProperty("allowedParents") final Collection<OfficeData> allowedParents) {
+            @JsonProperty("address") final String address, @JsonProperty("allowedParents") final Collection<OfficeData> allowedParents) {
         this.id = id;
         this.name = name;
         this.nameDecorated = nameDecorated;
@@ -90,6 +92,7 @@ public class OfficeData implements Serializable {
         this.hierarchy = hierarchy;
         this.parentName = parentName;
         this.parentId = parentId;
+        this.address = address;
         this.allowedParents = allowedParents;
     }
 
