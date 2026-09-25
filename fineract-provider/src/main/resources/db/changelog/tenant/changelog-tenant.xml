@@ -268,4 +268,5 @@
     <include file="parts/0247_add_read_regulatory_report_permission.xml" relativeToChangelogFile="true" />
     <include file="parts/0248_add_office_address.xml" relativeToChangelogFile="true" />
     <include file="parts/0249_set_head_office_branch_code_and_address.xml" relativeToChangelogFile="true" />
+    <include file="parts/0247_add_goal_savings_penalty_percentage_code.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
