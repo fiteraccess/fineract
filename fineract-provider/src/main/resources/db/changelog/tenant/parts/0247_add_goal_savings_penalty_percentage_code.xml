@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    The share of the interest attributable to a premature goal-savings withdrawal that the customer forfeits,
+    as a single Manage Codes value so ops can change it without a deploy. Synapse reads the one active value's
+    name as the percentage (0-100) and drops its cache whenever a code value is edited through it.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(1) FROM m_code WHERE code_name = 'GoalSavingsPenaltyPercentage'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="m_code">
+            <column name="code_name" value="GoalSavingsPenaltyPercentage"/>
+            <column name="is_system_defined" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(1) FROM m_code_value
+                WHERE code_id = (SELECT id FROM m_code WHERE code_name = 'GoalSavingsPenaltyPercentage')
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT id, '50', 'Percent of the interest attributable to a premature goal withdrawal that the customer forfeits', 1, true, false
+            FROM m_code WHERE code_name = 'GoalSavingsPenaltyPercentage'
+        </sql>
+    </changeSet>
+</databaseChangeLog>
