@@ -158,23 +158,60 @@ class NipSwitchAccountingConfigurationServiceTest {
             assertThatThrownBy(() -> service.upsert("NIBSS", command)).isInstanceOf(PlatformApiDataValidationException.class);
             verify(repository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
         }
+
+        @Test
+        void storesAndReturnsBothBridgeAccounts() {
+            JsonCommand command = command(NipSwitchAccountingDirection.BOTH, 1L, 2L, 3L, 4L, 5L, 6L, true);
+            NipSwitchAccountingConfigurationEntity existing = configuration("NIBSS", NipSwitchAccountingDirection.BOTH, true,
+                    detailAccount(1), detailAccount(2), detailAccount(3), assetDetailAccount(4));
+            when(repository.findBySwitchId("NIBSS")).thenReturn(Optional.of(existing));
+            when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
+            when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
+            when(glAccountRepository.findOneWithNotFoundDetection(3L)).thenReturn(detailAccount(3));
+            when(glAccountRepository.findOneWithNotFoundDetection(4L)).thenReturn(assetDetailAccount(4));
+            when(glAccountRepository.findOneWithNotFoundDetection(5L)).thenReturn(detailAccount(5));
+            when(glAccountRepository.findOneWithNotFoundDetection(6L)).thenReturn(detailAccount(6));
+
+            service.upsert("NIBSS", command);
+
+            NipSwitchAccountingConfigurationData data = service.retrieve("NIBSS");
+            assertThat(data.inflowBridgeGlAccountId()).isEqualTo(5L);
+            assertThat(data.outflowBridgeGlAccountId()).isEqualTo(6L);
+        }
+
+        @Test
+        void rejectsAHeaderBridgeAccountBeforePersistence() {
+            JsonCommand command = command(NipSwitchAccountingDirection.INBOUND, null, null, null, 4L, 5L, null, true);
+            when(glAccountRepository.findOneWithNotFoundDetection(4L)).thenReturn(assetDetailAccount(4));
+            when(glAccountRepository.findOneWithNotFoundDetection(5L)).thenReturn(account(5, HEADER.getValue(), ASSET.getValue(), false));
+
+            assertThatThrownBy(() -> service.upsert("NIBSS", command)).isInstanceOf(PlatformApiDataValidationException.class);
+            verify(repository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
+        }
     }
 
     private JsonCommand command(NipSwitchAccountingDirection direction, Long payableId, Long feeId, Long incomeId, Long receivableId,
             boolean active) {
+        return command(direction, payableId, feeId, incomeId, receivableId, null, null, active);
+    }
+
+    private JsonCommand command(NipSwitchAccountingDirection direction, Long payableId, Long feeId, Long incomeId, Long receivableId,
+            Long inflowBridgeId, Long outflowBridgeId, boolean active) {
         JsonCommand command = mock(JsonCommand.class);
         when(command.stringValueOfParameterNamed("direction")).thenReturn(direction.name());
         when(command.longValueOfParameterNamed("switchPayableGlAccountId")).thenReturn(payableId);
         when(command.longValueOfParameterNamed("switchFeeGlAccountId")).thenReturn(feeId);
         when(command.longValueOfParameterNamed("commissionIncomeGlAccountId")).thenReturn(incomeId);
         when(command.longValueOfParameterNamed("switchReceivableGlAccountId")).thenReturn(receivableId);
+        when(command.longValueOfParameterNamed("inflowBridgeGlAccountId")).thenReturn(inflowBridgeId);
+        when(command.longValueOfParameterNamed("outflowBridgeGlAccountId")).thenReturn(outflowBridgeId);
         when(command.booleanPrimitiveValueOfParameterNamed("active")).thenReturn(active);
         return command;
     }
 
     private NipSwitchAccountingConfigurationEntity configuration(String switchId, NipSwitchAccountingDirection direction, boolean active,
             GLAccount payable, GLAccount fee, GLAccount income, GLAccount receivable) {
-        return NipSwitchAccountingConfigurationEntity.create(switchId, direction, payable, fee, income, receivable, active);
+        return NipSwitchAccountingConfigurationEntity.create(switchId, direction, payable, fee, income, receivable, null, null, active);
     }
 
     private GLAccount detailAccount(long id) {

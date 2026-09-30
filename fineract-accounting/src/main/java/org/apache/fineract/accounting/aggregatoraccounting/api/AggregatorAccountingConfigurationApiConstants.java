@@ -26,9 +26,10 @@ public final class AggregatorAccountingConfigurationApiConstants {
     public static final String AGGREGATOR_PAYABLE_GL_ACCOUNT_ID = "aggregatorPayableGlAccountId";
     public static final String COMMISSION_INCOME_GL_ACCOUNT_ID = "commissionIncomeGlAccountId";
     public static final String CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID = "convenienceFeeIncomeGlAccountId";
+    public static final String BILLS_BRIDGE_GL_ACCOUNT_ID = "billsBridgeGlAccountId";
     public static final String ACTIVE = "active";
     public static final Set<String> UPSERT_PARAMETERS = Set.of(AGGREGATOR_PAYABLE_GL_ACCOUNT_ID, COMMISSION_INCOME_GL_ACCOUNT_ID,
-            CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID, ACTIVE);
+            CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID, BILLS_BRIDGE_GL_ACCOUNT_ID, ACTIVE);
 
     private AggregatorAccountingConfigurationApiConstants() {}
 }

@@ -21,6 +21,8 @@ package org.apache.fineract.accounting.nipswitch.serialization;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.ACTIVE;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.COMMISSION_INCOME_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.DIRECTION;
+import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.INFLOW_BRIDGE_GL_ACCOUNT_ID;
+import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.OUTFLOW_BRIDGE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.SWITCH_FEE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.SWITCH_PAYABLE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.SWITCH_RECEIVABLE_GL_ACCOUNT_ID;
@@ -63,6 +65,8 @@ public class NipSwitchAccountingConfigurationValidator {
         Long switchFeeGlAccountId = fromApiJsonHelper.extractLongNamed(SWITCH_FEE_GL_ACCOUNT_ID, element);
         Long commissionIncomeGlAccountId = fromApiJsonHelper.extractLongNamed(COMMISSION_INCOME_GL_ACCOUNT_ID, element);
         Long switchReceivableGlAccountId = fromApiJsonHelper.extractLongNamed(SWITCH_RECEIVABLE_GL_ACCOUNT_ID, element);
+        Long inflowBridgeGlAccountId = fromApiJsonHelper.extractLongNamed(INFLOW_BRIDGE_GL_ACCOUNT_ID, element);
+        Long outflowBridgeGlAccountId = fromApiJsonHelper.extractLongNamed(OUTFLOW_BRIDGE_GL_ACCOUNT_ID, element);
         Boolean active = fromApiJsonHelper.extractBooleanNamed(ACTIVE, element);
 
         List<ApiParameterError> errors = new ArrayList<>();
@@ -74,6 +78,10 @@ public class NipSwitchAccountingConfigurationValidator {
         NipSwitchAccountingDirection direction = parseDirection(directionValue, validator);
         validateDirectionShape(direction, switchPayableGlAccountId, switchFeeGlAccountId, commissionIncomeGlAccountId,
                 switchReceivableGlAccountId, validator);
+        validateOptionalGlAccount(INFLOW_BRIDGE_GL_ACCOUNT_ID, inflowBridgeGlAccountId, direction != null && direction.supportsInbound(),
+                validator);
+        validateOptionalGlAccount(OUTFLOW_BRIDGE_GL_ACCOUNT_ID, outflowBridgeGlAccountId, direction != null && direction.supportsOutbound(),
+                validator);
 
         if (!errors.isEmpty()) {
             throw new PlatformApiDataValidationException(errors);
@@ -100,6 +108,14 @@ public class NipSwitchAccountingConfigurationValidator {
         validateGlAccount(SWITCH_FEE_GL_ACCOUNT_ID, switchFeeGlAccountId, outbound, validator);
         validateGlAccount(COMMISSION_INCOME_GL_ACCOUNT_ID, commissionIncomeGlAccountId, outbound, validator);
         validateGlAccount(SWITCH_RECEIVABLE_GL_ACCOUNT_ID, switchReceivableGlAccountId, inbound, validator);
+    }
+
+    private void validateOptionalGlAccount(String parameterName, Long accountId, boolean allowed, DataValidatorBuilder validator) {
+        if (allowed) {
+            validator.reset().parameter(parameterName).value(accountId).ignoreIfNull().longGreaterThanZero();
+        } else {
+            validateGlAccount(parameterName, accountId, false, validator);
+        }
     }
 
     private void validateGlAccount(String parameterName, Long accountId, boolean required, DataValidatorBuilder validator) {

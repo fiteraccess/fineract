@@ -110,7 +110,7 @@ class AggregatorAccountingConfigurationServiceTest {
 
         @Test
         void replacesAnExistingConfigurationWithItsCompleteGlMapping() {
-            JsonCommand command = command(1L, 2L, 3L, true);
+            JsonCommand command = command(1L, 2L, 3L, null, true);
             AggregatorAccountingConfigurationEntity existing = configuration("CORALPAY", true, detailAccount(9), detailAccount(9),
                     detailAccount(9));
             when(repository.findByAggregatorCode("CORALPAY")).thenReturn(Optional.of(existing));
@@ -128,7 +128,7 @@ class AggregatorAccountingConfigurationServiceTest {
 
         @Test
         void rejectsADisabledOrHeaderGlAccountBeforePersistence() {
-            JsonCommand command = command(1L, 2L, 3L, true);
+            JsonCommand command = command(1L, 2L, 3L, null, true);
             when(glAccountRepository.findOneWithNotFoundDetection(1L))
                     .thenReturn(account(1, HEADER.getValue(), LIABILITY.getValue(), false));
 
@@ -142,7 +142,7 @@ class AggregatorAccountingConfigurationServiceTest {
 
         @Test
         void resolvesTheNowMandatoryConvenienceFeeAccountOnEveryUpsert() {
-            JsonCommand command = command(1L, 2L, 3L, true);
+            JsonCommand command = command(1L, 2L, 3L, null, true);
             when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
             when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
             when(glAccountRepository.findOneWithNotFoundDetection(3L)).thenReturn(detailAccount(3));
@@ -151,20 +151,65 @@ class AggregatorAccountingConfigurationServiceTest {
 
             verify(glAccountRepository).findOneWithNotFoundDetection(eq(3L));
         }
+
+        @Test
+        void storesAndReturnsTheBillsBridgeAccount() {
+            JsonCommand command = command(1L, 2L, 3L, 4L, true);
+            AggregatorAccountingConfigurationEntity existing = configuration("CORALPAY", true, detailAccount(1), detailAccount(2),
+                    detailAccount(3));
+            when(repository.findByAggregatorCode("CORALPAY")).thenReturn(Optional.of(existing));
+            when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
+            when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
+            when(glAccountRepository.findOneWithNotFoundDetection(3L)).thenReturn(detailAccount(3));
+            when(glAccountRepository.findOneWithNotFoundDetection(4L)).thenReturn(detailAccount(4));
+
+            service.upsert("CORALPAY", command);
+
+            assertThat(service.retrieve("CORALPAY").billsBridgeGlAccountId()).isEqualTo(4L);
+        }
+
+        @Test
+        void clearsTheBillsBridgeAccountWhenAnUpsertOmitsIt() {
+            JsonCommand command = command(1L, 2L, 3L, null, true);
+            AggregatorAccountingConfigurationEntity existing = AggregatorAccountingConfigurationEntity.create("CORALPAY", detailAccount(1),
+                    detailAccount(2), detailAccount(3), detailAccount(4), true);
+            when(repository.findByAggregatorCode("CORALPAY")).thenReturn(Optional.of(existing));
+            when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
+            when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
+            when(glAccountRepository.findOneWithNotFoundDetection(3L)).thenReturn(detailAccount(3));
+
+            service.upsert("CORALPAY", command);
+
+            assertThat(service.retrieve("CORALPAY").billsBridgeGlAccountId()).isNull();
+        }
+
+        @Test
+        void rejectsADisabledBillsBridgeAccountBeforePersistence() {
+            JsonCommand command = command(1L, 2L, 3L, 4L, true);
+            when(glAccountRepository.findOneWithNotFoundDetection(1L)).thenReturn(detailAccount(1));
+            when(glAccountRepository.findOneWithNotFoundDetection(2L)).thenReturn(detailAccount(2));
+            when(glAccountRepository.findOneWithNotFoundDetection(3L)).thenReturn(detailAccount(3));
+            when(glAccountRepository.findOneWithNotFoundDetection(4L))
+                    .thenReturn(account(4, DETAIL.getValue(), LIABILITY.getValue(), true));
+
+            assertThatThrownBy(() -> service.upsert("CORALPAY", command)).isInstanceOf(PlatformApiDataValidationException.class);
+            verify(repository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
+        }
     }
 
-    private JsonCommand command(Long payableId, Long commissionId, Long convenienceFeeId, boolean active) {
+    private JsonCommand command(Long payableId, Long commissionId, Long convenienceFeeId, Long billsBridgeId, boolean active) {
         JsonCommand command = mock(JsonCommand.class);
         when(command.longValueOfParameterNamed("aggregatorPayableGlAccountId")).thenReturn(payableId);
         when(command.longValueOfParameterNamed("commissionIncomeGlAccountId")).thenReturn(commissionId);
         when(command.longValueOfParameterNamed("convenienceFeeIncomeGlAccountId")).thenReturn(convenienceFeeId);
+        when(command.longValueOfParameterNamed("billsBridgeGlAccountId")).thenReturn(billsBridgeId);
         when(command.booleanPrimitiveValueOfParameterNamed("active")).thenReturn(active);
         return command;
     }
 
     private AggregatorAccountingConfigurationEntity configuration(String aggregatorCode, boolean active, GLAccount payable,
             GLAccount commission, GLAccount convenienceFee) {
-        return AggregatorAccountingConfigurationEntity.create(aggregatorCode, payable, commission, convenienceFee, active);
+        return AggregatorAccountingConfigurationEntity.create(aggregatorCode, payable, commission, convenienceFee, null, active);
     }
 
     private GLAccount detailAccount(long id) {

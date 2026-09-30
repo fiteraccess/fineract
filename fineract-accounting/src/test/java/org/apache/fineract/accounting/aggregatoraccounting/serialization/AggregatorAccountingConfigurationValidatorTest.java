@@ -45,6 +45,13 @@ class AggregatorAccountingConfigurationValidatorTest {
                     """))).doesNotThrowAnyException();
         }
 
+        @Test
+        void acceptsAnOptionalBillsBridgeAccount() {
+            assertThatCode(() -> validator.validateForUpsert("CORALPAY", command("""
+                    { "aggregatorPayableGlAccountId": 1, "commissionIncomeGlAccountId": 2,
+                      "convenienceFeeIncomeGlAccountId": 3, "billsBridgeGlAccountId": 4, "active": true }
+                    """))).doesNotThrowAnyException();
+        }
     }
 
     @Nested
@@ -79,6 +86,14 @@ class AggregatorAccountingConfigurationValidatorTest {
             assertThatThrownBy(() -> validator.validateForUpsert("CORALPAY", command("""
                     { "aggregatorPayableGlAccountId": 1, "commissionIncomeGlAccountId": 2,
                       "convenienceFeeIncomeGlAccountId": 0, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+        }
+
+        @Test
+        void rejectsANonPositiveBillsBridgeAccountId() {
+            assertThatThrownBy(() -> validator.validateForUpsert("CORALPAY", command("""
+                    { "aggregatorPayableGlAccountId": 1, "commissionIncomeGlAccountId": 2,
+                      "convenienceFeeIncomeGlAccountId": 3, "billsBridgeGlAccountId": 0, "active": true }
                     """))).isInstanceOf(PlatformApiDataValidationException.class);
         }
 

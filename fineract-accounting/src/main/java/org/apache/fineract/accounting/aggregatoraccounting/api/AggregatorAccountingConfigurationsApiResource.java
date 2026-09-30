@@ -89,6 +89,7 @@ public class AggregatorAccountingConfigurationsApiResource {
                       "aggregatorPayableGlAccountId": 101,
                       "commissionIncomeGlAccountId": 102,
                       "convenienceFeeIncomeGlAccountId": 103,
+                      "billsBridgeGlAccountId": 104,
                       "active": true
                     }
                     """) }))

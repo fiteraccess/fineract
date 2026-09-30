@@ -20,6 +20,7 @@ package org.apache.fineract.accounting.aggregatoraccounting.serialization;
 
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.ACTIVE;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.AGGREGATOR_PAYABLE_GL_ACCOUNT_ID;
+import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.BILLS_BRIDGE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.COMMISSION_INCOME_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.UPSERT_PARAMETERS;
@@ -58,6 +59,7 @@ public class AggregatorAccountingConfigurationValidator {
         Long aggregatorPayableGlAccountId = fromApiJsonHelper.extractLongNamed(AGGREGATOR_PAYABLE_GL_ACCOUNT_ID, element);
         Long commissionIncomeGlAccountId = fromApiJsonHelper.extractLongNamed(COMMISSION_INCOME_GL_ACCOUNT_ID, element);
         Long convenienceFeeIncomeGlAccountId = fromApiJsonHelper.extractLongNamed(CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID, element);
+        Long billsBridgeGlAccountId = fromApiJsonHelper.extractLongNamed(BILLS_BRIDGE_GL_ACCOUNT_ID, element);
         Boolean active = fromApiJsonHelper.extractBooleanNamed(ACTIVE, element);
 
         List<ApiParameterError> errors = new ArrayList<>();
@@ -67,6 +69,7 @@ public class AggregatorAccountingConfigurationValidator {
         validator.reset().parameter(COMMISSION_INCOME_GL_ACCOUNT_ID).value(commissionIncomeGlAccountId).notNull().longGreaterThanZero();
         validator.reset().parameter(CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID).value(convenienceFeeIncomeGlAccountId).notNull()
                 .longGreaterThanZero();
+        validator.reset().parameter(BILLS_BRIDGE_GL_ACCOUNT_ID).value(billsBridgeGlAccountId).ignoreIfNull().longGreaterThanZero();
         validator.reset().parameter(ACTIVE).value(active).notNull();
 
         if (!errors.isEmpty()) {

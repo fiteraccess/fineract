@@ -58,6 +58,22 @@ class NipSwitchAccountingConfigurationValidatorTest {
                       "commissionIncomeGlAccountId": 3, "switchReceivableGlAccountId": 4, "active": true }
                     """))).doesNotThrowAnyException();
         }
+
+        @Test
+        void acceptsBridgeAccountsForTheDirectionsTheSwitchSupports() {
+            assertThatCode(() -> validator.validateForUpsert("UPSL", command("""
+                    { "direction": "INBOUND", "switchReceivableGlAccountId": 4, "inflowBridgeGlAccountId": 5, "active": true }
+                    """))).doesNotThrowAnyException();
+            assertThatCode(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "OUTBOUND", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "outflowBridgeGlAccountId": 6, "active": true }
+                    """))).doesNotThrowAnyException();
+            assertThatCode(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "BOTH", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "switchReceivableGlAccountId": 4,
+                      "inflowBridgeGlAccountId": 5, "outflowBridgeGlAccountId": 6, "active": true }
+                    """))).doesNotThrowAnyException();
+        }
     }
 
     @Nested
@@ -87,6 +103,24 @@ class NipSwitchAccountingConfigurationValidatorTest {
             assertThatThrownBy(() -> validator.validateForUpsert("NIBSS", command("""
                     { "direction": "BOTH", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
                       "commissionIncomeGlAccountId": 3, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+        }
+
+        @Test
+        void rejectsABridgeAccountForADirectionTheSwitchDoesNotSupport() {
+            assertThatThrownBy(() -> validator.validateForUpsert("NIBSS", command("""
+                    { "direction": "OUTBOUND", "switchPayableGlAccountId": 1, "switchFeeGlAccountId": 2,
+                      "commissionIncomeGlAccountId": 3, "inflowBridgeGlAccountId": 5, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+            assertThatThrownBy(() -> validator.validateForUpsert("UPSL", command("""
+                    { "direction": "INBOUND", "switchReceivableGlAccountId": 4, "outflowBridgeGlAccountId": 6, "active": true }
+                    """))).isInstanceOf(PlatformApiDataValidationException.class);
+        }
+
+        @Test
+        void rejectsANonPositiveBridgeAccountId() {
+            assertThatThrownBy(() -> validator.validateForUpsert("UPSL", command("""
+                    { "direction": "INBOUND", "switchReceivableGlAccountId": 4, "inflowBridgeGlAccountId": 0, "active": true }
                     """))).isInstanceOf(PlatformApiDataValidationException.class);
         }
     }

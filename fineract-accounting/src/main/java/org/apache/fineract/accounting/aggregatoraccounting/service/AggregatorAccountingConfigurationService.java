@@ -20,6 +20,7 @@ package org.apache.fineract.accounting.aggregatoraccounting.service;
 
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.ACTIVE;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.AGGREGATOR_PAYABLE_GL_ACCOUNT_ID;
+import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.BILLS_BRIDGE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.COMMISSION_INCOME_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.aggregatoraccounting.api.AggregatorAccountingConfigurationApiConstants.CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID;
 
@@ -96,12 +97,15 @@ public class AggregatorAccountingConfigurationService implements AggregatorAccou
                 COMMISSION_INCOME_GL_ACCOUNT_ID);
         GLAccount convenienceFeeIncomeGlAccount = requireUsableGlAccount(
                 command.longValueOfParameterNamed(CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID), CONVENIENCE_FEE_INCOME_GL_ACCOUNT_ID);
+        Long billsBridgeGlAccountId = command.longValueOfParameterNamed(BILLS_BRIDGE_GL_ACCOUNT_ID);
+        GLAccount billsBridgeGlAccount = billsBridgeGlAccountId == null ? null
+                : requireUsableGlAccount(billsBridgeGlAccountId, BILLS_BRIDGE_GL_ACCOUNT_ID);
         boolean active = command.booleanPrimitiveValueOfParameterNamed(ACTIVE);
 
         AggregatorAccountingConfigurationEntity entity = repository.findByAggregatorCode(normalizedAggregatorCode)
                 .orElseGet(() -> AggregatorAccountingConfigurationEntity.create(normalizedAggregatorCode, aggregatorPayableGlAccount,
-                        commissionIncomeGlAccount, convenienceFeeIncomeGlAccount, active));
-        entity.replace(aggregatorPayableGlAccount, commissionIncomeGlAccount, convenienceFeeIncomeGlAccount, active);
+                        commissionIncomeGlAccount, convenienceFeeIncomeGlAccount, billsBridgeGlAccount, active));
+        entity.replace(aggregatorPayableGlAccount, commissionIncomeGlAccount, convenienceFeeIncomeGlAccount, billsBridgeGlAccount, active);
         repository.saveAndFlush(entity);
 
         return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(entity.getId())
@@ -119,6 +123,7 @@ public class AggregatorAccountingConfigurationService implements AggregatorAccou
 
     private AggregatorAccountingConfigurationData toData(AggregatorAccountingConfigurationEntity entity) {
         return new AggregatorAccountingConfigurationData(entity.getAggregatorCode(), entity.getAggregatorPayableGlAccount().getId(),
-                entity.getCommissionIncomeGlAccount().getId(), entity.getConvenienceFeeIncomeGlAccount().getId(), entity.isActive());
+                entity.getCommissionIncomeGlAccount().getId(), entity.getConvenienceFeeIncomeGlAccount().getId(),
+                entity.getBillsBridgeGlAccount() == null ? null : entity.getBillsBridgeGlAccount().getId(), entity.isActive());
     }
 }

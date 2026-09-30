@@ -21,6 +21,8 @@ package org.apache.fineract.accounting.nipswitch.service;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.ACTIVE;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.COMMISSION_INCOME_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.DIRECTION;
+import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.INFLOW_BRIDGE_GL_ACCOUNT_ID;
+import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.OUTFLOW_BRIDGE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.SWITCH_FEE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.SWITCH_PAYABLE_GL_ACCOUNT_ID;
 import static org.apache.fineract.accounting.nipswitch.api.NipSwitchAccountingConfigurationApiConstants.SWITCH_RECEIVABLE_GL_ACCOUNT_ID;
@@ -119,12 +121,18 @@ public class NipSwitchAccountingConfigurationService implements NipSwitchAccount
                 COMMISSION_INCOME_GL_ACCOUNT_ID, false);
         GLAccount switchReceivableGlAccount = requireUsableGlAccount(command.longValueOfParameterNamed(SWITCH_RECEIVABLE_GL_ACCOUNT_ID),
                 SWITCH_RECEIVABLE_GL_ACCOUNT_ID, true);
+        GLAccount inflowBridgeGlAccount = requireUsableGlAccount(command.longValueOfParameterNamed(INFLOW_BRIDGE_GL_ACCOUNT_ID),
+                INFLOW_BRIDGE_GL_ACCOUNT_ID, false);
+        GLAccount outflowBridgeGlAccount = requireUsableGlAccount(command.longValueOfParameterNamed(OUTFLOW_BRIDGE_GL_ACCOUNT_ID),
+                OUTFLOW_BRIDGE_GL_ACCOUNT_ID, false);
         boolean active = command.booleanPrimitiveValueOfParameterNamed(ACTIVE);
 
         NipSwitchAccountingConfigurationEntity entity = repository.findBySwitchId(normalizedSwitchId)
                 .orElseGet(() -> NipSwitchAccountingConfigurationEntity.create(normalizedSwitchId, direction, switchPayableGlAccount,
-                        switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount, active));
-        entity.replace(direction, switchPayableGlAccount, switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount, active);
+                        switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount, inflowBridgeGlAccount,
+                        outflowBridgeGlAccount, active));
+        entity.replace(direction, switchPayableGlAccount, switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount,
+                inflowBridgeGlAccount, outflowBridgeGlAccount, active);
         repository.saveAndFlush(entity);
 
         return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(entity.getId())
@@ -149,7 +157,8 @@ public class NipSwitchAccountingConfigurationService implements NipSwitchAccount
     private NipSwitchAccountingConfigurationData toData(NipSwitchAccountingConfigurationEntity entity) {
         return new NipSwitchAccountingConfigurationData(entity.getSwitchId(), entity.getDirection(),
                 idOf(entity.getSwitchPayableGlAccount()), idOf(entity.getSwitchFeeGlAccount()), idOf(entity.getCommissionIncomeGlAccount()),
-                idOf(entity.getSwitchReceivableGlAccount()), entity.isActive());
+                idOf(entity.getSwitchReceivableGlAccount()), idOf(entity.getInflowBridgeGlAccount()),
+                idOf(entity.getOutflowBridgeGlAccount()), entity.isActive());
     }
 
     private Long idOf(GLAccount glAccount) {
