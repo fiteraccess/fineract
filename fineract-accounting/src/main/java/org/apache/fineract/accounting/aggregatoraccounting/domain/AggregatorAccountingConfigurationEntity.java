@@ -55,6 +55,10 @@ public class AggregatorAccountingConfigurationEntity extends AbstractPersistable
     @JoinColumn(name = "convenience_fee_income_gl_account_id", nullable = false)
     private GLAccount convenienceFeeIncomeGlAccount;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "bills_bridge_gl_account_id")
+    private GLAccount billsBridgeGlAccount;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 
@@ -65,18 +69,19 @@ public class AggregatorAccountingConfigurationEntity extends AbstractPersistable
     private LocalDateTime lastModifiedOnUtc;
 
     public static AggregatorAccountingConfigurationEntity create(String aggregatorCode, GLAccount aggregatorPayableGlAccount,
-            GLAccount commissionIncomeGlAccount, GLAccount convenienceFeeIncomeGlAccount, boolean active) {
+            GLAccount commissionIncomeGlAccount, GLAccount convenienceFeeIncomeGlAccount, GLAccount billsBridgeGlAccount, boolean active) {
         AggregatorAccountingConfigurationEntity entity = new AggregatorAccountingConfigurationEntity();
         entity.aggregatorCode = aggregatorCode;
-        entity.replace(aggregatorPayableGlAccount, commissionIncomeGlAccount, convenienceFeeIncomeGlAccount, active);
+        entity.replace(aggregatorPayableGlAccount, commissionIncomeGlAccount, convenienceFeeIncomeGlAccount, billsBridgeGlAccount, active);
         return entity;
     }
 
     public void replace(GLAccount aggregatorPayableGlAccount, GLAccount commissionIncomeGlAccount, GLAccount convenienceFeeIncomeGlAccount,
-            boolean active) {
+            GLAccount billsBridgeGlAccount, boolean active) {
         this.aggregatorPayableGlAccount = aggregatorPayableGlAccount;
         this.commissionIncomeGlAccount = commissionIncomeGlAccount;
         this.convenienceFeeIncomeGlAccount = convenienceFeeIncomeGlAccount;
+        this.billsBridgeGlAccount = billsBridgeGlAccount;
         this.active = active;
     }
 

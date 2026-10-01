@@ -65,6 +65,14 @@ public class NipSwitchAccountingConfigurationEntity extends AbstractPersistableC
     @JoinColumn(name = "switch_receivable_gl_account_id")
     private GLAccount switchReceivableGlAccount;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "inflow_bridge_gl_account_id")
+    private GLAccount inflowBridgeGlAccount;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "outflow_bridge_gl_account_id")
+    private GLAccount outflowBridgeGlAccount;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 
@@ -76,20 +84,24 @@ public class NipSwitchAccountingConfigurationEntity extends AbstractPersistableC
 
     public static NipSwitchAccountingConfigurationEntity create(String switchId, NipSwitchAccountingDirection direction,
             GLAccount switchPayableGlAccount, GLAccount switchFeeGlAccount, GLAccount commissionIncomeGlAccount,
-            GLAccount switchReceivableGlAccount, boolean active) {
+            GLAccount switchReceivableGlAccount, GLAccount inflowBridgeGlAccount, GLAccount outflowBridgeGlAccount, boolean active) {
         NipSwitchAccountingConfigurationEntity entity = new NipSwitchAccountingConfigurationEntity();
         entity.switchId = switchId;
-        entity.replace(direction, switchPayableGlAccount, switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount, active);
+        entity.replace(direction, switchPayableGlAccount, switchFeeGlAccount, commissionIncomeGlAccount, switchReceivableGlAccount,
+                inflowBridgeGlAccount, outflowBridgeGlAccount, active);
         return entity;
     }
 
     public void replace(NipSwitchAccountingDirection direction, GLAccount switchPayableGlAccount, GLAccount switchFeeGlAccount,
-            GLAccount commissionIncomeGlAccount, GLAccount switchReceivableGlAccount, boolean active) {
+            GLAccount commissionIncomeGlAccount, GLAccount switchReceivableGlAccount, GLAccount inflowBridgeGlAccount,
+            GLAccount outflowBridgeGlAccount, boolean active) {
         this.direction = direction;
         this.switchPayableGlAccount = switchPayableGlAccount;
         this.switchFeeGlAccount = switchFeeGlAccount;
         this.commissionIncomeGlAccount = commissionIncomeGlAccount;
         this.switchReceivableGlAccount = switchReceivableGlAccount;
+        this.inflowBridgeGlAccount = inflowBridgeGlAccount;
+        this.outflowBridgeGlAccount = outflowBridgeGlAccount;
         this.active = active;
     }
 

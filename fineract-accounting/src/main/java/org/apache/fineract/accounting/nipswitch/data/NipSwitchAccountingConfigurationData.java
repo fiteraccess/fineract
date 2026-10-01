@@ -28,5 +28,7 @@ public record NipSwitchAccountingConfigurationData(
         @Schema(description = "GL credited for the supplied Switch Fee leg.", example = "102") Long switchFeeGlAccountId,
         @Schema(description = "GL credited for the supplied Bank Commission leg.", example = "103") Long commissionIncomeGlAccountId,
         @Schema(description = "GL debited for inbound NIP principal.", example = "104") Long switchReceivableGlAccountId,
+        @Schema(description = "GL debited by the inbound end-of-cycle settlement; null when not configured.", example = "105") Long inflowBridgeGlAccountId,
+        @Schema(description = "GL credited by the outbound end-of-cycle settlement; null when not configured.", example = "106") Long outflowBridgeGlAccountId,
         @Schema(description = "Whether this mapping may be used for new NIP transactions.", example = "true") boolean active) {
 }

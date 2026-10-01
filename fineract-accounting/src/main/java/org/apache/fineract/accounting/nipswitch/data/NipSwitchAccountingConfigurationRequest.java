@@ -28,6 +28,8 @@ public record NipSwitchAccountingConfigurationRequest(
         @Schema(description = "Enabled detail GL credited for the supplied Switch Fee leg.", example = "102") Long switchFeeGlAccountId,
         @Schema(description = "Enabled detail income GL credited for the supplied Bank Commission leg.", example = "103") Long commissionIncomeGlAccountId,
         @Schema(description = "Enabled detail asset GL debited for inbound NIP principal.", example = "104") Long switchReceivableGlAccountId,
+        @Schema(description = "Enabled detail GL the inbound end-of-cycle settlement debits. Optional; allowed only when inbound is enabled; omitting it clears it.", example = "105") Long inflowBridgeGlAccountId,
+        @Schema(description = "Enabled detail GL the outbound end-of-cycle settlement credits. Optional; allowed only when outbound is enabled; omitting it clears it.", example = "106") Long outflowBridgeGlAccountId,
         @Schema(description = "Whether this switch configuration may be used for new NIP transactions.", example = "true") Boolean active)
         implements
             Serializable {

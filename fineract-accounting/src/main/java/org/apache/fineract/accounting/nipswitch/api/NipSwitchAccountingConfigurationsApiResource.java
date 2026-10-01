@@ -91,12 +91,14 @@ public class NipSwitchAccountingConfigurationsApiResource {
                       "switchPayableGlAccountId": 101,
                       "switchFeeGlAccountId": 102,
                       "commissionIncomeGlAccountId": 103,
+                      "outflowBridgeGlAccountId": 106,
                       "active": true
                     }
                     """), @ExampleObject(name = "INBOUND", summary = "Inbound-only switch", value = """
                     {
                       "direction": "INBOUND",
                       "switchReceivableGlAccountId": 104,
+                      "inflowBridgeGlAccountId": 105,
                       "active": true
                     }
                     """), @ExampleObject(name = "BOTH", summary = "Bidirectional switch", value = """
@@ -106,6 +108,8 @@ public class NipSwitchAccountingConfigurationsApiResource {
                       "switchFeeGlAccountId": 102,
                       "commissionIncomeGlAccountId": 103,
                       "switchReceivableGlAccountId": 104,
+                      "inflowBridgeGlAccountId": 105,
+                      "outflowBridgeGlAccountId": 106,
                       "active": true
                     }
                     """) }))

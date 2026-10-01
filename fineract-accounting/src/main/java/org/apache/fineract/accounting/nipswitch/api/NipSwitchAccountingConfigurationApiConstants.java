@@ -27,10 +27,13 @@ public final class NipSwitchAccountingConfigurationApiConstants {
     public static final String SWITCH_FEE_GL_ACCOUNT_ID = "switchFeeGlAccountId";
     public static final String COMMISSION_INCOME_GL_ACCOUNT_ID = "commissionIncomeGlAccountId";
     public static final String SWITCH_RECEIVABLE_GL_ACCOUNT_ID = "switchReceivableGlAccountId";
+    public static final String INFLOW_BRIDGE_GL_ACCOUNT_ID = "inflowBridgeGlAccountId";
+    public static final String OUTFLOW_BRIDGE_GL_ACCOUNT_ID = "outflowBridgeGlAccountId";
     public static final String DIRECTION = "direction";
     public static final String ACTIVE = "active";
     public static final Set<String> UPSERT_PARAMETERS = Set.of(DIRECTION, SWITCH_PAYABLE_GL_ACCOUNT_ID, SWITCH_FEE_GL_ACCOUNT_ID,
-            COMMISSION_INCOME_GL_ACCOUNT_ID, SWITCH_RECEIVABLE_GL_ACCOUNT_ID, ACTIVE);
+            COMMISSION_INCOME_GL_ACCOUNT_ID, SWITCH_RECEIVABLE_GL_ACCOUNT_ID, INFLOW_BRIDGE_GL_ACCOUNT_ID, OUTFLOW_BRIDGE_GL_ACCOUNT_ID,
+            ACTIVE);
 
     private NipSwitchAccountingConfigurationApiConstants() {}
 }

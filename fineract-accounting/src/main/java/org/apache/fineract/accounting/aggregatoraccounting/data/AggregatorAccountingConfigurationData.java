@@ -25,5 +25,6 @@ public record AggregatorAccountingConfigurationData(
         @Schema(description = "GL credited for the aggregator payable principal leg.", example = "101") Long aggregatorPayableGlAccountId,
         @Schema(description = "GL credited for the bank's commission income leg.", example = "102") Long commissionIncomeGlAccountId,
         @Schema(description = "GL credited for the convenience fee income leg.", example = "103") Long convenienceFeeIncomeGlAccountId,
+        @Schema(description = "GL credited by the settlement collapse with the aggregator's settled total; null when not configured.", example = "104") Long billsBridgeGlAccountId,
         @Schema(description = "Whether this mapping may be used for new bills/airtime postings.", example = "true") boolean active) {
 }
