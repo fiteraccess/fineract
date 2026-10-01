@@ -46,6 +46,11 @@ public class SynapseInstructionMapper {
                 .originalTransactionId(tx.getOriginalTransactionId()).batchId(batchId).build();
     }
 
+    /** The transaction types interest posting produces, and so the only ones it may post or reverse in Synapse. */
+    public boolean supports(SavingsAccountTransactionEnumData txType) {
+        return txType != null && (txType.isInterestPosting() || txType.isIncomeFromInterest() || txType.isWithholdTax());
+    }
+
     private TransactionType resolveTransactionType(SavingsAccountTransactionEnumData txType) {
         if (txType.isInterestPosting()) {
             return TransactionType.INTEREST_POSTING;

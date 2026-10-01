@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.fineract.accounting.producttoaccountmapping.service.ProductToGLAccountMappingWritePlatformService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -45,6 +46,7 @@ import org.apache.fineract.infrastructure.security.service.PlatformSecurityConte
 import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.data.SavingsProductDataValidator;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
@@ -70,6 +72,15 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
     /*
      * Guaranteed to throw an exception no matter what the data integrity issue is.
      */
+    private static SavingsProductCategory requestedCategory(final JsonCommand command) {
+        if (!command.parameterExists(SavingsApiConstants.productCategoryParamName)) {
+            return null;
+        }
+        final String value = StringUtils
+                .trimToNull(command.stringValueOfParameterNamedAllowingNull(SavingsApiConstants.productCategoryParamName));
+        return value == null ? null : SavingsProductCategory.valueOf(value);
+    }
+
     private void handleDataIntegrityIssues(final JsonCommand command, final Throwable realCause, final Exception dae) {
         String msgCode = "error.msg." + SavingsApiConstants.SAVINGS_PRODUCT_RESOURCE_NAME;
         String msg = "Unknown data integrity issue with savings product.";
@@ -107,6 +118,8 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             this.fromApiJsonDataValidator.validateForCreate(command.json());
 
             final SavingsProduct product = this.savingsProductAssembler.assemble(command);
+            SavingsProductCategoryRules.assertCategoryAvailable(product.getProductCategory(), null, this.savingProductRepository);
+            SavingsProductCategoryRules.assertPeriodicAccrual(product);
 
             this.savingProductRepository.saveAndFlush(product);
 
@@ -145,6 +158,7 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
                     .orElseThrow(() -> new SavingsProductNotFoundException(productId));
 
             this.fromApiJsonDataValidator.validateForUpdate(command.json(), product);
+            SavingsProductCategoryRules.assertCategoryAvailable(requestedCategory(command), productId, this.savingProductRepository);
 
             final Map<String, Object> changes = product.update(command);
 
@@ -176,6 +190,10 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
                     .updateSavingsProductToGLAccountMapping(product.getId(), command, accountingTypeChanged, product.getAccountingType(),
                             DepositAccountType.SAVINGS_DEPOSIT);
             changes.putAll(accountingMappingChanges);
+
+            if (changes.containsKey(SavingsApiConstants.productCategoryParamName)) {
+                SavingsProductCategoryRules.assertPeriodicAccrual(product);
+            }
 
             if (!changes.isEmpty()) {
                 this.savingProductRepository.saveAndFlush(product);

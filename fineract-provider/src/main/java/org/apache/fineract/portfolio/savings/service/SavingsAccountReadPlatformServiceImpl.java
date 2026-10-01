@@ -59,6 +59,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountApplicationTimelineData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
@@ -252,9 +253,13 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         // must not move, so the ordinary catch-up credits the missed periods — correctly compounded — once the
         // restriction is lifted. Filtering any later (inside the outbox writer) would still advance the cursor.
         final String creditRestrictionFilter = isCreditRestrictionEnabled() ? "and a.synapse_credit_restricted = false " : "";
+        // Goals post interest only at settlement, so the same cursor rule keeps them out of the monthly run.
+        final String goalProductFilter = "and not exists (select 1 from m_savings_product gp where gp.id = a.product_id and gp.product_category = '"
+                + SavingsProductCategory.GOAL.name() + "') ";
+        // Ordered so the cursor (last id of the page) never jumps over ids the planner returned out of order.
         String sql = "select " + this.savingAccountMapperForInterestPosting.schema()
                 + "join (select a.id from m_savings_account a where a.id > ? and a.status_enum = ? " + creditRestrictionFilter
-                + "limit ?) b on b.id = sa.id ";
+                + goalProductFilter + "order by a.id limit ?) b on b.id = sa.id ";
         if (backdatedTxnsAllowedTill) {
             sql = sql
                     + "where (CASE WHEN sa.interest_posted_till_date is not null THEN tr.transaction_date >= sa.interest_posted_till_date ELSE tr.transaction_date >= sa.activatedon_date END) ";

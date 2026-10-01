@@ -69,10 +69,12 @@ import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccruedInterestData;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountChargeReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountTemplateReadPlatformService;
+import org.apache.fineract.portfolio.savings.service.SavingsAccruedInterestReadService;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.springframework.stereotype.Component;
@@ -94,6 +96,7 @@ public class SavingsAccountsApiResource {
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
     private final SqlValidator sqlValidator;
+    private final SavingsAccruedInterestReadService savingsAccruedInterestReadService;
 
     @GET
     @Path("template")
@@ -188,6 +191,17 @@ public class SavingsAccountsApiResource {
             @QueryParam("associations") final String associations, @Context final UriInfo uriInfo) {
 
         return retrieveSavingAccount(accountId, null, staffInSelectedOfficeOnly, chargeStatus, uriInfo);
+    }
+
+    @GET
+    @Path("{accountId}/accrued-interest")
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve interest accrued but not yet posted", description = "Sums the account's periodic ACCRUAL transactions since the last interest posting (or activation), and the interest posted since activation.")
+    public SavingsAccruedInterestData retrieveAccruedInterest(
+            @PathParam("accountId") @Parameter(description = "accountId") final Long accountId) {
+        context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+        return savingsAccruedInterestReadService.retrieve(accountId);
     }
 
     @GET

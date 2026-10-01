@@ -89,7 +89,9 @@ public class SynapseInterestPostingOutboxWriter {
 
     private AccountCursorUpdate toCursorUpdate(SavingsAccountData account) {
         SavingsAccountSummaryData summary = account.getSummary();
-        LocalDate postedTill = Objects.requireNonNullElse(summary.getInterestPostedTillDate(), summary.getLastInterestCalculationDate());
+        // Both are null for an account interest was never calculated on; writing null back leaves it unchanged.
+        LocalDate postedTill = summary.getInterestPostedTillDate() != null ? summary.getInterestPostedTillDate()
+                : summary.getLastInterestCalculationDate();
         return new AccountCursorUpdate(account.getId(), postedTill, summary.getLastInterestCalculationDate());
     }
 
@@ -98,6 +100,10 @@ public class SynapseInterestPostingOutboxWriter {
     }
 
     private SynapseTransactionInstruction toInstruction(SavingsAccountData account, SavingsAccountTransactionData tx, String batchId) {
+        // A deposit, withdrawal or levy reversed earlier sits in the same window; it is not this job's to replay.
+        if (!mapper.supports(tx.getTransactionType())) {
+            return null;
+        }
         if (tx.getId() == null && !MathUtil.isZero(tx.getAmount())) {
             return mapper.map(account, tx, Operation.POST, batchId);
         }

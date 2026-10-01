@@ -175,6 +175,42 @@ class SynapseInterestPostingOutboxWriterTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    void reversedNonInterestTransactionsAreSkippedWhileInterestStillPosts() {
+        SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("40.00"));
+        for (SavingsAccountTransactionType type : List.of(SavingsAccountTransactionType.DEPOSIT, SavingsAccountTransactionType.WITHDRAWAL,
+                SavingsAccountTransactionType.EMT_LEVY)) {
+            SavingsAccountTransactionEnumData txType = new SavingsAccountTransactionEnumData(type.getValue().longValue(), type.getCode(),
+                    type.getValue().toString());
+            SavingsAccountTransactionData reversed = SavingsAccountTransactionData.create(100L + type.getValue(), txType, null, 1L, "SA-1",
+                    POSTING_DATE, null, new BigDecimal("10.00"), null, null, false, null, false, null, null, POSTING_DATE);
+            reversed.reverse();
+            acct.setSavingsAccountTransactionData(reversed);
+        }
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getAccepted()).isEqualTo(1);
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
+        assertThat(entriesCaptor.getValue().get(0).getPayload()).contains("INTEREST_POSTING").contains("\"POST\"");
+    }
+
+    @Test
+    void accountNeverCalculatedKeepsNullCursorsInsteadOfFailingTheBatch() {
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null);
+        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getCursorUpdates()).hasSize(1);
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isNull();
+        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isNull();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     void postInterestForAccountDelegatesToBatchWithSingleAccount() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("250.00"));
 

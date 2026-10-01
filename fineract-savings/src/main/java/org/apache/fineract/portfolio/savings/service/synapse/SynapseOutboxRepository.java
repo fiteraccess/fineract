@@ -148,8 +148,10 @@ public class SynapseOutboxRepository {
     /**
      * Mark a single row as FAILED (or DEAD if max attempts or retry deadline reached). Applies exponential backoff with
      * ±20% jitter for the next retry attempt.
+     *
+     * @return true when the row went DEAD, i.e. it will not be retried automatically
      */
-    public void markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
+    public boolean markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
         boolean isDead = (currentAttempts + 1) >= maxAttempts || clock.instant().isAfter(createdAt.plus(RETRY_DEADLINE));
         Timestamp nextAttempt = null;
 
@@ -160,6 +162,7 @@ public class SynapseOutboxRepository {
 
         jdbcTemplate.update(MARK_FAILED_SQL, maxAttempts, errorDetail, nextAttempt, id);
         log.debug("Marked outbox entry id={} as FAILED/DEAD (nextAttempt={})", id, nextAttempt);
+        return isDead;
     }
 
     /**
