@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    AB-401. Which savings product is the Goal, AutoSave or a Digital product used to live in Synapse env vars
+    (SYNAPSE_GOAL_PRODUCT_ID, SYNAPSE_AUTOSAVE_PRODUCT_ID, SYNAPSE_PRODUCT_TYPE_*), so changing it needed a restart.
+    The product now carries it, Synapse reads it from here, and the interest-posting job skips GOAL products.
+
+    The backfill reproduces today's env classification by name (the Synapse defaults plus Access Dev's
+    "Kobi Digital Savings"). GOAL and AUTOSAVE are set only when exactly one product matches, so the unique index
+    holds; anything unmatched stays NULL and is set from the product screen.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="ab-401-1" author="fiteraccess">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="m_savings_product" columnName="product_category"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="m_savings_product">
+            <column name="product_category" type="VARCHAR(20)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="ab-401-2" author="fiteraccess">
+        <sql>
+            UPDATE m_savings_product SET product_category = 'GOAL'
+            WHERE product_category IS NULL AND deposit_type_enum = 100
+              AND LOWER(TRIM(name)) IN ('goal savings', 'goalsave', 'goal save')
+              AND (SELECT COUNT(1) FROM m_savings_product g WHERE g.deposit_type_enum = 100
+                   AND LOWER(TRIM(g.name)) IN ('goal savings', 'goalsave', 'goal save')) = 1
+              AND NOT EXISTS (SELECT 1 FROM m_savings_product x WHERE x.product_category = 'GOAL');
+            UPDATE m_savings_product SET product_category = 'AUTOSAVE'
+            WHERE product_category IS NULL AND deposit_type_enum = 100
+              AND LOWER(TRIM(name)) IN ('autosave', 'auto save')
+              AND (SELECT COUNT(1) FROM m_savings_product a WHERE a.deposit_type_enum = 100
+                   AND LOWER(TRIM(a.name)) IN ('autosave', 'auto save')) = 1
+              AND NOT EXISTS (SELECT 1 FROM m_savings_product x WHERE x.product_category = 'AUTOSAVE');
+            UPDATE m_savings_product SET product_category = 'DIGITAL'
+            WHERE product_category IS NULL AND deposit_type_enum = 100
+              AND LOWER(TRIM(name)) IN ('savings', 'personal savings', 'standard savings', 'regular savings', 'kobi digital savings');
+        </sql>
+    </changeSet>
+    <changeSet id="ab-401-3" author="fiteraccess" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists indexName="ux_m_savings_product_single_category"/>
+            </not>
+        </preConditions>
+        <sql>
+            CREATE UNIQUE INDEX ux_m_savings_product_single_category ON m_savings_product (product_category)
+            WHERE product_category IN ('GOAL', 'AUTOSAVE');
+        </sql>
+    </changeSet>
+</databaseChangeLog>

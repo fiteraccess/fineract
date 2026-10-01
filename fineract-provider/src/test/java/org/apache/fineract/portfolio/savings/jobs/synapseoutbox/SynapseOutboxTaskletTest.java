@@ -19,6 +19,7 @@
 package org.apache.fineract.portfolio.savings.jobs.synapseoutbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -54,6 +55,7 @@ import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.domain.FineractContext;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
@@ -221,6 +223,33 @@ class SynapseOutboxTaskletTest {
             verify(outboxRepository).markFailed(eq(1L), eq("java.lang.RuntimeException: something broke"), eq(e1.getAttempts()),
                     eq(e1.getMaxAttempts()), eq(e1.getCreatedAt()));
             verify(outboxRepository, never()).markSent(any());
+        }
+
+        @Test
+        void retriableFailureLeavesRunFinished() throws Exception {
+            when(handler.taskType()).thenReturn("INTEREST_POSTING");
+            OutboxEntry e1 = entry(1L);
+            when(outboxRepository.claimPending("INTEREST_POSTING", PAGE_SIZE)).thenReturn(List.of(e1)).thenReturn(Collections.emptyList());
+            doThrow(new SynapsePostingException("Synapse posting failed with HTTP 503")).when(handler).dispatch(any());
+            when(outboxRepository.markFailed(eq(1L), anyString(), anyInt(), anyInt(), any())).thenReturn(false);
+
+            RepeatStatus status = createTasklet(List.of(handler)).execute(mock(StepContribution.class), mock(ChunkContext.class));
+
+            assertThat(status).isEqualTo(RepeatStatus.FINISHED);
+        }
+
+        @Test
+        void deadEntryFailsRun() {
+            when(handler.taskType()).thenReturn("INTEREST_POSTING");
+            OutboxEntry e1 = entry(1L);
+            when(outboxRepository.claimPending("INTEREST_POSTING", PAGE_SIZE)).thenReturn(List.of(e1)).thenReturn(Collections.emptyList());
+            doThrow(new SynapsePostingException("Synapse posting failed with HTTP 401")).when(handler).dispatch(any());
+            when(outboxRepository.markFailed(eq(1L), anyString(), anyInt(), anyInt(), any())).thenReturn(true);
+
+            SynapseOutboxTasklet tasklet = createTasklet(List.of(handler));
+
+            assertThatThrownBy(() -> tasklet.execute(mock(StepContribution.class), mock(ChunkContext.class)))
+                    .isInstanceOf(JobExecutionException.class).hasMessageContaining("1 Synapse outbox entries exhausted their retries");
         }
 
         @Test

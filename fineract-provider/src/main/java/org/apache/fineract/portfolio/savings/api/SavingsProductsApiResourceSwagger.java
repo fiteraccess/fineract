@@ -82,6 +82,8 @@ final class SavingsProductsApiResourceSwagger {
         public Boolean withHoldTax;
         @Schema(example = "false")
         public Boolean isDormancyTrackingActive;
+        @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
+        public String productCategory;
     }
 
     @Schema(description = "PostSavingsProductsResponse")
@@ -104,6 +106,8 @@ final class SavingsProductsApiResourceSwagger {
         public String locale;
         @Schema(example = "5.73")
         public Double interestRate;
+        @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
+        public String productCategory;
     }
 
     @Schema(description = "PutSavingsProductsProductIdResponse")
@@ -229,6 +233,8 @@ final class SavingsProductsApiResourceSwagger {
         @Schema(example = "false")
         public Boolean withdrawalFeeForTransfers;
         public GetSavingsProductsAccountingRule accountingRule;
+        @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
+        public String productCategory;
     }
 
     @Schema(description = "GetSavingsProductsProductIdResponse")
@@ -377,6 +383,8 @@ final class SavingsProductsApiResourceSwagger {
         public Set<GetSavingsProductsPenaltyToIncomeAccountMappings> penaltyToIncomeAccountMappings;
         @Schema(example = "[]")
         public List<Long> charges;
+        @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
+        public String productCategory;
     }
 
     @Schema(description = "GetSavingsProductsTemplateResponse")

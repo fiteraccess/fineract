@@ -78,6 +78,7 @@ import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodTyp
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
 import org.springframework.stereotype.Component;
 
@@ -109,8 +110,8 @@ public class SavingsProductDataValidator {
             allowOverdraftParamName, overdraftLimitParamName, nominalAnnualInterestRateOverdraftParamName,
             minOverdraftForInterestCalculationParamName, SavingsApiConstants.minRequiredBalanceParamName,
             SavingsApiConstants.enforceMinRequiredBalanceParamName, SavingsApiConstants.maxAllowedLienLimitParamName,
-            SavingsApiConstants.lienAllowedParamName, minBalanceForInterestCalculationParamName, withHoldTaxParamName,
-            taxGroupIdParamName));
+            SavingsApiConstants.lienAllowedParamName, SavingsApiConstants.productCategoryParamName,
+            minBalanceForInterestCalculationParamName, withHoldTaxParamName, taxGroupIdParamName));
 
     public void validateForCreate(final String json) {
 
@@ -273,6 +274,7 @@ public class SavingsProductDataValidator {
         }
         validateTaxWithHoldingParams(baseDataValidator, element, true);
         validateLienParams(baseDataValidator, element);
+        validateProductCategoryParam(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -442,6 +444,7 @@ public class SavingsProductDataValidator {
 
         validateTaxWithHoldingParams(baseDataValidator, element, false);
         validateLienParams(baseDataValidator, element);
+        validateProductCategoryParam(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -476,6 +479,15 @@ public class SavingsProductDataValidator {
                     .ignoreIfNull().zeroOrPositiveAmount();
         }
 
+    }
+
+    private void validateProductCategoryParam(final DataValidatorBuilder baseDataValidator, final JsonElement element) {
+        if (this.fromApiJsonHelper.parameterExists(SavingsApiConstants.productCategoryParamName, element)) {
+            final String category = StringUtils
+                    .trimToNull(this.fromApiJsonHelper.extractStringNamed(SavingsApiConstants.productCategoryParamName, element));
+            baseDataValidator.reset().parameter(SavingsApiConstants.productCategoryParamName).value(category).ignoreIfNull()
+                    .isOneOfEnumValues(SavingsProductCategory.class);
+        }
     }
 
     private void validateLienParams(final DataValidatorBuilder baseDataValidator, final JsonElement element) {

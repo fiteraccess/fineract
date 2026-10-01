@@ -46,6 +46,7 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.namePara
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.nominalAnnualInterestRateOverdraftParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.nominalAnnualInterestRateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.overdraftLimitParamName;
+import static org.apache.fineract.portfolio.savings.SavingsApiConstants.productCategoryParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.shortNameParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.taxGroupIdParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withHoldTaxParamName;
@@ -56,6 +57,7 @@ import com.google.gson.JsonObject;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
@@ -68,6 +70,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.tax.domain.TaxGroup;
 import org.apache.fineract.portfolio.tax.domain.TaxGroupRepositoryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -193,12 +196,16 @@ public class SavingsProductAssembler {
         final Long daysToDormancy = command.longValueOfParameterNamed(daysToDormancyParamName);
         final Long daysToEscheat = command.longValueOfParameterNamed(daysToEscheatParamName);
 
-        return SavingsProduct.createNew(name, shortName, description, currency, interestRate, interestCompoundingPeriodType,
-                interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType, minRequiredOpeningBalance,
-                lockinPeriodFrequency, lockinPeriodFrequencyType, iswithdrawalFeeApplicableForTransfer, accountingRuleType, charges,
-                allowOverdraft, overdraftLimit, enforceMinRequiredBalance, minRequiredBalance, lienAllowed, maxAllowedLienLimit,
-                minBalanceForInterestCalculation, nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax,
-                taxGroup, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat);
+        final SavingsProduct product = SavingsProduct.createNew(name, shortName, description, currency, interestRate,
+                interestCompoundingPeriodType, interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType,
+                minRequiredOpeningBalance, lockinPeriodFrequency, lockinPeriodFrequencyType, iswithdrawalFeeApplicableForTransfer,
+                accountingRuleType, charges, allowOverdraft, overdraftLimit, enforceMinRequiredBalance, minRequiredBalance, lienAllowed,
+                maxAllowedLienLimit, minBalanceForInterestCalculation, nominalAnnualInterestRateOverdraft,
+                minOverdraftForInterestCalculation, withHoldTax, taxGroup, isDormancyTrackingActive, daysToInactive, daysToDormancy,
+                daysToEscheat);
+        final String category = StringUtils.trimToNull(command.stringValueOfParameterNamedAllowingNull(productCategoryParamName));
+        product.setProductCategory(category == null ? null : SavingsProductCategory.valueOf(category));
+        return product;
     }
 
     public Set<Charge> assembleListOfSavingsProductCharges(final JsonCommand command, final String savingsProductCurrencyCode) {

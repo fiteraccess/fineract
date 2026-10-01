@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
@@ -65,7 +66,7 @@ public class SynapseOutboxTasklet implements Tasklet {
     }
 
     @Override
-    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws JobExecutionException {
         if (handlers.isEmpty()) {
             log.debug("No SynapseTaskHandler beans registered, nothing to drain");
             return RepeatStatus.FINISHED;
@@ -84,15 +85,22 @@ public class SynapseOutboxTasklet implements Tasklet {
         long totalSent = 0;
         long totalFailed = 0;
         long totalReset = 0;
+        long totalDead = 0;
         for (CompletableFuture<DrainResult> f : futures) {
             DrainResult r = f.join();
             totalSent += r.sent();
             totalFailed += r.failed();
             totalReset += r.reset();
+            totalDead += r.dead();
         }
 
-        log.info("Synapse Outbox drain complete: sent={}, failed={}, reset={}", totalSent, totalFailed, totalReset);
+        log.info("Synapse Outbox drain complete: sent={}, failed={}, reset={}, dead={}", totalSent, totalFailed, totalReset, totalDead);
         log.info("Synapse Outbox Stats: {}", outboxRepository.getOutboxStats());
+        // Retriable failures and circuit-open resets stay green: they retry on their own. DEAD rows need an operator.
+        if (totalDead > 0) {
+            throw new JobExecutionException(List.of(new SynapsePostingException(
+                    totalDead + " Synapse outbox entries exhausted their retries and are DEAD; see synapse_outbox.error_detail")));
+        }
         return RepeatStatus.FINISHED;
     }
 
@@ -107,6 +115,7 @@ public class SynapseOutboxTasklet implements Tasklet {
         long sent = 0;
         long failed = 0;
         long reset = 0;
+        long dead = 0;
         boolean firstIteration = true;
 
         while (true) {
@@ -135,25 +144,29 @@ public class SynapseOutboxTasklet implements Tasklet {
                             remainingIds.size(), e);
                     outboxRepository.resetToPending(remainingIds);
                     reset += remainingIds.size();
-                    return new DrainResult(sent, failed, reset);
+                    return new DrainResult(sent, failed, reset, dead);
                 } catch (SynapsePostingException e) {
                     log.error("Synapse posting failed for entry id={} traceId={} accountId={}", entry.getId(), entry.getTraceId(),
                             entry.getAccountId(), e);
-                    outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts(),
-                            entry.getCreatedAt());
+                    if (outboxRepository.markFailed(entry.getId(), truncate(e.getMessage()), entry.getAttempts(), entry.getMaxAttempts(),
+                            entry.getCreatedAt())) {
+                        dead++;
+                    }
                     failed++;
                 } catch (Exception e) {
                     log.error("Unexpected error dispatching entry id={} traceId={} accountId={}", entry.getId(), entry.getTraceId(),
                             entry.getAccountId(), e);
-                    outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()),
-                            entry.getAttempts(), entry.getMaxAttempts(), entry.getCreatedAt());
+                    if (outboxRepository.markFailed(entry.getId(), truncate(e.getClass().getName() + ": " + e.getMessage()),
+                            entry.getAttempts(), entry.getMaxAttempts(), entry.getCreatedAt())) {
+                        dead++;
+                    }
                     failed++;
                 }
             }
         }
 
-        log.debug("Worker finished: taskType={}, sent={}, failed={}, reset={}", taskType, sent, failed, reset);
-        return new DrainResult(sent, failed, reset);
+        log.debug("Worker finished: taskType={}, sent={}, failed={}, reset={}, dead={}", taskType, sent, failed, reset, dead);
+        return new DrainResult(sent, failed, reset, dead);
     }
 
     private static final int MAX_ERROR_DETAIL_LENGTH = 1000;
@@ -165,6 +178,6 @@ public class SynapseOutboxTasklet implements Tasklet {
         return text.substring(0, MAX_ERROR_DETAIL_LENGTH) + "…[truncated]";
     }
 
-    record DrainResult(long sent, long failed, long reset) {
+    record DrainResult(long sent, long failed, long reset, long dead) {
     }
 }
