@@ -77,10 +77,11 @@ public class SynapseInterestTransactionApplier {
     public ReplayResult replay(SavingsAccount account, String transactionType, BigDecimal transactionAmount, LocalDate transactionDate,
             BigDecimal overdraftAmount, String traceId) {
 
-        // 1. Deduplicate on traceId
+        // 1. Deduplicate on traceId, reversed or not: a late retry of a posting a correction has since reversed must
+        // not book it again (AB-401).
         List<SavingsAccountTransaction> existing = transactionRepository.findByRefNo(traceId);
         for (SavingsAccountTransaction tx : existing) {
-            if (tx.getSavingsAccount().getId().equals(account.getId()) && tx.isNotReversed()) {
+            if (tx.getSavingsAccount().getId().equals(account.getId())) {
                 log.debug("Replay already exists for traceId={} on account={}", traceId, account.getId());
                 return new ReplayResult(tx, true);
             }

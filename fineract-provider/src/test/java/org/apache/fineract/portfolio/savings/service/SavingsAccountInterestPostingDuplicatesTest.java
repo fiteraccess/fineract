@@ -54,6 +54,22 @@ class SavingsAccountInterestPostingDuplicatesTest {
     }
 
     @Test
+    void theTaxOnADuplicateGoesWithItWhileTheKeptPostingsTaxStays() {
+        SavingsAccountData account = account();
+        SavingsAccountTransactionData kept = add(account, 1L, SavingsAccountTransactionType.INTEREST_POSTING, SEPT_END, false, false);
+        SavingsAccountTransactionData keptTax = add(account, 2L, SavingsAccountTransactionType.WITHHOLD_TAX, SEPT_END, false, false);
+        add(account, 3L, SavingsAccountTransactionType.INTEREST_POSTING, SEPT_END, false, false);
+        SavingsAccountTransactionData duplicateTax = add(account, 4L, SavingsAccountTransactionType.WITHHOLD_TAX, SEPT_END, false, false);
+        SavingsAccountTransactionData augustTax = add(account, 5L, SavingsAccountTransactionType.WITHHOLD_TAX, AUG_END, false, false);
+
+        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false, account)).isTrue();
+
+        assertThat(keptTax.isReversed()).isFalse();
+        assertThat(duplicateTax.isReversedInRun()).isTrue();
+        assertThat(augustTax.isReversed()).isFalse();
+    }
+
+    @Test
     void manualReversedAndOtherKindsAreLeftAlone() {
         SavingsAccountData account = account();
         SavingsAccountTransactionData kept = add(account, 1L, SavingsAccountTransactionType.INTEREST_POSTING, SEPT_END, false, false);
