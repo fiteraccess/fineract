@@ -43,7 +43,15 @@ public class SynapseInstructionMapper {
                 .officeId(account.officeId()).externalId(account.getExternalId()).transactionType(txType).direction(direction)
                 .operation(operation).amount(tx.getAmount()).overdraftAmount(tx.getOverdraftAmount())
                 .transactionDate(tx.getTransactionDate()).currencyCode(account.getCurrency().getCode()).refNo(tx.getRefNo())
-                .originalTransactionId(tx.getOriginalTransactionId()).batchId(batchId).build();
+                // A REVERSE undoes this very posting: Synapse finds its own leg by refNo, the replay finds this row by
+                // id.
+                .originalTransactionId(operation == Operation.REVERSE ? tx.getId() : tx.getOriginalTransactionId()).batchId(batchId)
+                .build();
+    }
+
+    /** The transaction types interest posting produces, and so the only ones it may post or reverse in Synapse. */
+    public boolean supports(SavingsAccountTransactionEnumData txType) {
+        return txType != null && (txType.isInterestPosting() || txType.isIncomeFromInterest() || txType.isWithholdTax());
     }
 
     private TransactionType resolveTransactionType(SavingsAccountTransactionEnumData txType) {

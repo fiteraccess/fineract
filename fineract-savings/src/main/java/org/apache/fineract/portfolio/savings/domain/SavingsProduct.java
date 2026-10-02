@@ -48,6 +48,7 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.namePara
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.nominalAnnualInterestRateOverdraftParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.nominalAnnualInterestRateParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.overdraftLimitParamName;
+import static org.apache.fineract.portfolio.savings.SavingsApiConstants.productCategoryParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.shortNameParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.taxGroupIdParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withHoldTaxParamName;
@@ -60,6 +61,8 @@ import jakarta.persistence.DiscriminatorType;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
@@ -75,6 +78,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
@@ -90,6 +94,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.tax.domain.TaxGroup;
 
 @Entity
@@ -186,6 +191,10 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
 
     @Column(name = "max_allowed_lien_limit", scale = 6, precision = 19, nullable = true)
     private BigDecimal maxAllowedLienLimit;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "product_category", length = 20, nullable = true)
+    private SavingsProductCategory productCategory;
 
     @Column(name = "min_balance_for_interest_calculation", scale = 6, precision = 19, nullable = true)
     private BigDecimal minBalanceForInterestCalculation;
@@ -555,6 +564,15 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
             this.lienAllowed = newValue;
         }
 
+        if (command.parameterExists(productCategoryParamName)) {
+            final String requested = StringUtils.trimToNull(command.stringValueOfParameterNamedAllowingNull(productCategoryParamName));
+            final SavingsProductCategory newValue = requested == null ? null : SavingsProductCategory.valueOf(requested);
+            if (newValue != this.productCategory) {
+                actualChanges.put(productCategoryParamName, newValue == null ? null : newValue.name());
+                this.productCategory = newValue;
+            }
+        }
+
         if (command.isChangeInBigDecimalParameterNamedDefaultingZeroToNull(maxAllowedLienLimitParamName, this.maxAllowedLienLimit)) {
             final BigDecimal newValue = command.bigDecimalValueOfParameterNamedDefaultToNullIfZero(maxAllowedLienLimitParamName);
             actualChanges.put(maxAllowedLienLimitParamName, newValue);
@@ -717,6 +735,14 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
 
     public boolean isLienAllowed() {
         return this.lienAllowed;
+    }
+
+    public SavingsProductCategory getProductCategory() {
+        return this.productCategory;
+    }
+
+    public void setProductCategory(final SavingsProductCategory productCategory) {
+        this.productCategory = productCategory;
     }
 
     public Set<Charge> charges() {

@@ -66,12 +66,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -961,144 +963,11 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         // (either normal interest or overdraft interest).
         final List<PostingPeriod> allPostingPeriods = new ArrayList<>();
         if (hasInterestCalculation() || hasOverdraftInterestCalculation()) {
-            // =====================================================================================
-            // RESOLVE INTEREST CALCULATION CONFIGURATION
-            // These enums define HOW and WHEN interest is calculated and posted:
-            // - postingPeriodType: How often interest is posted (e.g., Monthly, Quarterly, Annually)
-            // - compoundingPeriodType: How often interest is compounded (e.g., Daily, Monthly)
-            // - daysInYearType: Day-count convention for annualizing the rate (e.g., 360, 365, Actual)
-            // =====================================================================================
-            final SavingsPostingInterestPeriodType postingPeriodType = SavingsPostingInterestPeriodType
-                    .fromInt(this.interestPostingPeriodType);
-
-            final SavingsCompoundingInterestPeriodType compoundingPeriodType = SavingsCompoundingInterestPeriodType
-                    .fromInt(this.interestCompoundingPeriodType);
-
-            final SavingsInterestCalculationDaysInYearType daysInYearType = SavingsInterestCalculationDaysInYearType
-                    .fromInt(this.interestCalculationDaysInYearType);
-
-            // =====================================================================================
-            // COLLECT MANUAL POSTING DATES
-            // "postedAsOnDates" are dates where interest was manually posted by a user (as opposed
-            // to system-scheduled posting). These dates act as additional period boundaries when
-            // splitting the timeline into posting intervals.
-            // =====================================================================================
-            List<LocalDate> postedAsOnDates = null;
-            if (backdatedTxnsAllowedTill) {
-                postedAsOnDates = getManualPostingDatesWithPivotConfig();
-            } else {
-                postedAsOnDates = getManualPostingDates();
-            }
-            if (postInterestOnDate != null) {
-                postedAsOnDates.add(postInterestOnDate);
-            }
-
-            // =====================================================================================
-            // DETERMINE POSTING PERIOD INTERVALS
-            // Splits the full interest calculation date range into discrete time intervals based on
-            // the posting period type (e.g., monthly), financial year start, and any manual posting
-            // dates. Each interval will have its interest calculated independently.
-            // =====================================================================================
-            final List<LocalDateInterval> postingPeriodIntervals = this.savingsHelper.determineInterestPostingPeriods(
-                    getStartInterestCalculationDate(), upToInterestCalculationDate, postingPeriodType, financialYearBeginningMonth,
-                    postedAsOnDates);
-
-            // =====================================================================================
-            // DETERMINE THE STARTING BALANCE FOR THE FIRST PERIOD
-            // If a custom startInterestCalculationDate is set (different from activation date),
-            // look up the last transaction before that date to get the running balance.
-            // Otherwise, start from zero (i.e., interest is calculated from account activation).
-            // =====================================================================================
-            Money periodStartingBalance;
-            if (this.startInterestCalculationDate != null && !this.getStartInterestCalculationDate().equals(this.getActivationDate())) {
-                LocalDate startInterestCalculationDate = this.startInterestCalculationDate;
-                SavingsAccountTransaction transaction = null;
-                if (backdatedTxnsAllowedTill) {
-                    transaction = findLastFilteredTransactionWithPivotConfig(startInterestCalculationDate);
-                } else {
-                    transaction = findLastTransaction(startInterestCalculationDate);
-                }
-
-                if (transaction == null) {
-                    periodStartingBalance = Money.zero(this.currency);
-                } else {
-                    periodStartingBalance = Money.of(this.currency, this.summary.getRunningBalanceOnPivotDate());
-                }
-            } else {
-                periodStartingBalance = Money.zero(this.currency);
-            }
-
-            // =====================================================================================
-            // GATHER INTEREST CALCULATION PARAMETERS
-            // - interestCalculationType: Daily Balance or Average Daily Balance
-            // - interestRateAsFraction: Annual nominal rate converted to a decimal (e.g., 5% → 0.05)
-            // - overdraftInterestRateAsFraction: Separate rate applied when account is overdrawn
-            // - interestPostTransactions: IDs of existing interest posting transactions (to exclude
-            // them from balance calculations so interest isn't compounded on itself incorrectly)
-            // - minBalanceForInterestCalculation: Minimum balance required to earn interest
-            // - minOverdraftForInterestCalculation: Minimum overdraft amount to incur overdraft interest
-            // =====================================================================================
-            final SavingsInterestCalculationType interestCalculationType = SavingsInterestCalculationType
-                    .fromInt(this.interestCalculationType);
-            final BigDecimal interestRateAsFraction = getEffectiveInterestRateAsFraction(mc, upToInterestCalculationDate);
-            final BigDecimal overdraftInterestRateAsFraction = getEffectiveOverdraftInterestRateAsFraction(mc);
-            final Collection<Long> interestPostTransactions = this.savingsHelper.fetchPostInterestTransactionIds(getId());
-            final Money minBalanceForInterestCalculation = Money.of(getCurrency(), minBalanceForInterestCalculation());
-            final Money minOverdraftForInterestCalculation = Money.of(getCurrency(), this.minOverdraftForInterestCalculation);
-
-            // =====================================================================================
-            // BUILD A PostingPeriod FOR EACH INTERVAL
-            // For each time interval:
-            // 1. Check if this is a user-initiated (manual) posting period
-            // 2. Retrieve all non-interest-posting transactions (deposits, withdrawals, fees, etc.)
-            // that fall within this period — these determine the daily balances
-            // 3. Create a PostingPeriod object that encapsulates the interval, its transactions,
-            // and all the calculation parameters. The PostingPeriod computes end-of-day balances
-            // and the interest earned for the period.
-            // 4. The closing balance of one period becomes the opening balance of the next
-            // =====================================================================================
-            for (final LocalDateInterval periodInterval : postingPeriodIntervals) {
-
-                // A period is "user posting" if a manual posting date falls on the day after the period ends
-                boolean isUserPosting = false;
-                if (postedAsOnDates.contains(periodInterval.endDate().plusDays(1))) {
-                    isUserPosting = true;
-                }
-
-                PostingPeriod postingPeriod = null;
-                // Retrieve transactions excluding interest postings — only real account activity
-                List<SavingsAccountTransaction> orderedNonInterestPostingTransactions = null;
-                if (backdatedTxnsAllowedTill) {
-                    orderedNonInterestPostingTransactions = retreiveOrderedNonInterestPostingSavingsTransactionsWithPivotConfig();
-                } else {
-                    orderedNonInterestPostingTransactions = retreiveOrderedNonInterestPostingTransactions();
-                }
-
-                // Convert to lightweight DTOs used by the PostingPeriod calculation engine
-                List<SavingsAccountTransactionDetailsForPostingPeriod> savingsAccountTransactionDetailsForPostingPeriod = toSavingsAccountTransactionDetailsForPostingPeriodList(
-                        orderedNonInterestPostingTransactions);
-
-                // Create the PostingPeriod — this internally computes daily balances and interest earned
-                postingPeriod = PostingPeriod.createFrom(periodInterval, periodStartingBalance,
-                        savingsAccountTransactionDetailsForPostingPeriod, this.currency, compoundingPeriodType, interestCalculationType,
-                        interestRateAsFraction, daysInYearType.getValue(), upToInterestCalculationDate, interestPostTransactions,
-                        isInterestTransfer, minBalanceForInterestCalculation, isSavingsInterestPostingAtCurrentPeriodEnd,
-                        overdraftInterestRateAsFraction, minOverdraftForInterestCalculation, isUserPosting, financialYearBeginningMonth);
-
-                // Chain periods: closing balance of this period → opening balance of the next
-                periodStartingBalance = postingPeriod.closingBalance();
-
-                allPostingPeriods.add(postingPeriod);
-            }
-
-            // =====================================================================================
-            // CALCULATE COMPOUND INTEREST ACROSS ALL PERIODS
-            // After all PostingPeriods are built, this pass applies compounding logic across periods
-            // (e.g., interest earned in period 1 is added to the balance for period 2's calculation).
-            // Also respects the "locked-in until" date and interest transfer settings.
-            // =====================================================================================
-            this.savingsHelper.calculateInterestForAllPostingPeriods(this.currency, allPostingPeriods, getLockedInUntilDate(),
-                    isTransferInterestToOtherAccount());
+            allPostingPeriods.addAll(buildPostingPeriods(mc, upToInterestCalculationDate, isInterestTransfer,
+                    isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill,
+                    () -> toSavingsAccountTransactionDetailsForPostingPeriodList(
+                            backdatedTxnsAllowedTill ? retreiveOrderedNonInterestPostingSavingsTransactionsWithPivotConfig()
+                                    : retreiveOrderedNonInterestPostingTransactions())));
 
             // Update the account summary with totals derived from all posting periods
             this.summary.updateFromInterestPeriodSummaries(this.currency, allPostingPeriods);
@@ -1117,6 +986,201 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             this.summary.updateSummary(this.currency, this.savingsAccountTransactionSummaryWrapper, this.transactions);
         }
 
+        return allPostingPeriods;
+    }
+
+    /**
+     * AB-401: the posting periods {@link #calculateInterestUsing} would produce up to
+     * {@code upToInterestCalculationDate}, computed without changing the account or its transactions. The accrual job
+     * books from this so daily accruals add up to what interest posting credits; it cannot use the stored balance-end
+     * dates, which writes that skip the daily balance recalculation leave null.
+     */
+    public List<PostingPeriod> projectInterestUsing(final MathContext mc, final LocalDate upToInterestCalculationDate,
+            final boolean isSavingsInterestPostingAtCurrentPeriodEnd, final Integer financialYearBeginningMonth) {
+        if (!(hasInterestCalculation() || hasOverdraftInterestCalculation())) {
+            return new ArrayList<>();
+        }
+        final List<SavingsAccountTransactionDetailsForPostingPeriod> transactionDetails = projectTransactionDetails(
+                upToInterestCalculationDate);
+        return buildPostingPeriods(mc, upToInterestCalculationDate, false, isSavingsInterestPostingAtCurrentPeriodEnd,
+                financialYearBeginningMonth, null, false, () -> transactionDetails);
+    }
+
+    /**
+     * The running balances and balance-end dates {@link #recalculateDailyBalances} and
+     * {@link #resetAccountTransactionsEndOfDayBalances} would derive, for transactions up to the given date, as DTOs.
+     */
+    private List<SavingsAccountTransactionDetailsForPostingPeriod> projectTransactionDetails(final LocalDate upToDate) {
+        final List<SavingsAccountTransaction> sorted = retrieveListOfTransactions().stream()
+                .filter(transaction -> !transaction.getTransactionDate().isAfter(upToDate)).toList();
+        final Map<SavingsAccountTransaction, Money> runningBalances = new IdentityHashMap<>();
+        Money runningBalance = Money.zero(this.currency);
+        for (final SavingsAccountTransaction transaction : sorted) {
+            if (transaction.isReversed() || transaction.isReversalTransaction()) {
+                continue;
+            }
+            if (transaction.isCredit() || transaction.isAmountRelease()) {
+                runningBalance = runningBalance.plus(transaction.getAmount(this.currency));
+            } else if (transaction.isDebit() || transaction.isAmountOnHold()) {
+                runningBalance = runningBalance.minus(transaction.getAmount(this.currency));
+            }
+            runningBalances.put(transaction, runningBalance);
+        }
+        final Map<SavingsAccountTransaction, LocalDate> balanceEndDates = new IdentityHashMap<>();
+        final Map<SavingsAccountTransaction, Integer> balanceDays = new IdentityHashMap<>();
+        LocalDate endOfBalanceDate = upToDate;
+        for (int i = sorted.size() - 1; i >= 0; i--) {
+            final SavingsAccountTransaction transaction = sorted.get(i);
+            if (transaction.isNotReversed() && !transaction.isReversalTransaction()
+                    && !(transaction.isInterestPostingAndNotReversed() || transaction.isOverdraftInterestAndNotReversed())) {
+                final LocalDate transactionDate = transaction.getTransactionDate();
+                balanceEndDates.put(transaction, endOfBalanceDate.isBefore(transactionDate) ? transactionDate : endOfBalanceDate);
+                balanceDays.put(transaction, LocalDateInterval.create(transactionDate, endOfBalanceDate).daysInPeriodInclusiveOfEndDate());
+                endOfBalanceDate = transactionDate.minusDays(1);
+            }
+        }
+        return retreiveOrderedNonInterestPostingTransactions().stream().filter(balanceEndDates::containsKey)
+                .map(transaction -> new SavingsAccountTransactionDetailsForPostingPeriod(transaction.getId(),
+                        transaction.getTransactionDate(), balanceEndDates.get(transaction), runningBalances.get(transaction).getAmount(),
+                        transaction.getAmount(), this.currency, balanceDays.get(transaction), transaction.isDeposit(),
+                        transaction.isWithdrawal(), this.allowOverdraft, transaction.isChargeTransactionAndNotReversed(),
+                        transaction.isDividendPayoutAndNotReversed()))
+                .toList();
+    }
+
+    private List<PostingPeriod> buildPostingPeriods(final MathContext mc, final LocalDate upToInterestCalculationDate,
+            final boolean isInterestTransfer, final boolean isSavingsInterestPostingAtCurrentPeriodEnd,
+            final Integer financialYearBeginningMonth, final LocalDate postInterestOnDate, final boolean backdatedTxnsAllowedTill,
+            final Supplier<List<SavingsAccountTransactionDetailsForPostingPeriod>> transactionDetails) {
+        final List<PostingPeriod> allPostingPeriods = new ArrayList<>();
+        // =====================================================================================
+        // RESOLVE INTEREST CALCULATION CONFIGURATION
+        // These enums define HOW and WHEN interest is calculated and posted:
+        // - postingPeriodType: How often interest is posted (e.g., Monthly, Quarterly, Annually)
+        // - compoundingPeriodType: How often interest is compounded (e.g., Daily, Monthly)
+        // - daysInYearType: Day-count convention for annualizing the rate (e.g., 360, 365, Actual)
+        // =====================================================================================
+        final SavingsPostingInterestPeriodType postingPeriodType = SavingsPostingInterestPeriodType.fromInt(this.interestPostingPeriodType);
+
+        final SavingsCompoundingInterestPeriodType compoundingPeriodType = SavingsCompoundingInterestPeriodType
+                .fromInt(this.interestCompoundingPeriodType);
+
+        final SavingsInterestCalculationDaysInYearType daysInYearType = SavingsInterestCalculationDaysInYearType
+                .fromInt(this.interestCalculationDaysInYearType);
+
+        // =====================================================================================
+        // COLLECT MANUAL POSTING DATES
+        // "postedAsOnDates" are dates where interest was manually posted by a user (as opposed
+        // to system-scheduled posting). These dates act as additional period boundaries when
+        // splitting the timeline into posting intervals.
+        // =====================================================================================
+        List<LocalDate> postedAsOnDates = null;
+        if (backdatedTxnsAllowedTill) {
+            postedAsOnDates = getManualPostingDatesWithPivotConfig();
+        } else {
+            postedAsOnDates = getManualPostingDates();
+        }
+        if (postInterestOnDate != null) {
+            postedAsOnDates.add(postInterestOnDate);
+        }
+
+        // =====================================================================================
+        // DETERMINE POSTING PERIOD INTERVALS
+        // Splits the full interest calculation date range into discrete time intervals based on
+        // the posting period type (e.g., monthly), financial year start, and any manual posting
+        // dates. Each interval will have its interest calculated independently.
+        // =====================================================================================
+        final List<LocalDateInterval> postingPeriodIntervals = this.savingsHelper.determineInterestPostingPeriods(
+                getStartInterestCalculationDate(), upToInterestCalculationDate, postingPeriodType, financialYearBeginningMonth,
+                postedAsOnDates);
+
+        // =====================================================================================
+        // DETERMINE THE STARTING BALANCE FOR THE FIRST PERIOD
+        // If a custom startInterestCalculationDate is set (different from activation date),
+        // look up the last transaction before that date to get the running balance.
+        // Otherwise, start from zero (i.e., interest is calculated from account activation).
+        // =====================================================================================
+        Money periodStartingBalance;
+        if (this.startInterestCalculationDate != null && !this.getStartInterestCalculationDate().equals(this.getActivationDate())) {
+            LocalDate startInterestCalculationDate = this.startInterestCalculationDate;
+            SavingsAccountTransaction transaction = null;
+            if (backdatedTxnsAllowedTill) {
+                transaction = findLastFilteredTransactionWithPivotConfig(startInterestCalculationDate);
+            } else {
+                transaction = findLastTransaction(startInterestCalculationDate);
+            }
+
+            if (transaction == null) {
+                periodStartingBalance = Money.zero(this.currency);
+            } else {
+                periodStartingBalance = Money.of(this.currency, this.summary.getRunningBalanceOnPivotDate());
+            }
+        } else {
+            periodStartingBalance = Money.zero(this.currency);
+        }
+
+        // =====================================================================================
+        // GATHER INTEREST CALCULATION PARAMETERS
+        // - interestCalculationType: Daily Balance or Average Daily Balance
+        // - interestRateAsFraction: Annual nominal rate converted to a decimal (e.g., 5% → 0.05)
+        // - overdraftInterestRateAsFraction: Separate rate applied when account is overdrawn
+        // - interestPostTransactions: IDs of existing interest posting transactions (to exclude
+        // them from balance calculations so interest isn't compounded on itself incorrectly)
+        // - minBalanceForInterestCalculation: Minimum balance required to earn interest
+        // - minOverdraftForInterestCalculation: Minimum overdraft amount to incur overdraft interest
+        // =====================================================================================
+        final SavingsInterestCalculationType interestCalculationType = SavingsInterestCalculationType.fromInt(this.interestCalculationType);
+        final BigDecimal interestRateAsFraction = getEffectiveInterestRateAsFraction(mc, upToInterestCalculationDate);
+        final BigDecimal overdraftInterestRateAsFraction = getEffectiveOverdraftInterestRateAsFraction(mc);
+        final Collection<Long> interestPostTransactions = this.savingsHelper.fetchPostInterestTransactionIds(getId());
+        final Money minBalanceForInterestCalculation = Money.of(getCurrency(), minBalanceForInterestCalculation());
+        final Money minOverdraftForInterestCalculation = Money.of(getCurrency(), this.minOverdraftForInterestCalculation);
+
+        // =====================================================================================
+        // BUILD A PostingPeriod FOR EACH INTERVAL
+        // For each time interval:
+        // 1. Check if this is a user-initiated (manual) posting period
+        // 2. Retrieve all non-interest-posting transactions (deposits, withdrawals, fees, etc.)
+        // that fall within this period — these determine the daily balances
+        // 3. Create a PostingPeriod object that encapsulates the interval, its transactions,
+        // and all the calculation parameters. The PostingPeriod computes end-of-day balances
+        // and the interest earned for the period.
+        // 4. The closing balance of one period becomes the opening balance of the next
+        // =====================================================================================
+        for (final LocalDateInterval periodInterval : postingPeriodIntervals) {
+
+            // A period is "user posting" if a manual posting date falls on the day after the period ends
+            boolean isUserPosting = false;
+            if (postedAsOnDates.contains(periodInterval.endDate().plusDays(1))) {
+                isUserPosting = true;
+            }
+
+            PostingPeriod postingPeriod = null;
+            // Non-interest-posting transactions as lightweight DTOs used by the PostingPeriod calculation engine
+            List<SavingsAccountTransactionDetailsForPostingPeriod> savingsAccountTransactionDetailsForPostingPeriod = transactionDetails
+                    .get();
+
+            // Create the PostingPeriod — this internally computes daily balances and interest earned
+            postingPeriod = PostingPeriod.createFrom(periodInterval, periodStartingBalance,
+                    savingsAccountTransactionDetailsForPostingPeriod, this.currency, compoundingPeriodType, interestCalculationType,
+                    interestRateAsFraction, daysInYearType.getValue(), upToInterestCalculationDate, interestPostTransactions,
+                    isInterestTransfer, minBalanceForInterestCalculation, isSavingsInterestPostingAtCurrentPeriodEnd,
+                    overdraftInterestRateAsFraction, minOverdraftForInterestCalculation, isUserPosting, financialYearBeginningMonth);
+
+            // Chain periods: closing balance of this period → opening balance of the next
+            periodStartingBalance = postingPeriod.closingBalance();
+
+            allPostingPeriods.add(postingPeriod);
+        }
+
+        // =====================================================================================
+        // CALCULATE COMPOUND INTEREST ACROSS ALL PERIODS
+        // After all PostingPeriods are built, this pass applies compounding logic across periods
+        // (e.g., interest earned in period 1 is added to the balance for period 2's calculation).
+        // Also respects the "locked-in until" date and interest transfer settings.
+        // =====================================================================================
+        this.savingsHelper.calculateInterestForAllPostingPeriods(this.currency, allPostingPeriods, getLockedInUntilDate(),
+                isTransferInterestToOtherAccount());
         return allPostingPeriods;
     }
 
@@ -4266,6 +4330,10 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                 : retrieveListOfTransactions();
         final List<SavingsAccountTransaction> accrualsToReverse = selectAccrualsToReverse(transactions, date);
         accrualsToReverse.forEach(SavingsAccountTransaction::reverse);
+        // The accrual job resumes after accruedTillDate, so it must step back for the reversed dates to be re-booked.
+        if (!accrualsToReverse.isEmpty() && this.accruedTillDate != null && !this.accruedTillDate.isBefore(date)) {
+            this.accruedTillDate = date.minusDays(1);
+        }
         return accrualsToReverse;
     }
 

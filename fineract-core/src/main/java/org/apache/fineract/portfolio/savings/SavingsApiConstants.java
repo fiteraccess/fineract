@@ -140,6 +140,7 @@ public class SavingsApiConstants {
     public static final String enforceMinRequiredBalanceParamName = "enforceMinRequiredBalance";
     public static final String maxAllowedLienLimitParamName = "maxAllowedLienLimit";
     public static final String lienAllowedParamName = "lienAllowed";
+    public static final String productCategoryParamName = "productCategory";
     public static final String minBalanceForInterestCalculationParamName = "minBalanceForInterestCalculation";
     public static final String withdrawBalanceParamName = "withdrawBalance";
     public static final String onHoldFundsParamName = "onHoldFunds";

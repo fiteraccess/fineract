@@ -271,4 +271,5 @@
     <include file="parts/0250_add_settlement_batch_permission.xml" relativeToChangelogFile="true" />
     <include file="parts/0251_add_settlement_bridge_gl_accounts.xml" relativeToChangelogFile="true" />
     <include file="parts/0247_add_goal_savings_penalty_percentage_code.xml" relativeToChangelogFile="true" />
+    <include file="parts/0252_add_savings_product_category.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

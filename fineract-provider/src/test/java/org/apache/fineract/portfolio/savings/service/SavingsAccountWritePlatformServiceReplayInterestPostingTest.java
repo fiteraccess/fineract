@@ -104,6 +104,29 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
     }
 
     @Test
+    void reverseOperation_reversesTheOriginalInsteadOfBookingANewPosting() throws Exception {
+        when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
+        Long savingsId = 12L;
+        SavingsAccount account = buildAccount(savingsId);
+        SavingsAccountTransaction original = mock(SavingsAccountTransaction.class);
+        when(original.getId()).thenReturn(21423L);
+        when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
+        when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
+        when(replayService.reverse(account, "INTEREST_POSTING", 21423L)).thenReturn(new ReplayResult(original, false));
+        JsonCommand command = mockCommand(LocalDate.of(2026, 9, 30), new BigDecimal("64789.45"), "INTEREST_POSTING", "trace-rev", null);
+        when(command.stringValueOfParameterNamed("operation")).thenReturn("REVERSE");
+        when(command.longValueOfParameterNamed("originalTransactionId")).thenReturn(21423L);
+
+        CommandProcessingResult result = service.replayInterestPosting(savingsId, command);
+
+        assertThat(result.getResourceId()).isEqualTo(21423L);
+        verify(replayService, never()).replay(any(), any(), any(), any(), any(), any());
+        verify(txRepo).saveAndFlush(original);
+        verify(accountRepo).updateSummaryDirectAndDetach(account);
+        verify(journalService).createJournalEntriesForSavings(any());
+    }
+
+    @Test
     void idempotentReplay_returnsEarlyWithoutSaving() throws Exception {
         when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
         Long savingsId = 11L;

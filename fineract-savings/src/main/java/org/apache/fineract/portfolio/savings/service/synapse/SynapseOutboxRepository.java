@@ -49,17 +49,21 @@ public class SynapseOutboxRepository {
             + "(trace_id, batch_id, task_type, account_id, office_id, payload, status, attempts, max_attempts, created_at) "
             + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)";
 
+    // AB-401: an entry waits while an earlier one for its account is still pending or in flight, so concurrent drains
+    // and retries keep each account in order (a correction's REVERSE always lands before its POST).
     private static final String CLAIM_SQL = "UPDATE synapse_outbox SET status = 'DISPATCHED', "
-            + "dispatched_at = ?, attempts = attempts + 1 " + "WHERE id IN (" + "  SELECT id FROM synapse_outbox "
-            + "  WHERE status = 'PENDING' AND task_type = ? AND attempts < max_attempts "
-            + "  AND (next_attempt_at IS NULL OR next_attempt_at <= ?) " + "  ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED"
+            + "dispatched_at = ?, attempts = attempts + 1 " + "WHERE id IN (" + "  SELECT o.id FROM synapse_outbox o "
+            + "  WHERE o.status = 'PENDING' AND o.task_type = ? AND o.attempts < o.max_attempts "
+            + "  AND (o.next_attempt_at IS NULL OR o.next_attempt_at <= ?) "
+            + "  AND NOT EXISTS (SELECT 1 FROM synapse_outbox e WHERE e.account_id = o.account_id AND e.task_type = o.task_type "
+            + "    AND e.id < o.id AND e.status IN ('PENDING', 'DISPATCHED')) " + "  ORDER BY o.id LIMIT ? FOR UPDATE OF o SKIP LOCKED"
             + ") RETURNING id, trace_id, batch_id, task_type, account_id, office_id, "
             + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at";
 
     private static final String MARK_SENT_SQL = "UPDATE synapse_outbox SET status = 'SENT', completed_at = ? WHERE id IN (%s)";
 
-    private static final String MARK_FAILED_SQL = "UPDATE synapse_outbox SET status = CASE WHEN attempts >= ? "
-            + "THEN 'DEAD' ELSE 'PENDING' END, error_detail = ?, next_attempt_at = ? WHERE id = ?";
+    private static final String MARK_FAILED_SQL = "UPDATE synapse_outbox SET status = ?, error_detail = ?, next_attempt_at = ? "
+            + "WHERE id = ?";
 
     private static final String RESET_TO_PENDING_SQL = "UPDATE synapse_outbox SET status = 'PENDING', dispatched_at = NULL, "
             + "attempts = GREATEST(attempts - 1, 0) WHERE id IN (%s)";
@@ -148,8 +152,10 @@ public class SynapseOutboxRepository {
     /**
      * Mark a single row as FAILED (or DEAD if max attempts or retry deadline reached). Applies exponential backoff with
      * ±20% jitter for the next retry attempt.
+     *
+     * @return true when the row went DEAD, i.e. it will not be retried automatically
      */
-    public void markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
+    public boolean markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
         boolean isDead = (currentAttempts + 1) >= maxAttempts || clock.instant().isAfter(createdAt.plus(RETRY_DEADLINE));
         Timestamp nextAttempt = null;
 
@@ -158,8 +164,11 @@ public class SynapseOutboxRepository {
             nextAttempt = Timestamp.from(clock.instant().plusSeconds((long) (delayMinutes * 60)));
         }
 
-        jdbcTemplate.update(MARK_FAILED_SQL, maxAttempts, errorDetail, nextAttempt, id);
+        // AB-401: persist the deadline verdict too, else an expired entry stays PENDING with no backoff and is retried
+        // every run.
+        jdbcTemplate.update(MARK_FAILED_SQL, isDead ? "DEAD" : "PENDING", errorDetail, nextAttempt, id);
         log.debug("Marked outbox entry id={} as FAILED/DEAD (nextAttempt={})", id, nextAttempt);
+        return isDead;
     }
 
     /**

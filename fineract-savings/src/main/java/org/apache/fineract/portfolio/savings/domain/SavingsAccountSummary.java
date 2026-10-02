@@ -135,11 +135,27 @@ public final class SavingsAccountSummary {
         }
         applyDelta(currency, delta);
 
-        // Update interest posted till date if this is an interest posting or overdraft interest transaction
+        // Update interest posted till date if this is an interest posting or overdraft interest transaction.
+        // AB-401: Synapse replays a catch-up run's periods in any order, so an older period must not pull the date
+        // back.
         if ((transaction.isInterestPostingAndNotReversed() || transaction.isOverdraftInterestAndNotReversed())
-                && !transaction.isReversalTransaction()) {
+                && !transaction.isReversalTransaction()
+                && (this.interestPostedTillDate == null || transaction.getTransactionDate().isAfter(this.interestPostedTillDate))) {
             setInterestPostedTillDate(transaction.getTransactionDate());
         }
+    }
+
+    /**
+     * Undoes a live transaction's effect on the summary; call it before marking the transaction reversed. The
+     * interest-posted-till date stays put: the replacement posting for the same period carries the same date.
+     */
+    public void updateSummaryWithReversal(final MonetaryCurrency currency, final SavingsAccountTransactionSummaryWrapper wrapper,
+            final SavingsAccountTransaction transaction) {
+        final SavingsAccountSummaryDelta delta = wrapper.computeIncrementalDelta(currency, transaction);
+        if (delta == null || delta.isZero()) {
+            return;
+        }
+        applyDelta(currency, delta.negated());
     }
 
     /**

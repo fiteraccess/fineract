@@ -109,6 +109,20 @@ class SynapseOutboxRepositoryTest {
     }
 
     @Test
+    void claimPending_holdsAnEntryBehindAnEarlierOneOfItsAccount() {
+        Timestamp now = Timestamp.from(FIXED_NOW);
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        when(jdbcTemplate.query(sql.capture(), any(RowMapper.class), eq(now), eq("INTEREST_POSTING"), eq(now), eq(10)))
+                .thenReturn(Collections.emptyList());
+
+        repository.claimPending("INTEREST_POSTING", 10);
+
+        // Verified against Postgres: a later entry waits while an earlier one is pending, in backoff or in flight.
+        assertThat(sql.getValue()).contains("NOT EXISTS (SELECT 1 FROM synapse_outbox e WHERE e.account_id = o.account_id")
+                .contains("e.id < o.id AND e.status IN ('PENDING', 'DISPATCHED')").contains("FOR UPDATE OF o SKIP LOCKED");
+    }
+
+    @Test
     void markSent_emptyIds_skipsJdbc() {
         repository.markSent(Collections.emptyList());
 
@@ -136,8 +150,7 @@ class SynapseOutboxRepositoryTest {
         Instant createdAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
         repository.markFailed(42L, "connection timeout", 2, 1000, createdAt);
 
-        verify(jdbcTemplate).update(argThat(sql -> sql.contains("CASE WHEN attempts >= ?")), eq(1000), eq("connection timeout"),
-                argThat(ts -> ts != null), eq(42L));
+        verify(jdbcTemplate).update(anyString(), eq("PENDING"), eq("connection timeout"), argThat(ts -> ts != null), eq(42L));
     }
 
     @Test
@@ -145,8 +158,7 @@ class SynapseOutboxRepositoryTest {
         Instant createdAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
         repository.markFailed(42L, "connection timeout", 999, 1000, createdAt);
 
-        verify(jdbcTemplate).update(argThat(sql -> sql.contains("CASE WHEN attempts >= ?")), eq(1000), eq("connection timeout"), eq(null),
-                eq(42L));
+        verify(jdbcTemplate).update(anyString(), eq("DEAD"), eq("connection timeout"), eq(null), eq(42L));
     }
 
     @Test
@@ -154,8 +166,7 @@ class SynapseOutboxRepositoryTest {
         Instant createdAt = FIXED_NOW.minus(25, ChronoUnit.HOURS);
         repository.markFailed(42L, "connection timeout", 2, 1000, createdAt);
 
-        verify(jdbcTemplate).update(argThat(sql -> sql.contains("CASE WHEN attempts >= ?")), eq(1000), eq("connection timeout"), eq(null),
-                eq(42L));
+        verify(jdbcTemplate).update(anyString(), eq("DEAD"), eq("connection timeout"), eq(null), eq(42L));
     }
 
     @Test
@@ -192,7 +203,7 @@ class SynapseOutboxRepositoryTest {
             double baseDelay = 1.0 * Math.pow(1.5, 5) * 60;
             long minSeconds = (long) (baseDelay * 0.8);
             long maxSeconds = (long) (baseDelay * 1.2) + 1;
-            verify(jdbcTemplate).update(argThat(sql -> sql.contains("CASE WHEN attempts >= ?")), eq(1000), eq("timeout"), argThat(ts -> {
+            verify(jdbcTemplate).update(anyString(), eq("PENDING"), eq("timeout"), argThat(ts -> {
                 Timestamp t = (Timestamp) ts;
                 long actualSeconds = t.toInstant().getEpochSecond() - FIXED_NOW.getEpochSecond();
                 return actualSeconds >= minSeconds && actualSeconds <= maxSeconds;
@@ -205,7 +216,7 @@ class SynapseOutboxRepositoryTest {
 
             long minSeconds = (long) (15.0 * 60 * 0.8);
             long maxSeconds = (long) (15.0 * 60 * 1.2) + 1;
-            verify(jdbcTemplate).update(argThat(sql -> sql.contains("CASE WHEN attempts >= ?")), eq(1000), eq("timeout"), argThat(ts -> {
+            verify(jdbcTemplate).update(anyString(), eq("PENDING"), eq("timeout"), argThat(ts -> {
                 Timestamp t = (Timestamp) ts;
                 long actualSeconds = t.toInstant().getEpochSecond() - FIXED_NOW.getEpochSecond();
                 return actualSeconds >= minSeconds && actualSeconds <= maxSeconds;
@@ -218,7 +229,7 @@ class SynapseOutboxRepositoryTest {
 
             long minSeconds = (long) (60 * 0.8);
             long maxSeconds = (long) (60 * 1.2) + 1;
-            verify(jdbcTemplate).update(argThat(sql -> sql.contains("CASE WHEN attempts >= ?")), eq(1000), eq("error"), argThat(ts -> {
+            verify(jdbcTemplate).update(anyString(), eq("PENDING"), eq("error"), argThat(ts -> {
                 Timestamp t = (Timestamp) ts;
                 long actualSeconds = t.toInstant().getEpochSecond() - FIXED_NOW.getEpochSecond();
                 return actualSeconds >= minSeconds && actualSeconds <= maxSeconds;

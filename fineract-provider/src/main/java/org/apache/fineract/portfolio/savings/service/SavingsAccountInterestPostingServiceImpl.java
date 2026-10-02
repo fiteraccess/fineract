@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +80,9 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
 
         withholdTransactions.addAll(findWithHoldSavingsTransactionsWithPivotConfig(savingsAccountData));
 
+        // With the pivot only history from the posted-till date is loaded, so the first window is just its posting
+        // date.
+        final Map<Boolean, LocalDate> previousPostingDate = new HashMap<>();
         for (final PostingPeriod interestPostingPeriod : postingPeriods) {
             final LocalDate interestPostingTransactionDate = interestPostingPeriod.dateOfPostingTransaction();
             final Money interestEarnedToBePostedForPeriod = interestPostingPeriod.getInterestEarned();
@@ -92,6 +96,14 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
                             isOverdraft);
                 } else {
                     postingTransaction = findInterestPostingTransactionFor(interestPostingTransactionDate, savingsAccountData);
+                }
+                final boolean overdraftPeriod = Boolean.TRUE.equals(isOverdraft);
+                final LocalDate previous = previousPostingDate.put(overdraftPeriod, interestPostingTransactionDate);
+                final LocalDate windowAfter = previous != null ? previous
+                        : backdatedTxnsAllowedTill ? interestPostingTransactionDate.minusDays(1) : null;
+                if (reverseDuplicatePostings(postingTransaction, windowAfter, interestPostingTransactionDate, overdraftPeriod,
+                        savingsAccountData)) {
+                    recalucateDailyBalanceDetails = true;
                 }
 
                 if (postingTransaction == null) {
@@ -601,6 +613,46 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
             }
         }
         return isTaxAdded;
+    }
+
+    /**
+     * A period owns one posting and every day since the previous posting date; any other live system posting of its
+     * kind there is a duplicate (AB-401: a REVERSE replayed as a credit, or a posting dated by an older setting).
+     */
+    static boolean reverseDuplicatePostings(final SavingsAccountTransactionData kept, final LocalDate windowAfter,
+            final LocalDate postingDate, final boolean overdraftPeriod, final SavingsAccountData savingsAccountData) {
+        final boolean overdraftKind = kept != null ? kept.isOverdraftInterestAndNotReversed() : overdraftPeriod;
+        final List<SavingsAccountTransactionData> transactions = savingsAccountData.getSavingsAccountTransactionData();
+        boolean reversedAny = false;
+        for (final SavingsAccountTransactionData transaction : transactions) {
+            if (transaction != kept && inWindow(transaction, windowAfter, postingDate)
+                    && (overdraftKind ? transaction.isOverdraftInterestAndNotReversed() : transaction.isInterestPostingAndNotReversed())) {
+                transaction.reverse();
+                reversedAny = true;
+            }
+        }
+        if (overdraftKind) {
+            return reversedAny;
+        }
+        // The kept posting keeps the tax booked on its own date; every other withholding in the window taxed a
+        // duplicate.
+        final SavingsAccountTransactionData keptTax = kept == null ? null
+                : transactions.stream().filter(tx -> tx.isWithHoldTaxAndNotReversed() && tx.occursOn(kept.getTransactionDate())).findFirst()
+                        .orElse(null);
+        for (final SavingsAccountTransactionData transaction : transactions) {
+            if (transaction != keptTax && transaction.isWithHoldTaxAndNotReversed() && inWindow(transaction, windowAfter, postingDate)) {
+                transaction.reverse();
+                reversedAny = true;
+            }
+        }
+        return reversedAny;
+    }
+
+    private static boolean inWindow(final SavingsAccountTransactionData transaction, final LocalDate windowAfter,
+            final LocalDate postingDate) {
+        return transaction.getId() != null && !transaction.isReversalTransaction() && !transaction.isManualTransaction()
+                && !transaction.getTransactionDate().isAfter(postingDate)
+                && (windowAfter == null || transaction.getTransactionDate().isAfter(windowAfter));
     }
 
     protected SavingsAccountTransactionData findInterestPostingTransactionFor(final LocalDate postingDate,

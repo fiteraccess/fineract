@@ -18,9 +18,12 @@
  */
 package org.apache.fineract.portfolio.savings.domain;
 
+import java.util.List;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 public interface SavingsProductRepository extends JpaRepository<SavingsProduct, Long>, JpaSpecificationExecutor<SavingsProduct> {
-    //
+
+    List<SavingsProduct> findByProductCategory(SavingsProductCategory productCategory);
 }

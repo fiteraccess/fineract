@@ -19,6 +19,7 @@
 package org.apache.fineract.portfolio.savings.service.synapse;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -127,20 +128,6 @@ class SynapseInterestPostingOutboxWriterTest {
     }
 
     @Test
-    void cursorFallsBackToLastCalcDateWhenInterestPostedTillDateIsNull() {
-        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
-                null, null, null, null, null, LocalDate.of(2026, 3, 15), null, null);
-        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
-
-        SynapsePostResult result = service.postInterestBatch(List.of(acct));
-
-        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
-        assertThat(result.getCursorUpdates()).hasSize(1);
-        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(LocalDate.of(2026, 3, 15));
-        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(LocalDate.of(2026, 3, 15));
-    }
-
-    @Test
     void zeroAmountTransactionsSkipOutboxWrite() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", BigDecimal.ZERO);
 
@@ -171,6 +158,102 @@ class SynapseInterestPostingOutboxWriterTest {
         verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
         assertThat(entriesCaptor.getValue()).hasSize(1);
         assertThat(entriesCaptor.getValue().get(0).getPayload()).contains("REVERSE");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void reverseNamesThePostingItUndoesByIdAndRefNo() {
+        SavingsAccountData acct = buildAccountNoTx(1L, 10L, "NGN");
+        SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(99L, interestPostingType(), null, 1L, "SA-1", POSTING_DATE,
+                null, new BigDecimal("75.00"), null, null, false, null, false, null, null, POSTING_DATE);
+        tx.setRefNo("3230cfb6-f0c1-4d4a-8e40-227256a0961b");
+        tx.reverse();
+        acct.setSavingsAccountTransactionData(tx);
+
+        service.postInterestBatch(List.of(acct));
+
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue().get(0).getPayload()).contains("\"operation\":\"REVERSE\"")
+                .contains("\"originalTransactionId\":99").contains("\"refNo\":\"3230cfb6-f0c1-4d4a-8e40-227256a0961b\"");
+    }
+
+    @Test
+    void aPostingLoadedAlreadyReversedIsNotReversedAgain() {
+        SavingsAccountData acct = buildAccountNoTx(1L, 10L, "NGN");
+        acct.setSavingsAccountTransactionData(SavingsAccountTransactionData.create(98L, interestPostingType(), null, 1L, "SA-1",
+                POSTING_DATE, null, new BigDecimal("75.00"), null, null, true, null, false, null, null, POSTING_DATE));
+
+        service.postInterestBatch(List.of(acct));
+
+        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), anyList());
+    }
+
+    private static SavingsAccountTransactionEnumData interestPostingType() {
+        return new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.INTEREST_POSTING.getValue().longValue(),
+                SavingsAccountTransactionType.INTEREST_POSTING.getCode(),
+                SavingsAccountTransactionType.INTEREST_POSTING.getValue().toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void reversedNonInterestTransactionsAreSkippedWhileInterestStillPosts() {
+        SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", new BigDecimal("40.00"));
+        for (SavingsAccountTransactionType type : List.of(SavingsAccountTransactionType.DEPOSIT, SavingsAccountTransactionType.WITHDRAWAL,
+                SavingsAccountTransactionType.EMT_LEVY)) {
+            SavingsAccountTransactionEnumData txType = new SavingsAccountTransactionEnumData(type.getValue().longValue(), type.getCode(),
+                    type.getValue().toString());
+            SavingsAccountTransactionData reversed = SavingsAccountTransactionData.create(100L + type.getValue(), txType, null, 1L, "SA-1",
+                    POSTING_DATE, null, new BigDecimal("10.00"), null, null, false, null, false, null, null, POSTING_DATE);
+            reversed.reverse();
+            acct.setSavingsAccountTransactionData(reversed);
+        }
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getAccepted()).isEqualTo(1);
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).hasSize(1);
+        assertThat(entriesCaptor.getValue().get(0).getPayload()).contains("INTEREST_POSTING").contains("\"POST\"");
+    }
+
+    @Test
+    void accountNeverCalculatedKeepsNullCursorsInsteadOfFailingTheBatch() {
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null);
+        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getCursorUpdates()).hasSize(1);
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isNull();
+        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isNull();
+    }
+
+    @Test
+    void neverPostedAccountKeepsNullPostedTillDateAfterACalculationWithNoPosting() {
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, POSTING_DATE, null, null);
+        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isNull();
+        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(POSTING_DATE);
+    }
+
+    @Test
+    void storedPostedTillDateIsKeptWhenTheRunPostsNothing() {
+        LocalDate previouslyPosted = POSTING_DATE.minusMonths(1);
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, POSTING_DATE, null, null);
+        summary.setPrevInterestPostedTillDate(previouslyPosted);
+        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(previouslyPosted);
     }
 
     @SuppressWarnings("unchecked")

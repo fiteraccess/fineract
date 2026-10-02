@@ -89,7 +89,10 @@ public class SynapseInterestPostingOutboxWriter {
 
     private AccountCursorUpdate toCursorUpdate(SavingsAccountData account) {
         SavingsAccountSummaryData summary = account.getSummary();
-        LocalDate postedTill = Objects.requireNonNullElse(summary.getInterestPostedTillDate(), summary.getLastInterestCalculationDate());
+        // AB-401: never fall back to the calculation date; a run that posts nothing must not move the posted-till date,
+        // or the next posting starts after it and drops the interest earned before it.
+        LocalDate postedTill = summary.getInterestPostedTillDate() != null ? summary.getInterestPostedTillDate()
+                : summary.getPrevInterestPostedTillDate();
         return new AccountCursorUpdate(account.getId(), postedTill, summary.getLastInterestCalculationDate());
     }
 
@@ -98,10 +101,15 @@ public class SynapseInterestPostingOutboxWriter {
     }
 
     private SynapseTransactionInstruction toInstruction(SavingsAccountData account, SavingsAccountTransactionData tx, String batchId) {
+        // A deposit, withdrawal or levy reversed earlier sits in the same window; it is not this job's to replay.
+        if (!mapper.supports(tx.getTransactionType())) {
+            return null;
+        }
         if (tx.getId() == null && !MathUtil.isZero(tx.getAmount())) {
             return mapper.map(account, tx, Operation.POST, batchId);
         }
-        if (tx.getId() != null && tx.isReversed()) {
+        // Only a posting this run reversed: one loaded already reversed was reversed in Synapse when that happened.
+        if (tx.getId() != null && tx.isReversedInRun()) {
             return mapper.map(account, tx, Operation.REVERSE, batchId);
         }
         return null;

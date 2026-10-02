@@ -44,6 +44,24 @@ public final class SavingsAccountSummaryDelta {
     private BigDecimal totalWithholdTax = BigDecimal.ZERO;
     private BigDecimal accountBalance = BigDecimal.ZERO;
 
+    /** The delta that undoes this one, for reversing a transaction it was computed from. */
+    public SavingsAccountSummaryDelta negated() {
+        final SavingsAccountSummaryDelta undo = new SavingsAccountSummaryDelta();
+        undo.totalDeposits = totalDeposits.negate();
+        undo.totalWithdrawals = totalWithdrawals.negate();
+        undo.totalInterestPosted = totalInterestPosted.negate();
+        undo.totalWithdrawalFees = totalWithdrawalFees.negate();
+        undo.totalAnnualFees = totalAnnualFees.negate();
+        undo.totalFeeCharge = totalFeeCharge.negate();
+        undo.totalPenaltyCharge = totalPenaltyCharge.negate();
+        undo.totalFeeChargesWaived = totalFeeChargesWaived.negate();
+        undo.totalPenaltyChargesWaived = totalPenaltyChargesWaived.negate();
+        undo.totalOverdraftInterestDerived = totalOverdraftInterestDerived.negate();
+        undo.totalWithholdTax = totalWithholdTax.negate();
+        undo.accountBalance = accountBalance.negate();
+        return undo;
+    }
+
     /**
      * Returns true if all delta fields are zero, meaning the transaction had no effect on the summary.
      */

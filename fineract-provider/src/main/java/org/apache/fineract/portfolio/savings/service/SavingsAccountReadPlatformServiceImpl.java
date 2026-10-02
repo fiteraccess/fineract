@@ -59,6 +59,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountApplicationTimelineData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
@@ -252,9 +253,13 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         // must not move, so the ordinary catch-up credits the missed periods — correctly compounded — once the
         // restriction is lifted. Filtering any later (inside the outbox writer) would still advance the cursor.
         final String creditRestrictionFilter = isCreditRestrictionEnabled() ? "and a.synapse_credit_restricted = false " : "";
+        // Goals post interest only at settlement, so the same cursor rule keeps them out of the monthly run.
+        final String goalProductFilter = "and not exists (select 1 from m_savings_product gp where gp.id = a.product_id and gp.product_category = '"
+                + SavingsProductCategory.GOAL.name() + "') ";
+        // Ordered so the cursor (last id of the page) never jumps over ids the planner returned out of order.
         String sql = "select " + this.savingAccountMapperForInterestPosting.schema()
                 + "join (select a.id from m_savings_account a where a.id > ? and a.status_enum = ? " + creditRestrictionFilter
-                + "limit ?) b on b.id = sa.id ";
+                + goalProductFilter + "order by a.id limit ?) b on b.id = sa.id ";
         if (backdatedTxnsAllowedTill) {
             sql = sql
                     + "where (CASE WHEN sa.interest_posted_till_date is not null THEN tr.transaction_date >= sa.interest_posted_till_date ELSE tr.transaction_date >= sa.activatedon_date END) ";
@@ -359,7 +364,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("tr.running_balance_derived as runningBalance, tr.is_reversed as reversed,");
             sqlBuilder.append("tr.is_reversal as isReversal, tr.original_transaction_id as originalTransactionId, ");
             sqlBuilder.append("tr.balance_end_date_derived as balanceEndDate, tr.overdraft_amount_derived as overdraftAmount,");
-            sqlBuilder.append("tr.is_manual as manualTransaction,tr.office_id as officeId, ");
+            sqlBuilder.append("tr.is_manual as manualTransaction,tr.office_id as officeId, tr.ref_no as transactionRefNo, ");
             sqlBuilder.append("pd.payment_type_id as paymentType,pd.account_number as accountNumber,pd.check_number as checkNumber, ");
             sqlBuilder.append("pd.receipt_number as receiptNumber, pd.bank_number as bankNumber,pd.routing_code as routingCode, ");
             sqlBuilder.append("pt.value as paymentTypeName, ");
@@ -654,6 +659,9 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                             id, accountNo, date, currency, amount, outstandingChargeAmount, runningBalance, reversed, transSubmittedOnDate,
                             postInterestAsOn, cumulativeBalance, balanceEndDate, isReversal, originalTransactionId);
                     savingsAccountTransactionData.setOverdraftAmount(overdraftAmount);
+                    // A Synapse replay stores its trace id here; a REVERSE instruction needs it to find the posting to
+                    // undo.
+                    savingsAccountTransactionData.setRefNo(rs.getString("transactionRefNo"));
 
                     transMap.put("id", transactionId);
                     if (savingsAccountData.getOfficeId() == null) {
