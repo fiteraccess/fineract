@@ -89,9 +89,10 @@ public class SynapseInterestPostingOutboxWriter {
 
     private AccountCursorUpdate toCursorUpdate(SavingsAccountData account) {
         SavingsAccountSummaryData summary = account.getSummary();
-        // Both are null for an account interest was never calculated on; writing null back leaves it unchanged.
+        // AB-401: never fall back to the calculation date; a run that posts nothing must not move the posted-till date,
+        // or the next posting starts after it and drops the interest earned before it.
         LocalDate postedTill = summary.getInterestPostedTillDate() != null ? summary.getInterestPostedTillDate()
-                : summary.getLastInterestCalculationDate();
+                : summary.getPrevInterestPostedTillDate();
         return new AccountCursorUpdate(account.getId(), postedTill, summary.getLastInterestCalculationDate());
     }
 

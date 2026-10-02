@@ -127,20 +127,6 @@ class SynapseInterestPostingOutboxWriterTest {
     }
 
     @Test
-    void cursorFallsBackToLastCalcDateWhenInterestPostedTillDateIsNull() {
-        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
-                null, null, null, null, null, LocalDate.of(2026, 3, 15), null, null);
-        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
-
-        SynapsePostResult result = service.postInterestBatch(List.of(acct));
-
-        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), org.mockito.ArgumentMatchers.anyList());
-        assertThat(result.getCursorUpdates()).hasSize(1);
-        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(LocalDate.of(2026, 3, 15));
-        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(LocalDate.of(2026, 3, 15));
-    }
-
-    @Test
     void zeroAmountTransactionsSkipOutboxWrite() {
         SavingsAccountData acct = buildAccountWithInterestTx(1L, 10L, "NGN", BigDecimal.ZERO);
 
@@ -207,6 +193,31 @@ class SynapseInterestPostingOutboxWriterTest {
         assertThat(result.getCursorUpdates()).hasSize(1);
         assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isNull();
         assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isNull();
+    }
+
+    @Test
+    void neverPostedAccountKeepsNullPostedTillDateAfterACalculationWithNoPosting() {
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, POSTING_DATE, null, null);
+        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isNull();
+        assertThat(result.getCursorUpdates().get(0).getLastInterestCalculationDate()).isEqualTo(POSTING_DATE);
+    }
+
+    @Test
+    void storedPostedTillDateIsKeptWhenTheRunPostsNothing() {
+        LocalDate previouslyPosted = POSTING_DATE.minusMonths(1);
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, POSTING_DATE, null, null);
+        summary.setPrevInterestPostedTillDate(previouslyPosted);
+        SavingsAccountData acct = buildAccountWithSummary(1L, 10L, "NGN", summary);
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(previouslyPosted);
     }
 
     @SuppressWarnings("unchecked")
