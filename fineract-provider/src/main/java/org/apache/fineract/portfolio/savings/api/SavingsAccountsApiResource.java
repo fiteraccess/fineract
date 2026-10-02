@@ -197,7 +197,7 @@ public class SavingsAccountsApiResource {
     @Path("{accountId}/accrued-interest")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve interest accrued but not yet posted", description = "Sums the account's periodic ACCRUAL transactions since the last interest posting (or activation), and the interest posted since activation.")
+    @Operation(summary = "Retrieve interest accrued but not yet posted", description = "Sums the account's periodic ACCRUAL transactions since the last interest posting (or activation), and the interest posted since activation. A goal is paid only at settlement, so its accrued amount is everything accrued since activation less the interest settlements already posted.")
     public SavingsAccruedInterestData retrieveAccruedInterest(
             @PathParam("accountId") @Parameter(description = "accountId") final Long accountId) {
         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);

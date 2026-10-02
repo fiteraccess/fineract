@@ -622,18 +622,37 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
     static boolean reverseDuplicatePostings(final SavingsAccountTransactionData kept, final LocalDate windowAfter,
             final LocalDate postingDate, final boolean overdraftPeriod, final SavingsAccountData savingsAccountData) {
         final boolean overdraftKind = kept != null ? kept.isOverdraftInterestAndNotReversed() : overdraftPeriod;
+        final List<SavingsAccountTransactionData> transactions = savingsAccountData.getSavingsAccountTransactionData();
         boolean reversedAny = false;
-        for (final SavingsAccountTransactionData transaction : savingsAccountData.getSavingsAccountTransactionData()) {
-            if (transaction != kept && transaction.getId() != null && !transaction.isReversalTransaction()
-                    && !transaction.isManualTransaction()
-                    && (overdraftKind ? transaction.isOverdraftInterestAndNotReversed() : transaction.isInterestPostingAndNotReversed())
-                    && !transaction.getTransactionDate().isAfter(postingDate)
-                    && (windowAfter == null || transaction.getTransactionDate().isAfter(windowAfter))) {
+        for (final SavingsAccountTransactionData transaction : transactions) {
+            if (transaction != kept && inWindow(transaction, windowAfter, postingDate)
+                    && (overdraftKind ? transaction.isOverdraftInterestAndNotReversed() : transaction.isInterestPostingAndNotReversed())) {
+                transaction.reverse();
+                reversedAny = true;
+            }
+        }
+        if (overdraftKind) {
+            return reversedAny;
+        }
+        // The kept posting keeps the tax booked on its own date; every other withholding in the window taxed a
+        // duplicate.
+        final SavingsAccountTransactionData keptTax = kept == null ? null
+                : transactions.stream().filter(tx -> tx.isWithHoldTaxAndNotReversed() && tx.occursOn(kept.getTransactionDate())).findFirst()
+                        .orElse(null);
+        for (final SavingsAccountTransactionData transaction : transactions) {
+            if (transaction != keptTax && transaction.isWithHoldTaxAndNotReversed() && inWindow(transaction, windowAfter, postingDate)) {
                 transaction.reverse();
                 reversedAny = true;
             }
         }
         return reversedAny;
+    }
+
+    private static boolean inWindow(final SavingsAccountTransactionData transaction, final LocalDate windowAfter,
+            final LocalDate postingDate) {
+        return transaction.getId() != null && !transaction.isReversalTransaction() && !transaction.isManualTransaction()
+                && !transaction.getTransactionDate().isAfter(postingDate)
+                && (windowAfter == null || transaction.getTransactionDate().isAfter(windowAfter));
     }
 
     protected SavingsAccountTransactionData findInterestPostingTransactionFor(final LocalDate postingDate,

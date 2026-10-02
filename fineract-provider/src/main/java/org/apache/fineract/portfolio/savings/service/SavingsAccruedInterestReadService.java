@@ -26,6 +26,7 @@ import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.data.SavingsAccruedInterestData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
@@ -37,7 +38,11 @@ import org.springframework.stereotype.Service;
 public class SavingsAccruedInterestReadService {
 
     private static final String ACCOUNT_SQL = "select sa.id, sa.account_no, sa.status_enum, sa.currency_code, sa.currency_digits,"
-            + " sa.activatedon_date, sa.interest_posted_till_date from m_savings_account sa where sa.id = ?";
+            + " sa.activatedon_date, sa.interest_posted_till_date, sp.product_category,"
+            + " (select max(p.transaction_date) from m_savings_account_transaction p where p.savings_account_id = sa.id"
+            + " and p.transaction_type_enum = " + SavingsAccountTransactionType.INTEREST_POSTING.getValue()
+            + " and p.is_reversed = false and p.is_reversal = false) as last_posting"
+            + " from m_savings_account sa join m_savings_product sp on sp.id = sa.product_id where sa.id = ?";
     private static final String SUMS_SQL = "select"
             + " coalesce(sum(case when tr.transaction_type_enum = ? and tr.transaction_date >= ? and tr.transaction_date <= ?"
             + " then tr.amount end), 0) as accrued,"
@@ -53,7 +58,9 @@ public class SavingsAccruedInterestReadService {
         final List<AccountRow> accounts = jdbcTemplate.query(ACCOUNT_SQL,
                 (rs, rowNum) -> new AccountRow(rs.getLong("id"), rs.getString("account_no"), JdbcSupport.getInteger(rs, "status_enum"),
                         rs.getString("currency_code"), JdbcSupport.getInteger(rs, "currency_digits"),
-                        JdbcSupport.getLocalDate(rs, "activatedon_date"), JdbcSupport.getLocalDate(rs, "interest_posted_till_date")),
+                        JdbcSupport.getLocalDate(rs, "activatedon_date"), JdbcSupport.getLocalDate(rs, "interest_posted_till_date"),
+                        SavingsProductCategory.GOAL.name().equals(rs.getString("product_category")),
+                        JdbcSupport.getLocalDate(rs, "last_posting")),
                 accountId);
         if (accounts.isEmpty()) {
             throw new SavingsAccountNotFoundException(accountId);
@@ -64,18 +71,31 @@ public class SavingsAccruedInterestReadService {
                     "Savings account " + account.accountNo() + " is closed", account.accountNo());
         }
 
-        // Accruals are dated at their period end, so the open period starts the day after the last posting.
-        final LocalDate periodStart = account.postedTill() != null ? account.postedTill().plusDays(1) : account.activation();
+        final LocalDate periodStart = periodStart(account.goal(), account.activation(), account.lastPosting());
         final LocalDate today = DateUtils.getBusinessLocalDate();
         final int accrual = SavingsAccountTransactionType.ACCRUAL.getValue();
         if (periodStart == null) {
             return toData(account, BigDecimal.ZERO, BigDecimal.ZERO, null, null);
         }
-        return jdbcTemplate.queryForObject(SUMS_SQL,
-                (rs, rowNum) -> toData(account, rs.getBigDecimal("accrued"), rs.getBigDecimal("posted"), periodStart,
-                        JdbcSupport.getLocalDate(rs, "last_accrual")),
-                accrual, periodStart, today, accrual, periodStart, today, SavingsAccountTransactionType.INTEREST_POSTING.getValue(),
-                accountId);
+        return jdbcTemplate.queryForObject(SUMS_SQL, (rs, rowNum) -> {
+            final BigDecimal posted = rs.getBigDecimal("posted");
+            return toData(account, owed(account.goal(), rs.getBigDecimal("accrued"), posted), posted, periodStart,
+                    JdbcSupport.getLocalDate(rs, "last_accrual"));
+        }, accrual, periodStart, today, accrual, periodStart, today, SavingsAccountTransactionType.INTEREST_POSTING.getValue(), accountId);
+    }
+
+    /**
+     * A goal is only ever paid at settlement, partial ones included, so its open period runs from activation. Any other
+     * account's starts the day after its last posting; the stored posted-till date is not used because older posting
+     * runs moved it even when nothing was posted (AB-401).
+     */
+    static LocalDate periodStart(final boolean goal, final LocalDate activation, final LocalDate lastPosting) {
+        return goal || lastPosting == null ? activation : lastPosting.plusDays(1);
+    }
+
+    /** What a goal is owed is everything accrued less what settlements already paid in; never below zero. */
+    static BigDecimal owed(final boolean goal, final BigDecimal accrued, final BigDecimal posted) {
+        return goal ? accrued.subtract(posted).max(BigDecimal.ZERO) : accrued;
     }
 
     private static SavingsAccruedInterestData toData(final AccountRow account, final BigDecimal accrued, final BigDecimal posted,
@@ -85,6 +105,6 @@ public class SavingsAccruedInterestReadService {
     }
 
     private record AccountRow(Long id, String accountNo, Integer statusId, String currencyCode, Integer currencyDigits,
-            LocalDate activation, LocalDate postedTill) {
+            LocalDate activation, LocalDate postedTill, boolean goal, LocalDate lastPosting) {
     }
 }

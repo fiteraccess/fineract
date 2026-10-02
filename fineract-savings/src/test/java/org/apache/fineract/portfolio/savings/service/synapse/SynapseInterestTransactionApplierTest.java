@@ -152,6 +152,21 @@ class SynapseInterestTransactionApplierTest {
     }
 
     @Test
+    void replayOfAPostingSinceReversed_isNotBookedAgain() throws Exception {
+        SavingsAccount account = buildAccount(11L, new BigDecimal("1000.00"));
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        ReplayResult posted = postedInterest(service, account, 80L);
+        service.reverse(account, "INTEREST_POSTING", 80L);
+        when(transactionRepository.findByRefNo("trace-post")).thenReturn(List.of(posted.transaction()));
+
+        ReplayResult late = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"), LocalDate.of(2026, 2, 28), null,
+                "trace-post");
+
+        assertThat(late.alreadyExists()).isTrue();
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
     void unknownTransactionType_throwsValidationException() throws Exception {
         SavingsAccount account = buildAccount(5L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-bad")).thenReturn(Collections.emptyList());
