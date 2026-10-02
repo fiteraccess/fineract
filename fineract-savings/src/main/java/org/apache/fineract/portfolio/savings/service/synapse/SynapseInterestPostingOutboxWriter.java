@@ -108,7 +108,8 @@ public class SynapseInterestPostingOutboxWriter {
         if (tx.getId() == null && !MathUtil.isZero(tx.getAmount())) {
             return mapper.map(account, tx, Operation.POST, batchId);
         }
-        if (tx.getId() != null && tx.isReversed()) {
+        // Only a posting this run reversed: one loaded already reversed was reversed in Synapse when that happened.
+        if (tx.getId() != null && tx.isReversedInRun()) {
             return mapper.map(account, tx, Operation.REVERSE, batchId);
         }
         return null;

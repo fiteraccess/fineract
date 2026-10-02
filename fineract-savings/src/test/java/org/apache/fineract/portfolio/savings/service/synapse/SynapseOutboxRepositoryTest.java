@@ -109,6 +109,20 @@ class SynapseOutboxRepositoryTest {
     }
 
     @Test
+    void claimPending_holdsAnEntryBehindAnEarlierOneOfItsAccount() {
+        Timestamp now = Timestamp.from(FIXED_NOW);
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        when(jdbcTemplate.query(sql.capture(), any(RowMapper.class), eq(now), eq("INTEREST_POSTING"), eq(now), eq(10)))
+                .thenReturn(Collections.emptyList());
+
+        repository.claimPending("INTEREST_POSTING", 10);
+
+        // Verified against Postgres: a later entry waits while an earlier one is pending, in backoff or in flight.
+        assertThat(sql.getValue()).contains("NOT EXISTS (SELECT 1 FROM synapse_outbox e WHERE e.account_id = o.account_id")
+                .contains("e.id < o.id AND e.status IN ('PENDING', 'DISPATCHED')").contains("FOR UPDATE OF o SKIP LOCKED");
+    }
+
+    @Test
     void markSent_emptyIds_skipsJdbc() {
         repository.markSent(Collections.emptyList());
 

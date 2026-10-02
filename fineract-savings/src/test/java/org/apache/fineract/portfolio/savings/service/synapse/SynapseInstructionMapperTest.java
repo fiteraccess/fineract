@@ -104,6 +104,17 @@ class SynapseInstructionMapperTest {
     }
 
     @Test
+    void reversalPointsAtThePostingItUndoes() {
+        SavingsAccountData account = buildAccount(401L, 40L, null, "NGN");
+        SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(21423L,
+                txEnumData(SavingsAccountTransactionType.INTEREST_POSTING), null, null, null, LocalDate.of(2026, 9, 30), null,
+                new BigDecimal("64789.45"), null, null, false, null, false, null, null, LocalDate.of(2026, 9, 30));
+
+        assertThat(mapper.map(account, tx, Operation.REVERSE, "batch-5").getOriginalTransactionId()).isEqualTo(21423L);
+        assertThat(mapper.map(account, tx, Operation.POST, "batch-5").getOriginalTransactionId()).isNull();
+    }
+
+    @Test
     void unsupportedTransactionTypeThrows() {
         SavingsAccountData account = buildAccount(500L, 50L, null, "NGN");
         SavingsAccountTransactionData tx = buildTx(SavingsAccountTransactionType.DEPOSIT, new BigDecimal("1000.00"));

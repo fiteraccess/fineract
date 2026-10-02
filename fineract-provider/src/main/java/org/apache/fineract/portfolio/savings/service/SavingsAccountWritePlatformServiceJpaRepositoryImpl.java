@@ -2330,8 +2330,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, false);
 
-        final SynapseInterestTransactionApplier.ReplayResult result = replayService.replay(account, txType, txAmount, txDate,
-                overdraftAmount, traceId);
+        final SynapseInterestTransactionApplier.ReplayResult result = "REVERSE".equals(command.stringValueOfParameterNamed("operation"))
+                ? replayService.reverse(account, txType, command.longValueOfParameterNamed("originalTransactionId"))
+                : replayService.replay(account, txType, txAmount, txDate, overdraftAmount, traceId);
 
         if (result.alreadyExists()) {
             return new CommandProcessingResultBuilder().withEntityId(result.transaction().getId()).withSavingsId(savingsId).build();
