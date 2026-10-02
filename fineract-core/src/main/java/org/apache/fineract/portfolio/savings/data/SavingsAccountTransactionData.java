@@ -108,6 +108,8 @@ public class SavingsAccountTransactionData implements Serializable {
     private BigDecimal chargeableAmount;
     private transient Long modifiedId;
     private transient String refNo;
+    // Set only by reverse(): a posting loaded already reversed must not be reversed again downstream.
+    private transient boolean reversedInRun;
     private Boolean isOverdraft;
 
     private Long accountCredit;
@@ -505,6 +507,7 @@ public class SavingsAccountTransactionData implements Serializable {
 
     public void reverse() {
         this.reversed = true;
+        this.reversedInRun = true;
     }
 
     public boolean fallsWithin(final LocalDateInterval periodInterval) {

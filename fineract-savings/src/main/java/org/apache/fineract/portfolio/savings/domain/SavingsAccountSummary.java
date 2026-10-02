@@ -146,6 +146,19 @@ public final class SavingsAccountSummary {
     }
 
     /**
+     * Undoes a live transaction's effect on the summary; call it before marking the transaction reversed. The
+     * interest-posted-till date stays put: the replacement posting for the same period carries the same date.
+     */
+    public void updateSummaryWithReversal(final MonetaryCurrency currency, final SavingsAccountTransactionSummaryWrapper wrapper,
+            final SavingsAccountTransaction transaction) {
+        final SavingsAccountSummaryDelta delta = wrapper.computeIncrementalDelta(currency, transaction);
+        if (delta == null || delta.isZero()) {
+            return;
+        }
+        applyDelta(currency, delta.negated());
+    }
+
+    /**
      * Applies a pre-computed delta to the summary fields. All arithmetic is done using {@link Money} to ensure correct
      * currency handling.
      */

@@ -364,7 +364,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("tr.running_balance_derived as runningBalance, tr.is_reversed as reversed,");
             sqlBuilder.append("tr.is_reversal as isReversal, tr.original_transaction_id as originalTransactionId, ");
             sqlBuilder.append("tr.balance_end_date_derived as balanceEndDate, tr.overdraft_amount_derived as overdraftAmount,");
-            sqlBuilder.append("tr.is_manual as manualTransaction,tr.office_id as officeId, ");
+            sqlBuilder.append("tr.is_manual as manualTransaction,tr.office_id as officeId, tr.ref_no as transactionRefNo, ");
             sqlBuilder.append("pd.payment_type_id as paymentType,pd.account_number as accountNumber,pd.check_number as checkNumber, ");
             sqlBuilder.append("pd.receipt_number as receiptNumber, pd.bank_number as bankNumber,pd.routing_code as routingCode, ");
             sqlBuilder.append("pt.value as paymentTypeName, ");
@@ -659,6 +659,9 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                             id, accountNo, date, currency, amount, outstandingChargeAmount, runningBalance, reversed, transSubmittedOnDate,
                             postInterestAsOn, cumulativeBalance, balanceEndDate, isReversal, originalTransactionId);
                     savingsAccountTransactionData.setOverdraftAmount(overdraftAmount);
+                    // A Synapse replay stores its trace id here; a REVERSE instruction needs it to find the posting to
+                    // undo.
+                    savingsAccountTransactionData.setRefNo(rs.getString("transactionRefNo"));
 
                     transMap.put("id", transactionId);
                     if (savingsAccountData.getOfficeId() == null) {

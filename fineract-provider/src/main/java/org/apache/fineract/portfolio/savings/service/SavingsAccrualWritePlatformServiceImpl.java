@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.service;
 
+import jakarta.persistence.OptimisticLockException;
 import java.math.MathContext;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -39,8 +40,11 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -52,8 +56,11 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
     private final SavingsAccountRepositoryWrapper savingsAccountRepository;
     private final ConfigurationDomainService configurationDomainService;
     private final SavingsAccountDomainService savingsAccountDomainService;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional
+    /** A concurrent Synapse replay can bump an account's version mid-run; a fresh read of the account then succeeds. */
+    private static final int MAX_ATTEMPTS_PER_ACCOUNT = 3;
+
     @Override
     public void addAccrualEntries(LocalDate tillDate) throws JobExecutionException {
         final List<SavingsAccrualData> savingsAccrualData = savingsAccountReadPlatformService.retrievePeriodicAccrualData(tillDate, null);
@@ -61,6 +68,11 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final MathContext mc = MoneyHelper.getMathContext();
+
+        // AB-401: one account per transaction, so a conflict on one account no longer rolls back every other account's
+        // accrual.
+        final TransactionTemplate perAccount = new TransactionTemplate(transactionManager);
+        perAccount.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         List<Throwable> errors = new ArrayList<>();
         for (SavingsAccrualData savingsAccrual : savingsAccrualData) {
@@ -70,22 +82,51 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
                         continue;
                     }
                 }
-                SavingsAccount savingsAccount = savingsAccountAssembler.assembleFrom(savingsAccrual.getId(), false);
-                LocalDate fromDate = savingsAccrual.getAccruedTill();
-                if (fromDate == null) {
-                    fromDate = savingsAccount.getActivationDate();
-                }
-                log.debug("Processing savings account {} from date {} till date {}", savingsAccrual.getAccountNo(), fromDate, tillDate);
-                addAccrualTransactions(savingsAccount, fromDate, tillDate, financialYearBeginningMonth,
-                        isSavingsInterestPostingAtCurrentPeriodEnd, mc, null);
+                accrueInOwnTransaction(perAccount, savingsAccrual, tillDate, financialYearBeginningMonth,
+                        isSavingsInterestPostingAtCurrentPeriodEnd, mc);
             } catch (Exception e) {
                 log.error("Failed to add accrual transaction for savings {} : {}", savingsAccrual.getAccountNo(), e.getMessage());
-                errors.add(e.getCause());
+                errors.add(e.getCause() != null ? e.getCause() : e);
             }
         }
         if (!errors.isEmpty()) {
             throw new JobExecutionException(errors);
         }
+    }
+
+    private void accrueInOwnTransaction(final TransactionTemplate perAccount, final SavingsAccrualData savingsAccrual,
+            final LocalDate tillDate, final Integer financialYearBeginningMonth, final boolean isSavingsInterestPostingAtCurrentPeriodEnd,
+            final MathContext mc) {
+        for (int attempt = 1;; attempt++) {
+            try {
+                perAccount.executeWithoutResult(status -> {
+                    SavingsAccount savingsAccount = savingsAccountAssembler.assembleFrom(savingsAccrual.getId(), false);
+                    LocalDate fromDate = savingsAccrual.getAccruedTill();
+                    if (fromDate == null) {
+                        fromDate = savingsAccount.getActivationDate();
+                    }
+                    log.debug("Processing savings account {} from date {} till date {}", savingsAccrual.getAccountNo(), fromDate, tillDate);
+                    addAccrualTransactions(savingsAccount, fromDate, tillDate, financialYearBeginningMonth,
+                            isSavingsInterestPostingAtCurrentPeriodEnd, mc, null);
+                });
+                return;
+            } catch (RuntimeException e) {
+                if (attempt >= MAX_ATTEMPTS_PER_ACCOUNT || !isOptimisticLock(e)) {
+                    throw e;
+                }
+                log.warn("Savings {} changed during accrual (attempt {}), retrying", savingsAccrual.getAccountNo(), attempt);
+            }
+        }
+    }
+
+    private static boolean isOptimisticLock(final Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof OptimisticLockingFailureException || t instanceof OptimisticLockException
+                    || t instanceof org.eclipse.persistence.exceptions.OptimisticLockException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

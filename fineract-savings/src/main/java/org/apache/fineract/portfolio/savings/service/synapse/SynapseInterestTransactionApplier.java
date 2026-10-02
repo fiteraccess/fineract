@@ -26,6 +26,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -107,6 +108,45 @@ public class SynapseInterestTransactionApplier {
         transaction.setRunningBalance(Money.of(account.getCurrency(), account.getSummary().getAccountBalance()));
 
         return new ReplayResult(transaction, false);
+    }
+
+    /**
+     * Replays a Synapse REVERSE: marks the posting Synapse has just reversed in its ledger as reversed here too and
+     * takes it back out of the balances. A second replay of the same reversal finds it already reversed and changes
+     * nothing.
+     *
+     * @param account
+     *            the savings account the original posting belongs to
+     * @param transactionType
+     *            the original posting's type, one of INTEREST_POSTING, OVERDRAFT_INTEREST, WITHHOLD_TAX
+     * @param originalTransactionId
+     *            the Fineract id of the posting to reverse
+     * @return the original posting, with {@code alreadyExists} true when it was already reversed
+     */
+    public ReplayResult reverse(SavingsAccount account, String transactionType, Long originalTransactionId) {
+        if (originalTransactionId == null) {
+            throw new PlatformApiDataValidationException(
+                    List.of(ApiParameterError.parameterError("error.msg.savings.replay.originalTransactionId.required",
+                            "A reversal replay needs the original transaction id", "originalTransactionId")));
+        }
+        SavingsAccountTransactionType type = resolveTransactionType(transactionType);
+        SavingsAccountTransaction original = account.getTransactions().stream().filter(tx -> originalTransactionId.equals(tx.getId()))
+                .findFirst()
+                .orElseThrow(() -> new GeneralPlatformDomainRuleException("error.msg.savings.replay.original.not.found",
+                        "Transaction " + originalTransactionId + " is not on savings account " + account.getId(), originalTransactionId,
+                        account.getId()));
+        if (original.getTransactionType() != type || original.isReversalTransaction()) {
+            throw new GeneralPlatformDomainRuleException("error.msg.savings.replay.original.type.mismatch",
+                    "Transaction " + originalTransactionId + " is not a " + transactionType + " posting", originalTransactionId,
+                    transactionType);
+        }
+        if (original.isReversed()) {
+            log.debug("Reversal already replayed for transaction={} on account={}", originalTransactionId, account.getId());
+            return new ReplayResult(original, true);
+        }
+        account.getSummary().updateSummaryWithReversal(account.getCurrency(), summaryWrapper, original);
+        original.reverse();
+        return new ReplayResult(original, false);
     }
 
     private SavingsAccountTransactionType resolveTransactionType(String transactionType) {

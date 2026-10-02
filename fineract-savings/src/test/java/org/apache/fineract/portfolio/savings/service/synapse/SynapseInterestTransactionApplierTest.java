@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
@@ -161,6 +162,73 @@ class SynapseInterestTransactionApplierTest {
                 () -> service.replay(account, "INVALID_TYPE", new BigDecimal("10.00"), LocalDate.of(2026, 3, 20), null, "trace-bad"))
                 .isInstanceOfSatisfying(PlatformApiDataValidationException.class, ex -> assertThat(ex.getErrors()).singleElement()
                         .satisfies(err -> assertThat(err.getDefaultUserMessage()).contains("INVALID_TYPE")));
+    }
+
+    private ReplayResult postedInterest(SynapseInterestTransactionApplier service, SavingsAccount account, long txId) throws Exception {
+        when(transactionRepository.findByRefNo("trace-post")).thenReturn(Collections.emptyList());
+        ReplayResult posted = service.replay(account, "INTEREST_POSTING", new BigDecimal("250.00"), LocalDate.of(2026, 2, 28), null,
+                "trace-post");
+        setField(AbstractPersistableCustom.class, posted.transaction(), "id", txId);
+        return posted;
+    }
+
+    @Test
+    void reverse_marksThePostingReversed_andTakesItBackOutOfTheBalances() throws Exception {
+        SavingsAccount account = buildAccount(6L, new BigDecimal("1000.00"));
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        ReplayResult posted = postedInterest(service, account, 77L);
+
+        ReplayResult result = service.reverse(account, "INTEREST_POSTING", 77L);
+
+        assertThat(result.alreadyExists()).isFalse();
+        assertThat(result.transaction()).isSameAs(posted.transaction());
+        assertThat(result.transaction().isReversed()).isTrue();
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("1000.00");
+        assertThat(account.getSummary().getTotalInterestPosted()).isEqualByComparingTo("0");
+        assertThat(account.getSummary().getInterestPostedTillDate()).isEqualTo(LocalDate.of(2026, 2, 28));
+    }
+
+    @Test
+    void reverse_ofAnAlreadyReversedPosting_changesNothing() throws Exception {
+        SavingsAccount account = buildAccount(7L, new BigDecimal("1000.00"));
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        postedInterest(service, account, 78L);
+        service.reverse(account, "INTEREST_POSTING", 78L);
+
+        ReplayResult again = service.reverse(account, "INTEREST_POSTING", 78L);
+
+        assertThat(again.alreadyExists()).isTrue();
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    void reverse_refusesAPostingOfAnotherType() throws Exception {
+        SavingsAccount account = buildAccount(8L, new BigDecimal("1000.00"));
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        postedInterest(service, account, 79L);
+
+        assertThatThrownBy(() -> service.reverse(account, "WITHHOLD_TAX", 79L)).isInstanceOfSatisfying(
+                GeneralPlatformDomainRuleException.class,
+                ex -> assertThat(ex.getGlobalisationMessageCode()).isEqualTo("error.msg.savings.replay.original.type.mismatch"));
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("1250.00");
+    }
+
+    @Test
+    void reverse_refusesATransactionNotOnTheAccount() throws Exception {
+        SavingsAccount account = buildAccount(9L, new BigDecimal("1000.00"));
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+
+        assertThatThrownBy(() -> service.reverse(account, "INTEREST_POSTING", 404L)).isInstanceOfSatisfying(
+                GeneralPlatformDomainRuleException.class,
+                ex -> assertThat(ex.getGlobalisationMessageCode()).isEqualTo("error.msg.savings.replay.original.not.found"));
+    }
+
+    @Test
+    void reverse_needsTheOriginalTransactionId() throws Exception {
+        SavingsAccount account = buildAccount(10L, new BigDecimal("1000.00"));
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+
+        assertThatThrownBy(() -> service.reverse(account, "INTEREST_POSTING", null)).isInstanceOf(PlatformApiDataValidationException.class);
     }
 
     private static SavingsAccount buildAccount(Long id, BigDecimal balance) throws Exception {
