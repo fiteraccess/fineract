@@ -58,8 +58,8 @@ public class SynapseOutboxRepository {
 
     private static final String MARK_SENT_SQL = "UPDATE synapse_outbox SET status = 'SENT', completed_at = ? WHERE id IN (%s)";
 
-    private static final String MARK_FAILED_SQL = "UPDATE synapse_outbox SET status = CASE WHEN attempts >= ? "
-            + "THEN 'DEAD' ELSE 'PENDING' END, error_detail = ?, next_attempt_at = ? WHERE id = ?";
+    private static final String MARK_FAILED_SQL = "UPDATE synapse_outbox SET status = ?, error_detail = ?, next_attempt_at = ? "
+            + "WHERE id = ?";
 
     private static final String RESET_TO_PENDING_SQL = "UPDATE synapse_outbox SET status = 'PENDING', dispatched_at = NULL, "
             + "attempts = GREATEST(attempts - 1, 0) WHERE id IN (%s)";
@@ -160,7 +160,9 @@ public class SynapseOutboxRepository {
             nextAttempt = Timestamp.from(clock.instant().plusSeconds((long) (delayMinutes * 60)));
         }
 
-        jdbcTemplate.update(MARK_FAILED_SQL, maxAttempts, errorDetail, nextAttempt, id);
+        // AB-401: persist the deadline verdict too, else an expired entry stays PENDING with no backoff and is retried
+        // every run.
+        jdbcTemplate.update(MARK_FAILED_SQL, isDead ? "DEAD" : "PENDING", errorDetail, nextAttempt, id);
         log.debug("Marked outbox entry id={} as FAILED/DEAD (nextAttempt={})", id, nextAttempt);
         return isDead;
     }
