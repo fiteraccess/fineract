@@ -158,9 +158,18 @@ class SynapseOutboxRepositoryTest {
     @Test
     void markFailed_deadByAttempts_setsNullNextAttempt() {
         Instant createdAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
-        repository.markFailed(42L, "connection timeout", 999, 1000, createdAt);
+        // claimPending returns the attempt count already incremented for this, the 1000th, attempt
+        repository.markFailed(42L, "connection timeout", 1000, 1000, createdAt);
 
         verify(jdbcTemplate).update(anyString(), eq("DEAD"), eq("connection timeout"), eq(null), eq(42L));
+    }
+
+    @Test
+    void markFailed_beforeTheLastAttempt_staysPending() {
+        Instant createdAt = FIXED_NOW.minus(1, ChronoUnit.HOURS);
+        repository.markFailed(42L, "connection timeout", 999, 1000, createdAt);
+
+        verify(jdbcTemplate).update(anyString(), eq("PENDING"), eq("connection timeout"), argThat(ts -> ts != null), eq(42L));
     }
 
     @Test

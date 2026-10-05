@@ -280,7 +280,7 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
         final SavingsInterestCalculationDaysInYearType daysInYearType = SavingsInterestCalculationDaysInYearType
                 .fromInt(savingsAccountData.getInterestCalculationDaysInYearTypeId());
 
-        List<LocalDate> postedAsOnDates = manualAsOnDates(getManualPostingDates(savingsAccountData),
+        List<LocalDate> postedAsOnDates = SavingsHelper.manualAsOnDates(getManualPostingDates(savingsAccountData),
                 isSavingsInterestPostingAtCurrentPeriodEnd);
         if (postInterestOnDate != null) {
             postedAsOnDates.add(postInterestOnDate);
@@ -501,18 +501,6 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
             activationLocalDate = savingsAccountData.getActivationLocalDate();
         }
         return activationLocalDate;
-    }
-
-    /**
-     * AB-401: posting at the period end dates a manual posting the day before its as-on date. Splitting periods at the
-     * posting's own date carved out a period one day short and posted those days a second time.
-     */
-    static List<LocalDate> manualAsOnDates(final List<LocalDate> manualPostingDates, final boolean postingAtPeriodEnd) {
-        final List<LocalDate> asOnDates = new ArrayList<>(manualPostingDates);
-        if (postingAtPeriodEnd) {
-            asOnDates.replaceAll(date -> date.plusDays(1));
-        }
-        return asOnDates;
     }
 
     public List<LocalDate> getManualPostingDates(final SavingsAccountData savingsAccountData) {

@@ -157,7 +157,8 @@ public class SynapseOutboxRepository {
      * @return true when the row went DEAD, i.e. it will not be retried automatically
      */
     public boolean markFailed(Long id, String errorDetail, int currentAttempts, int maxAttempts, Instant createdAt) {
-        boolean isDead = (currentAttempts + 1) >= maxAttempts || clock.instant().isAfter(createdAt.plus(RETRY_DEADLINE));
+        // currentAttempts comes from claimPending, whose CLAIM_SQL has already counted this attempt.
+        boolean isDead = currentAttempts >= maxAttempts || clock.instant().isAfter(createdAt.plus(RETRY_DEADLINE));
         Timestamp nextAttempt = null;
 
         if (!isDead) {
