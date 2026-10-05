@@ -42,7 +42,8 @@ public class SynapseInstructionMapper {
         return SynapseTransactionInstruction.builder().traceId(UUID.randomUUID().toString()).savingsAccountId(account.getId())
                 .officeId(account.officeId()).externalId(account.getExternalId()).transactionType(txType).direction(direction)
                 .operation(operation).amount(tx.getAmount()).overdraftAmount(tx.getOverdraftAmount())
-                .transactionDate(tx.getTransactionDate()).currencyCode(account.getCurrency().getCode()).refNo(tx.getRefNo())
+                .manual(tx.isManualTransaction() ? Boolean.TRUE : null).transactionDate(tx.getTransactionDate())
+                .currencyCode(account.getCurrency().getCode()).refNo(tx.getRefNo())
                 // A REVERSE undoes this very posting: Synapse finds its own leg by refNo, the replay finds this row by
                 // id.
                 .originalTransactionId(operation == Operation.REVERSE ? tx.getId() : tx.getOriginalTransactionId()).batchId(batchId)

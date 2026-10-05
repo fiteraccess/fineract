@@ -83,6 +83,12 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
         // With the pivot only history from the posted-till date is loaded, so the first window is just its posting
         // date.
         final Map<Boolean, LocalDate> previousPostingDate = new HashMap<>();
+        // Filtered once: the duplicate check runs for every period and must not rescan the whole history each time.
+        final List<SavingsAccountTransactionData> systemPostings = savingsAccountData.getSavingsAccountTransactionData().stream()
+                .filter(tx -> tx.getId() != null && !tx.isManualTransaction() && !tx.isReversalTransaction()
+                        && (tx.isInterestPostingAndNotReversed() || tx.isOverdraftInterestAndNotReversed()
+                                || tx.isWithHoldTaxAndNotReversed()))
+                .toList();
         for (final PostingPeriod interestPostingPeriod : postingPeriods) {
             final LocalDate interestPostingTransactionDate = interestPostingPeriod.dateOfPostingTransaction();
             final Money interestEarnedToBePostedForPeriod = interestPostingPeriod.getInterestEarned();
@@ -102,7 +108,7 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
                 final LocalDate windowAfter = previous != null ? previous
                         : backdatedTxnsAllowedTill ? interestPostingTransactionDate.minusDays(1) : null;
                 if (reverseDuplicatePostings(postingTransaction, windowAfter, interestPostingTransactionDate, overdraftPeriod,
-                        savingsAccountData)) {
+                        systemPostings)) {
                     recalucateDailyBalanceDetails = true;
                 }
 
@@ -274,7 +280,8 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
         final SavingsInterestCalculationDaysInYearType daysInYearType = SavingsInterestCalculationDaysInYearType
                 .fromInt(savingsAccountData.getInterestCalculationDaysInYearTypeId());
 
-        List<LocalDate> postedAsOnDates = getManualPostingDates(savingsAccountData);
+        List<LocalDate> postedAsOnDates = manualAsOnDates(getManualPostingDates(savingsAccountData),
+                isSavingsInterestPostingAtCurrentPeriodEnd);
         if (postInterestOnDate != null) {
             postedAsOnDates.add(postInterestOnDate);
         }
@@ -496,6 +503,18 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
         return activationLocalDate;
     }
 
+    /**
+     * AB-401: posting at the period end dates a manual posting the day before its as-on date. Splitting periods at the
+     * posting's own date carved out a period one day short and posted those days a second time.
+     */
+    static List<LocalDate> manualAsOnDates(final List<LocalDate> manualPostingDates, final boolean postingAtPeriodEnd) {
+        final List<LocalDate> asOnDates = new ArrayList<>(manualPostingDates);
+        if (postingAtPeriodEnd) {
+            asOnDates.replaceAll(date -> date.plusDays(1));
+        }
+        return asOnDates;
+    }
+
     public List<LocalDate> getManualPostingDates(final SavingsAccountData savingsAccountData) {
         List<LocalDate> transactions = new ArrayList<>();
         for (SavingsAccountTransactionData trans : savingsAccountData.getSavingsAccountTransactionData()) {
@@ -620,9 +639,8 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
      * kind there is a duplicate (AB-401: a REVERSE replayed as a credit, or a posting dated by an older setting).
      */
     static boolean reverseDuplicatePostings(final SavingsAccountTransactionData kept, final LocalDate windowAfter,
-            final LocalDate postingDate, final boolean overdraftPeriod, final SavingsAccountData savingsAccountData) {
+            final LocalDate postingDate, final boolean overdraftPeriod, final List<SavingsAccountTransactionData> transactions) {
         final boolean overdraftKind = kept != null ? kept.isOverdraftInterestAndNotReversed() : overdraftPeriod;
-        final List<SavingsAccountTransactionData> transactions = savingsAccountData.getSavingsAccountTransactionData();
         boolean reversedAny = false;
         for (final SavingsAccountTransactionData transaction : transactions) {
             if (transaction != kept && inWindow(transaction, windowAfter, postingDate)

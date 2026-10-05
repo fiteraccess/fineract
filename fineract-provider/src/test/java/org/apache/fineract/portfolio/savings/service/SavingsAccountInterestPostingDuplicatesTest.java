@@ -45,7 +45,8 @@ class SavingsAccountInterestPostingDuplicatesTest {
                 false, false);
         SavingsAccountTransactionData august = add(account, 21413L, SavingsAccountTransactionType.INTEREST_POSTING, AUG_END, false, false);
 
-        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false, account)).isTrue();
+        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false,
+                account.getSavingsAccountTransactionData())).isTrue();
 
         assertThat(kept.isReversed()).isFalse();
         assertThat(sameDay.isReversedInRun()).isTrue();
@@ -62,7 +63,8 @@ class SavingsAccountInterestPostingDuplicatesTest {
         SavingsAccountTransactionData duplicateTax = add(account, 4L, SavingsAccountTransactionType.WITHHOLD_TAX, SEPT_END, false, false);
         SavingsAccountTransactionData augustTax = add(account, 5L, SavingsAccountTransactionType.WITHHOLD_TAX, AUG_END, false, false);
 
-        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false, account)).isTrue();
+        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false,
+                account.getSavingsAccountTransactionData())).isTrue();
 
         assertThat(keptTax.isReversed()).isFalse();
         assertThat(duplicateTax.isReversedInRun()).isTrue();
@@ -81,7 +83,8 @@ class SavingsAccountInterestPostingDuplicatesTest {
         SavingsAccountTransactionData overdraft = add(account, 5L, SavingsAccountTransactionType.OVERDRAFT_INTEREST, SEPT_END, false,
                 false);
 
-        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false, account)).isFalse();
+        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, AUG_END, SEPT_END, false,
+                account.getSavingsAccountTransactionData())).isFalse();
 
         assertThat(manual.isReversed()).isFalse();
         assertThat(reversedEarlier.isReversedInRun()).isFalse();
@@ -95,7 +98,8 @@ class SavingsAccountInterestPostingDuplicatesTest {
         SavingsAccountTransactionData misdated = add(account, 7L, SavingsAccountTransactionType.INTEREST_POSTING, AUG_END.plusDays(1),
                 false, false);
 
-        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(null, AUG_END, SEPT_END, false, account)).isTrue();
+        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(null, AUG_END, SEPT_END, false,
+                account.getSavingsAccountTransactionData())).isTrue();
 
         assertThat(misdated.isReversedInRun()).isTrue();
     }
@@ -106,8 +110,8 @@ class SavingsAccountInterestPostingDuplicatesTest {
         SavingsAccountTransactionData kept = add(account, 1L, SavingsAccountTransactionType.INTEREST_POSTING, SEPT_END, false, false);
         SavingsAccountTransactionData postedTill = add(account, 2L, SavingsAccountTransactionType.INTEREST_POSTING, AUG_END, false, false);
 
-        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, SEPT_END.minusDays(1), SEPT_END, false, account))
-                .isFalse();
+        assertThat(SavingsAccountInterestPostingServiceImpl.reverseDuplicatePostings(kept, SEPT_END.minusDays(1), SEPT_END, false,
+                account.getSavingsAccountTransactionData())).isFalse();
 
         assertThat(postedTill.isReversed()).isFalse();
     }

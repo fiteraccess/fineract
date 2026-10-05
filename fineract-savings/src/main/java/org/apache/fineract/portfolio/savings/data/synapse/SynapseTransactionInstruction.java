@@ -54,6 +54,9 @@ public class SynapseTransactionInstruction {
 
     private final BigDecimal amount;
     private final BigDecimal overdraftAmount;
+
+    /** True for an operator's "post interest as on" posting, which the period duplicate rule must leave alone. */
+    private final Boolean manual;
     private final LocalDate transactionDate;
     private final String currencyCode;
 

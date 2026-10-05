@@ -167,6 +167,18 @@ class SynapseInterestTransactionApplierTest {
     }
 
     @Test
+    void aManualPostingReplaysAsManual() throws Exception {
+        SavingsAccount account = buildAccount(12L, new BigDecimal("1000.00"));
+        when(transactionRepository.findByRefNo("trace-manual")).thenReturn(Collections.emptyList());
+        SynapseInterestTransactionApplier service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+
+        ReplayResult result = service.replay(account, "INTEREST_POSTING", new BigDecimal("12.00"), LocalDate.of(2026, 3, 15), null,
+                "trace-manual", true);
+
+        assertThat(result.transaction().isManualTransaction()).isTrue();
+    }
+
+    @Test
     void unknownTransactionType_throwsValidationException() throws Exception {
         SavingsAccount account = buildAccount(5L, new BigDecimal("1000.00"));
         when(transactionRepository.findByRefNo("trace-bad")).thenReturn(Collections.emptyList());
