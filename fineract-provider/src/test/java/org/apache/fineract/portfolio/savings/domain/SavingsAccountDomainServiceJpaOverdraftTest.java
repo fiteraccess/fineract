@@ -24,6 +24,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import jakarta.persistence.EntityManager;
@@ -115,6 +116,52 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
     void tearDown() {
         ThreadLocalContextUtil.reset();
         MoneyHelper.clearCache();
+    }
+
+    @Test
+    void reversedAccrualsPostTheirContraEntriesAndLinkThem() {
+        SavingsAccount account = accrualAccount();
+        Office office = account.office();
+        SavingsAccountTransaction accrual = SavingsAccountTransaction.accrual(account, office, BUSINESS_DATE,
+                Money.of(account.getCurrency(), new BigDecimal("2.20")), false, null);
+        accrual.setId(77L);
+        when(savingsAccountTransactionRepository.findLiveAccrualsFrom(11L, BUSINESS_DATE)).thenReturn(List.of(accrual));
+
+        service.reverseAccrualsFrom(account, BUSINESS_DATE);
+
+        assertThat(accrual.isReversed()).isTrue();
+        verify(savingsAccountTransactionRepository).saveAll(List.of(accrual));
+        ArgumentCaptor<SavingsAccountingBridgeDTO> bridge = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
+        verify(journalEntryWritePlatformService).createJournalEntriesForSavings(bridge.capture(), any(Office.class));
+        assertThat(bridge.getValue().getNewSavingsTransactions()).singleElement().satisfies(transaction -> {
+            assertThat(transaction.isReversed()).isTrue();
+            assertThat(transaction.getAmount()).isEqualByComparingTo("2.20");
+        });
+        verify(journalEntryWritePlatformService).linkSavingsReversalJournalEntries(List.of(77L));
+    }
+
+    @Test
+    void noLiveAccrualsMeansNoJournalWork() {
+        SavingsAccount account = mock(SavingsAccount.class);
+        when(account.getId()).thenReturn(11L);
+        when(savingsAccountTransactionRepository.findLiveAccrualsFrom(11L, BUSINESS_DATE)).thenReturn(List.of());
+
+        service.reverseAccrualsFrom(account, BUSINESS_DATE);
+
+        verifyNoInteractions(journalEntryWritePlatformService);
+    }
+
+    private static SavingsAccount accrualAccount() {
+        SavingsAccount account = mock(SavingsAccount.class);
+        SavingsProduct savingsProduct = mock(SavingsProduct.class);
+        when(account.getId()).thenReturn(11L);
+        when(account.productId()).thenReturn(22L);
+        when(account.officeId()).thenReturn(33L);
+        when(account.office()).thenReturn(mock(Office.class));
+        when(account.getCurrency()).thenReturn(new MonetaryCurrency("NGN", 2, null));
+        when(account.savingsProduct()).thenReturn(savingsProduct);
+        when(savingsProduct.isAccrualBasedAccountingEnabled()).thenReturn(true);
+        return account;
     }
 
     @Test

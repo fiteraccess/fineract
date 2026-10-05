@@ -127,6 +127,61 @@ class SavingsAccountInterestProjectionTest {
         assertThat(ReflectionTestUtils.getField(account, "accruedTillDate")).isEqualTo(LocalDate.of(2026, 8, 11));
     }
 
+    @Test
+    void aClosureAccruesThePostedInterestWhoseLastDayTheSweepUnaccrued() {
+        SavingsAccount account = accountWith(null);
+        accrue(account, LocalDate.of(2026, 8, 18), "3.29");
+        accrue(account, LocalDate.of(2026, 8, 19), "3.30");
+        accrue(account, LocalDate.of(2026, 8, 20), "3.31").reverse();
+        posting(account, LocalDate.of(2026, 8, 20), "9.90");
+
+        SavingsAccountTransaction trueUp = account.accrueInterestPostedButNotAccrued(UP_TO);
+
+        assertThat(trueUp.getTransactionDate()).isEqualTo(UP_TO);
+        assertThat(trueUp.getAmount()).isEqualByComparingTo("3.31");
+        assertThat(trueUp.getOverdraftAmount()).isEqualByComparingTo("3.31");
+    }
+
+    @Test
+    void aClosureWhoseAccrualsCoverItsPostingsAccruesNothing() {
+        SavingsAccount account = accountWith(null);
+        accrue(account, LocalDate.of(2026, 8, 19), "3.30");
+        accrue(account, LocalDate.of(2026, 8, 20), "3.31");
+        posting(account, LocalDate.of(2026, 8, 20), "6.61");
+
+        assertThat(account.accrueInterestPostedButNotAccrued(UP_TO)).isNull();
+    }
+
+    @Test
+    void postingsBeforeTheFirstAccrualNeverReachedThePayable() {
+        SavingsAccount account = accountWith(null);
+        posting(account, LocalDate.of(2026, 8, 5), "12.00");
+        accrue(account, LocalDate.of(2026, 8, 20), "3.31");
+        posting(account, LocalDate.of(2026, 8, 20), "3.31");
+
+        assertThat(account.accrueInterestPostedButNotAccrued(UP_TO)).isNull();
+    }
+
+    @Test
+    void anAccountNeverAccruedIsLeftAlone() {
+        SavingsAccount account = accountWith(null);
+        posting(account, LocalDate.of(2026, 8, 20), "6.61");
+
+        assertThat(account.accrueInterestPostedButNotAccrued(UP_TO)).isNull();
+    }
+
+    private SavingsAccountTransaction accrue(final SavingsAccount account, final LocalDate date, final String amount) {
+        SavingsAccountTransaction accrual = SavingsAccountTransaction.accrual(account, office, date, Money.of(NGN, new BigDecimal(amount)),
+                false, null);
+        account.addTransaction(accrual);
+        return accrual;
+    }
+
+    private void posting(final SavingsAccount account, final LocalDate date, final String amount) {
+        account.addTransaction(
+                SavingsAccountTransaction.interestPosting(account, office, date, Money.of(NGN, new BigDecimal(amount)), false));
+    }
+
     private SavingsAccount accountWith(final LocalDate withdrawalDate) {
         SavingsAccount account = new SavingsAccount();
         ReflectionTestUtils.setField(account, "currency", NGN);
