@@ -37,10 +37,11 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SavingsAccruedInterestReadService {
 
-    private static final String ACCOUNT_SQL = "select sa.id, sa.account_no, sa.status_enum, sa.currency_code, sa.currency_digits,"
+    static final String ACCOUNT_SQL = "select sa.id, sa.account_no, sa.status_enum, sa.currency_code, sa.currency_digits,"
             + " sa.activatedon_date, sa.interest_posted_till_date, sp.product_category,"
             + " (select max(p.transaction_date) from m_savings_account_transaction p where p.savings_account_id = sa.id"
-            + " and p.transaction_type_enum = " + SavingsAccountTransactionType.INTEREST_POSTING.getValue()
+            + " and p.transaction_type_enum in (" + SavingsAccountTransactionType.INTEREST_POSTING.getValue() + ", "
+            + SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue() + ")"
             + " and p.is_reversed = false and p.is_reversal = false) as last_posting"
             + " from m_savings_account sa join m_savings_product sp on sp.id = sa.product_id where sa.id = ?";
     private static final String SUMS_SQL = "select"

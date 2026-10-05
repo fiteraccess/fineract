@@ -1074,12 +1074,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         // to system-scheduled posting). These dates act as additional period boundaries when
         // splitting the timeline into posting intervals.
         // =====================================================================================
-        List<LocalDate> postedAsOnDates = null;
-        if (backdatedTxnsAllowedTill) {
-            postedAsOnDates = getManualPostingDatesWithPivotConfig();
-        } else {
-            postedAsOnDates = getManualPostingDates();
-        }
+        List<LocalDate> postedAsOnDates = SavingsHelper.manualAsOnDates(
+                backdatedTxnsAllowedTill ? getManualPostingDatesWithPivotConfig() : getManualPostingDates(),
+                isSavingsInterestPostingAtCurrentPeriodEnd);
         if (postInterestOnDate != null) {
             postedAsOnDates.add(postInterestOnDate);
         }

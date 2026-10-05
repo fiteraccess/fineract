@@ -47,6 +47,18 @@ public final class SavingsHelper {
 
     private static final CompoundInterestHelper COMPOUND_INTEREST_HELPER = new CompoundInterestHelper();
 
+    /**
+     * AB-401: posting at the period end dates a manual posting the day before its as-on date. Splitting periods at the
+     * posting's own date carved out a period one day short and posted those days a second time.
+     */
+    public static List<LocalDate> manualAsOnDates(final List<LocalDate> manualPostingDates, final boolean postingAtPeriodEnd) {
+        final List<LocalDate> asOnDates = new ArrayList<>(manualPostingDates);
+        if (postingAtPeriodEnd) {
+            asOnDates.replaceAll(date -> date.plusDays(1));
+        }
+        return asOnDates;
+    }
+
     public List<LocalDateInterval> determineInterestPostingPeriods(final LocalDate startInterestCalculationLocalDate,
             final LocalDate interestPostingUpToDate, final SavingsPostingInterestPeriodType postingPeriodType,
             final Integer financialYearBeginningMonth, List<LocalDate> postInterestAsOn) {

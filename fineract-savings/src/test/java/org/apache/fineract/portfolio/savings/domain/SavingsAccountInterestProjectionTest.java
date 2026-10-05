@@ -104,6 +104,18 @@ class SavingsAccountInterestProjectionTest {
     }
 
     @Test
+    void aManualPostingAtThePeriodEndSplitsTheProjectionAtItsAsOnDate() {
+        SavingsAccount account = accountWith(null);
+        // "Post interest as on 11 August" with posting at the period end books the posting on 10 August.
+        account.addTransaction(
+                SavingsAccountTransaction.interestPosting(account, office, LocalDate.of(2026, 8, 10), Money.of(NGN, BigDecimal.TEN), true));
+
+        List<PostingPeriod> periods = account.projectInterestUsing(MC, UP_TO, true, 1);
+
+        assertThat(periods.getFirst().dateOfPostingTransaction()).isEqualTo(LocalDate.of(2026, 8, 10));
+    }
+
+    @Test
     void reversingAccrualsStepsTheAccruedTillDateBack() {
         SavingsAccount account = accountWith(null);
         account.addTransaction(

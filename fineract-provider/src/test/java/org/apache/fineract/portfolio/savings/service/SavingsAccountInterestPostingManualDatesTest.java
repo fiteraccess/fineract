@@ -34,16 +34,14 @@ class SavingsAccountInterestPostingManualDatesTest {
 
     @Test
     void aManualPostingAtThePeriodEndSplitsTheMonthAtItsAsOnDate() {
-        List<LocalDateInterval> periods = periodsWith(
-                SavingsAccountInterestPostingServiceImpl.manualAsOnDates(List.of(MANUAL_POSTING), true));
+        List<LocalDateInterval> periods = periodsWith(SavingsHelper.manualAsOnDates(List.of(MANUAL_POSTING), true));
 
         assertThat(periods).extracting(LocalDateInterval::endDate).containsExactly(LocalDate.of(2026, 11, 15), LocalDate.of(2026, 11, 30));
     }
 
     @Test
     void aManualPostingDatedOnItsAsOnDateIsTakenAsIs() {
-        assertThat(SavingsAccountInterestPostingServiceImpl.manualAsOnDates(List.of(MANUAL_POSTING), false))
-                .containsExactly(MANUAL_POSTING);
+        assertThat(SavingsHelper.manualAsOnDates(List.of(MANUAL_POSTING), false)).containsExactly(MANUAL_POSTING);
     }
 
     private static List<LocalDateInterval> periodsWith(List<LocalDate> asOnDates) {

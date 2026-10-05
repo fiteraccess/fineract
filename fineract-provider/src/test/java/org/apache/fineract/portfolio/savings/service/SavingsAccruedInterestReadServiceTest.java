@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.junit.jupiter.api.Test;
 
 class SavingsAccruedInterestReadServiceTest {
@@ -40,6 +41,13 @@ class SavingsAccruedInterestReadServiceTest {
     @Test
     void aGoalSettledInFullOwesNothingRatherThanANegativeAmount() {
         assertThat(SavingsAccruedInterestReadService.owed(true, new BigDecimal("9.31"), new BigDecimal("9.32"))).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void anOverdraftInterestPostingClosesThePeriodLikeAnInterestPosting() {
+        assertThat(SavingsAccruedInterestReadService.ACCOUNT_SQL)
+                .contains("p.transaction_type_enum in (" + SavingsAccountTransactionType.INTEREST_POSTING.getValue() + ", "
+                        + SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue() + ")");
     }
 
     @Test
