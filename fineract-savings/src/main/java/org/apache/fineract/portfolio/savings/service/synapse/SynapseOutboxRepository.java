@@ -49,14 +49,15 @@ public class SynapseOutboxRepository {
             + "(trace_id, batch_id, task_type, account_id, office_id, payload, status, attempts, max_attempts, created_at) "
             + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)";
 
-    // AB-401: an entry waits while an earlier one for its account is still pending or in flight, so concurrent drains
-    // and retries keep each account in order (a correction's REVERSE always lands before its POST).
+    // AB-401: an entry waits while an earlier one for its account is pending or in flight, so concurrent drains and
+    // retries keep each account in order. A DEAD interest entry holds the rest until an operator retries it.
     private static final String CLAIM_SQL = "UPDATE synapse_outbox SET status = 'DISPATCHED', "
             + "dispatched_at = ?, attempts = attempts + 1 " + "WHERE id IN (" + "  SELECT o.id FROM synapse_outbox o "
             + "  WHERE o.status = 'PENDING' AND o.task_type = ? AND o.attempts < o.max_attempts "
             + "  AND (o.next_attempt_at IS NULL OR o.next_attempt_at <= ?) "
             + "  AND NOT EXISTS (SELECT 1 FROM synapse_outbox e WHERE e.account_id = o.account_id AND e.task_type = o.task_type "
-            + "    AND e.id < o.id AND e.status IN ('PENDING', 'DISPATCHED')) " + "  ORDER BY o.id LIMIT ? FOR UPDATE OF o SKIP LOCKED"
+            + "    AND e.id < o.id AND (e.status IN ('PENDING', 'DISPATCHED') OR (e.status = 'DEAD' AND e.task_type = 'INTEREST_POSTING'))) "
+            + "  ORDER BY o.id LIMIT ? FOR UPDATE OF o SKIP LOCKED"
             + ") RETURNING id, trace_id, batch_id, task_type, account_id, office_id, "
             + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at";
 

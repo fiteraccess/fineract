@@ -115,6 +115,20 @@ class SynapseInstructionMapperTest {
     }
 
     @Test
+    void aManualPostingIsSentAsManualAndAnyOtherCarriesNoFlag() throws Exception {
+        SavingsAccountData account = buildAccount(402L, 40L, null, "NGN");
+        SavingsAccountTransactionData manual = buildTx(SavingsAccountTransactionType.INTEREST_POSTING, new BigDecimal("10.00"));
+        java.lang.reflect.Field flag = SavingsAccountTransactionData.class.getDeclaredField("isManualTransaction");
+        flag.setAccessible(true);
+        flag.setBoolean(manual, true);
+
+        assertThat(mapper.map(account, manual, Operation.POST, "batch-6").getManual()).isTrue();
+        assertThat(mapper
+                .map(account, buildTx(SavingsAccountTransactionType.INTEREST_POSTING, new BigDecimal("10.00")), Operation.POST, "batch-6")
+                .getManual()).isNull();
+    }
+
+    @Test
     void unsupportedTransactionTypeThrows() {
         SavingsAccountData account = buildAccount(500L, 50L, null, "NGN");
         SavingsAccountTransactionData tx = buildTx(SavingsAccountTransactionType.DEPOSIT, new BigDecimal("1000.00"));

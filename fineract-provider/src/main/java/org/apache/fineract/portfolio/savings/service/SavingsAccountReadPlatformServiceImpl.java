@@ -643,6 +643,8 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                     final BigDecimal cumulativeBalance = JdbcSupport.getBigDecimalDefaultToZeroIfNull(rs, "cumulativeBalance");
 
                     final boolean postInterestAsOn = false;
+                    // The posting engine splits periods at, and never reverses, a manual "post interest as on" posting.
+                    final boolean manualTransaction = rs.getBoolean("manualTransaction");
 
                     PaymentDetailData paymentDetailData = null;
                     if (transactionType.isDepositOrWithdrawal()) {
@@ -657,7 +659,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
 
                     savingsAccountTransactionData = SavingsAccountTransactionData.create(transactionId, transactionType, paymentDetailData,
                             id, accountNo, date, currency, amount, outstandingChargeAmount, runningBalance, reversed, transSubmittedOnDate,
-                            postInterestAsOn, cumulativeBalance, balanceEndDate, isReversal, originalTransactionId);
+                            postInterestAsOn, cumulativeBalance, balanceEndDate, isReversal, originalTransactionId, manualTransaction);
                     savingsAccountTransactionData.setOverdraftAmount(overdraftAmount);
                     // A Synapse replay stores its trace id here; a REVERSE instruction needs it to find the posting to
                     // undo.

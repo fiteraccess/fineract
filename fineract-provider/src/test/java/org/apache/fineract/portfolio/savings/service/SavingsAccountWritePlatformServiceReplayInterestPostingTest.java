@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -89,7 +90,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
         when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
         when(replayService.replay(eq(account), eq("INTEREST_POSTING"), eq(new BigDecimal("100.00")),
-                eq(LocalDate.of(2026, 3, 20)), eq(null), eq("trace-1")))
+                eq(LocalDate.of(2026, 3, 20)), eq(null), eq("trace-1"), eq(false)))
                 .thenReturn(new ReplayResult(tx, false));
 
         JsonCommand command = mockCommand(LocalDate.of(2026, 3, 20), new BigDecimal("100.00"),
@@ -120,7 +121,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         CommandProcessingResult result = service.replayInterestPosting(savingsId, command);
 
         assertThat(result.getResourceId()).isEqualTo(21423L);
-        verify(replayService, never()).replay(any(), any(), any(), any(), any(), any());
+        verify(replayService, never()).replay(any(), any(), any(), any(), any(), any(), anyBoolean());
         verify(txRepo).saveAndFlush(original);
         verify(accountRepo).updateSummaryDirectAndDetach(account);
         verify(journalService).createJournalEntriesForSavings(any());
@@ -136,7 +137,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
 
         when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
         when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
-        when(replayService.replay(any(), any(), any(), any(), any(), any()))
+        when(replayService.replay(any(), any(), any(), any(), any(), any(), anyBoolean()))
                 .thenReturn(new ReplayResult(existingTx, true));
 
         JsonCommand command = mockCommand(LocalDate.of(2026, 3, 20), new BigDecimal("50.00"),

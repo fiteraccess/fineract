@@ -219,9 +219,20 @@ public class SavingsAccountTransactionData implements Serializable {
             final CurrencyData currency, final BigDecimal amount, final BigDecimal outstandingChargeAmount, final BigDecimal runningBalance,
             final boolean reversed, final LocalDate submittedOnDate, final boolean interestedPostedAsOn, final BigDecimal cumulativeBalance,
             final LocalDate balanceEndDate, final Boolean isReversal, final Long originalTransactionId) {
+        return create(id, transactionType, paymentDetailData, savingsId, savingsAccountNo, date, currency, amount, outstandingChargeAmount,
+                runningBalance, reversed, submittedOnDate, interestedPostedAsOn, cumulativeBalance, balanceEndDate, isReversal,
+                originalTransactionId, false);
+    }
+
+    /** As above, keeping a manual "post interest as on" posting manual, so the posting engine never reverses it. */
+    public static SavingsAccountTransactionData create(final Long id, final SavingsAccountTransactionEnumData transactionType,
+            final PaymentDetailData paymentDetailData, final Long savingsId, final String savingsAccountNo, final LocalDate date,
+            final CurrencyData currency, final BigDecimal amount, final BigDecimal outstandingChargeAmount, final BigDecimal runningBalance,
+            final boolean reversed, final LocalDate submittedOnDate, final boolean interestedPostedAsOn, final BigDecimal cumulativeBalance,
+            final LocalDate balanceEndDate, final Boolean isReversal, final Long originalTransactionId, final boolean manualTransaction) {
         SavingsAccountTransactionData data = new SavingsAccountTransactionData(id, transactionType, paymentDetailData, savingsId,
                 savingsAccountNo, date, currency, amount, outstandingChargeAmount, runningBalance, reversed, null, null, submittedOnDate,
-                interestedPostedAsOn, null, null, isReversal, originalTransactionId, false, null, null, null, false);
+                interestedPostedAsOn, null, null, isReversal, originalTransactionId, manualTransaction, null, null, null, false);
         data.transactionDate = date;
         data.cumulativeBalance = cumulativeBalance;
         data.balanceEndDate = balanceEndDate;
@@ -434,18 +445,14 @@ public class SavingsAccountTransactionData implements Serializable {
     }
 
     public EndOfDayBalance toEndOfDayBalance(final Money openingBalance) {
-        final MonetaryCurrency currency = openingBalance.getCurrency();
+        // AB-401: posted interest reaches later periods as compounded interest, so the running balance (which also
+        // holds it)
+        // counted it twice. Step from the opening balance as recalculateDailyBalances does, without the postings.
         Money endOfDayBalance = openingBalance.copy();
-        if (isDeposit() || isDividendPayoutAndNotReversed()) {
-            endOfDayBalance = Money.of(currency, this.runningBalance);
-        } else if (isWithdrawal() || isChargeTransactionAndNotReversed()) {
-            if (isWithdrawal()) {
-                endOfDayBalance = Money.of(currency, this.runningBalance);
-            } else if (openingBalance.isGreaterThanZero()) {
-                endOfDayBalance = openingBalance.minus(getAmount());
-            } else {
-                endOfDayBalance = Money.of(currency, this.runningBalance);
-            }
+        if (isCredit() || isAmountRelease()) {
+            endOfDayBalance = openingBalance.plus(getAmount());
+        } else if (isDebit() || isAmountOnHold()) {
+            endOfDayBalance = openingBalance.minus(getAmount());
         }
 
         return EndOfDayBalance.from(getTransactionDate(), openingBalance, endOfDayBalance, this.balanceNumberOfDays);

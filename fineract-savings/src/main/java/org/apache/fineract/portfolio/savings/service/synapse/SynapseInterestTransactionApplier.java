@@ -76,6 +76,15 @@ public class SynapseInterestTransactionApplier {
      */
     public ReplayResult replay(SavingsAccount account, String transactionType, BigDecimal transactionAmount, LocalDate transactionDate,
             BigDecimal overdraftAmount, String traceId) {
+        return replay(account, transactionType, transactionAmount, transactionDate, overdraftAmount, traceId, false);
+    }
+
+    /**
+     * As {@link #replay(SavingsAccount, String, BigDecimal, LocalDate, BigDecimal, String)}, keeping a manual posting
+     * manual.
+     */
+    public ReplayResult replay(SavingsAccount account, String transactionType, BigDecimal transactionAmount, LocalDate transactionDate,
+            BigDecimal overdraftAmount, String traceId, boolean manual) {
 
         // 1. Deduplicate on traceId, reversed or not: a late retry of a posting a correction has since reversed must
         // not book it again (AB-401).
@@ -92,7 +101,7 @@ public class SynapseInterestTransactionApplier {
 
         // 3. Create transaction entity
         Money money = Money.of(account.getCurrency(), transactionAmount);
-        SavingsAccountTransaction transaction = createTransaction(account, type, transactionDate, money);
+        SavingsAccountTransaction transaction = createTransaction(account, type, transactionDate, money, manual);
         transaction.setRefNo(traceId);
 
         // 4. Set overdraft amount if applicable
@@ -161,10 +170,10 @@ public class SynapseInterestTransactionApplier {
     }
 
     private SavingsAccountTransaction createTransaction(SavingsAccount account, SavingsAccountTransactionType type, LocalDate date,
-            Money money) {
+            Money money, boolean manual) {
         return switch (type) {
-            case INTEREST_POSTING -> SavingsAccountTransaction.interestPosting(account, account.office(), date, money, false);
-            case OVERDRAFT_INTEREST -> SavingsAccountTransaction.overdraftInterest(account, account.office(), date, money, false);
+            case INTEREST_POSTING -> SavingsAccountTransaction.interestPosting(account, account.office(), date, money, manual);
+            case OVERDRAFT_INTEREST -> SavingsAccountTransaction.overdraftInterest(account, account.office(), date, money, manual);
             case WITHHOLD_TAX -> SavingsAccountTransaction.withHoldTax(account, account.office(), date, money, Collections.emptyMap());
             default -> throw new IllegalArgumentException("Unsupported replay transaction type: " + type);
         };

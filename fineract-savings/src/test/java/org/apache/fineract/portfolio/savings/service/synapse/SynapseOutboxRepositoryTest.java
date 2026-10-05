@@ -117,9 +117,11 @@ class SynapseOutboxRepositoryTest {
 
         repository.claimPending("INTEREST_POSTING", 10);
 
-        // Verified against Postgres: a later entry waits while an earlier one is pending, in backoff or in flight.
+        // Verified against Postgres: a later entry waits while an earlier one is pending, in backoff, in flight or a
+        // DEAD interest entry.
         assertThat(sql.getValue()).contains("NOT EXISTS (SELECT 1 FROM synapse_outbox e WHERE e.account_id = o.account_id")
-                .contains("e.id < o.id AND e.status IN ('PENDING', 'DISPATCHED')").contains("FOR UPDATE OF o SKIP LOCKED");
+                .contains("e.id < o.id AND (e.status IN ('PENDING', 'DISPATCHED')")
+                .contains("(e.status = 'DEAD' AND e.task_type = 'INTEREST_POSTING')").contains("FOR UPDATE OF o SKIP LOCKED");
     }
 
     @Test
