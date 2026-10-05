@@ -1217,10 +1217,21 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                     transactionBooleanValues, false);
         }
 
+        final Set<Long> existingTransactionIds = new HashSet<>(account.findExistingTransactionIds());
         final Map<String, Object> accountChanges = account.close(user, command);
         changes.putAll(accountChanges);
+        final SavingsAccountTransaction trueUp = Boolean.TRUE
+                .equals(cacheableSavingsProductConfigService.getSavingsProduct(account.productId()).getIsAccrualBasedAccountingEnabled())
+                        ? account.accrueInterestPostedButNotAccrued(account.getClosedOnDate())
+                        : null;
         if (!changes.isEmpty()) {
-            this.savingAccountRepositoryWrapper.save(account);
+            if (trueUp != null) {
+                // The account can arrive detached, so only the merged copy returned here carries the accrual's id.
+                final SavingsAccount saved = this.savingAccountRepositoryWrapper.saveAndFlush(account);
+                postJournalEntries(saved, existingTransactionIds, new HashSet<>(saved.findExistingReversedTransactionIds()), false);
+            } else {
+                this.savingAccountRepositoryWrapper.save(account);
+            }
             final String noteText = command.stringValueOfParameterNamed("note");
             if (StringUtils.isNotBlank(noteText)) {
                 final Note note = Note.savingNote(account, noteText);

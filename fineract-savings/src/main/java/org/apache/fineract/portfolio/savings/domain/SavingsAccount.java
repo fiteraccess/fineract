@@ -4334,6 +4334,38 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return accrualsToReverse;
     }
 
+    /**
+     * AB-401: a closure pays interest through its last day, priced before the sweep that day reverses that day's
+     * accrual, and a closed account is never accrued again. Books what was posted but never accrued, so the account's
+     * interest payable nets to zero. Postings before its first accrual predate accrual accounting and never touched the
+     * payable.
+     */
+    public SavingsAccountTransaction accrueInterestPostedButNotAccrued(final LocalDate closedDate) {
+        final List<SavingsAccountTransaction> accruals = retrieveOrderedAccrualTransactions();
+        if (accruals.isEmpty()) {
+            return null;
+        }
+        final LocalDate firstAccrual = accruals.get(0).getTransactionDate();
+        Money shortfall = Money.zero(this.currency);
+        for (SavingsAccountTransaction transaction : retrieveListOfTransactions()) {
+            if (transaction.isInterestPostingAndNotReversed() && !transaction.getTransactionDate().isBefore(firstAccrual)) {
+                shortfall = shortfall.plus(transaction.getAmount(this.currency));
+            } else if (transaction.isAccrual() && transaction.isNotReversed()) {
+                shortfall = shortfall.minus(transaction.getAmount(this.currency));
+            }
+        }
+        if (!shortfall.isGreaterThanZero()) {
+            return null;
+        }
+        final SavingsAccountTransaction accrual = SavingsAccountTransaction.accrual(this, office(), closedDate, shortfall, false, null);
+        accrual.setRunningBalance(Money.zero(this.currency));
+        // A positive overdraft amount routes the accrual to interest payable, as the accrual job's entries do.
+        accrual.setOverdraftAmount(shortfall);
+        addTransaction(accrual);
+        this.accruedTillDate = closedDate;
+        return accrual;
+    }
+
     static List<SavingsAccountTransaction> selectAccrualsToReverse(final List<SavingsAccountTransaction> transactions,
             final LocalDate fromDate) {
         return transactions.stream().filter(transaction -> transaction.getTransactionType() == SavingsAccountTransactionType.ACCRUAL

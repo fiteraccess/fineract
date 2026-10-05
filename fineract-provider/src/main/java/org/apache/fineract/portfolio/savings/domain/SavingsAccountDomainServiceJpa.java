@@ -412,10 +412,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 transactionBooleanValues.isExceptionForBalanceCheck());
         final BigDecimal availableBalanceBeforeWithdrawal = account.getWithdrawableBalanceWithoutMinimumBalance();
 
-        // Reverse accrual transactions on or after the transaction date (O(1) JPQL UPDATE)
+        // Reverse accrual transactions on or after the transaction date (one indexed read when there are none)
         if (Boolean.TRUE
                 .equals(cacheableSavingsProductConfigService.getSavingsProduct(account.productId()).getIsAccrualBasedAccountingEnabled())) {
-            this.savingsAccountTransactionRepository.reverseAccrualTransactions(account.getId(), transactionDate);
+            reverseAccrualsFrom(account, transactionDate);
         }
 
         // Create transaction directly using static factory — bypass account.withdraw() which adds to collection
@@ -657,10 +657,10 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final Long relaxingDaysConfigForPivotDate = this.configurationDomainService.retrieveRelaxingDaysConfigForPivotDate();
         account.validatePivotDateTransaction(transactionDate, backdatedTxnsAllowedTill, relaxingDaysConfigForPivotDate, resourceTypeName);
 
-        // Reverse accrual transactions on or after the transaction date (O(1) JPQL UPDATE)
+        // Reverse accrual transactions on or after the transaction date (one indexed read when there are none)
         if (Boolean.TRUE
                 .equals(cacheableSavingsProductConfigService.getSavingsProduct(account.productId()).getIsAccrualBasedAccountingEnabled())) {
-            this.savingsAccountTransactionRepository.reverseAccrualTransactions(account.getId(), transactionDate);
+            reverseAccrualsFrom(account, transactionDate);
         }
 
         // Create transaction directly using static factory — bypass account.deposit() which adds to collection
@@ -982,6 +982,24 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                         existingReversedTransactionIds, backdatedTxnsAllowedTill),
                 isAccountTransfer);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData, savingsAccount.office());
+    }
+
+    /**
+     * Reverses the account's live accruals from the given date with their contra entries. AB-401: a bulk update left
+     * their journals live, so every accrual the job re-booked sat twice in interest expense and interest payable.
+     */
+    void reverseAccrualsFrom(final SavingsAccount account, final LocalDate fromDate) {
+        final List<SavingsAccountTransaction> accruals = this.savingsAccountTransactionRepository.findLiveAccrualsFrom(account.getId(),
+                fromDate);
+        if (accruals.isEmpty()) {
+            return;
+        }
+        accruals.forEach(SavingsAccountTransaction::reverse);
+        this.savingsAccountTransactionRepository.saveAll(accruals);
+        this.journalEntryWritePlatformService.createJournalEntriesForSavings(
+                SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account, accruals, false), account.office());
+        this.journalEntryWritePlatformService
+                .linkSavingsReversalJournalEntries(accruals.stream().map(SavingsAccountTransaction::getId).toList());
     }
 
     /**

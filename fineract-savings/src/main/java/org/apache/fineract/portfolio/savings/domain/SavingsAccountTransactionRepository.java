@@ -60,19 +60,18 @@ public interface SavingsAccountTransactionRepository
             @Param("transactionDate") LocalDate transactionDate, Pageable pageable);
 
     /**
-     * Bulk-reverse all non-reversed accrual transactions for a given account on or after the specified date. This
-     * replaces the O(N) in-memory iteration in {@code SavingsAccount.accrualsForSavingsReverse()} with a single O(1)
-     * indexed UPDATE statement.
+     * The live accrual transactions of an account on or after the given date: one indexed read, in place of iterating
+     * the account's whole history in {@code SavingsAccount.accrualsForSavingsReverse()}.
      *
      * @param savingsAccountId
      *            the savings account ID
      * @param transactionDate
-     *            reverse accruals on or after this date
-     * @return the number of accrual transactions reversed
+     *            accruals on or after this date
+     * @return the accruals still live from that date
      */
-    @Modifying
-    @Query("UPDATE SavingsAccountTransaction sat SET sat.reversed = true WHERE sat.savingsAccount.id = :savingsAccountId AND sat.typeOf = 10 AND sat.dateOf >= :transactionDate AND sat.reversed = false")
-    int reverseAccrualTransactions(@Param("savingsAccountId") Long savingsAccountId, @Param("transactionDate") LocalDate transactionDate);
+    @Query("SELECT sat FROM SavingsAccountTransaction sat WHERE sat.savingsAccount.id = :savingsAccountId AND sat.typeOf = 10 AND sat.dateOf >= :transactionDate AND sat.reversed = false")
+    List<SavingsAccountTransaction> findLiveAccrualsFrom(@Param("savingsAccountId") Long savingsAccountId,
+            @Param("transactionDate") LocalDate transactionDate);
 
     /**
      * Batch-update running balances for all non-reversed transactions on or after the given date. Used by the optimized
