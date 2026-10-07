@@ -808,7 +808,22 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("sp.is_dormancy_tracking_active as isDormancyTrackingActive, ");
             sqlBuilder.append("sp.days_to_inactive as daysToInactive, ");
             sqlBuilder.append("sp.days_to_dormancy as daysToDormancy, ");
-            sqlBuilder.append("sp.days_to_escheat as daysToEscheat ");
+            sqlBuilder.append("sp.days_to_escheat as daysToEscheat, ");
+            sqlBuilder.append("sp.accounting_type as accountingType, ");
+            sqlBuilder.append("sp.product_category as productCategory, ");
+            // Same open period as SavingsAccruedInterestReadService: a goal's runs from activation, others' from the
+            // last posting.
+            sqlBuilder.append("(select coalesce(sum(acr.amount), 0) from m_savings_account_transaction acr ");
+            sqlBuilder.append("where acr.savings_account_id = sa.id and acr.transaction_type_enum = "
+                    + SavingsAccountTransactionType.ACCRUAL.getValue() + " ");
+            sqlBuilder.append("and acr.is_reversed = false and acr.is_reversal = false ");
+            sqlBuilder.append("and (sp.product_category = '" + SavingsProductCategory.GOAL.name() + "' ");
+            sqlBuilder
+                    .append("or coalesce(acr.transaction_date > (select max(pst.transaction_date) from m_savings_account_transaction pst ");
+            sqlBuilder.append("where pst.savings_account_id = sa.id and pst.transaction_type_enum in ("
+                    + SavingsAccountTransactionType.INTEREST_POSTING.getValue() + ", "
+                    + SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue() + ") ");
+            sqlBuilder.append("and pst.is_reversed = false and pst.is_reversal = false), true))) as accruedNotPosted ");
             sqlBuilder.append("from m_savings_account sa ");
             sqlBuilder.append("join m_savings_product sp ON sa.product_id = sp.id ");
             sqlBuilder.append("join m_currency curr on curr.code = sa.currency_code ");
@@ -995,16 +1010,15 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                 availableBalance = availableBalance.subtract(onHoldAmount);
             }
 
-            BigDecimal interestNotPosted = BigDecimal.ZERO;
-            LocalDate lastInterestCalculationDate = null;
-            if (totalInterestEarned != null) {
-                interestNotPosted = totalInterestEarned.subtract(totalInterestPosted).add(totalOverdraftInterestDerived);
-                lastInterestCalculationDate = JdbcSupport.getLocalDate(rs, "lastInterestCalculationDate");
-            }
+            final LocalDate lastInterestCalculationDate = totalInterestEarned == null ? null
+                    : JdbcSupport.getLocalDate(rs, "lastInterestCalculationDate");
+            final SavingsInterestSummary interest = SavingsInterestSummary.of(JdbcSupport.getInteger(rs, "accountingType"),
+                    SavingsProductCategory.GOAL.name().equals(rs.getString("productCategory")), totalInterestEarned, totalInterestPosted,
+                    totalOverdraftInterestDerived, rs.getBigDecimal("accruedNotPosted"));
 
             final SavingsAccountSummaryData summary = new SavingsAccountSummaryData(currency, totalDeposits, totalWithdrawals,
-                    totalWithdrawalFees, totalAnnualFees, totalInterestEarned, totalInterestPosted, accountBalance, totalFeeCharge,
-                    totalPenaltyCharge, totalOverdraftInterestDerived, totalWithholdTax, interestNotPosted, lastInterestCalculationDate,
+                    totalWithdrawalFees, totalAnnualFees, interest.earned(), totalInterestPosted, accountBalance, totalFeeCharge,
+                    totalPenaltyCharge, totalOverdraftInterestDerived, totalWithholdTax, interest.notPosted(), lastInterestCalculationDate,
                     availableBalance, interestPostedTillDate);
 
             final boolean withHoldTax = rs.getBoolean("withHoldTax");
