@@ -18,28 +18,17 @@
  */
 package org.apache.fineract.cob.service;
 
-import java.util.Arrays;
-import java.util.Optional;
+import java.util.List;
+import org.apache.fineract.cob.data.BusinessStep;
+import org.apache.fineract.cob.exceptions.BusinessStepException;
 
-public enum BusinessStepCategory {
+/**
+ * A job's own rule for a business-step configuration, checked before {@link ConfigJobParameterService} replaces the
+ * stored steps. Implementations throw {@link BusinessStepException} (a 400) when the configuration is not runnable.
+ */
+public interface BusinessStepConfigValidator {
 
-    LOAN("LOAN"), //
-    EOD("EOD"); //
+    boolean appliesTo(String jobName);
 
-    private final String name;
-
-    BusinessStepCategory(String name) {
-        this.name = name;
-    }
-
-    public static BusinessStepCategory getCategoryName(String categoryName) {
-        Optional<BusinessStepCategory> optionalCategory = Arrays.stream(BusinessStepCategory.values())
-                .filter(jn -> categoryName.equals(jn.name)).findAny();
-        return optionalCategory.orElseThrow(() -> new IllegalArgumentException("Category not found by name: " + categoryName));
-    }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
+    void validate(List<BusinessStep> steps);
 }

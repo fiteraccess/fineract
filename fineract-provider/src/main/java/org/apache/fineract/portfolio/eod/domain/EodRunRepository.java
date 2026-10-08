@@ -16,30 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.cob.service;
+package org.apache.fineract.portfolio.eod.domain;
 
-import java.util.Arrays;
+import java.time.LocalDate;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-public enum BusinessStepCategory {
+public interface EodRunRepository extends JpaRepository<EodRun, Long> {
 
-    LOAN("LOAN"), //
-    EOD("EOD"); //
+    Optional<EodRun> findByBusinessDate(LocalDate businessDate);
 
-    private final String name;
+    /** Earlier days still open: the chain closes one business date at a time, in order. */
 
-    BusinessStepCategory(String name) {
-        this.name = name;
-    }
-
-    public static BusinessStepCategory getCategoryName(String categoryName) {
-        Optional<BusinessStepCategory> optionalCategory = Arrays.stream(BusinessStepCategory.values())
-                .filter(jn -> categoryName.equals(jn.name)).findAny();
-        return optionalCategory.orElseThrow(() -> new IllegalArgumentException("Category not found by name: " + categoryName));
-    }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
+    /** The earliest run not yet completed: what "Run now" resumes before any new day is opened. */
+    Optional<EodRun> findFirstByStatusNotOrderByBusinessDateAsc(String status);
 }

@@ -16,30 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.cob.service;
+package org.apache.fineract.portfolio.eod.domain;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-public enum BusinessStepCategory {
+public interface EodStepRepository extends JpaRepository<EodStep, Long> {
 
-    LOAN("LOAN"), //
-    EOD("EOD"); //
+    Optional<EodStep> findByRunAndStepName(EodRun run, String stepName);
 
-    private final String name;
-
-    BusinessStepCategory(String name) {
-        this.name = name;
-    }
-
-    public static BusinessStepCategory getCategoryName(String categoryName) {
-        Optional<BusinessStepCategory> optionalCategory = Arrays.stream(BusinessStepCategory.values())
-                .filter(jn -> categoryName.equals(jn.name)).findAny();
-        return optionalCategory.orElseThrow(() -> new IllegalArgumentException("Category not found by name: " + categoryName));
-    }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
+    List<EodStep> findByRunOrderByIdAsc(EodRun run);
 }

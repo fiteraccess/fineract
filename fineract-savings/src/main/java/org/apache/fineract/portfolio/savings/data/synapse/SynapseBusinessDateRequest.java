@@ -16,30 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.cob.service;
+package org.apache.fineract.portfolio.savings.data.synapse;
 
-import java.util.Arrays;
-import java.util.Optional;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-public enum BusinessStepCategory {
+/** The EOD rollover's push to Synapse: the business date Fineract has just advanced to, as yyyy-MM-dd. */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class SynapseBusinessDateRequest {
 
-    LOAN("LOAN"), //
-    EOD("EOD"); //
-
-    private final String name;
-
-    BusinessStepCategory(String name) {
-        this.name = name;
-    }
-
-    public static BusinessStepCategory getCategoryName(String categoryName) {
-        Optional<BusinessStepCategory> optionalCategory = Arrays.stream(BusinessStepCategory.values())
-                .filter(jn -> categoryName.equals(jn.name)).findAny();
-        return optionalCategory.orElseThrow(() -> new IllegalArgumentException("Category not found by name: " + categoryName));
-    }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
+    private String date;
 }

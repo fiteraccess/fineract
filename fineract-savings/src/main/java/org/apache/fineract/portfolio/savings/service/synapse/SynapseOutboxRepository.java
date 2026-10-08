@@ -184,6 +184,31 @@ public class SynapseOutboxRepository {
         return delayMinutes * jitter;
     }
 
+    /** Entries of one task type created at or after {@code since}, counted by status: a posting run's own entries. */
+    public Map<String, Long> countByStatusSince(String taskType, Instant since) {
+        return jdbcTemplate
+                .query("SELECT status, COUNT(*) AS cnt FROM synapse_outbox WHERE task_type = ? AND created_at >= ? GROUP BY status", rs -> {
+                    Map<String, Long> counts = new HashMap<>();
+                    while (rs.next()) {
+                        counts.put(rs.getString("status"), rs.getLong("cnt"));
+                    }
+                    return counts;
+                }, taskType, Timestamp.from(since));
+    }
+
+    /** DEAD entries of one task type, whatever their age. */
+    public long countDead(String taskType) {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM synapse_outbox WHERE task_type = ? AND status = 'DEAD'", Long.class,
+                taskType);
+        return count == null ? 0 : count;
+    }
+
+    /** Accounts holding a DEAD entry of one task type, oldest entry first, at most {@code limit}. */
+    public List<Long> findDeadAccountIds(String taskType, int limit) {
+        return jdbcTemplate.queryForList("SELECT account_id FROM synapse_outbox WHERE task_type = ? AND status = 'DEAD'"
+                + " GROUP BY account_id ORDER BY MIN(id) LIMIT ?", Long.class, taskType, limit);
+    }
+
     /**
      * Returns outbox entry counts grouped by task type and status.
      *

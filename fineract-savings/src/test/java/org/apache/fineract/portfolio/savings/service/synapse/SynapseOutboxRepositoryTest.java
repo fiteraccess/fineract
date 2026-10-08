@@ -80,6 +80,32 @@ class SynapseOutboxRepositoryTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void countByStatusSince_bindsTheInstantTheWayRowsAreStamped() {
+        Instant since = Instant.parse("2026-10-31T17:00:00Z");
+        when(jdbcTemplate.query(argThat((String sql) -> sql.contains("created_at >= ?")), any(ResultSetExtractor.class),
+                eq("INTEREST_POSTING"), eq(Timestamp.from(since)))).thenReturn(Map.of("PENDING", 2L));
+
+        assertThat(repository.countByStatusSince("INTEREST_POSTING", since)).isEqualTo(Map.of("PENDING", 2L));
+    }
+
+    @Test
+    void countDead_countsDeadEntriesOfTheTaskTypeWhateverTheirAge() {
+        when(jdbcTemplate.queryForObject(argThat((String sql) -> sql.contains("status = 'DEAD'") && !sql.contains("created_at")),
+                eq(Long.class), eq("INTEREST_POSTING"))).thenReturn(3L);
+
+        assertThat(repository.countDead("INTEREST_POSTING")).isEqualTo(3L);
+    }
+
+    @Test
+    void findDeadAccountIds_isBoundedAndOldestFirst() {
+        when(jdbcTemplate.queryForList(argThat((String sql) -> sql.contains("ORDER BY MIN(id) LIMIT ?")), eq(Long.class),
+                eq("INTEREST_POSTING"), eq(5))).thenReturn(List.of(11L, 12L));
+
+        assertThat(repository.findDeadAccountIds("INTEREST_POSTING", 5)).containsExactly(11L, 12L);
+    }
+
+    @Test
     void claimPending_noRows_returnsEmpty() {
         Timestamp now = Timestamp.from(FIXED_NOW);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(now), eq("INTEREST_POSTING"), eq(now), eq(10)))

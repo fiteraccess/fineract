@@ -54,6 +54,7 @@ public class BusinessDateWritePlatformServiceImpl implements BusinessDateWritePl
     }
 
     @Override
+    @CacheEvict(value = "businessDates", allEntries = true)
     public void increaseDateByTypeByOneDay(BusinessDateType businessDateType) throws JobExecutionException {
         Optional<BusinessDate> businessDateEntity = repository.findByType(businessDateType);
         List<Throwable> exceptions = new ArrayList<>();
@@ -82,7 +83,6 @@ public class BusinessDateWritePlatformServiceImpl implements BusinessDateWritePl
         }
     }
 
-    @CacheEvict(value = "businessDates", allEntries = true)
     private void adjustDate(BusinessDateDTO businessDateDto) {
         boolean isCOBDateAdjustmentEnabled = configurationDomainService.isCOBDateAdjustmentEnabled();
         boolean isBusinessDateEnabled = configurationDomainService.isBusinessDateEnabled();

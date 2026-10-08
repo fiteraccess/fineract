@@ -16,30 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.cob.service;
+package org.apache.fineract.cob.eod;
 
-import java.util.Arrays;
-import java.util.Optional;
+import org.apache.fineract.cob.COBBusinessStep;
+import org.apache.fineract.portfolio.eod.domain.EodRun;
 
-public enum BusinessStepCategory {
-
-    LOAN("LOAN"), //
-    EOD("EOD"); //
-
-    private final String name;
-
-    BusinessStepCategory(String name) {
-        this.name = name;
-    }
-
-    public static BusinessStepCategory getCategoryName(String categoryName) {
-        Optional<BusinessStepCategory> optionalCategory = Arrays.stream(BusinessStepCategory.values())
-                .filter(jn -> categoryName.equals(jn.name)).findAny();
-        return optionalCategory.orElseThrow(() -> new IllegalArgumentException("Category not found by name: " + categoryName));
-    }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
-}
+/** A step of the tenant-wide EOD close-of-business chain; the item is the day's run, not an account. */
+public interface EodBusinessStep extends COBBusinessStep<EodRun> {}
