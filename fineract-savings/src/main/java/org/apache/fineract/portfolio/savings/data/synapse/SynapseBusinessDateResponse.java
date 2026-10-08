@@ -16,30 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.cob.service;
+package org.apache.fineract.portfolio.savings.data.synapse;
 
-import java.util.Arrays;
-import java.util.Optional;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.time.LocalDate;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-public enum BusinessStepCategory {
+/** What Synapse now stamps ({@code businessDate}, always Fineract's own date as it just read it). */
+@Getter
+@Setter
+@NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class SynapseBusinessDateResponse {
 
-    LOAN("LOAN"), //
-    EOD("EOD"); //
-
-    private final String name;
-
-    BusinessStepCategory(String name) {
-        this.name = name;
-    }
-
-    public static BusinessStepCategory getCategoryName(String categoryName) {
-        Optional<BusinessStepCategory> optionalCategory = Arrays.stream(BusinessStepCategory.values())
-                .filter(jn -> categoryName.equals(jn.name)).findAny();
-        return optionalCategory.orElseThrow(() -> new IllegalArgumentException("Category not found by name: " + categoryName));
-    }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
+    private LocalDate businessDate;
+    private LocalDate fineractBusinessDate;
+    private LocalDate requestedDate;
 }

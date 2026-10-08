@@ -35,6 +35,7 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +48,7 @@ public class ConfigJobParameterServiceImpl implements ConfigJobParameterService,
     private final BusinessStepCategoryService businessStepCategoryService;
     private final ApplicationContext applicationContext;
     private final BusinessStepMapper mapper;
+    private final ObjectProvider<BusinessStepConfigValidator> configValidators;
     private JobBusinessStepDetail availableBusinessStepsForLoan;
 
     @Override
@@ -70,11 +72,18 @@ public class ConfigJobParameterServiceImpl implements ConfigJobParameterService,
         if (businessSteps.isEmpty()) {
             throw new BusinessStepException("A job needs to have 1 business step at least.");
         }
-        List<String> availableBusinessStepNames = availableBusinessStepsForLoan.getAvailableBusinessSteps().stream()
-                .map(BusinessStepDetail::getStepName).toList();
+        // The job's own category decides which steps are valid; a job name no category claims keeps the loan list.
+        JobBusinessStepDetail available = getAvailableBusinessStepsByJobName(jobName);
+        if (available == null) {
+            available = availableBusinessStepsForLoan;
+        }
+        List<String> availableBusinessStepNames = available.getAvailableBusinessSteps().stream().map(BusinessStepDetail::getStepName)
+                .toList();
         List<String> notValidBusinessStepNames = businessSteps.stream().map(BusinessStep::getStepName)
                 .filter(businessStepName -> !availableBusinessStepNames.contains(businessStepName)).toList();
         if (notValidBusinessStepNames.isEmpty()) {
+            configValidators.orderedStream().filter(validator -> validator.appliesTo(jobName))
+                    .forEach(validator -> validator.validate(businessSteps));
             batchBusinessStepRepository.deleteAllByJobName(jobName);
             businessSteps.forEach(newBusinessStepConfig -> {
                 BatchBusinessStep batchBusinessStep = new BatchBusinessStep();
