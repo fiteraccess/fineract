@@ -101,7 +101,8 @@ public class EodCloseOfBusinessTasklet implements Tasklet {
             return RepeatStatus.FINISHED;
         }
         EodRun run = runService.findOrStart(businessDate);
-        log.info("EOD {}: {} (attempt {})", businessDate, open.isPresent() ? "resuming" : "starting", run.getAttempts());
+        String action = open.isPresent() ? "resuming" : "starting";
+        log.info("EOD {}: {} (attempt {})", businessDate, action, run.getAttempts());
 
         try {
             requireRunnablePlan();
