@@ -49,6 +49,7 @@ import org.junit.jupiter.api.Test;
 class EodRunServiceTest {
 
     private static final LocalDate D = LocalDate.of(2026, 10, 6);
+    private static final LocalDateTime AT = D.atTime(9, 0);
 
     private EodRunRepository runs;
     private EodStepRepository steps;
@@ -85,7 +86,7 @@ class EodRunServiceTest {
 
     @Test
     void anOpenRunIsReAttempted_aCompletedOneIsReturnedAsIs() {
-        EodRun failed = EodRun.start(D, LocalDateTime.now());
+        EodRun failed = EodRun.start(D, AT);
         failed.setStatus(EodRun.STATUS_FAILED);
         failed.setLastError("boom");
         when(runs.findByBusinessDate(D)).thenReturn(Optional.of(failed));
@@ -96,7 +97,7 @@ class EodRunServiceTest {
         assertEquals(2, resumed.getAttempts());
         assertNull(resumed.getLastError());
 
-        EodRun done = EodRun.start(D, LocalDateTime.now());
+        EodRun done = EodRun.start(D, AT);
         done.setStatus(EodRun.STATUS_COMPLETED);
         when(runs.findByBusinessDate(D)).thenReturn(Optional.of(done));
         assertSame(done, underTest.findOrStart(D));
@@ -105,11 +106,11 @@ class EodRunServiceTest {
 
     @Test
     void aCompletedStepIsHandedBackUntouched_anyOtherIsRestarted() {
-        EodRun run = EodRun.start(D, LocalDateTime.now());
-        EodStep done = EodStep.start(run, "EOD_ROLLOVER", LocalDateTime.now());
+        EodRun run = EodRun.start(D, AT);
+        EodStep done = EodStep.start(run, "EOD_ROLLOVER", AT);
         done.setStatus(EodStep.STATUS_COMPLETED);
         when(steps.findByRunAndStepName(run, "EOD_ROLLOVER")).thenReturn(Optional.of(done));
-        EodStep failed = EodStep.start(run, "EOD_ACCRUAL", LocalDateTime.now());
+        EodStep failed = EodStep.start(run, "EOD_ACCRUAL", AT);
         failed.setStatus(EodStep.STATUS_FAILED);
         failed.setErrorCode("X");
         when(steps.findByRunAndStepName(run, "EOD_ACCRUAL")).thenReturn(Optional.of(failed));
@@ -126,7 +127,7 @@ class EodRunServiceTest {
     /** A retried or resumed step reports the same exception again; the report counts it once. */
     @Test
     void anExceptionAlreadyRecordedForTheRunStepCodeAndReferenceIsNotInsertedAgain() {
-        EodRun run = EodRun.start(D, LocalDateTime.now());
+        EodRun run = EodRun.start(D, AT);
         when(exceptions.existsByRunAndStepNameAndCodeAndReference(run, "EOD_REPLAY_DRAIN", "EOD-REPLAY-LEGACY", "ref-1")).thenReturn(false,
                 true);
 
@@ -138,7 +139,7 @@ class EodRunServiceTest {
 
     @Test
     void aNullReferenceMatchesANullReference() {
-        EodRun run = EodRun.start(D, LocalDateTime.now());
+        EodRun run = EodRun.start(D, AT);
         when(exceptions.existsByRunAndStepNameAndCodeAndReferenceIsNull(run, "EOD_BILLS_GATE", "EOD-BILLS-NO-FILE")).thenReturn(true);
 
         underTest.recordException(run, "EOD_BILLS_GATE", EodException.SEVERITY_WARN, "EOD-BILLS-NO-FILE", "no file", null);
@@ -148,8 +149,8 @@ class EodRunServiceTest {
 
     @Test
     void checkpointDetailIsStoredAsJson() {
-        EodRun run = EodRun.start(D, LocalDateTime.now());
-        EodStep step = EodStep.start(run, "EOD_ROLLOVER", LocalDateTime.now());
+        EodRun run = EodRun.start(D, AT);
+        EodStep step = EodStep.start(run, "EOD_ROLLOVER", AT);
 
         underTest.completed(step, Map.of("from", "2026-10-06"));
 

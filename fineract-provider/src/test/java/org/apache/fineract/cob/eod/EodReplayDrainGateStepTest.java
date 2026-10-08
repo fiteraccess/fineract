@@ -31,10 +31,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.eod.domain.EodException;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
@@ -67,8 +67,8 @@ class EodReplayDrainGateStepTest {
         run = EodStepTestSupport.run();
         EodStepTestSupport.freshCheckpoints(runService, run);
         // The grace wait compares the rollover's completion with the real clock: it must lie in the actual past.
-        when(runService.findStep(run, EodRolloverStep.NAME))
-                .thenReturn(Optional.of(EodStepTestSupport.completedStep(run, EodRolloverStep.NAME, LocalDateTime.now().minusDays(1))));
+        when(runService.findStep(run, EodRolloverStep.NAME)).thenReturn(Optional
+                .of(EodStepTestSupport.completedStep(run, EodRolloverStep.NAME, DateUtils.getLocalDateTimeOfTenant().minusDays(1))));
     }
 
     @AfterEach
