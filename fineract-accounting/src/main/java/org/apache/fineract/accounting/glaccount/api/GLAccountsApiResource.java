@@ -54,6 +54,7 @@ import org.apache.fineract.accounting.glaccount.data.GLAccountDetailsData;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
 import org.apache.fineract.accounting.glaccount.service.GLAccountBalanceReadPlatformService;
 import org.apache.fineract.accounting.glaccount.service.GLAccountReadPlatformService;
+import org.apache.fineract.accounting.glaccount.service.GLAccountReversals;
 import org.apache.fineract.accounting.journalentry.data.JournalEntryAssociationParametersData;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
@@ -324,6 +325,10 @@ public class GLAccountsApiResource {
                     Sign convention, reversal exclusion, office scope, currency scope and the JSON-string encoding of
                     monetary fields are all identical to `GET glaccounts/code/{glCode}`.
 
+                    `reversals=asPosted` counts every entry on its own entry date instead: an original posting on its
+                    day and the reversal posted against it on the reversal's day. Use it to compare day-by-day movement
+                    with another ledger. The default, `reversals=exclude`, leaves both legs out.
+
                     Requires the `READ_JOURNALENTRY` permission, since the entire response is derived from journal
                     entries and reveals strictly less than `GET journalentries?glAccountId=...`.
 
@@ -339,12 +344,14 @@ public class GLAccountsApiResource {
             @QueryParam("officeId") @Parameter(description = "Restrict to one office; omit for organisation-wide") final Long officeId,
             @QueryParam("currencyCode") @Parameter(description = "Restrict to one currency; omit to resolve the account's sole currency") final String currencyCode,
             @QueryParam("dateFormat") @Parameter(description = "defaults to yyyy-MM-dd") final String dateFormat,
-            @QueryParam("locale") @Parameter(description = "defaults to en") final String locale) {
+            @QueryParam("locale") @Parameter(description = "defaults to en") final String locale,
+            @QueryParam("reversals") @Parameter(description = "exclude (default) or asPosted") final String reversals) {
         this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION_JOURNAL_ENTRY);
 
         final LocalDate fromDate = parseQueryDate(fromDateParam, DateParam.FROM_DATE_PARAM, dateFormat, locale);
         final LocalDate toDate = parseQueryDate(toDateParam, DateParam.TO_DATE_PARAM, dateFormat, locale);
-        return this.glAccountBalanceReadPlatformService.retrieveGLAccountBalanceByCode(glCode, fromDate, toDate, officeId, currencyCode);
+        return this.glAccountBalanceReadPlatformService.retrieveGLAccountBalanceByCode(glCode, fromDate, toDate, officeId, currencyCode,
+                GLAccountReversals.fromParam(reversals));
     }
 
     /**

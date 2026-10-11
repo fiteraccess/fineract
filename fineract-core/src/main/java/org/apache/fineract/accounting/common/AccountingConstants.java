@@ -439,7 +439,11 @@ public final class AccountingConstants {
         PAYABLE_DIVIDENDS(201, "payableDividends", GLAccountType.LIABILITY), //
         EMT_LEVY(202, "emtLevy", GLAccountType.LIABILITY), //
         VAT_PAYABLE(203, "vatPayable", GLAccountType.LIABILITY), //
-        SIGNED_STATEMENT_FEE_INCOME(204, "signedStatementFeeIncome", GLAccountType.INCOME); //
+        SIGNED_STATEMENT_FEE_INCOME(204, "signedStatementFeeIncome", GLAccountType.INCOME), //
+        EOD_DEPOSIT_BRIDGE(205, "eodDepositBridge", GLAccountType.LIABILITY), //
+        EOD_INCOME_BRIDGE(206, "eodIncomeBridge", GLAccountType.INCOME), //
+        EOD_TAX_BRIDGE(207, "eodTaxBridge", GLAccountType.LIABILITY), //
+        EOD_INTEREST_BRIDGE(208, "eodInterestBridge", GLAccountType.EXPENSE); //
 
         private final Integer value;
         private final String code;

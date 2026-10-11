@@ -64,7 +64,9 @@ public final class FinancialActivityAccountDataValidator {
                 FinancialActivity.CASH_AT_MAINVAULT.getValue(), FinancialActivity.CASH_AT_TELLER.getValue(),
                 FinancialActivity.OPENING_BALANCES_TRANSFER_CONTRA.getValue(), FinancialActivity.ASSET_FUND_SOURCE.getValue(),
                 FinancialActivity.PAYABLE_DIVIDENDS.getValue(), FinancialActivity.EMT_LEVY.getValue(),
-                FinancialActivity.VAT_PAYABLE.getValue(), FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue());
+                FinancialActivity.VAT_PAYABLE.getValue(), FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(),
+                FinancialActivity.EOD_DEPOSIT_BRIDGE.getValue(), FinancialActivity.EOD_INCOME_BRIDGE.getValue(),
+                FinancialActivity.EOD_TAX_BRIDGE.getValue(), FinancialActivity.EOD_INTEREST_BRIDGE.getValue());
 
         final Long glAccountId = this.fromApiJsonHelper.extractLongNamed(paramNameForGLAccount, element);
         baseDataValidator.reset().parameter(paramNameForGLAccount).value(glAccountId).notNull().integerGreaterThanZero();
@@ -91,7 +93,9 @@ public final class FinancialActivityAccountDataValidator {
                     FinancialActivity.ASSET_TRANSFER.getValue(), FinancialActivity.LIABILITY_TRANSFER.getValue(),
                     FinancialActivity.OPENING_BALANCES_TRANSFER_CONTRA.getValue(), FinancialActivity.ASSET_FUND_SOURCE.getValue(),
                     FinancialActivity.PAYABLE_DIVIDENDS.getValue(), FinancialActivity.EMT_LEVY.getValue(),
-                    FinancialActivity.VAT_PAYABLE.getValue(), FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue());
+                    FinancialActivity.VAT_PAYABLE.getValue(), FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue(),
+                    FinancialActivity.EOD_DEPOSIT_BRIDGE.getValue(), FinancialActivity.EOD_INCOME_BRIDGE.getValue(),
+                    FinancialActivity.EOD_TAX_BRIDGE.getValue(), FinancialActivity.EOD_INTEREST_BRIDGE.getValue());
         }
 
         if (this.fromApiJsonHelper.parameterExists(paramNameForGLAccount, element)) {

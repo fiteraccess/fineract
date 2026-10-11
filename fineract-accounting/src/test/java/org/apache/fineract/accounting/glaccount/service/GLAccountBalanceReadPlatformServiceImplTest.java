@@ -322,6 +322,72 @@ class GLAccountBalanceReadPlatformServiceImplTest {
         }
     }
 
+    @Nested
+    @DisplayName("reversals mode")
+    class ReversalsMode {
+
+        @Test
+        void asPostedCountsEveryEntryOnItsOwnDate_inTheWindowAndTheCurrencyQueries() {
+            stubWindow("0", "0", "0", "0", 0);
+
+            service.retrieveGLAccountBalanceByCode(GL_CODE, FROM, TO, null, null, GLAccountReversals.AS_POSTED);
+
+            assertThat(capturedWindowSql()).doesNotContain("je.reversed = false").doesNotContain("rev.reversal_id");
+            final ArgumentCaptor<String> currencySql = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).queryForList(currencySql.capture(), anyMap(), eq(String.class));
+            assertThat(currencySql.getValue()).doesNotContain("je.reversed = false").doesNotContain("rev.reversal_id");
+        }
+
+        @Test
+        void anExplicitExcludeBuildsExactlyTheDefaultQuery() {
+            stubWindow("0", "0", "0", "0", 0);
+
+            balance(FROM, TO, 7L, "NGN");
+            service.retrieveGLAccountBalanceByCode(GL_CODE, FROM, TO, 7L, "NGN", GLAccountReversals.EXCLUDE);
+
+            final ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate, org.mockito.Mockito.atLeastOnce()).queryForObject(sql.capture(), anyMap(), any(RowMapper.class));
+            final List<String> windows = sql.getAllValues().stream().filter(s -> s.contains(WINDOW_SQL_MARKER)).toList();
+            assertThat(windows).hasSize(2);
+            assertThat(windows.get(1)).isEqualTo(windows.get(0)).contains("je.reversed = false").contains("rev.reversal_id = je.id");
+        }
+
+        @Test
+        void theAsOfDetailsReadAlwaysExcludesReversals() {
+            stubCumulative("0", "0", 0L, null);
+
+            details(TO, null, null);
+
+            final ArgumentCaptor<String> currencySql = ArgumentCaptor.forClass(String.class);
+            verify(jdbcTemplate).queryForList(currencySql.capture(), anyMap(), eq(String.class));
+            assertThat(currencySql.getValue()).contains("je.reversed = false").contains("rev.reversal_id = je.id");
+        }
+    }
+
+    @Nested
+    @DisplayName("reversals parameter")
+    class ReversalsParameter {
+
+        @Test
+        void absentOrBlankMeansExclude() {
+            assertThat(GLAccountReversals.fromParam(null)).isEqualTo(GLAccountReversals.EXCLUDE);
+            assertThat(GLAccountReversals.fromParam(" ")).isEqualTo(GLAccountReversals.EXCLUDE);
+        }
+
+        @Test
+        void acceptsTheTwoDocumentedValues() {
+            assertThat(GLAccountReversals.fromParam("exclude")).isEqualTo(GLAccountReversals.EXCLUDE);
+            assertThat(GLAccountReversals.fromParam("asPosted")).isEqualTo(GLAccountReversals.AS_POSTED);
+        }
+
+        @Test
+        void anyOtherValueIsAValidationErrorNamingTheParameter() {
+            assertThatThrownBy(() -> GLAccountReversals.fromParam("include")).isInstanceOf(PlatformApiDataValidationException.class)
+                    .satisfies(e -> assertThat(((PlatformApiDataValidationException) e).getErrors()).singleElement()
+                            .satisfies(error -> assertThat(error.getParameterName()).isEqualTo("reversals")));
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------------- currency
 
     @Nested
