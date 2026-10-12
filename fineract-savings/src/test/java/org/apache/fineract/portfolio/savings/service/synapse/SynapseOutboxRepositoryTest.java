@@ -472,4 +472,66 @@ class SynapseOutboxRepositoryTest {
             assertThat(cutoffCaptor.getValue()).isEqualTo(Timestamp.from(FIXED_NOW));
         }
     }
+
+    @Nested
+    class Supersede {
+
+        @Test
+        void aKeyedEntrySupersedesTheUnsentEntryWithItsKeyBeforeItIsInserted() {
+            OutboxEntry entry = OutboxEntry.builder().traceId("t-new").accountId(7L).officeId(1L).payload("{}").dedupKey("REVERSE:99")
+                    .build();
+            when(jdbcTemplate.batchUpdate(argThat((String sql) -> sql.contains("SUPERSEDED")), eq(List.of(entry)), eq(1), any()))
+                    .thenReturn(new int[][] { { 1 } });
+
+            int superseded = repository.insertBatch("INTEREST_POSTING", "batch-2", List.of(entry));
+
+            assertThat(superseded).isEqualTo(1);
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(jdbcTemplate);
+            order.verify(jdbcTemplate).batchUpdate(argThat((String sql) -> sql.contains("status = 'SUPERSEDED'")
+                    && sql.contains("dedup_key = ?") && sql.contains("status = 'PENDING'")), eq(List.of(entry)), eq(1), any());
+            order.verify(jdbcTemplate).batchUpdate(
+                    argThat((String sql) -> sql.contains("INSERT INTO synapse_outbox") && sql.contains("dedup_key")), eq(List.of(entry)),
+                    eq(1), any());
+        }
+
+        @Test
+        void entriesWithoutAKeySupersedeNothing() {
+            OutboxEntry entry = OutboxEntry.builder().traceId("t1").accountId(1L).officeId(10L).payload("{}").build();
+
+            int superseded = repository.insertBatch("CHARGE_POSTING", "batch-1", List.of(entry));
+
+            assertThat(superseded).isZero();
+            verify(jdbcTemplate, org.mockito.Mockito.never()).batchUpdate(argThat((String sql) -> sql.contains("SUPERSEDED")),
+                    org.mockito.ArgumentMatchers.<List<OutboxEntry>>any(), org.mockito.ArgumentMatchers.anyInt(), any());
+        }
+    }
+
+    @Nested
+    class Cancel {
+
+        @Test
+        void cancelsOnlyADeadEntry_recordingWhoAndWhy() {
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class), anyString(), eq(36937L))).thenReturn(1);
+
+            int updated = repository.cancelDeadEntry(36937L, "mifos", "reversal of a posting Synapse never held");
+
+            assertThat(updated).isEqualTo(1);
+            verify(jdbcTemplate).update(argThat((String sql) -> sql.contains("status = 'CANCELLED'") && sql.contains("status = 'DEAD'")),
+                    eq(Timestamp.from(FIXED_NOW)), eq("CANCELLED by mifos: reversal of a posting Synapse never held"), eq(36937L));
+        }
+
+        @Test
+        void cancelsTheDeadEntriesOfATaskTypeCreatedBeforeADate() {
+            Instant before = Instant.parse("2026-10-08T00:00:00Z");
+            when(jdbcTemplate.update(anyString(), any(Timestamp.class), anyString(), eq("INTEREST_POSTING"), eq(Timestamp.from(before))))
+                    .thenReturn(23);
+
+            int updated = repository.cancelDeadEntriesBefore("INTEREST_POSTING", before, "mifos", "QA cleanup");
+
+            assertThat(updated).isEqualTo(23);
+            verify(jdbcTemplate).update(argThat((String sql) -> sql.contains("status = 'CANCELLED'") && sql.contains("created_at < ?")),
+                    eq(Timestamp.from(FIXED_NOW)), eq("CANCELLED by mifos: QA cleanup"), eq("INTEREST_POSTING"),
+                    eq(Timestamp.from(before)));
+        }
+    }
 }

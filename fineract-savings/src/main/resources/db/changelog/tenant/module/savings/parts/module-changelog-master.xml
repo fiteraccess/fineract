@@ -42,4 +42,5 @@
   <include file="parts/2017_set_fillfactor_savings_account.xml" relativeToChangelogFile="true" />
   <include file="parts/2013_add_replay_charge_posting_permission.xml" relativeToChangelogFile="true"/>
   <include file="parts/2014_add_replay_dormancy_status_permission.xml" relativeToChangelogFile="true" />
+  <include file="parts/2018_add_dedup_key_to_synapse_outbox.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

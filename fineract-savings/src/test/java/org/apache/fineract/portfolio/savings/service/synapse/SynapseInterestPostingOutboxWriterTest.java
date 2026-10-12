@@ -329,4 +329,24 @@ class SynapseInterestPostingOutboxWriterTest {
         account.setClientData(client);
         return account;
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void eachEntryCarriesTheKeyThatMakesARerunSupersedeIt() {
+        SavingsAccountData acct = buildAccountNoTx(1L, 10L, "NGN");
+        SavingsAccountTransactionData reversed = SavingsAccountTransactionData.create(99L, interestPostingType(), null, 1L, "SA-1",
+                POSTING_DATE, null, new BigDecimal("75.00"), null, null, false, null, false, null, null, POSTING_DATE);
+        reversed.reverse();
+        SavingsAccountTransactionData posted = SavingsAccountTransactionData.create(null, interestPostingType(), null, 1L, "SA-1",
+                POSTING_DATE, null, new BigDecimal("70.00"), null, null, false, null, false, null, null, POSTING_DATE);
+        acct.setSavingsAccountTransactionData(reversed);
+        acct.setSavingsAccountTransactionData(posted);
+
+        service.postInterestBatch(List.of(acct));
+
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).extracting(OutboxEntry::getDedupKey).containsExactlyInAnyOrder("REVERSE:99",
+                "POST:INTEREST_POSTING:" + POSTING_DATE);
+    }
 }
