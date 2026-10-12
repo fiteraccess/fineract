@@ -19,15 +19,21 @@
 package org.apache.fineract.portfolio.savings.service.synapse;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateRequest;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseReplayStatus;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseSettlementStatus;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.ResourceAccessException;
@@ -40,12 +46,18 @@ public class SynapseTransactionClient {
     private static final String BATCH_ENDPOINT_PATH = "/api/v1/proxy/savings/interest-postings:batch";
     private static final String DORMANCY_ENDPOINT_PATH = "/api/v1/proxy/savings/dormancy-statuses";
     private static final String MONTHLY_STATEMENT_PLAN_PATH = "/api/v1/proxy/statements/monthly:plan";
+    private static final String EOD_BUSINESS_DATE_PATH = "/api/v1/proxy/eod/business-date";
+    private static final String EOD_REPLAY_STATUS_PATH = "/api/v1/proxy/eod/replay-status";
+    private static final String EOD_SETTLEMENT_STATUS_PATH = "/api/v1/proxy/eod/settlement-status";
     private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
 
     private final RestTemplate restTemplate;
     private final String postUrl;
     private final String dormancyUrl;
     private final String monthlyStatementPlanUrl;
+    private final String eodBusinessDateUrl;
+    private final String eodReplayStatusUrl;
+    private final String eodSettlementStatusUrl;
     private final String apiKey;
 
     @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW")
@@ -58,6 +70,9 @@ public class SynapseTransactionClient {
         this.postUrl = baseUrl + BATCH_ENDPOINT_PATH;
         this.dormancyUrl = baseUrl + DORMANCY_ENDPOINT_PATH;
         this.monthlyStatementPlanUrl = baseUrl + MONTHLY_STATEMENT_PLAN_PATH;
+        this.eodBusinessDateUrl = baseUrl + EOD_BUSINESS_DATE_PATH;
+        this.eodReplayStatusUrl = baseUrl + EOD_REPLAY_STATUS_PATH;
+        this.eodSettlementStatusUrl = baseUrl + EOD_SETTLEMENT_STATUS_PATH;
         this.apiKey = apiKey;
     }
 
@@ -119,6 +134,47 @@ public class SynapseTransactionClient {
                     e);
         }
         return body;
+    }
+
+    /**
+     * The EOD rollover's push: tells every Synapse pod the business date Fineract has just advanced to. Synapse refuses
+     * a date ahead of its own reading of Fineract (409), which surfaces here as a posting exception.
+     */
+    public SynapseBusinessDateResponse postBusinessDate(LocalDate businessDate) {
+        log.debug("Pushing business date {} to {}", businessDate, eodBusinessDateUrl);
+        try {
+            return post(eodBusinessDateUrl, new SynapseBusinessDateRequest(businessDate.toString()), SynapseBusinessDateResponse.class);
+        } catch (RestClientResponseException e) {
+            throw new SynapsePostingException("Synapse business-date push failed with HTTP " + e.getStatusCode() + " date=" + businessDate
+                    + ": " + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new SynapsePostingException("Synapse business-date push failed: connection error to " + eodBusinessDateUrl, e);
+        }
+    }
+
+    /** The replay-drain gate's poll: what dated on or before {@code businessDate} has not reached Fineract. */
+    public SynapseReplayStatus getReplayStatus(LocalDate businessDate) {
+        return get(eodReplayStatusUrl + "?businessDate=" + businessDate, SynapseReplayStatus.class, "replay status");
+    }
+
+    /** The Bills gate's poll: the BILLS settlement batches loaded on or before {@code businessDate}. */
+    public SynapseSettlementStatus getSettlementStatus(LocalDate businessDate) {
+        return get(eodSettlementStatusUrl + "?businessDate=" + businessDate, SynapseSettlementStatus.class, "settlement status");
+    }
+
+    private <ResT> ResT get(String url, Class<ResT> responseType, String what) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, apiKey);
+        headers.set(TENANT_HEADER, tenantIdentifier());
+        try {
+            ResponseEntity<ResT> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), responseType);
+            return response.getBody();
+        } catch (RestClientResponseException e) {
+            throw new SynapsePostingException(
+                    "Synapse " + what + " read failed with HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new SynapsePostingException("Synapse " + what + " read failed: connection error to " + url, e);
+        }
     }
 
     private <ReqT, ResT> ResT post(String url, ReqT body, Class<ResT> responseType) {

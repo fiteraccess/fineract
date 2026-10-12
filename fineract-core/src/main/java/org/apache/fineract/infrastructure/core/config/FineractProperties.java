@@ -92,6 +92,7 @@ public class FineractProperties {
     private RetryProperties retry;
 
     private FineractSynapseProperties synapse;
+    private FineractEodProperties eod;
 
     @Getter
     @Setter
@@ -748,5 +749,17 @@ public class FineractProperties {
         private int outboxRetentionDays = 30;
         private int outboxStaleDispatchedMinutes = 5;
         private boolean creditRestrictionEnabled;
+    }
+
+    /** The EOD close-of-business chain: how long a waiting step polls, how often, and the posting job's sizing. */
+    @Getter
+    @Setter
+    public static class FineractEodProperties {
+
+        private int stepTimeoutMinutes = 60;
+        private int pollIntervalSeconds = 15;
+        private int replayGraceSeconds = 120;
+        private int postingThreadPoolSize = 10;
+        private int postingBatchSize = 100;
     }
 }

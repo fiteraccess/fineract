@@ -23,7 +23,8 @@ import java.util.Optional;
 
 public enum BusinessStepCategory {
 
-    LOAN("LOAN"); //
+    LOAN("LOAN"), //
+    EOD("EOD"); //
 
     private final String name;
 

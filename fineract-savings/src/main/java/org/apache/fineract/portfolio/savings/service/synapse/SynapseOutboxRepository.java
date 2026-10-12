@@ -46,8 +46,18 @@ public class SynapseOutboxRepository {
     private final Clock clock;
 
     private static final String INSERT_SQL = "INSERT INTO synapse_outbox "
-            + "(trace_id, batch_id, task_type, account_id, office_id, payload, status, attempts, max_attempts, created_at) "
-            + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)";
+            + "(trace_id, batch_id, task_type, account_id, office_id, payload, status, attempts, max_attempts, created_at, dedup_key) "
+            + "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?)";
+
+    // Only an unsent row is superseded: one already dispatched or sent stays, and Synapse dedups what reaches it twice.
+    private static final String SUPERSEDE_SQL = "UPDATE synapse_outbox SET status = 'SUPERSEDED', completed_at = ?, error_detail = ? "
+            + "WHERE task_type = ? AND account_id = ? AND dedup_key = ? AND status = 'PENDING'";
+
+    private static final String CANCEL_DEAD_SQL = "UPDATE synapse_outbox SET status = 'CANCELLED', completed_at = ?, error_detail = ? "
+            + "WHERE id = ? AND status = 'DEAD'";
+
+    private static final String CANCEL_DEAD_BEFORE_SQL = "UPDATE synapse_outbox SET status = 'CANCELLED', completed_at = ?, "
+            + "error_detail = ? WHERE task_type = ? AND status = 'DEAD' AND created_at < ?";
 
     // AB-401: an entry waits while an earlier one for its account is pending or in flight, so concurrent drains and
     // retries keep each account in order. A DEAD interest entry holds the rest until an operator retries it.
@@ -59,7 +69,7 @@ public class SynapseOutboxRepository {
             + "    AND e.id < o.id AND (e.status IN ('PENDING', 'DISPATCHED') OR (e.status = 'DEAD' AND e.task_type = 'INTEREST_POSTING'))) "
             + "  ORDER BY o.id LIMIT ? FOR UPDATE OF o SKIP LOCKED"
             + ") RETURNING id, trace_id, batch_id, task_type, account_id, office_id, "
-            + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at";
+            + "payload, status, attempts, max_attempts, error_detail, created_at, dispatched_at, completed_at, next_attempt_at, dedup_key";
 
     private static final String MARK_SENT_SQL = "UPDATE synapse_outbox SET status = 'SENT', completed_at = ? WHERE id IN (%s)";
 
@@ -91,13 +101,18 @@ public class SynapseOutboxRepository {
     }
 
     /**
-     * Batch-insert outbox entries within the current transaction.
+     * Batch-insert outbox entries within the current transaction. An entry with a dedup key first supersedes any unsent
+     * entry of its account carrying the same key, so a posting run that starts before the previous one was delivered
+     * replaces that run's instructions rather than queueing them twice.
+     *
+     * @return the number of earlier entries superseded
      */
-    public void insertBatch(String taskType, String batchId, List<OutboxEntry> entries) {
+    public int insertBatch(String taskType, String batchId, List<OutboxEntry> entries) {
         if (entries.isEmpty()) {
-            return;
+            return 0;
         }
         Instant now = clock.instant();
+        int superseded = supersede(taskType, entries, now);
         jdbcTemplate.batchUpdate(INSERT_SQL, entries, entries.size(), (PreparedStatement ps, OutboxEntry e) -> {
             ps.setString(1, e.getTraceId());
             ps.setString(2, batchId);
@@ -107,8 +122,63 @@ public class SynapseOutboxRepository {
             ps.setString(6, e.getPayload());
             ps.setInt(7, e.getMaxAttempts());
             ps.setTimestamp(8, Timestamp.from(now));
+            ps.setString(9, e.getDedupKey());
         });
-        log.debug("Inserted {} outbox entries for taskType={} batchId={}", entries.size(), taskType, batchId);
+        log.debug("Inserted {} outbox entries for taskType={} batchId={} (superseded {})", entries.size(), taskType, batchId, superseded);
+        return superseded;
+    }
+
+    private int supersede(String taskType, List<OutboxEntry> entries, Instant now) {
+        List<OutboxEntry> keyed = entries.stream().filter(e -> e.getDedupKey() != null).toList();
+        if (keyed.isEmpty()) {
+            return 0;
+        }
+        int[][] counts = jdbcTemplate.batchUpdate(SUPERSEDE_SQL, keyed, keyed.size(), (PreparedStatement ps, OutboxEntry e) -> {
+            ps.setTimestamp(1, Timestamp.from(now));
+            ps.setString(2, "SUPERSEDED by traceId=" + e.getTraceId());
+            ps.setString(3, taskType);
+            ps.setLong(4, e.getAccountId());
+            ps.setString(5, e.getDedupKey());
+        });
+        int superseded = 0;
+        for (int[] batch : counts) {
+            for (int c : batch) {
+                superseded += Math.max(c, 0);
+            }
+        }
+        if (superseded > 0) {
+            log.info("Superseded {} unsent {} outbox entries with this run's instructions", superseded, taskType);
+        }
+        return superseded;
+    }
+
+    /**
+     * Cancel one DEAD entry with an operator's reason. Cancelled entries no longer hold their account's queue.
+     *
+     * @return 1 when cancelled, 0 when the entry does not exist or is not DEAD
+     */
+    public int cancelDeadEntry(Long id, String cancelledBy, String reason) {
+        int updated = jdbcTemplate.update(CANCEL_DEAD_SQL, Timestamp.from(clock.instant()), cancelNote(cancelledBy, reason), id);
+        if (updated > 0) {
+            log.warn("Cancelled DEAD outbox entry id={} by {}: {}", id, cancelledBy, reason);
+        }
+        return updated;
+    }
+
+    /** Cancel every DEAD entry of one task type created before {@code createdBefore}; returns how many. */
+    public int cancelDeadEntriesBefore(String taskType, Instant createdBefore, String cancelledBy, String reason) {
+        int updated = jdbcTemplate.update(CANCEL_DEAD_BEFORE_SQL, Timestamp.from(clock.instant()), cancelNote(cancelledBy, reason),
+                taskType, Timestamp.from(createdBefore));
+        log.warn("Cancelled {} DEAD {} outbox entries created before {} by {}: {}", updated, taskType, createdBefore, cancelledBy, reason);
+        return updated;
+    }
+
+    private static String cancelNote(String cancelledBy, String reason) {
+        return truncateNote("CANCELLED by " + cancelledBy + ": " + reason);
+    }
+
+    private static String truncateNote(String note) {
+        return note.length() <= 1000 ? note : note.substring(0, 1000);
     }
 
     /**
@@ -182,6 +252,31 @@ public class SynapseOutboxRepository {
         delayMinutes = Math.min(delayMinutes, BACKOFF_MAX_MINUTES);
         double jitter = 1.0 + ThreadLocalRandom.current().nextDouble(-JITTER_FACTOR, JITTER_FACTOR);
         return delayMinutes * jitter;
+    }
+
+    /** Entries of one task type created at or after {@code since}, counted by status: a posting run's own entries. */
+    public Map<String, Long> countByStatusSince(String taskType, Instant since) {
+        return jdbcTemplate
+                .query("SELECT status, COUNT(*) AS cnt FROM synapse_outbox WHERE task_type = ? AND created_at >= ? GROUP BY status", rs -> {
+                    Map<String, Long> counts = new HashMap<>();
+                    while (rs.next()) {
+                        counts.put(rs.getString("status"), rs.getLong("cnt"));
+                    }
+                    return counts;
+                }, taskType, Timestamp.from(since));
+    }
+
+    /** DEAD entries of one task type, whatever their age. */
+    public long countDead(String taskType) {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM synapse_outbox WHERE task_type = ? AND status = 'DEAD'", Long.class,
+                taskType);
+        return count == null ? 0 : count;
+    }
+
+    /** Accounts holding a DEAD entry of one task type, oldest entry first, at most {@code limit}. */
+    public List<Long> findDeadAccountIds(String taskType, int limit) {
+        return jdbcTemplate.queryForList("SELECT account_id FROM synapse_outbox WHERE task_type = ? AND status = 'DEAD'"
+                + " GROUP BY account_id ORDER BY MIN(id) LIMIT ?", Long.class, taskType, limit);
     }
 
     /**
@@ -275,7 +370,7 @@ public class SynapseOutboxRepository {
                     .maxAttempts(rs.getInt("max_attempts")).errorDetail(rs.getString("error_detail"))
                     .createdAt(toInstant(rs.getTimestamp("created_at"))).dispatchedAt(toInstant(rs.getTimestamp("dispatched_at")))
                     .completedAt(toInstant(rs.getTimestamp("completed_at"))).nextAttemptAt(toInstant(rs.getTimestamp("next_attempt_at")))
-                    .build();
+                    .dedupKey(rs.getString("dedup_key")).build();
         }
 
         private static Instant toInstant(Timestamp ts) {

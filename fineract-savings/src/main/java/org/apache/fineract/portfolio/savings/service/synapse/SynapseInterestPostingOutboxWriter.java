@@ -119,11 +119,22 @@ public class SynapseInterestPostingOutboxWriter {
         List<OutboxEntry> entries = instructions.stream().map(instr -> {
             try {
                 return OutboxEntry.builder().traceId(instr.getTraceId()).accountId(instr.getSavingsAccountId())
-                        .officeId(instr.getOfficeId()).payload(objectMapper.writeValueAsString(instr)).build();
+                        .officeId(instr.getOfficeId()).payload(objectMapper.writeValueAsString(instr)).dedupKey(dedupKey(instr)).build();
             } catch (JsonProcessingException e) {
                 throw new IllegalStateException("Failed to serialize instruction for traceId: " + instr.getTraceId(), e);
             }
         }).toList();
         outboxRepository.insertBatch("INTEREST_POSTING", batchId, entries);
+    }
+
+    /**
+     * What makes two instructions the same correction: a REVERSE undoes one Fineract posting; a POST books its type for
+     * one value date, of which an account carries at most one live posting.
+     */
+    static String dedupKey(SynapseTransactionInstruction instr) {
+        if (instr.getOperation() == Operation.REVERSE) {
+            return "REVERSE:" + instr.getOriginalTransactionId();
+        }
+        return "POST:" + instr.getTransactionType() + ":" + instr.getTransactionDate();
     }
 }

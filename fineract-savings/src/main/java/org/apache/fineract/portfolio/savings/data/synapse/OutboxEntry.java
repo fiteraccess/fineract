@@ -56,4 +56,6 @@ public class OutboxEntry {
     private Instant dispatchedAt;
     private Instant completedAt;
     private Instant nextAttemptAt;
+    /** The instruction this row carries; an unsent row with the same key is superseded when a later run queues it. */
+    private String dedupKey;
 }

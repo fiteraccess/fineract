@@ -67,8 +67,9 @@ class PostInterestForSavingTaskletTest {
 
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.initialize();
-        tasklet = new PostInterestForSavingTasklet(readService, mock(ConfigurationDomainService.class), applicationContext, executor,
-                mock(SavingsDailyBalanceSyncService.class, RETURNS_DEEP_STUBS));
+        // The tasklet now only reads its job parameters; the posting logic it exercised lives in the service.
+        tasklet = new PostInterestForSavingTasklet(new PostInterestForSavingsService(readService, mock(ConfigurationDomainService.class),
+                applicationContext, executor, mock(SavingsDailyBalanceSyncService.class, RETURNS_DEEP_STUBS)));
 
         chunkContext = mock(ChunkContext.class, RETURNS_DEEP_STUBS);
         when(chunkContext.getStepContext().getJobParameters()).thenReturn(Map.of("thread-pool-size", "1", "batch-size", "10"));

@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    The EOD close-of-business chain: one run per business date with per-step checkpoints and exception rows, the
+    job (inactive until ops activate it; the chain replaces the midnight business-date, accrual and posting crons),
+    its ordered business steps, the permissions the Synapse EOD routes check, and the three reports.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="1" author="fineract">
+        <createTable tableName="m_eod_run">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_m_eod_run" nullable="false"/>
+            </column>
+            <column name="business_date" type="DATE">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_m_eod_run_business_date"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="DATETIME"/>
+            <column name="attempts" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error" type="VARCHAR(1000)"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="2" author="fineract">
+        <createTable tableName="m_eod_step">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_m_eod_step" nullable="false"/>
+            </column>
+            <column name="run_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_m_eod_step_run" references="m_eod_run(id)"/>
+            </column>
+            <column name="step_name" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="DATETIME"/>
+            <column name="attempts" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error_code" type="VARCHAR(50)"/>
+            <column name="error_message" type="VARCHAR(2000)"/>
+            <column name="detail" type="TEXT"/>
+        </createTable>
+        <addUniqueConstraint tableName="m_eod_step" columnNames="run_id, step_name" constraintName="uq_m_eod_step_run_step"/>
+    </changeSet>
+
+    <changeSet id="3" author="fineract">
+        <createTable tableName="m_eod_exception">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_m_eod_exception" nullable="false"/>
+            </column>
+            <column name="run_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_m_eod_exception_run" references="m_eod_run(id)"/>
+            </column>
+            <column name="step_name" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="severity" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="VARCHAR(2000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reference" type="VARCHAR(140)"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="m_eod_exception" indexName="idx_m_eod_exception_run">
+            <column name="run_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_batch_business_steps">
+            <column name="job_name" value="EOD_CLOSE_OF_BUSINESS"/>
+            <column name="step_name" value="EOD_ROLLOVER"/>
+            <column name="step_order" value="1"/>
+        </insert>
+        <insert tableName="m_batch_business_steps">
+            <column name="job_name" value="EOD_CLOSE_OF_BUSINESS"/>
+            <column name="step_name" value="EOD_REPLAY_DRAIN"/>
+            <column name="step_order" value="2"/>
+        </insert>
+        <insert tableName="m_batch_business_steps">
+            <column name="job_name" value="EOD_CLOSE_OF_BUSINESS"/>
+            <column name="step_name" value="EOD_ACCRUAL"/>
+            <column name="step_order" value="3"/>
+        </insert>
+        <insert tableName="m_batch_business_steps">
+            <column name="job_name" value="EOD_CLOSE_OF_BUSINESS"/>
+            <column name="step_name" value="EOD_INTEREST_POSTING"/>
+            <column name="step_order" value="4"/>
+        </insert>
+        <insert tableName="m_batch_business_steps">
+            <column name="job_name" value="EOD_CLOSE_OF_BUSINESS"/>
+            <column name="step_name" value="EOD_BILLS_GATE"/>
+            <column name="step_order" value="5"/>
+        </insert>
+        <insert tableName="m_batch_business_steps">
+            <column name="job_name" value="EOD_CLOSE_OF_BUSINESS"/>
+            <column name="step_name" value="EOD_COMPLETION"/>
+            <column name="step_order" value="9"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="5" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM job WHERE name = 'EOD Close Of Business'</sqlCheck>
+        </preConditions>
+        <insert tableName="job">
+            <column name="name" value="EOD Close Of Business"/>
+            <column name="display_name" value="EOD Close Of Business"/>
+            <column name="short_name" value="EOD_COB"/>
+            <column name="cron_expression" value="0 0 18 * * ?"/>
+            <column name="create_time" valueDate="${current_datetime}"/>
+            <column name="task_priority" valueNumeric="5"/>
+            <column name="group_name"/>
+            <column name="previous_run_start_time"/>
+            <column name="job_key" value="EOD Close Of BusinessJobDetail1 _DEFAULT"/>
+            <column name="initializing_errorlog"/>
+            <column name="is_active" valueBoolean="false"/>
+            <column name="currently_running" valueBoolean="false"/>
+            <column name="updates_allowed" valueBoolean="true"/>
+            <column name="scheduler_group" valueNumeric="0"/>
+            <column name="is_misfired" valueBoolean="false"/>
+            <column name="node_id" valueNumeric="1"/>
+            <column name="is_mismatched_job" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+
+    <changeSet id="7" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'EOD Status and Execution Report'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="EOD Status and Execution Report"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Accounting"/>
+            <column name="report_sql" value="SELECT r.business_date AS business_date, r.status AS run_status, r.attempts AS run_attempts, r.started_at AS run_started, r.completed_at AS run_completed, r.last_error AS run_error, s.step_name AS step, s.status AS step_status, s.attempts AS step_attempts, s.started_at AS step_started, s.completed_at AS step_completed, s.error_code AS error_code, s.error_message AS error_message, s.detail AS detail FROM m_eod_run r LEFT JOIN m_eod_step s ON s.run_id = r.id WHERE r.business_date BETWEEN '${startDate}' AND '${endDate}' ORDER BY r.business_date DESC, s.id"/>
+            <column name="description" value="Every EOD run in the period with its steps: status, attempts, timings, errors and what each step recorded."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'EOD Status and Execution Report')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'startDate')"/>
+            <column name="report_parameter_name" value="startDate"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'EOD Status and Execution Report')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_EOD Status and Execution Report"/>
+            <column name="entity_name" value="EOD Status and Execution Report"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="8" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'EOD Step Status'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="EOD Step Status"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Accounting"/>
+            <column name="report_sql" value="SELECT r.business_date AS business_date, r.status AS run_status, s.step_name AS step, s.status AS step_status, s.attempts AS attempts, s.started_at AS started, s.completed_at AS completed, s.error_code AS error_code, s.error_message AS error_message, (SELECT COUNT(1) FROM m_eod_exception x WHERE x.run_id = r.id AND x.step_name = s.step_name) AS exceptions, s.detail AS detail FROM m_eod_run r JOIN m_eod_step s ON s.run_id = r.id WHERE r.business_date = '${endDate}' ORDER BY s.id"/>
+            <column name="description" value="The steps of one business date's EOD run, mid-run or after, with the number of exception rows each raised."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'EOD Step Status')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_EOD Step Status"/>
+            <column name="entity_name" value="EOD Step Status"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="9" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'EOD Exceptions'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="EOD Exceptions"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Accounting"/>
+            <column name="report_sql" value="SELECT r.business_date AS business_date, x.step_name AS step, x.severity AS severity, x.code AS code, x.reference AS reference, x.message AS message, x.created_at AS raised_at FROM m_eod_exception x JOIN m_eod_run r ON r.id = x.run_id WHERE r.business_date BETWEEN '${startDate}' AND '${endDate}' ORDER BY r.business_date DESC, x.id"/>
+            <column name="description" value="What the EOD runs in the period flagged without stopping: legacy replay failures, a missing Bills file, a COB date that did not follow the rollover."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'EOD Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'startDate')"/>
+            <column name="report_parameter_name" value="startDate"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'EOD Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_EOD Exceptions"/>
+            <column name="entity_name" value="EOD Exceptions"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- One changeset per permission, each guarded on its own code, so a partly provisioned tenant gets exactly the missing ones. -->
+    <changeSet id="10" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'READ_EODSTATUS'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="eod"/>
+            <column name="code" value="READ_EODSTATUS"/>
+            <column name="entity_name" value="EODSTATUS"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="11" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'EXECUTE_EODSTEP'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="eod"/>
+            <column name="code" value="EXECUTE_EODSTEP"/>
+            <column name="entity_name" value="EODSTEP"/>
+            <column name="action_name" value="EXECUTE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="12" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'READ_EODGLMAPPING'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="eod"/>
+            <column name="code" value="READ_EODGLMAPPING"/>
+            <column name="entity_name" value="EODGLMAPPING"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="13" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'UPDATE_EODGLMAPPING'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="eod"/>
+            <column name="code" value="UPDATE_EODGLMAPPING"/>
+            <column name="entity_name" value="EODGLMAPPING"/>
+            <column name="action_name" value="UPDATE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- Contiguous orders: clients that chain steps by order - 1 (the web-app's workflow diagram) break on a gap. -->
+    <changeSet id="14" author="fineract">
+        <update tableName="m_batch_business_steps">
+            <column name="step_order" valueNumeric="6"/>
+            <where>job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_COMPLETION' AND step_order = 9</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

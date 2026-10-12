@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    The four EOD bridge GLs as financial activities, so the Fineract side of the EOD GL mirroring is mapped through the
+    existing Financial Activity Mappings screen. Each activity takes the GL type of the position it clears.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+    <changeSet author="fiteraccess" id="1">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM r_enum_value WHERE enum_name = 'financial_activity_type_enum' AND enum_id = 205</sqlCheck>
+        </preConditions>
+        <insert tableName="r_enum_value">
+            <column name="enum_name" value="financial_activity_type_enum"/>
+            <column name="enum_id" valueNumeric="205"/>
+            <column name="enum_message_property" value="EOD Deposit Bridge"/>
+            <column name="enum_value" value="EOD_DEPOSIT_BRIDGE"/>
+            <column name="enum_type" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fiteraccess" id="2">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM r_enum_value WHERE enum_name = 'financial_activity_type_enum' AND enum_id = 206</sqlCheck>
+        </preConditions>
+        <insert tableName="r_enum_value">
+            <column name="enum_name" value="financial_activity_type_enum"/>
+            <column name="enum_id" valueNumeric="206"/>
+            <column name="enum_message_property" value="EOD Income Bridge"/>
+            <column name="enum_value" value="EOD_INCOME_BRIDGE"/>
+            <column name="enum_type" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fiteraccess" id="3">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM r_enum_value WHERE enum_name = 'financial_activity_type_enum' AND enum_id = 207</sqlCheck>
+        </preConditions>
+        <insert tableName="r_enum_value">
+            <column name="enum_name" value="financial_activity_type_enum"/>
+            <column name="enum_id" valueNumeric="207"/>
+            <column name="enum_message_property" value="EOD Tax Bridge"/>
+            <column name="enum_value" value="EOD_TAX_BRIDGE"/>
+            <column name="enum_type" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="fiteraccess" id="4">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM r_enum_value WHERE enum_name = 'financial_activity_type_enum' AND enum_id = 208</sqlCheck>
+        </preConditions>
+        <insert tableName="r_enum_value">
+            <column name="enum_name" value="financial_activity_type_enum"/>
+            <column name="enum_id" valueNumeric="208"/>
+            <column name="enum_message_property" value="EOD Interest Bridge"/>
+            <column name="enum_value" value="EOD_INTEREST_BRIDGE"/>
+            <column name="enum_type" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

@@ -20,12 +20,17 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadGateway;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,10 +42,13 @@ import java.util.List;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseReplayStatus;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseSettlementStatus;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.junit.jupiter.api.AfterEach;
@@ -49,6 +57,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -275,5 +284,79 @@ class SynapseTransactionClientTest {
 
         return SynapseInterestPostingBatch.builder().batchId(batchId).postingDate(LocalDate.of(2026, 3, 20)).totalCount(1)
                 .transactions(List.of(instruction)).build();
+    }
+
+    @Nested
+    class EodCalls {
+
+        @Test
+        void pushesTheBusinessDate_andReadsBackWhatSynapseStamps() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/business-date")).andExpect(method(HttpMethod.POST))
+                    .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token")).andExpect(header(TENANT_HEADER, TENANT_ID))
+                    .andExpect(jsonPath("$.date").value("2026-10-07"))
+                    .andRespond(withSuccess(
+                            "{\"businessDate\":\"2026-10-07\",\"fineractBusinessDate\":\"2026-10-07\",\"requestedDate\":\"2026-10-07\"}",
+                            MediaType.APPLICATION_JSON));
+
+            SynapseBusinessDateResponse response = client.postBusinessDate(LocalDate.of(2026, 10, 7));
+
+            assertEquals(LocalDate.of(2026, 10, 7), response.getBusinessDate());
+            mockServer.verify();
+        }
+
+        @Test
+        void aRefusedPushSurfacesSynapsesReason() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/business-date"))
+                    .andRespond(withStatus(HttpStatus.CONFLICT).body("Business date 2026-10-08 is ahead of Fineract's 2026-10-07"));
+
+            SynapsePostingException thrown = assertThrows(SynapsePostingException.class,
+                    () -> client.postBusinessDate(LocalDate.of(2026, 10, 8)));
+
+            assertTrue(thrown.getMessage().contains("409"));
+            assertTrue(thrown.getMessage().contains("ahead of Fineract"));
+        }
+
+        @Test
+        void readsTheReplayStatusForADay() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/replay-status?businessDate=2026-10-06"))
+                    .andExpect(method(HttpMethod.GET)).andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
+                    .andRespond(withSuccess("{\"businessDate\":\"2026-10-06\",\"cutoff\":null,\"cutoffSource\":\"NONE\","
+                            + "\"inFlight\":{\"pendingTx\":1,\"postedToTbOnly\":0,\"inboxPending\":2,\"inboxRetrying\":0,\"total\":3},"
+                            + "\"failedNewCount\":1,\"failedLegacyCount\":0,"
+                            + "\"failedNew\":[{\"reference\":\"REF-1\",\"source\":\"TX\",\"type\":\"DEPOSIT\",\"status\":\"UNKNOWN\",\"transactionDate\":\"2026-10-06\",\"error\":null}],"
+                            + "\"failedLegacy\":[],\"flexcubeOutboxPending\":0,\"interestRows\":{\"INTEREST_POSTING\":{\"POSTED_TO_FINERACT\":4}},\"drained\":false}",
+                            MediaType.APPLICATION_JSON));
+
+            SynapseReplayStatus status = client.getReplayStatus(LocalDate.of(2026, 10, 6));
+
+            assertEquals(3, status.getInFlight().getTotal());
+            assertEquals(1, status.getFailedNewCount());
+            assertEquals("REF-1", status.getFailedNew().get(0).getReference());
+            assertEquals(4L, status.getInterestRows().get("INTEREST_POSTING").get("POSTED_TO_FINERACT"));
+            assertEquals(false, status.isDrained());
+        }
+
+        @Test
+        void readsTheSettlementStatusForADay() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/settlement-status?businessDate=2026-10-06"))
+                    .andExpect(method(HttpMethod.GET)).andRespond(
+                            withSuccess("{\"businessDate\":\"2026-10-06\",\"rail\":\"BILLS\",\"byStatus\":{\"COMPLETED\":2},\"inFlight\":0,"
+                                    + "\"cutoff\":\"2026-10-05\",\"cutoffSource\":\"LAST_COMPLETED_RUN\",\"failedNewCount\":0,"
+                                    + "\"failedLegacyCount\":1,\"failedNew\":[],\"failedLegacy\":[{\"batchId\":\"b-old\",\"status\":\"FAILED\","
+                                    + "\"loadedDate\":\"2026-10-02\",\"lastError\":\"bad file\"}],"
+                                    + "\"awaitingEoc\":[\"b-1\"],\"loadedForDate\":2,\"settled\":false}", MediaType.APPLICATION_JSON));
+
+            SynapseSettlementStatus status = client.getSettlementStatus(LocalDate.of(2026, 10, 6));
+
+            assertEquals(List.of("b-1"), status.getAwaitingEoc());
+            assertEquals(2, status.getLoadedForDate());
+            assertEquals(LocalDate.of(2026, 10, 5), status.getCutoff());
+            assertEquals("LAST_COMPLETED_RUN", status.getCutoffSource());
+            assertEquals(0, status.getFailedNewCount());
+            assertEquals(1, status.getFailedLegacyCount());
+            assertEquals("b-old", status.getFailedLegacy().get(0).getBatchId());
+            assertEquals(LocalDate.of(2026, 10, 2), status.getFailedLegacy().get(0).getLoadedDate());
+            assertEquals(false, status.isSettled());
+        }
     }
 }

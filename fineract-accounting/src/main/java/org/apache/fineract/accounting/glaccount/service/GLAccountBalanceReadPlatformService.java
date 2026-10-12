@@ -62,6 +62,16 @@ public interface GLAccountBalanceReadPlatformService {
      * @throws org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException
      *             when {@code fromDate}, {@code toDate} are missing, or {@code fromDate} is after {@code toDate}
      */
+    default GLAccountBalanceData retrieveGLAccountBalanceByCode(String glCode, LocalDate fromDate, LocalDate toDate, Long officeId,
+            String currencyCode) {
+        return retrieveGLAccountBalanceByCode(glCode, fromDate, toDate, officeId, currencyCode, GLAccountReversals.EXCLUDE);
+    }
+
+    /**
+     * @param reversals
+     *            {@link GLAccountReversals#EXCLUDE} leaves both legs of a reversal out;
+     *            {@link GLAccountReversals#AS_POSTED} counts each entry on its own {@code entry_date}
+     */
     GLAccountBalanceData retrieveGLAccountBalanceByCode(String glCode, LocalDate fromDate, LocalDate toDate, Long officeId,
-            String currencyCode);
+            String currencyCode, GLAccountReversals reversals);
 }

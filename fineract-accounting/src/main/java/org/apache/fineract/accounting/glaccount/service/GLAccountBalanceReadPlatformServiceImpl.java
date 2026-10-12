@@ -59,7 +59,8 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
      * and the {@code not exists} clause excludes the reversal entry itself, which is the row some other entry's
      * {@code reversal_id} points at. A reversal is a deliberate correction — "this posting should not have happened" —
      * so ignoring it entirely reflects what actually stands, rather than summing a cancelling pair that happens to net
-     * to the same total.
+     * to the same total. A window read can opt out with {@link GLAccountReversals#AS_POSTED}, which counts each leg on
+     * its own entry date; the as-of details read always excludes.
      */
     private static final String EXCLUDE_REVERSED = """
             and je.reversed = false
@@ -90,7 +91,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         final LocalDate cutOff = asOnDate == null ? DateUtils.getBusinessLocalDate() : asOnDate;
 
         final CumulativeRow cumulative = retrieveCumulative(account.id(), cutOff, officeId, currencyCode);
-        final String currency = resolveCurrency(glCode, account.id(), cutOff, officeId, currencyCode);
+        final String currency = resolveCurrency(glCode, account.id(), cutOff, officeId, currencyCode, EXCLUDE_REVERSED);
 
         return new GLAccountDetailsData(account.id(), account.glCode(), account.name(),
                 AccountingEnumerations.gLAccountType(account.type()), AccountingEnumerations.gLAccountUsage(account.usage()),
@@ -103,12 +104,13 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
 
     @Override
     public GLAccountBalanceData retrieveGLAccountBalanceByCode(final String glCode, final LocalDate fromDate, final LocalDate toDate,
-            final Long officeId, final String currencyCode) {
+            final Long officeId, final String currencyCode, final GLAccountReversals reversals) {
         final GLAccountRow account = findAccountByCode(glCode);
         validateWindow(fromDate, toDate);
 
-        final WindowRow window = retrieveWindow(account.id(), fromDate, toDate, officeId, currencyCode);
-        final String currency = resolveCurrency(glCode, account.id(), toDate, officeId, currencyCode);
+        final String reversalFilter = reversalFilter(reversals);
+        final WindowRow window = retrieveWindow(account.id(), fromDate, toDate, officeId, currencyCode, reversalFilter);
+        final String currency = resolveCurrency(glCode, account.id(), toDate, officeId, currencyCode, reversalFilter);
 
         final BigDecimal opening = GLAccountBalanceCalculator.signedNet(account.type(), window.openingDebits(), window.openingCredits());
         final BigDecimal net = GLAccountBalanceCalculator.signedNet(account.type(), window.totalDebits(), window.totalCredits());
@@ -180,7 +182,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
      * the same scan of {@code acc_gl_journal_entry} for the account.
      */
     private WindowRow retrieveWindow(final Long accountId, final LocalDate fromDate, final LocalDate toDate, final Long officeId,
-            final String currencyCode) {
+            final String currencyCode, final String reversalFilter) {
         final Map<String, Object> params = new HashMap<>();
         params.put("accountId", accountId);
         params.put("fromDate", fromDate);
@@ -191,7 +193,7 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
                 .append(" as totalDebits, ").append(windowSumOf(ENTRY_TYPE_CREDIT)).append(" as totalCredits, ")
                 .append(" count(case when je.entry_date between :fromDate and :toDate then 1 end) as entryCount ")
                 .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
-                .append(" and je.entry_date <= :toDate ").append(EXCLUDE_REVERSED);
+                .append(" and je.entry_date <= :toDate ").append(reversalFilter);
         appendScopeFilters(sql, params, officeId, currencyCode);
 
         return this.jdbcTemplate.queryForObject(sql.toString(), params,
@@ -217,13 +219,13 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
      *            the as-of date, or the inclusive window end
      */
     private String resolveCurrency(final String glCode, final Long accountId, final LocalDate windowEnd, final Long officeId,
-            final String currencyCodeFilter) {
+            final String currencyCodeFilter, final String reversalFilter) {
         final String filter = trimToNull(currencyCodeFilter);
         if (filter != null) {
             return filter;
         }
 
-        final List<String> distinct = retrieveDistinctCurrencies(accountId, windowEnd, officeId);
+        final List<String> distinct = retrieveDistinctCurrencies(accountId, windowEnd, officeId, reversalFilter);
         if (distinct.isEmpty()) {
             return null;
         }
@@ -233,14 +235,15 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
         throw new GLAccountMultipleCurrenciesException(glCode);
     }
 
-    private List<String> retrieveDistinctCurrencies(final Long accountId, final LocalDate windowEnd, final Long officeId) {
+    private List<String> retrieveDistinctCurrencies(final Long accountId, final LocalDate windowEnd, final Long officeId,
+            final String reversalFilter) {
         final Map<String, Object> params = new HashMap<>();
         params.put("accountId", accountId);
         params.put("windowEnd", windowEnd);
 
         final StringBuilder sql = new StringBuilder(" select distinct je.currency_code as currencyCode ")
                 .append(" from acc_gl_journal_entry je ").append(" where je.account_id = :accountId ")
-                .append(" and je.entry_date <= :windowEnd ").append(EXCLUDE_REVERSED);
+                .append(" and je.entry_date <= :windowEnd ").append(reversalFilter);
         appendScopeFilters(sql, params, officeId, null);
         sql.append(" order by je.currency_code");
 
@@ -281,6 +284,10 @@ public class GLAccountBalanceReadPlatformServiceImpl implements GLAccountBalance
             sql.append(" and je.currency_code = :currencyCode");
             params.put("currencyCode", currency);
         }
+    }
+
+    private static String reversalFilter(final GLAccountReversals reversals) {
+        return reversals == GLAccountReversals.AS_POSTED ? "" : EXCLUDE_REVERSED;
     }
 
     private static void validateWindow(final LocalDate fromDate, final LocalDate toDate) {

@@ -65,6 +65,7 @@ public enum JobName {
     SYNC_SAVINGS_DAILY_BALANCE("Sync Savings Daily Balance"), //
     GENERATE_MONTHLY_STATEMENTS("Generate Monthly Statements"), //
     EXPIRE_DORMANCY_GRACE_WINDOWS("Expire Dormancy Grace Windows"), //
+    EOD_CLOSE_OF_BUSINESS("EOD Close Of Business"), //
     ; //
 
     private final String name;
