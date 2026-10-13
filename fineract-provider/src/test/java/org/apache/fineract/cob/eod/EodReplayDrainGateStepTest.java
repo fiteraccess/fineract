@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -126,6 +127,21 @@ class EodReplayDrainGateStepTest {
 
         verify(runService).recordException(eq(run), eq(EodReplayDrainGateStep.NAME), eq(EodException.SEVERITY_WARN),
                 eq(EodReplayDrainGateStep.CODE_REPLAY_LEGACY), anyString(), eq("OLD-1"));
+        verify(runService).completed(any(), any());
+    }
+
+    @Test
+    void graceEndingDuringTheWaitingWrite_doesNotSleepANegativeTime() {
+        when(runService.findStep(run, EodRolloverStep.NAME)).thenReturn(Optional.of(
+                EodStepTestSupport.completedStep(run, EodRolloverStep.NAME, DateUtils.getLocalDateTimeOfTenant().plusNanos(100_000_000))));
+        doAnswer(invocation -> {
+            Thread.sleep(150);
+            return null;
+        }).when(runService).waiting(any(), any());
+        when(synapse.getReplayStatus(D)).thenReturn(status(0, true, List.of(), List.of()));
+
+        underTest.execute(run);
+
         verify(runService).completed(any(), any());
     }
 
