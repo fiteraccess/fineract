@@ -101,10 +101,12 @@ public class EodReplayDrainGateStep extends AbstractEodStep {
         }
         LocalDateTime until = rolledAt.plus(Duration.ofSeconds(properties.getEod().getReplayGraceSeconds()));
         Duration interval = Duration.ofSeconds(properties.getEod().getPollIntervalSeconds());
-        while (DateUtils.getLocalDateTimeOfTenant().isBefore(until)) {
+        // One clock read per pass: a re-read after the slow waiting() write could be past `until`.
+        Duration remaining = Duration.between(DateUtils.getLocalDateTimeOfTenant(), until);
+        while (remaining.isPositive()) {
             runService.waiting(step, detail("phase", "grace", "until", until.toString()));
-            Duration remaining = Duration.between(DateUtils.getLocalDateTimeOfTenant(), until);
             sleep(remaining.compareTo(interval) < 0 ? remaining : interval);
+            remaining = Duration.between(DateUtils.getLocalDateTimeOfTenant(), until);
         }
     }
 
