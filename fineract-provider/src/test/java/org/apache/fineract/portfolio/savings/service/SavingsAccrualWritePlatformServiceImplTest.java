@@ -73,7 +73,7 @@ class SavingsAccrualWritePlatformServiceImplTest {
 
     @Test
     void anAccountChangedMidRunIsRetriedInAFreshTransaction() {
-        SavingsAccount account = mock(SavingsAccount.class);
+        SavingsAccount account = regularAccount();
         when(readService.retrievePeriodicAccrualData(TILL, null)).thenReturn(List.of(accrual(309L)));
         when(assembler.assembleFrom(309L, false)).thenThrow(new ObjectOptimisticLockingFailureException(SavingsAccount.class, 309L))
                 .thenReturn(account);
@@ -88,7 +88,7 @@ class SavingsAccrualWritePlatformServiceImplTest {
 
     @Test
     void oneFailingAccountNoLongerRollsBackTheOthers() {
-        SavingsAccount healthy = mock(SavingsAccount.class);
+        SavingsAccount healthy = regularAccount();
         when(readService.retrievePeriodicAccrualData(TILL, null)).thenReturn(List.of(accrual(1L), accrual(2L)));
         when(assembler.assembleFrom(1L, false)).thenThrow(new IllegalStateException("boom"));
         when(assembler.assembleFrom(2L, false)).thenReturn(healthy);
@@ -109,6 +109,14 @@ class SavingsAccrualWritePlatformServiceImplTest {
 
         verify(assembler, times(3)).assembleFrom(5L, false);
         verify(transactionManager, never()).commit(any());
+    }
+
+    private static SavingsAccount regularAccount() {
+        var account = mock(SavingsAccount.class);
+        var product = mock(org.apache.fineract.portfolio.savings.domain.SavingsProduct.class);
+        when(account.savingsProduct()).thenReturn(product);
+        when(product.getProductCategory()).thenReturn(org.apache.fineract.portfolio.savings.SavingsProductCategory.DIGITAL);
+        return account;
     }
 
     private static SavingsAccrualData accrual(Long id) {
