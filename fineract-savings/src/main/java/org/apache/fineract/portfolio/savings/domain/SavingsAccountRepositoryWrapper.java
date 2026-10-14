@@ -227,6 +227,10 @@ public class SavingsAccountRepositoryWrapper {
     @Transactional
     public void updateSummaryDirectAndDetach(final SavingsAccount account) {
         updateSummaryDirectInternal(account);
+        if (account.isGoalAccrualStopped()) {
+            entityManager.createQuery("UPDATE SavingsAccount s SET s.goalAccrualStopped = true WHERE s.id = :id")
+                    .setParameter("id", account.getId()).executeUpdate();
+        }
         // Detach the entity so Hibernate doesn't try to cascade to the transactions collection at commit
         entityManager.detach(account);
     }

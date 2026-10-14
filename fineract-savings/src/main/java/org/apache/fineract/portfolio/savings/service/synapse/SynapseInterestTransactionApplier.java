@@ -20,7 +20,6 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +29,7 @@ import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRu
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
+import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
@@ -49,7 +49,8 @@ public class SynapseInterestTransactionApplier {
 
     private static final Map<String, SavingsAccountTransactionType> TRANSACTION_TYPES = Map.of("INTEREST_POSTING",
             SavingsAccountTransactionType.INTEREST_POSTING, "OVERDRAFT_INTEREST", SavingsAccountTransactionType.OVERDRAFT_INTEREST,
-            "WITHHOLD_TAX", SavingsAccountTransactionType.WITHHOLD_TAX);
+            "WITHHOLD_TAX", SavingsAccountTransactionType.WITHHOLD_TAX, "GOAL_PENALTY", SavingsAccountTransactionType.GOAL_PENALTY,
+            "GOAL_FORFEITURE", SavingsAccountTransactionType.GOAL_FORFEITURE);
 
     private final SavingsAccountTransactionRepository transactionRepository;
     private final SavingsAccountTransactionSummaryWrapper summaryWrapper;
@@ -99,6 +100,22 @@ public class SynapseInterestTransactionApplier {
         // 2. Resolve transaction type
         SavingsAccountTransactionType type = resolveTransactionType(transactionType);
 
+        if (type == SavingsAccountTransactionType.GOAL_PENALTY || type == SavingsAccountTransactionType.GOAL_FORFEITURE) {
+            if (account.savingsProduct().getProductCategory() != SavingsProductCategory.GOAL || transactionAmount.signum() < 0) {
+                throw new GeneralPlatformDomainRuleException("error.msg.goal.settlement.invalid", "Only goal interest may be forfeited");
+            }
+            var payable = account.getTransactions().stream().filter(tx -> !tx.isReversed() && !tx.isReversalTransaction())
+                    .map(tx -> switch (tx.getTransactionType()) {
+                        case ACCRUAL -> tx.getAmount(account.getCurrency()).getAmount();
+                        case INTEREST_POSTING, GOAL_PENALTY, GOAL_FORFEITURE -> tx.getAmount(account.getCurrency()).getAmount().negate();
+                        default -> BigDecimal.ZERO;
+                    }).reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (transactionAmount.compareTo(payable) > 0) {
+                throw new GeneralPlatformDomainRuleException("error.msg.goal.settlement.exceeds.payable",
+                        "Settlement exceeds accrued interest payable");
+            }
+            if (type == SavingsAccountTransactionType.GOAL_FORFEITURE) account.stopGoalAccrual();
+        }
         // 3. Create transaction entity
         Money money = Money.of(account.getCurrency(), transactionAmount);
         SavingsAccountTransaction transaction = createTransaction(account, type, transactionDate, money, manual);
@@ -174,7 +191,42 @@ public class SynapseInterestTransactionApplier {
         return switch (type) {
             case INTEREST_POSTING -> SavingsAccountTransaction.interestPosting(account, account.office(), date, money, manual);
             case OVERDRAFT_INTEREST -> SavingsAccountTransaction.overdraftInterest(account, account.office(), date, money, manual);
-            case WITHHOLD_TAX -> SavingsAccountTransaction.withHoldTax(account, account.office(), date, money, Collections.emptyMap());
+            case GOAL_PENALTY, GOAL_FORFEITURE -> SavingsAccountTransaction.goalInterestSettlement(account, type, date, money, null);
+            case WITHHOLD_TAX -> {
+                if (account.getTaxGroup() == null && (account.savingsProduct() == null
+                        || account.savingsProduct().getProductCategory() != SavingsProductCategory.GOAL)) {
+                    yield SavingsAccountTransaction.withHoldTax(account, account.office(), date, money, java.util.Collections.emptyMap());
+                }
+                if (account.getTaxGroup() == null) {
+                    throw new GeneralPlatformDomainRuleException("error.msg.savings.tax.mapping.missing",
+                            "Withholding tax requires a tax group");
+                }
+                var split = new java.util.LinkedHashMap<org.apache.fineract.portfolio.tax.domain.TaxComponent, BigDecimal>();
+                for (var mapping : account.getTaxGroup().getTaxGroupMappings()) {
+                    if (!mapping.occursOnDayFromAndUpToAndIncluding(date)) continue;
+                    var component = mapping.getTaxComponent();
+                    var percentage = component.getApplicablePercentage(date);
+                    if (percentage != null && percentage.signum() > 0) split.put(component, percentage);
+                }
+                var calculated = split.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (calculated.signum() <= 0) {
+                    throw new GeneralPlatformDomainRuleException("error.msg.savings.tax.mapping.missing",
+                            "No active withholding tax component");
+                }
+                var remaining = money.getAmount();
+                var allocated = new java.util.LinkedHashMap<org.apache.fineract.portfolio.tax.domain.TaxComponent, BigDecimal>();
+                var entries = split.entrySet().stream().filter(e -> e.getValue().signum() > 0).toList();
+                for (int i = 0; i < entries.size(); i++) {
+                    var entry = entries.get(i);
+                    var part = i == entries.size() - 1 ? remaining
+                            : money.getAmount().multiply(entry.getValue()).divide(calculated, money.getAmount().scale(),
+                                    java.math.RoundingMode.HALF_UP);
+                    part = part.min(remaining);
+                    allocated.put(entry.getKey(), part);
+                    remaining = remaining.subtract(part);
+                }
+                yield SavingsAccountTransaction.withHoldTax(account, account.office(), date, money, allocated);
+            }
             default -> throw new IllegalArgumentException("Unsupported replay transaction type: " + type);
         };
     }

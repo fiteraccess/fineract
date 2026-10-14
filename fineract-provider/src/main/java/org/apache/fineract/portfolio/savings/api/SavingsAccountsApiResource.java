@@ -655,6 +655,7 @@ public class SavingsAccountsApiResource {
                     savingsAccount.getGroupId(), savingsAccount.getSavingsProductId(), staffInSelectedOfficeOnly);
         }
 
-        return SavingsAccountData.withTemplateOptions(savingsAccount, templateData, transactions, charges);
+        return SavingsAccountData.withTemplateOptions(savingsAccount, templateData, transactions, charges)
+                .withProductCategory(savingsAccount.getProductCategory());
     }
 }

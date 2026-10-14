@@ -98,6 +98,7 @@ public interface SavingsAccountRepository extends JpaRepository<SavingsAccount, 
             LEFT JOIN SavingsProduct msp ON msp = savings.product
             LEFT JOIN ProductToGLAccountMapping apm ON apm.productId = msp.id and (apm.financialAccountType = 18 or apm.financialAccountType IS NULL)
             WHERE savings.status = :status
+              AND savings.goalAccrualStopped = false
               AND (savings.nominalAnnualInterestRate IS NOT NULL AND savings.nominalAnnualInterestRate > 0)
               AND msp.accountingRule = :accountingRule
               AND ( savings.closedOnDate <= :tillDate OR savings.closedOnDate IS NULL)

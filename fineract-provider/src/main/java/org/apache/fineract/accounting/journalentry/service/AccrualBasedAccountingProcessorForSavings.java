@@ -235,7 +235,12 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
                     }
                 }
 
-                else if (savingsTransactionDTO.getTransactionType().isInterestPosting()) {
+                else if (savingsTransactionDTO.getTransactionType().isGoalInterestSettlement()) {
+                    this.helper.createCashBasedJournalEntriesAndReversalsForSavings(office, currencyCode,
+                            AccrualAccountsForSavings.INTEREST_PAYABLE.getValue(),
+                            AccrualAccountsForSavings.INCOME_FROM_PENALTIES.getValue(), savingsProductId, paymentTypeId, savingsId,
+                            transactionId, transactionDate, amount, isReversal);
+                } else if (savingsTransactionDTO.getTransactionType().isInterestPosting()) {
                     // Post journal entry if earned interest amount is greater than
                     // zero
                     if (savingsTransactionDTO.getAmount().compareTo(BigDecimal.ZERO) > 0) {

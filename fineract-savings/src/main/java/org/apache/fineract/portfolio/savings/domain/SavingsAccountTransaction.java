@@ -258,6 +258,11 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
                 isReversed, isManualTransaction, lienTransaction, refNo);
     }
 
+    public static SavingsAccountTransaction goalInterestSettlement(final SavingsAccount account, final SavingsAccountTransactionType type,
+            final LocalDate date, final Money amount, final String reference) {
+        return new SavingsAccountTransaction(account, account.office(), type.getValue(), date, amount, false, false, false, reference);
+    }
+
     public static SavingsAccountTransaction interestPosting(final SavingsAccount savingsAccount, final Office office, final LocalDate date,
             final Money amount, final boolean isManualTransaction) {
         final boolean isReversed = false;

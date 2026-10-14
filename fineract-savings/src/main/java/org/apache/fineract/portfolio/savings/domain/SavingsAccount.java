@@ -382,12 +382,38 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     @Column(name = "accrued_till_date")
     private LocalDate accruedTillDate;
 
+    public LocalDate getAccruedTillDate() {
+        return accruedTillDate;
+    }
+
     /**
      * Synapse-owned, inert: written only by {@code ?command=replayCreditRestriction}, read only by the interest
      * engine's account selection and the manual/closure interest posts. Never consulted by transaction validation.
      */
     @Column(name = "synapse_credit_restricted", nullable = false)
     private boolean synapseCreditRestricted;
+
+    @Column(name = "goal_accrual_stopped", nullable = false)
+    private boolean goalAccrualStopped;
+
+    @Column(name = "goal_maturity_date")
+    private LocalDate goalMaturityDate;
+
+    public LocalDate getGoalMaturityDate() {
+        return goalMaturityDate;
+    }
+
+    public void setGoalMaturityDate(LocalDate value) {
+        goalMaturityDate = value;
+    }
+
+    public boolean isGoalAccrualStopped() {
+        return goalAccrualStopped;
+    }
+
+    public void stopGoalAccrual() {
+        goalAccrualStopped = true;
+    }
 
     /**
      * AB-550: Fineract's copy of the reactivation grace deadline Synapse owns, kept only so the Expire Dormancy Grace

@@ -139,6 +139,12 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         final Set<Long> existingTransactionIds = new HashSet<>(savingsAccount.findExistingTransactionIds());
         final Set<Long> existingReversedTransactionIds = new HashSet<>(savingsAccount.findExistingReversedTransactionIds());
 
+        if (savingsAccount.savingsProduct().getProductCategory() == org.apache.fineract.portfolio.savings.SavingsProductCategory.GOAL) {
+            org.apache.fineract.portfolio.savings.domain.GoalSavingsAccrual.accrue(savingsAccount, tillDate);
+            savingsAccountRepository.saveAndFlush(savingsAccount);
+            savingsAccountDomainService.postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds, false);
+            return;
+        }
         LocalDate accruedTillDate = null;
         for (LocalDate day = fromDate; !day.isAfter(tillDate) && !DateUtils.isDateInTheFuture(day); day = day.plusDays(1)) {
             accruedTillDate = day;

@@ -823,7 +823,10 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("where pst.savings_account_id = sa.id and pst.transaction_type_enum in ("
                     + SavingsAccountTransactionType.INTEREST_POSTING.getValue() + ", "
                     + SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue() + ") ");
-            sqlBuilder.append("and pst.is_reversed = false and pst.is_reversal = false), true))) as accruedNotPosted ");
+            sqlBuilder.append("and pst.is_reversed = false and pst.is_reversal = false), true))) as accruedNotPosted, ");
+            sqlBuilder.append("(select coalesce(sum(gs.amount), 0) from m_savings_account_transaction gs ");
+            sqlBuilder.append("where gs.savings_account_id = sa.id and gs.transaction_type_enum in (30, 31) ");
+            sqlBuilder.append("and gs.is_reversed = false and gs.is_reversal = false) as settledGoalInterest ");
             sqlBuilder.append("from m_savings_account sa ");
             sqlBuilder.append("join m_savings_product sp ON sa.product_id = sp.id ");
             sqlBuilder.append("join m_currency curr on curr.code = sa.currency_code ");
@@ -1012,9 +1015,12 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
 
             final LocalDate lastInterestCalculationDate = totalInterestEarned == null ? null
                     : JdbcSupport.getLocalDate(rs, "lastInterestCalculationDate");
+            final BigDecimal settledGoalInterest = SavingsProductCategory.GOAL.name().equals(rs.getString("productCategory"))
+                    ? rs.getBigDecimal("settledGoalInterest")
+                    : BigDecimal.ZERO;
             final SavingsInterestSummary interest = SavingsInterestSummary.of(JdbcSupport.getInteger(rs, "accountingType"),
                     SavingsProductCategory.GOAL.name().equals(rs.getString("productCategory")), totalInterestEarned, totalInterestPosted,
-                    totalOverdraftInterestDerived, rs.getBigDecimal("accruedNotPosted"));
+                    totalOverdraftInterestDerived, rs.getBigDecimal("accruedNotPosted").subtract(settledGoalInterest));
 
             final SavingsAccountSummaryData summary = new SavingsAccountSummaryData(currency, totalDeposits, totalWithdrawals,
                     totalWithdrawalFees, totalAnnualFees, interest.earned(), totalInterestPosted, accountBalance, totalFeeCharge,
@@ -1036,7 +1042,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                     withdrawalFeeForTransfers, summary, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
                     maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds, nominalAnnualInterestRateOverdraft,
                     minOverdraftForInterestCalculation, withHoldTax, taxGroupData, lastActiveTransactionDate, isDormancyTrackingActive,
-                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount);
+                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount).withProductCategory(rs.getString("productCategory"));
         }
     }
 

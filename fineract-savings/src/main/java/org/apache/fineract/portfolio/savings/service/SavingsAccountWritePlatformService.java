@@ -41,6 +41,8 @@ public interface SavingsAccountWritePlatformService {
 
     CommandProcessingResult calculateInterest(Long savingsId);
 
+    CommandProcessingResult calculateGoalInterest(Long savingsId, LocalDate targetDate);
+
     CommandProcessingResult reverseTransaction(Long savingsId, Long transactionId, boolean allowAccountTransferModification,
             JsonCommand command);
 

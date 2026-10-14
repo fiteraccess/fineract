@@ -63,6 +63,13 @@ public final class SavingsAccountData implements Serializable {
     private final String clientName;
     private final Long savingsProductId;
     private final String savingsProductName;
+    private String productCategory;
+
+    public SavingsAccountData withProductCategory(String category) {
+        this.productCategory = category;
+        return this;
+    }
+
     private final Long fieldOfficerId;
     private final String fieldOfficerName;
     private final SavingsAccountStatusEnumData status;

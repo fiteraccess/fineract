@@ -49,7 +49,7 @@ public class SavingsAccruedInterestReadService {
             + " then tr.amount end), 0) as accrued,"
             + " max(case when tr.transaction_type_enum = ? and tr.transaction_date >= ? and tr.transaction_date <= ?"
             + " then tr.transaction_date end) as last_accrual,"
-            + " coalesce(sum(case when tr.transaction_type_enum = ? then tr.amount end), 0) as posted"
+            + " coalesce(sum(case when tr.transaction_type_enum in (?, 30, 31) then tr.amount end), 0) as posted"
             + " from m_savings_account_transaction tr"
             + " where tr.savings_account_id = ? and tr.is_reversed = false and tr.is_reversal = false";
 
@@ -67,7 +67,7 @@ public class SavingsAccruedInterestReadService {
             throw new SavingsAccountNotFoundException(accountId);
         }
         final AccountRow account = accounts.get(0);
-        if (SavingsAccountStatusType.fromInt(account.statusId()).isClosed()) {
+        if (!account.goal() && SavingsAccountStatusType.fromInt(account.statusId()).isClosed()) {
             throw new GeneralPlatformDomainRuleException("error.msg.savings.account.closed",
                     "Savings account " + account.accountNo() + " is closed", account.accountNo());
         }
