@@ -114,7 +114,9 @@ public class SynapseInterestTransactionApplier {
                 throw new GeneralPlatformDomainRuleException("error.msg.goal.settlement.exceeds.payable",
                         "Settlement exceeds accrued interest payable");
             }
-            if (type == SavingsAccountTransactionType.GOAL_FORFEITURE) account.stopGoalAccrual();
+            if (type == SavingsAccountTransactionType.GOAL_FORFEITURE) {
+                account.stopGoalAccrual();
+            }
         }
         // 3. Create transaction entity
         Money money = Money.of(account.getCurrency(), transactionAmount);
@@ -203,10 +205,14 @@ public class SynapseInterestTransactionApplier {
                 }
                 var split = new java.util.LinkedHashMap<org.apache.fineract.portfolio.tax.domain.TaxComponent, BigDecimal>();
                 for (var mapping : account.getTaxGroup().getTaxGroupMappings()) {
-                    if (!mapping.occursOnDayFromAndUpToAndIncluding(date)) continue;
+                    if (!mapping.occursOnDayFromAndUpToAndIncluding(date)) {
+                        continue;
+                    }
                     var component = mapping.getTaxComponent();
                     var percentage = component.getApplicablePercentage(date);
-                    if (percentage != null && percentage.signum() > 0) split.put(component, percentage);
+                    if (percentage != null && percentage.signum() > 0) {
+                        split.put(component, percentage);
+                    }
                 }
                 var calculated = split.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
                 if (calculated.signum() <= 0) {
