@@ -41,6 +41,10 @@ public class CalculateInterestSavingsAccountCommandHandler implements NewCommand
     @Transactional
     @Override
     public CommandProcessingResult processCommand(final JsonCommand command) {
+        if (command.parameterExists("goalTargetDate")) {
+            return this.writePlatformService.calculateGoalInterest(command.getSavingsId(),
+                    command.localDateValueOfParameterNamed("goalTargetDate"));
+        }
         return this.writePlatformService.calculateInterest(command.getSavingsId());
     }
 }

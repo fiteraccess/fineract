@@ -82,6 +82,11 @@ public class SavingsAccountTransactionEnumData implements Serializable {
         this.amountRelease = transactionType == SavingsAccountTransactionType.AMOUNT_RELEASE;
     }
 
+    public boolean isGoalInterestSettlement() {
+        return id != null && (id.intValue() == SavingsAccountTransactionType.GOAL_PENALTY.getValue()
+                || id.intValue() == SavingsAccountTransactionType.GOAL_FORFEITURE.getValue());
+    }
+
     public boolean isIncomeFromInterest() {
         return this.overdraftInterest;
     }

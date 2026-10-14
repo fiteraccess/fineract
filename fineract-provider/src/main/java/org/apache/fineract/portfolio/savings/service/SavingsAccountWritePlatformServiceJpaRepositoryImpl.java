@@ -617,6 +617,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     @Transactional
     @Override
     public CommandProcessingResult calculateInterest(final Long savingsId) {
+        return calculateGoalInterest(savingsId, null);
+    }
+
+    @Transactional
+    @Override
+    public CommandProcessingResult calculateGoalInterest(final Long savingsId, final LocalDate targetDate) {
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
@@ -630,8 +636,28 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         boolean isInterestTransfer = false;
         final LocalDate postInterestOnDate = null;
         boolean postReversals = false;
-        account.calculateInterestUsing(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
-                financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
+        if (account.savingsProduct().getProductCategory() == org.apache.fineract.portfolio.savings.SavingsProductCategory.GOAL) {
+            final Set<Long> existing = new HashSet<>(account.findExistingTransactionIds());
+            final Set<Long> reversed = new HashSet<>(account.findExistingReversedTransactionIds());
+            if (targetDate != null) {
+                if (account.getGoalMaturityDate() != null && !account.getGoalMaturityDate().equals(targetDate)) {
+                    throw new GeneralPlatformDomainRuleException("error.msg.goal.target.date.mismatch",
+                            "Goal target date cannot change during settlement");
+                }
+                if (targetDate.isBefore(account.getActivationDate())) {
+                    throw new GeneralPlatformDomainRuleException("error.msg.goal.target.date.invalid",
+                            "Goal target date precedes activation");
+                }
+                account.setGoalMaturityDate(targetDate);
+                account.reverseAccrualsFrom(targetDate, false);
+            }
+            org.apache.fineract.portfolio.savings.domain.GoalSavingsAccrual.accrue(account, today.minusDays(1));
+            this.savingAccountRepositoryWrapper.saveAndFlush(account);
+            this.savingsAccountDomainService.postJournalEntries(account, existing, reversed, false);
+        } else {
+            account.calculateInterestUsing(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
+                    financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
+        }
 
         if (backdatedTxnsAllowedTill) {
             this.savingsAccountTransactionRepository.saveAll(account.getSavingsAccountTransactionsWithPivotConfig());

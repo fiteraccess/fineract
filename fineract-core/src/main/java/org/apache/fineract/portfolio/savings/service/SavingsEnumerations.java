@@ -219,6 +219,12 @@ public final class SavingsEnumerations {
                 optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.BILL_PAYMENT.getValue().longValue(),
                         SavingsAccountTransactionType.BILL_PAYMENT.getCode(), "Bill Payment");
             break;
+            case GOAL_PENALTY:
+                optionData = new SavingsAccountTransactionEnumData(type.getValue().longValue(), type.getCode(), "Goal Interest Penalty");
+            break;
+            case GOAL_FORFEITURE:
+                optionData = new SavingsAccountTransactionEnumData(type.getValue().longValue(), type.getCode(), "Goal Interest Forfeiture");
+            break;
             case CONVENIENCE_FEE:
                 optionData = new SavingsAccountTransactionEnumData(SavingsAccountTransactionType.CONVENIENCE_FEE.getValue().longValue(),
                         SavingsAccountTransactionType.CONVENIENCE_FEE.getCode(), "Convenience Fee");

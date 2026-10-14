@@ -57,7 +57,8 @@ public enum SavingsAccountTransactionType {
     VAT(26, "savingsAccountTransactionType.vat", TransactionEntryType.DEBIT), //
     SIGNED_STATEMENT_FEE(27, "savingsAccountTransactionType.signedStatementFee", TransactionEntryType.DEBIT), //
     BILL_PAYMENT(28, "savingsAccountTransactionType.billPayment", TransactionEntryType.DEBIT), //
-    CONVENIENCE_FEE(29, "savingsAccountTransactionType.convenienceFee", TransactionEntryType.DEBIT); //
+    CONVENIENCE_FEE(29, "savingsAccountTransactionType.convenienceFee", TransactionEntryType.DEBIT), GOAL_PENALTY(30,
+            "savingsAccountTransactionType.goalPenalty"), GOAL_FORFEITURE(31, "savingsAccountTransactionType.goalForfeiture"); //
 
     private static final Map<Integer, SavingsAccountTransactionType> BY_ID = Arrays.stream(values())
             .collect(Collectors.toMap(SavingsAccountTransactionType::getValue, v -> v));

@@ -282,6 +282,71 @@ class SynapseInterestTransactionApplierTest {
         return account;
     }
 
+    private void goalProduct(SavingsAccount account) throws Exception {
+        var product = Mockito.mock(org.apache.fineract.portfolio.savings.domain.SavingsProduct.class);
+        when(product.getProductCategory()).thenReturn(org.apache.fineract.portfolio.savings.SavingsProductCategory.GOAL);
+        setField(SavingsAccount.class, account, "product", product);
+    }
+
+    @Test
+    void goalPenaltyReducesPayableWithoutDebitingPrincipal() throws Exception {
+        var account = buildAccount(561L, new BigDecimal("1000.00"));
+        goalProduct(account);
+        account.addTransaction(SavingsAccountTransaction.accrual(account, account.office(), LocalDate.of(2026, 3, 19),
+                org.apache.fineract.organisation.monetary.domain.Money.of(account.getCurrency(), new BigDecimal("4.12")), false, null));
+        var result = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper).replay(account, "GOAL_PENALTY",
+                new BigDecimal("2.06"), LocalDate.of(2026, 3, 20), null, "goal-penalty");
+        assertThat(result.transaction().getTransactionType()).isEqualTo(SavingsAccountTransactionType.GOAL_PENALTY);
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("1000.00");
+        assertThat(result.transaction().getRunningBalance()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    void fullForfeiturePermanentlyStopsAccrualWithoutTax() throws Exception {
+        var account = buildAccount(562L, new BigDecimal("90000.00"));
+        goalProduct(account);
+        account.addTransaction(SavingsAccountTransaction.accrual(account, account.office(), LocalDate.of(2026, 3, 19),
+                org.apache.fineract.organisation.monetary.domain.Money.of(account.getCurrency(), new BigDecimal("3275")), false, null));
+        new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper).replay(account, "GOAL_FORFEITURE",
+                new BigDecimal("3275"), LocalDate.of(2026, 3, 20), null, "goal-forfeit");
+        assertThat(account.isGoalAccrualStopped()).isTrue();
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("90000");
+    }
+
+    @Test
+    void cannotForfeitMoreThanAccruedPayable() throws Exception {
+        var account = buildAccount(563L, new BigDecimal("1000"));
+        goalProduct(account);
+        assertThatThrownBy(() -> new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper).replay(account,
+                "GOAL_PENALTY", BigDecimal.ONE, LocalDate.of(2026, 3, 20), null, "over-payable"))
+                .isInstanceOf(GeneralPlatformDomainRuleException.class);
+    }
+
+    @Test
+    void zeroInterestForfeitureStillStopsAccrual() throws Exception {
+        var account = buildAccount(564L, new BigDecimal("1000"));
+        goalProduct(account);
+        new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper).replay(account, "GOAL_FORFEITURE", BigDecimal.ZERO,
+                LocalDate.of(2026, 3, 20), null, "zero-forfeit");
+        assertThat(account.isGoalAccrualStopped()).isTrue();
+    }
+
+    @Test
+    void smallWithholdingTaxRetainsExactAmountAndTaxComponent() throws Exception {
+        var account = buildAccount(565L, new BigDecimal("1002.06"));
+        var component = org.apache.fineract.portfolio.tax.domain.TaxComponent.createTaxComponent("WHT", new BigDecimal("10"), null, null,
+                org.apache.fineract.accounting.glaccount.domain.GLAccountType.LIABILITY,
+                Mockito.mock(org.apache.fineract.accounting.glaccount.domain.GLAccount.class), LocalDate.of(2020, 1, 1));
+        var mapping = org.apache.fineract.portfolio.tax.domain.TaxGroupMappings.createTaxGroupMappings(component, LocalDate.of(2020, 1, 1));
+        var group = org.apache.fineract.portfolio.tax.domain.TaxGroup.createTaxGroup("WHT",
+                new java.util.HashSet<>(java.util.Set.of(mapping)));
+        setField(SavingsAccount.class, account, "taxGroup", group);
+        var result = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper).replay(account, "WITHHOLD_TAX",
+                new BigDecimal("0.21"), LocalDate.of(2026, 3, 20), null, "goal-tax");
+        assertThat(account.getSummary().getAccountBalance()).isEqualByComparingTo("1001.85");
+        assertThat(result.transaction().getTaxDetails()).hasSize(1);
+    }
+
     private static void setField(Class<?> clazz, Object target, String name, Object value) throws Exception {
         java.lang.reflect.Field f = clazz.getDeclaredField(name);
         f.setAccessible(true);
