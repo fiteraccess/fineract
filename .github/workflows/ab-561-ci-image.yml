@@ -1,0 +1,43 @@
+name: AB-561 integration backend image
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/AB-561-goal-settlement-interest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout backend revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+          cache: gradle
+      - name: Configure development registry credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::916148231619:role/fiter-us-east-2-dev-ghdeploy-role-access
+          aws-region: us-east-2
+      - name: Login to development registry
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build integration backend
+        run: ./gradlew :fineract-provider:jibDockerBuild -Djib.to.image=fineract:ci --max-workers=2 --console=plain
+      - name: Publish revision-specific integration image
+        env:
+          IMAGE: 916148231619.dkr.ecr.us-east-2.amazonaws.com/access/backend:ci-${{ github.event.pull_request.head.sha }}
+        run: |
+          docker tag fineract:ci "$IMAGE"
+          docker push "$IMAGE"
