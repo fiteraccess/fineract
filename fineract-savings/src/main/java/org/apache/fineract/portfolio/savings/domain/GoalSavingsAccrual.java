@@ -36,17 +36,25 @@ public final class GoalSavingsAccrual {
     }
 
     public static void accrue(SavingsAccount account, LocalDate through) {
-        if (account.isGoalAccrualStopped() || account.getActivationDate() == null) return;
+        if (account.isGoalAccrualStopped() || account.getActivationDate() == null) {
+            return;
+        }
         if (account.getGoalMaturityDate() != null && !through.isBefore(account.getGoalMaturityDate())) {
             through = account.getGoalMaturityDate().minusDays(1);
         }
         var changes = new TreeMap<LocalDate, BigDecimal>();
         var accruedDates = new HashSet<LocalDate>();
         for (var tx : account.getTransactions()) {
-            if (tx.isReversed() || tx.isReversalTransaction()) continue;
+            if (tx.isReversed() || tx.isReversalTransaction()) {
+                continue;
+            }
             var type = tx.getTransactionType();
-            if (type == SavingsAccountTransactionType.ACCRUAL) accruedDates.add(tx.getTransactionDate());
-            if (type == SavingsAccountTransactionType.INTEREST_POSTING || type == SavingsAccountTransactionType.WITHHOLD_TAX) continue;
+            if (type == SavingsAccountTransactionType.ACCRUAL) {
+                accruedDates.add(tx.getTransactionDate());
+            }
+            if (type == SavingsAccountTransactionType.INTEREST_POSTING || type == SavingsAccountTransactionType.WITHHOLD_TAX) {
+                continue;
+            }
             if (tx.isCredit() || tx.isDebit()) {
                 var amount = tx.getAmount(account.getCurrency()).getAmount();
                 changes.merge(tx.getTransactionDate(), tx.isCredit() ? amount : amount.negate(), BigDecimal::add);
