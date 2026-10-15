@@ -540,7 +540,8 @@ public class SavingsAccountsApiResource {
             final CommandWrapper commandRequest = builder.savingsAccountActivation(accountId).build();
             result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
         } else if (is(commandParam, "calculateInterest")) {
-            final CommandWrapper commandRequest = builder.withNoJsonBody().savingsAccountInterestCalculation(accountId).build();
+            // Keeps the body: a goal settlement passes goalTargetDate, which stops accrual at maturity.
+            final CommandWrapper commandRequest = builder.savingsAccountInterestCalculation(accountId).build();
             result = commandsSourceWritePlatformService.logCommandSource(commandRequest);
         } else if (is(commandParam, "postInterest")) {
             final CommandWrapper commandRequest = builder.savingsAccountInterestPosting(accountId).build();
