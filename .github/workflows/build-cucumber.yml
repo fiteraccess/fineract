@@ -56,7 +56,7 @@ jobs:
 
           case "${{ matrix.task }}" in
             build-core)
-              ./gradlew --no-daemon build -x test -x cucumber -x doc
+              ./gradlew --no-daemon --no-parallel --max-workers=2 build -x test -x cucumber -x doc
               ;;
             cucumber)
               ./gradlew --no-daemon cucumber -x :fineract-e2e-tests-runner:cucumber -x checkstyleJmh -x checkstyleMain -x checkstyleTest -x spotlessCheck -x spotlessApply -x spotbugsMain -x spotbugsTest -x javadoc -x javadocJar -x modernizer

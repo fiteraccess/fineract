@@ -23,6 +23,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.TreeMap;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 
@@ -38,6 +39,11 @@ public final class GoalSavingsAccrual {
     public static void accrue(SavingsAccount account, LocalDate through) {
         if (account.isGoalAccrualStopped() || account.getActivationDate() == null) {
             return;
+        }
+        // Today's principal can still change, so only completed business days earn interest.
+        var lastCompletedDay = DateUtils.getBusinessLocalDate().minusDays(1);
+        if (through.isAfter(lastCompletedDay)) {
+            through = lastCompletedDay;
         }
         if (account.getGoalMaturityDate() != null && !through.isBefore(account.getGoalMaturityDate())) {
             through = account.getGoalMaturityDate().minusDays(1);
