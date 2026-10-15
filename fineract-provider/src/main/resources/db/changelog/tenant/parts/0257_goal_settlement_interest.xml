@@ -22,16 +22,20 @@
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+ <!-- Guarded: an environment that ran these as 0255_goal_settlement_interest.xml marks them ran. -->
  <changeSet id="ab-561-goal-accrual-stop" author="fiteraccess">
+  <preConditions onFail="MARK_RAN"><not><columnExists tableName="m_savings_account" columnName="goal_accrual_stopped"/></not></preConditions>
   <addColumn tableName="m_savings_account"><column name="goal_accrual_stopped" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column></addColumn>
   <rollback><dropColumn tableName="m_savings_account" columnName="goal_accrual_stopped"/></rollback>
  </changeSet>
  <changeSet id="ab-561-goal-maturity-date" author="fiteraccess">
+  <preConditions onFail="MARK_RAN"><not><columnExists tableName="m_savings_account" columnName="goal_maturity_date"/></not></preConditions>
   <addColumn tableName="m_savings_account"><column name="goal_maturity_date" type="DATE"/></addColumn>
   <rollback><dropColumn tableName="m_savings_account" columnName="goal_maturity_date"/></rollback>
  </changeSet>
  <!-- A goal paying out to its owner's own account is not spend; system-defined types skip Synapse's daily limit. Id pinned like 9000 (0231). -->
  <changeSet id="ab-561-goal-settlement-payment-type" author="fiteraccess">
+  <preConditions onFail="MARK_RAN"><sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_payment_type WHERE id = 9001</sqlCheck></preConditions>
   <insert tableName="m_payment_type">
    <column name="id" valueNumeric="9001"/>
    <column name="value" value="Goal Settlement"/>
