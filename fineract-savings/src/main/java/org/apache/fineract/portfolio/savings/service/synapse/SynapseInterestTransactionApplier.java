@@ -115,7 +115,7 @@ public class SynapseInterestTransactionApplier {
                         "Settlement exceeds accrued interest payable");
             }
             if (type == SavingsAccountTransactionType.GOAL_FORFEITURE) {
-                account.stopGoalAccrual();
+                account.setGoalAccrualStopped(true);
             }
         }
         // 3. Create transaction entity
@@ -175,6 +175,11 @@ public class SynapseInterestTransactionApplier {
         }
         account.getSummary().updateSummaryWithReversal(account.getCurrency(), summaryWrapper, original);
         original.reverse();
+        if (type == SavingsAccountTransactionType.GOAL_FORFEITURE) {
+            // Accrual stays stopped only while a live forfeiture remains.
+            account.setGoalAccrualStopped(account.getTransactions().stream()
+                    .anyMatch(tx -> tx.getTransactionType() == type && !tx.isReversed() && !tx.isReversalTransaction()));
+        }
         return new ReplayResult(original, false);
     }
 

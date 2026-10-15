@@ -128,6 +128,46 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
     }
 
     @Test
+    void reversedForfeiturePersistsTheRecomputedAccrualStop() throws Exception {
+        when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
+        Long savingsId = 13L;
+        SavingsAccount account = buildAccount(savingsId);
+        account.setGoalAccrualStopped(false);
+        SavingsAccountTransaction original = mock(SavingsAccountTransaction.class);
+        when(original.getId()).thenReturn(31L);
+        when(original.getTransactionType()).thenReturn(org.apache.fineract.portfolio.savings.SavingsAccountTransactionType.GOAL_FORFEITURE);
+        when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
+        when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
+        when(replayService.reverse(account, "GOAL_FORFEITURE", 31L)).thenReturn(new ReplayResult(original, false));
+        JsonCommand command = mockCommand(LocalDate.of(2026, 9, 30), BigDecimal.ZERO, "GOAL_FORFEITURE", "trace-forfeit-rev", null);
+        when(command.stringValueOfParameterNamed("operation")).thenReturn("REVERSE");
+        when(command.longValueOfParameterNamed("originalTransactionId")).thenReturn(31L);
+
+        service.replayInterestPosting(savingsId, command);
+
+        verify(accountRepo).updateGoalAccrualStopped(savingsId, false);
+    }
+
+    @Test
+    void interestReplayNeverWritesTheAccrualStop() throws Exception {
+        when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
+        Long savingsId = 14L;
+        SavingsAccount account = buildAccount(savingsId);
+        SavingsAccountTransaction tx = mock(SavingsAccountTransaction.class);
+        when(tx.getId()).thenReturn(98L);
+        when(tx.getTransactionType()).thenReturn(org.apache.fineract.portfolio.savings.SavingsAccountTransactionType.INTEREST_POSTING);
+        when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
+        when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
+        when(replayService.replay(eq(account), eq("INTEREST_POSTING"), any(), any(), any(), eq("trace-2"), eq(false)))
+                .thenReturn(new ReplayResult(tx, false));
+
+        service.replayInterestPosting(savingsId,
+                mockCommand(LocalDate.of(2026, 3, 20), new BigDecimal("100.00"), "INTEREST_POSTING", "trace-2", null));
+
+        verify(accountRepo, never()).updateGoalAccrualStopped(any(), anyBoolean());
+    }
+
+    @Test
     void idempotentReplay_returnsEarlyWithoutSaving() throws Exception {
         when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
         Long savingsId = 11L;
