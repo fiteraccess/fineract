@@ -2383,6 +2383,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         // 2. OptimisticLockException when postInterestViaSynapse (Transaction A) holds
         // the same entity in its persistence context with a stale version
         this.savingAccountRepositoryWrapper.updateSummaryDirectAndDetach(account);
+        if (result.transaction().getTransactionType() == SavingsAccountTransactionType.GOAL_FORFEITURE) {
+            this.savingAccountRepositoryWrapper.updateGoalAccrualStopped(account.getId(), account.isGoalAccrualStopped());
+        }
 
         postJournalEntriesForTransaction(account, result.transaction(), false);
 

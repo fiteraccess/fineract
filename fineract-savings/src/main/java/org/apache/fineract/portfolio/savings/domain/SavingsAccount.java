@@ -411,8 +411,8 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return goalAccrualStopped;
     }
 
-    public void stopGoalAccrual() {
-        goalAccrualStopped = true;
+    public void setGoalAccrualStopped(boolean stopped) {
+        goalAccrualStopped = stopped;
     }
 
     /**

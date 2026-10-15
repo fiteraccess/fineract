@@ -331,6 +331,51 @@ class SynapseInterestTransactionApplierTest {
         assertThat(account.isGoalAccrualStopped()).isTrue();
     }
 
+    private SavingsAccountTransaction forfeited(SynapseInterestTransactionApplier service, SavingsAccount account, String trace, long txId)
+            throws Exception {
+        var forfeiture = service.replay(account, "GOAL_FORFEITURE", BigDecimal.ZERO, LocalDate.of(2026, 3, 20), null, trace).transaction();
+        setField(AbstractPersistableCustom.class, forfeiture, "id", txId);
+        return forfeiture;
+    }
+
+    @Test
+    void reversingTheOnlyForfeitureRestartsAccrual() throws Exception {
+        var account = buildAccount(566L, new BigDecimal("1000"));
+        goalProduct(account);
+        var service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        forfeited(service, account, "forfeit-1", 901L);
+
+        service.reverse(account, "GOAL_FORFEITURE", 901L);
+
+        assertThat(account.isGoalAccrualStopped()).isFalse();
+    }
+
+    @Test
+    void reversingOneOfTwoForfeituresKeepsAccrualStopped() throws Exception {
+        var account = buildAccount(567L, new BigDecimal("1000"));
+        goalProduct(account);
+        var service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        forfeited(service, account, "forfeit-1", 902L);
+        forfeited(service, account, "forfeit-2", 903L);
+
+        service.reverse(account, "GOAL_FORFEITURE", 902L);
+
+        assertThat(account.isGoalAccrualStopped()).isTrue();
+    }
+
+    @Test
+    void reversingInterestPostingNeverTouchesTheForfeitureStop() throws Exception {
+        var account = buildAccount(568L, new BigDecimal("1000"));
+        goalProduct(account);
+        var service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        forfeited(service, account, "forfeit-1", 904L);
+        postedInterest(service, account, 905L);
+
+        service.reverse(account, "INTEREST_POSTING", 905L);
+
+        assertThat(account.isGoalAccrualStopped()).isTrue();
+    }
+
     @Test
     void smallWithholdingTaxRetainsExactAmountAndTaxComponent() throws Exception {
         var account = buildAccount(565L, new BigDecimal("1002.06"));
