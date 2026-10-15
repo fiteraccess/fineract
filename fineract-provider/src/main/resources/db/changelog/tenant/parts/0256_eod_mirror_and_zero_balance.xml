@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    The GL steps of the EOD chain: the four mirror jobs and the zero-balance check, seeded between the Bills gate and
+    completion, the table their legs and checks are kept in, and the report that lists them for a business date.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="1" author="fineract">
+        <createTable tableName="m_eod_gl_result">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_m_eod_gl_result" nullable="false"/>
+            </column>
+            <column name="run_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_m_eod_gl_result_run" references="m_eod_run(id)"/>
+            </column>
+            <column name="step_name" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_no" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logical_name" type="VARCHAR(100)"/>
+            <column name="fin_source_gl" type="VARCHAR(45)"/>
+            <column name="fin_bridge_gl" type="VARCHAR(45)"/>
+            <column name="flex_source_gl" type="VARCHAR(45)"/>
+            <column name="flex_bridge_gl" type="VARCHAR(45)"/>
+            <column name="flex_source_branch" type="VARCHAR(20)"/>
+            <column name="flex_bridge_branch" type="VARCHAR(20)"/>
+            <column name="normal_side" type="VARCHAR(10)"/>
+            <column name="flipped" type="BOOLEAN"/>
+            <column name="side" type="VARCHAR(10)"/>
+            <column name="amount" type="DECIMAL(19, 6)"/>
+            <column name="expected" type="DECIMAL(19, 6)"/>
+            <column name="actual" type="DECIMAL(19, 6)"/>
+            <column name="fin_status" type="VARCHAR(20)"/>
+            <column name="flex_status" type="VARCHAR(20)"/>
+            <column name="drift_status" type="VARCHAR(20)"/>
+            <column name="check_result" type="VARCHAR(20)"/>
+            <column name="reference" type="VARCHAR(140)"/>
+            <column name="note" type="VARCHAR(500)"/>
+            <column name="created_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="m_eod_gl_result" columnNames="run_id, step_name, row_no" constraintName="uq_m_eod_gl_result_run_step_row"/>
+    </changeSet>
+
+    <!--
+        Each new step takes the next order after every step but completion, so a tenant's own steps keep their places
+        and orders stay unique; completion then moves after all of them. The order is computed rather than fixed
+        because the job's steps are configurable.
+    -->
+    <changeSet id="2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_MIRROR_DEPOSIT'</sqlCheck>
+        </preConditions>
+        <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_MIRROR_DEPOSIT', COALESCE(MAX(step_order), 0) + 1 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name &lt;&gt; 'EOD_COMPLETION'</sql>
+    </changeSet>
+
+    <changeSet id="3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_MIRROR_INCOME'</sqlCheck>
+        </preConditions>
+        <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_MIRROR_INCOME', COALESCE(MAX(step_order), 0) + 1 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name &lt;&gt; 'EOD_COMPLETION'</sql>
+    </changeSet>
+
+    <changeSet id="4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_MIRROR_TAX'</sqlCheck>
+        </preConditions>
+        <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_MIRROR_TAX', COALESCE(MAX(step_order), 0) + 1 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name &lt;&gt; 'EOD_COMPLETION'</sql>
+    </changeSet>
+
+    <changeSet id="5" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_MIRROR_INTEREST'</sqlCheck>
+        </preConditions>
+        <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_MIRROR_INTEREST', COALESCE(MAX(step_order), 0) + 1 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name &lt;&gt; 'EOD_COMPLETION'</sql>
+    </changeSet>
+
+    <changeSet id="6" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_ZERO_BALANCE'</sqlCheck>
+        </preConditions>
+        <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_ZERO_BALANCE', COALESCE(MAX(step_order), 0) + 1 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name &lt;&gt; 'EOD_COMPLETION'</sql>
+    </changeSet>
+
+    <!-- The derived table lets MySQL read the table it updates. -->
+    <changeSet id="7" author="fineract">
+        <sql>UPDATE m_batch_business_steps SET step_order = (SELECT next_order FROM (SELECT COALESCE(MAX(step_order), 0) + 1 AS next_order FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name &lt;&gt; 'EOD_COMPLETION') last_step) WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_COMPLETION'</sql>
+    </changeSet>
+
+    <!-- One row per leg or check, then a TOTAL row (row_no 0, so it heads its step) per step. -->
+    <changeSet id="8" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'EOD GL Results'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="EOD GL Results"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Accounting"/>
+            <column name="report_sql" value="SELECT r.business_date AS business_date, b.step_order AS step_order, g.step_name AS step, g.row_no AS row_no, g.kind AS kind, g.logical_name AS name, g.fin_source_gl AS fin_source_gl, g.fin_bridge_gl AS fin_bridge_gl, g.flex_source_gl AS flex_source_gl, g.flex_bridge_gl AS flex_bridge_gl, g.flex_source_branch AS flex_source_branch, g.flex_bridge_branch AS flex_bridge_branch, g.side AS side, g.normal_side AS normal_side, g.flipped AS flipped, g.amount AS amount, g.expected AS expected, g.actual AS actual, g.fin_status AS fin_status, g.flex_status AS flex_status, g.drift_status AS drift_status, g.check_result AS check_result, g.reference AS reference, g.note AS note FROM m_eod_gl_result g JOIN m_eod_run r ON r.id = g.run_id LEFT JOIN m_batch_business_steps b ON b.job_name = 'EOD_CLOSE_OF_BUSINESS' AND b.step_name = g.step_name WHERE r.business_date = '${endDate}' UNION ALL SELECT r.business_date, b.step_order, g.step_name, 0, 'TOTAL', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, SUM(g.amount), SUM(g.expected), SUM(g.actual), NULL, NULL, NULL, NULL, NULL, NULL FROM m_eod_gl_result g JOIN m_eod_run r ON r.id = g.run_id LEFT JOIN m_batch_business_steps b ON b.job_name = 'EOD_CLOSE_OF_BUSINESS' AND b.step_name = g.step_name WHERE r.business_date = '${endDate}' GROUP BY r.business_date, b.step_order, g.step_name ORDER BY step_order, step, row_no"/>
+            <column name="description" value="What the EOD GL steps of one business date produced: every mirror leg (GLs and branches on both sides, signed amount, direction, Fineract and Flexcube status, drift) and every zero-balance check (GL, side, expected, actual, result), with a TOTAL row per step."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'EOD GL Results')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_EOD GL Results"/>
+            <column name="entity_name" value="EOD GL Results"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

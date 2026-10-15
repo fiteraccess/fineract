@@ -40,6 +40,24 @@ class EodStepPlanTest {
         assertEquals(List.of(), EodStepPlan.problems(seeded()));
     }
 
+    /** The configuration once changeset 0256 has added the GL steps and moved completion to 11. */
+    @Test
+    void theSeededConfigurationWithTheGlStepsIsRunnable() {
+        List<EodStepPlan.Entry> entries = seeded();
+        entries.replaceAll(
+                entry -> entry.stepName().equals(EodCompletionStep.NAME) ? new EodStepPlan.Entry(EodCompletionStep.NAME, 11L) : entry);
+        entries.addAll(List.of(new EodStepPlan.Entry(EodMirrorDepositStep.NAME, 6L), new EodStepPlan.Entry(EodMirrorIncomeStep.NAME, 7L),
+                new EodStepPlan.Entry(EodMirrorTaxStep.NAME, 8L), new EodStepPlan.Entry(EodMirrorInterestStep.NAME, 9L),
+                new EodStepPlan.Entry(EodZeroBalanceStep.NAME, 10L)));
+
+        assertEquals(List.of(), EodStepPlan.problems(entries));
+    }
+
+    @Test
+    void theGlStepsAreOptional() {
+        assertTrue(EodStepPlan.REQUIRED.stream().noneMatch(name -> name.startsWith("EOD_MIRROR") || name.equals(EodZeroBalanceStep.NAME)));
+    }
+
     @Test
     void anotherEodStepBeforeCompletionIsAllowed() {
         List<EodStepPlan.Entry> entries = seeded();

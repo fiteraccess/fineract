@@ -28,6 +28,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.eod.domain.EodException;
 import org.apache.fineract.portfolio.eod.domain.EodExceptionRepository;
+import org.apache.fineract.portfolio.eod.domain.EodGlResult;
+import org.apache.fineract.portfolio.eod.domain.EodGlResultRepository;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodRunRepository;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
@@ -49,6 +51,7 @@ public class EodRunService {
     private final EodRunRepository runRepository;
     private final EodStepRepository stepRepository;
     private final EodExceptionRepository exceptionRepository;
+    private final EodGlResultRepository glResultRepository;
 
     /** The run for {@code businessDate}: the existing one, re-attempted, or a new one. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -135,6 +138,22 @@ public class EodRunService {
         if (!recorded) {
             exceptionRepository.saveAndFlush(EodException.of(run, stepName, severity, code, truncate(message, 2000), reference, now()));
         }
+    }
+
+    /**
+     * The step's GL result rows become exactly {@code results}: the old ones are deleted and these inserted together.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void replaceGlResults(EodRun run, String stepName, List<EodGlResult> results) {
+        glResultRepository.deleteByRunAndStepName(run, stepName);
+        LocalDateTime now = now();
+        for (EodGlResult result : results) {
+            result.setRun(run);
+            result.setStepName(stepName);
+            result.setCreatedAt(now);
+            result.setNote(truncate(result.getNote(), 500));
+        }
+        glResultRepository.saveAllAndFlush(results);
     }
 
     @Transactional(readOnly = true)

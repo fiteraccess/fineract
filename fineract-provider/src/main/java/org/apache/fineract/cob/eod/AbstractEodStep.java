@@ -169,6 +169,16 @@ public abstract class AbstractEodStep implements EodBusinessStep {
         throw new EodStepFailedException(CODE_POLL_ERROR, getEnumStyledName() + ": poll failed: " + e, e);
     }
 
+    /** A 4xx other than 429: Synapse refused the request itself, so sending it again cannot change the answer. */
+    protected static boolean isRefusal(Throwable e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof RestClientResponseException response) {
+                return response.getStatusCode().is4xxClientError() && response.getStatusCode().value() != 429;
+            }
+        }
+        return false;
+    }
+
     /** The chain cannot run without Synapse: a disabled client (no bean) fails the step plainly. */
     protected SynapseTransactionClient requireSynapse(ObjectProvider<SynapseTransactionClient> provider) {
         SynapseTransactionClient client = provider.getIfAvailable();

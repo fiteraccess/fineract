@@ -274,4 +274,6 @@
     <include file="parts/0252_add_savings_product_category.xml" relativeToChangelogFile="true" />
     <include file="parts/0253_eod_close_of_business.xml" relativeToChangelogFile="true" />
     <include file="parts/0254_eod_bridge_financial_activities.xml" relativeToChangelogFile="true" />
+    <include file="parts/0255_inbox_rollback_permission.xml" relativeToChangelogFile="true" />
+    <include file="parts/0256_eod_mirror_and_zero_balance.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

@@ -29,8 +29,12 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateRes
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRun;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRunRequest;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseReplayStatus;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseSettlementStatus;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseZeroCheck;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseZeroCheckRequest;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -49,6 +53,8 @@ public class SynapseTransactionClient {
     private static final String EOD_BUSINESS_DATE_PATH = "/api/v1/proxy/eod/business-date";
     private static final String EOD_REPLAY_STATUS_PATH = "/api/v1/proxy/eod/replay-status";
     private static final String EOD_SETTLEMENT_STATUS_PATH = "/api/v1/proxy/eod/settlement-status";
+    private static final String EOD_MIRROR_RUNS_PATH = "/api/v1/proxy/eod/mirror-runs";
+    private static final String EOD_ZERO_CHECKS_PATH = "/api/v1/proxy/eod/zero-checks";
     private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
 
     private final RestTemplate restTemplate;
@@ -58,6 +64,8 @@ public class SynapseTransactionClient {
     private final String eodBusinessDateUrl;
     private final String eodReplayStatusUrl;
     private final String eodSettlementStatusUrl;
+    private final String eodMirrorRunsUrl;
+    private final String eodZeroChecksUrl;
     private final String apiKey;
 
     @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW")
@@ -73,6 +81,8 @@ public class SynapseTransactionClient {
         this.eodBusinessDateUrl = baseUrl + EOD_BUSINESS_DATE_PATH;
         this.eodReplayStatusUrl = baseUrl + EOD_REPLAY_STATUS_PATH;
         this.eodSettlementStatusUrl = baseUrl + EOD_SETTLEMENT_STATUS_PATH;
+        this.eodMirrorRunsUrl = baseUrl + EOD_MIRROR_RUNS_PATH;
+        this.eodZeroChecksUrl = baseUrl + EOD_ZERO_CHECKS_PATH;
         this.apiKey = apiKey;
     }
 
@@ -160,6 +170,43 @@ public class SynapseTransactionClient {
     /** The Bills gate's poll: the BILLS settlement batches loaded on or before {@code businessDate}. */
     public SynapseSettlementStatus getSettlementStatus(LocalDate businessDate) {
         return get(eodSettlementStatusUrl + "?businessDate=" + businessDate, SynapseSettlementStatus.class, "settlement status");
+    }
+
+    /**
+     * Starts the GL mirror run of {@code job} for {@code businessDate}, or returns the existing one (a FAILED run is
+     * reopened). Synapse answers 409/400 when the day cannot be mirrored; its reason is kept in the message.
+     */
+    public SynapseMirrorRun startMirrorRun(LocalDate businessDate, String job) {
+        return postEod(eodMirrorRunsUrl, new SynapseMirrorRunRequest(businessDate.toString(), job), SynapseMirrorRun.class,
+                "mirror-run start date=" + businessDate + " job=" + job);
+    }
+
+    public SynapseMirrorRun getMirrorRun(LocalDate businessDate, String job) {
+        return get(eodMirrorRunsUrl + "/" + businessDate + "/" + job, SynapseMirrorRun.class, "mirror run");
+    }
+
+    /**
+     * Computes (or returns the stored CLEAR) zero-balance checks for {@code businessDate}; 409 until every mirror
+     * completed.
+     */
+    public SynapseZeroCheck runZeroCheck(LocalDate businessDate) {
+        return postEod(eodZeroChecksUrl, new SynapseZeroCheckRequest(businessDate.toString()), SynapseZeroCheck.class,
+                "zero-check date=" + businessDate);
+    }
+
+    public SynapseZeroCheck getZeroCheck(LocalDate businessDate) {
+        return get(eodZeroChecksUrl + "/" + businessDate, SynapseZeroCheck.class, "zero check");
+    }
+
+    private <ReqT, ResT> ResT postEod(String url, ReqT body, Class<ResT> responseType, String what) {
+        try {
+            return post(url, body, responseType);
+        } catch (RestClientResponseException e) {
+            throw new SynapsePostingException(
+                    "Synapse " + what + " failed with HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new SynapsePostingException("Synapse " + what + " failed: connection error to " + url, e);
+        }
     }
 
     private <ResT> ResT get(String url, Class<ResT> responseType, String what) {

@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
@@ -38,6 +40,8 @@ import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.eod.domain.EodException;
 import org.apache.fineract.portfolio.eod.domain.EodExceptionRepository;
+import org.apache.fineract.portfolio.eod.domain.EodGlResult;
+import org.apache.fineract.portfolio.eod.domain.EodGlResultRepository;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodRunRepository;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
@@ -54,6 +58,7 @@ class EodRunServiceTest {
     private EodRunRepository runs;
     private EodStepRepository steps;
     private EodExceptionRepository exceptions;
+    private EodGlResultRepository glResults;
     private EodRunService underTest;
 
     @BeforeEach
@@ -63,7 +68,8 @@ class EodRunServiceTest {
         runs = mock(EodRunRepository.class);
         steps = mock(EodStepRepository.class);
         exceptions = mock(EodExceptionRepository.class);
-        underTest = new EodRunService(runs, steps, exceptions);
+        glResults = mock(EodGlResultRepository.class);
+        underTest = new EodRunService(runs, steps, exceptions, glResults);
         when(runs.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(steps.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
@@ -156,5 +162,22 @@ class EodRunServiceTest {
 
         assertEquals(EodStep.STATUS_COMPLETED, step.getStatus());
         assertEquals("{\"from\":\"2026-10-06\"}", step.getDetail());
+    }
+
+    @Test
+    void glResultsReplaceTheStepsOldRows_stampedWithRunStepAndTime() {
+        EodRun run = EodRun.start(D, AT);
+        EodGlResult leg = EodGlResult.of(EodGlResult.KIND_MIRROR_LEG, 1, "CUSTOMER_REGULAR_SAVINGS_DEPOSIT");
+        leg.setNote("x".repeat(600));
+
+        underTest.replaceGlResults(run, "EOD_MIRROR_DEPOSIT", List.of(leg));
+
+        var order = inOrder(glResults);
+        order.verify(glResults).deleteByRunAndStepName(run, "EOD_MIRROR_DEPOSIT");
+        order.verify(glResults).saveAllAndFlush(List.of(leg));
+        assertSame(run, leg.getRun());
+        assertEquals("EOD_MIRROR_DEPOSIT", leg.getStepName());
+        assertTrue(leg.getCreatedAt() != null);
+        assertEquals(500, leg.getNote().length());
     }
 }

@@ -46,10 +46,12 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateRes
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRun;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseReplayStatus;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseSettlementStatus;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseZeroCheck;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -358,5 +360,93 @@ class SynapseTransactionClientTest {
             assertEquals(LocalDate.of(2026, 10, 2), status.getFailedLegacy().get(0).getLoadedDate());
             assertEquals(false, status.isSettled());
         }
+
+        @Test
+        void startsAMirrorRun_andReadsTheRunAndItsLegs() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/mirror-runs")).andExpect(method(HttpMethod.POST))
+                    .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token")).andExpect(header(TENANT_HEADER, TENANT_ID))
+                    .andExpect(jsonPath("$.businessDate").value("2026-10-13")).andExpect(jsonPath("$.job").value("DEPOSIT"))
+                    .andRespond(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON).body(MIRROR_RUN));
+
+            SynapseMirrorRun view = client.startMirrorRun(LocalDate.of(2026, 10, 13), "DEPOSIT");
+
+            assertEquals("PLANNING", view.getRun().getStatus());
+            assertEquals(LocalDate.of(2026, 10, 13), view.getRun().getBusinessDate());
+            assertEquals(1, view.getLegs().size());
+            assertEquals("CUSTOMER_REGULAR_SAVINGS_DEPOSIT", view.getLegs().get(0).getLogicalName());
+            assertEquals(new BigDecimal("123.45"), view.getLegs().get(0).getAmount());
+            assertEquals(55L, view.getLegs().get(0).getFinBridgeGlId());
+            assertEquals("FLX-SRC", view.getLegs().get(0).getFlexSource().getGl());
+            assertEquals(null, view.getLegs().get(0).getFlexBridge());
+            assertEquals("DRIFT", view.getLegs().get(0).getDriftStatus());
+            mockServer.verify();
+        }
+
+        @Test
+        void aRefusedMirrorRunKeepsSynapsesReasonAndTheCause() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/mirror-runs")).andRespond(withStatus(HttpStatus.CONFLICT)
+                    .contentType(MediaType.APPLICATION_JSON).body("{\"message\":\"mirroring is disabled\"}"));
+
+            SynapsePostingException thrown = assertThrows(SynapsePostingException.class,
+                    () -> client.startMirrorRun(LocalDate.of(2026, 10, 13), "DEPOSIT"));
+
+            assertTrue(thrown.getMessage().contains("409"));
+            assertTrue(thrown.getMessage().contains("mirroring is disabled"));
+            assertTrue(thrown.getCause() instanceof RestClientResponseException);
+        }
+
+        @Test
+        void readsAMirrorRunByDateAndJob() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/mirror-runs/2026-10-13/TAX")).andExpect(method(HttpMethod.GET))
+                    .andExpect(header(TENANT_HEADER, TENANT_ID)).andRespond(withSuccess(MIRROR_RUN, MediaType.APPLICATION_JSON));
+
+            assertEquals(1L, client.getMirrorRun(LocalDate.of(2026, 10, 13), "TAX").getRun().getId());
+            mockServer.verify();
+        }
+
+        @Test
+        void runsAndReadsTheZeroCheck() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/zero-checks")).andExpect(method(HttpMethod.POST))
+                    .andExpect(jsonPath("$.businessDate").value("2026-10-13"))
+                    .andRespond(withSuccess(ZERO_CHECK, MediaType.APPLICATION_JSON));
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/zero-checks/2026-10-13")).andExpect(method(HttpMethod.GET))
+                    .andRespond(withSuccess(ZERO_CHECK, MediaType.APPLICATION_JSON));
+
+            SynapseZeroCheck ran = client.runZeroCheck(LocalDate.of(2026, 10, 13));
+            SynapseZeroCheck read = client.getZeroCheck(LocalDate.of(2026, 10, 13));
+
+            assertEquals("FAILED", ran.getRun().getStatus());
+            assertEquals(2, ran.getChecks().size());
+            assertEquals("SETTLEMENT_BRIDGE", ran.getChecks().get(1).getKind());
+            assertEquals(new BigDecimal("0.00"), ran.getChecks().get(0).getExpected());
+            assertEquals(null, ran.getChecks().get(1).getActual());
+            assertEquals("UNVERIFIED", read.getChecks().get(1).getResult());
+            mockServer.verify();
+        }
+
+        @Test
+        void aZeroCheckOutageIsAPostingExceptionWithTheCause() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/zero-checks")).andRespond(withServerError());
+
+            SynapsePostingException thrown = assertThrows(SynapsePostingException.class,
+                    () -> client.runZeroCheck(LocalDate.of(2026, 10, 13)));
+
+            assertTrue(thrown.getMessage().contains("500"));
+            assertTrue(thrown.getCause() instanceof RestClientResponseException);
+        }
     }
+
+    private static final String MIRROR_RUN = "{\"run\":{\"id\":1,\"businessDate\":\"2026-10-13\",\"job\":\"DEPOSIT\",\"status\":\"PLANNING\","
+            + "\"attempts\":0,\"lastError\":null,\"acceptUnresolvedCommission\":false},\"legs\":[{\"runId\":1,\"rowNo\":1,\"mappingId\":3,"
+            + "\"logicalName\":\"CUSTOMER_REGULAR_SAVINGS_DEPOSIT\",\"finSourceGlId\":10,\"finSourceGlCode\":\"2001\",\"finBridgeGlId\":55,"
+            + "\"normalSide\":\"CREDIT\",\"flexSource\":{\"gl\":\"FLX-SRC\",\"branch\":\"001\"},\"flexBridge\":null,\"amount\":123.45,"
+            + "\"lateAmount\":0,\"windowFrom\":null,\"windowTo\":\"2026-10-13\",\"flipped\":false,\"reference\":\"EOD-2026-10-13-DEPOSIT-1\","
+            + "\"finStatus\":\"PENDING\",\"finTxId\":null,\"flexStatus\":\"PENDING\",\"driftStatus\":\"DRIFT\","
+            + "\"fineractMovement\":{\"debits\":1},\"note\":null,\"lastError\":null,\"somethingNew\":true}]}";
+
+    private static final String ZERO_CHECK = "{\"run\":{\"businessDate\":\"2026-10-13\",\"status\":\"FAILED\",\"attempts\":1},\"checks\":["
+            + "{\"checkNo\":1,\"kind\":\"EOD_PAIR\",\"name\":\"DEPOSIT bridge\",\"side\":\"FINERACT\",\"glCode\":\"2901\",\"branch\":null,"
+            + "\"expected\":0.00,\"actual\":0.00,\"result\":\"CLEAR\",\"note\":null},"
+            + "{\"checkNo\":2,\"kind\":\"SETTLEMENT_BRIDGE\",\"name\":\"Inflow bridge\",\"side\":\"FLEXCUBE\",\"glCode\":\"FLX-IN\","
+            + "\"branch\":\"001\",\"expected\":0.00,\"actual\":null,\"result\":\"UNVERIFIED\",\"note\":\"Flexcube unavailable\"}]}";
 }
