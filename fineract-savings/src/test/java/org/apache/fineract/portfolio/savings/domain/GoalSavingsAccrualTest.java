@@ -41,7 +41,7 @@ class GoalSavingsAccrualTest {
     @org.junit.jupiter.api.BeforeEach
     void setBusinessDate() {
         org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil.setBusinessDates(new java.util.HashMap<>(java.util.Map
-                .of(org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 1, 2))));
+                .of(org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 1, 3))));
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -80,6 +80,33 @@ class GoalSavingsAccrualTest {
             verify(account).addTransaction(captured.capture());
             assertThat(captured.getValue().getAmount()).isEqualByComparingTo("54.79");
             assertThat(captured.getValue().getRunningBalance()).isEqualByComparingTo("200000");
+        }
+    }
+
+    @Test
+    void jobCannotAccrueAnIncompleteBusinessDayOrFutureDays() {
+        try (var money = mockStatic(MoneyHelper.class)) {
+            money.when(MoneyHelper::getMathContext).thenReturn(new MathContext(15, RoundingMode.HALF_UP));
+            money.when(MoneyHelper::getRoundingMode).thenReturn(RoundingMode.HALF_UP);
+            var account = mock(SavingsAccount.class);
+            var currency = new MonetaryCurrency("NGN", 2, null);
+            var office = mock(Office.class);
+            var day = LocalDate.of(2026, 1, 2);
+            var txs = new ArrayList<SavingsAccountTransaction>();
+            txs.add(SavingsAccountTransaction.deposit(account, office, null, day, Money.of(currency, new BigDecimal("20000")), null));
+            when(account.getTransactions()).thenReturn(txs);
+            when(account.getCurrency()).thenReturn(currency);
+            when(account.office()).thenReturn(office);
+            when(account.getActivationDate()).thenReturn(day);
+            when(account.getNominalAnnualInterestRate()).thenReturn(new BigDecimal("10"));
+            var captured = org.mockito.ArgumentCaptor.forClass(SavingsAccountTransaction.class);
+
+            GoalSavingsAccrual.accrue(account, day.plusDays(5));
+
+            verify(account).addTransaction(captured.capture());
+            assertThat(captured.getValue().getTransactionDate()).isEqualTo(day);
+            assertThat(captured.getValue().getAmount()).isEqualByComparingTo("5.48");
+            verify(account).setAccruedTillDate(day);
         }
     }
 
