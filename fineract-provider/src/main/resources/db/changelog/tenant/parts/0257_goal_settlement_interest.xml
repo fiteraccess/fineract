@@ -30,4 +30,17 @@
   <addColumn tableName="m_savings_account"><column name="goal_maturity_date" type="DATE"/></addColumn>
   <rollback><dropColumn tableName="m_savings_account" columnName="goal_maturity_date"/></rollback>
  </changeSet>
+ <!-- A goal paying out to its owner's own account is not spend; system-defined types skip Synapse's daily limit. Id pinned like 9000 (0231). -->
+ <changeSet id="ab-561-goal-settlement-payment-type" author="fiteraccess">
+  <insert tableName="m_payment_type">
+   <column name="id" valueNumeric="9001"/>
+   <column name="value" value="Goal Settlement"/>
+   <column name="description" value="System-initiated payment type for goal settlement to the owner's account; not selectable by customers"/>
+   <column name="is_cash_payment" valueBoolean="false"/>
+   <column name="order_position" valueNumeric="1"/>
+   <column name="code_name" value="GOAL_SETTLEMENT"/>
+   <column name="is_system_defined" valueBoolean="true"/>
+  </insert>
+  <rollback><delete tableName="m_payment_type"><where>id = 9001</where></delete></rollback>
+ </changeSet>
 </databaseChangeLog>
