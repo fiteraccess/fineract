@@ -23,6 +23,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -50,11 +51,15 @@ public final class GoalSavingsAccrual {
         }
         var changes = new TreeMap<LocalDate, BigDecimal>();
         var accruedDates = new HashSet<LocalDate>();
+        var reversedAccrualDates = new TreeSet<LocalDate>();
         for (var tx : account.getTransactions()) {
+            var type = tx.getTransactionType();
+            if (tx.isReversed() && type == SavingsAccountTransactionType.ACCRUAL) {
+                reversedAccrualDates.add(tx.getTransactionDate());
+            }
             if (tx.isReversed() || tx.isReversalTransaction()) {
                 continue;
             }
-            var type = tx.getTransactionType();
             if (type == SavingsAccountTransactionType.ACCRUAL) {
                 accruedDates.add(tx.getTransactionDate());
             }
@@ -67,6 +72,11 @@ public final class GoalSavingsAccrual {
             }
         }
         var start = account.getAccruedTillDate() == null ? account.getActivationDate() : account.getAccruedTillDate().plusDays(1);
+        // A late backdated deposit or withdrawal reverses accruals without moving accruedTillDate back; re-book them.
+        reversedAccrualDates.removeAll(accruedDates);
+        if (!reversedAccrualDates.isEmpty() && reversedAccrualDates.first().isBefore(start)) {
+            start = reversedAccrualDates.first();
+        }
         var principal = changes.headMap(start, false).values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         var scale = account.getCurrency().getDigitsAfterDecimal();
         for (var day = start; !day.isAfter(through); day = day.plusDays(1)) {
