@@ -40,6 +40,7 @@ public class EodException extends AbstractPersistableCustom<Long> {
 
     public static final String SEVERITY_WARN = "WARN";
     public static final String SEVERITY_ERROR = "ERROR";
+    public static final String SEVERITY_CRITICAL = "CRITICAL";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "run_id", nullable = false)
