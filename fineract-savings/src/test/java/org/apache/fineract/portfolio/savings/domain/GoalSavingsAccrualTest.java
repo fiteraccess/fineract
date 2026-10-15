@@ -146,6 +146,35 @@ class GoalSavingsAccrualTest {
     }
 
     @Test
+    void booksZeroBalanceDaysTheCursorPassedOnceADepositIsBackdatedOntoThem() {
+        try (var money = mockStatic(MoneyHelper.class)) {
+            money.when(MoneyHelper::getMathContext).thenReturn(new MathContext(15, RoundingMode.HALF_UP));
+            money.when(MoneyHelper::getRoundingMode).thenReturn(RoundingMode.HALF_UP);
+            var account = mock(SavingsAccount.class);
+            var currency = new MonetaryCurrency("NGN", 2, null);
+            var office = mock(Office.class);
+            var day = LocalDate.of(2026, 1, 1);
+            var txs = new ArrayList<SavingsAccountTransaction>();
+            txs.add(SavingsAccountTransaction.deposit(account, office, null, day, Money.of(currency, new BigDecimal("36500")), null));
+            when(account.getTransactions()).thenReturn(txs);
+            when(account.getCurrency()).thenReturn(currency);
+            when(account.office()).thenReturn(office);
+            when(account.getActivationDate()).thenReturn(day);
+            when(account.getAccruedTillDate()).thenReturn(day.plusDays(1));
+            when(account.getNominalAnnualInterestRate()).thenReturn(new BigDecimal("10"));
+            var captured = org.mockito.ArgumentCaptor.forClass(SavingsAccountTransaction.class);
+
+            GoalSavingsAccrual.accrue(account, day.plusDays(1));
+
+            verify(account, org.mockito.Mockito.times(2)).addTransaction(captured.capture());
+            assertThat(captured.getAllValues()).extracting(SavingsAccountTransaction::getTransactionDate).containsExactly(day,
+                    day.plusDays(1));
+            assertThat(captured.getAllValues()).allSatisfy(tx -> assertThat(tx.getAmount()).isEqualByComparingTo("10.00"));
+            verify(account, never()).setAccruedTillDate(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    @Test
     void forfeitureSuppressesFutureAccrualWithoutLoadingHistory() {
         var account = mock(SavingsAccount.class);
         when(account.isGoalAccrualStopped()).thenReturn(true);
