@@ -277,4 +277,5 @@
     <include file="parts/0255_inbox_rollback_permission.xml" relativeToChangelogFile="true" />
     <include file="parts/0256_eod_mirror_and_zero_balance.xml" relativeToChangelogFile="true" />
     <include file="parts/0257_goal_settlement_interest.xml" relativeToChangelogFile="true" />
+    <include file="parts/0258_settlement_reports.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

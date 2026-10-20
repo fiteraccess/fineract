@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    The three settlement reports of the Reports menu. Fineract owns the menu entry, the parameter form and the
+    read permission; the data is Synapse's, which answers runreports for these names before the request reaches
+    Fineract. The report SQL here is a placeholder that returns nothing, so a run that does reach Fineract is harmless.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Selectors shared by the three reports. selectAll makes the form offer "All", which arrives as -1. -->
+    <changeSet id="1" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_parameter WHERE parameter_name = 'settlementRailSelect'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_parameter">
+            <column name="parameter_name" value="settlementRailSelect"/>
+            <column name="parameter_variable" value="rail"/>
+            <column name="parameter_label" value="Rail"/>
+            <column name="parameter_displayType" value="select"/>
+            <column name="parameter_FormatType" value="string"/>
+            <column name="parameter_default" value="n/a"/>
+            <column name="special"/>
+            <column name="selectOne"/>
+            <column name="selectAll" value="Y"/>
+            <column name="parameter_sql" value="select 'OUTBOUND' as id, 'Outbound' as name union all select 'INBOUND', 'Inbound' union all select 'BILLS', 'Bills'"/>
+            <column name="parent_id"/>
+        </insert>
+        <insert tableName="stretchy_parameter">
+            <column name="parameter_name" value="settlementSwitchSelect"/>
+            <column name="parameter_variable" value="switchProvider"/>
+            <column name="parameter_label" value="Switch / Aggregator"/>
+            <column name="parameter_displayType" value="select"/>
+            <column name="parameter_FormatType" value="string"/>
+            <column name="parameter_default" value="n/a"/>
+            <column name="special"/>
+            <column name="selectOne"/>
+            <column name="selectAll" value="Y"/>
+            <column name="parameter_sql" value="select switch_id as id, switch_id as name from m_nip_switch_accounting_configuration union select aggregator_code, aggregator_code from m_aggregator_accounting_configuration order by 1"/>
+            <column name="parent_id"/>
+        </insert>
+        <insert tableName="stretchy_parameter">
+            <column name="parameter_name" value="settlementExceptionTypeSelect"/>
+            <column name="parameter_variable" value="type"/>
+            <column name="parameter_label" value="Exception Type"/>
+            <column name="parameter_displayType" value="select"/>
+            <column name="parameter_FormatType" value="string"/>
+            <column name="parameter_default" value="n/a"/>
+            <column name="special"/>
+            <column name="selectOne"/>
+            <column name="selectAll" value="Y"/>
+            <column name="parameter_sql" value="select 'GlEntryNotFound' as id, 'GlEntryNotFound' as name union all select 'GlAmountMismatch', 'GlAmountMismatch' union all select 'GlOther', 'GlOther'"/>
+            <column name="parent_id"/>
+        </insert>
+    </changeSet>
+
+    <!-- One row per cycle (Outbound, Inbound) or day (Bills) per switch: what settled, what was refused, exceptions by type. -->
+    <changeSet id="2" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'Settlement Cycle Summary'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="Settlement Cycle Summary"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Settlement"/>
+            <column name="report_sql" value="SELECT 'Settlement Cycle Summary is served by Synapse' AS note WHERE 1 = 0"/>
+            <column name="description" value="Per settlement cycle (Outbound, Inbound) or business day (Bills) and switch: batches and value settled, pay-window batches rejected, and the settle-complete exceptions by type."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Cycle Summary')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementRailSelect')"/>
+            <column name="report_parameter_name" value="rail"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Cycle Summary')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementSwitchSelect')"/>
+            <column name="report_parameter_name" value="switchProvider"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Cycle Summary')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'startDate')"/>
+            <column name="report_parameter_name" value="startDate"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Cycle Summary')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_Settlement Cycle Summary"/>
+            <column name="entity_name" value="Settlement Cycle Summary"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- Pay-window submissions refused with 12, 13 or 14: nothing was posted and the caller resends under a new id. -->
+    <changeSet id="3" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'Settlement Rejected Batches'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="Settlement Rejected Batches"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Settlement"/>
+            <column name="report_sql" value="SELECT 'Settlement Rejected Batches is served by Synapse' AS note WHERE 1 = 0"/>
+            <column name="description" value="Pay-window batches refused at intake (response codes 12, 13 and 14) with the batch id, the code and the reason; nothing in them was posted."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Rejected Batches')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementRailSelect')"/>
+            <column name="report_parameter_name" value="rail"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Rejected Batches')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementSwitchSelect')"/>
+            <column name="report_parameter_name" value="switchProvider"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Rejected Batches')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'startDate')"/>
+            <column name="report_parameter_name" value="startDate"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Rejected Batches')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_Settlement Rejected Batches"/>
+            <column name="entity_name" value="Settlement Rejected Batches"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <!-- The exceptions settle-complete carried for posted batches, line by line, typed GlEntryNotFound, GlAmountMismatch or GlOther. -->
+    <changeSet id="4" author="fineract">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM stretchy_report WHERE report_name = 'Settlement Posted Exceptions'</sqlCheck>
+        </preConditions>
+        <insert tableName="stretchy_report">
+            <column name="report_name" value="Settlement Posted Exceptions"/>
+            <column name="report_type" value="Table"/>
+            <column name="report_subtype"/>
+            <column name="report_category" value="Settlement"/>
+            <column name="report_sql" value="SELECT 'Settlement Posted Exceptions is served by Synapse' AS note WHERE 1 = 0"/>
+            <column name="description" value="Every exception reported to the Settlement Service for a posted batch (GlEntryNotFound, GlAmountMismatch, GlOther) with its reference, amount and reason, and the batch and cycle it belongs to."/>
+            <column name="core_report" valueBoolean="false"/>
+            <column name="use_report" valueBoolean="true"/>
+            <column name="self_service_user_report" valueBoolean="false"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Posted Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementRailSelect')"/>
+            <column name="report_parameter_name" value="rail"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Posted Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementSwitchSelect')"/>
+            <column name="report_parameter_name" value="switchProvider"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Posted Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_name = 'settlementExceptionTypeSelect')"/>
+            <column name="report_parameter_name" value="type"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Posted Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'startDate')"/>
+            <column name="report_parameter_name" value="startDate"/>
+        </insert>
+        <insert tableName="stretchy_report_parameter">
+            <column name="report_id" valueComputed="(select id from stretchy_report where report_name = 'Settlement Posted Exceptions')"/>
+            <column name="parameter_id" valueComputed="(select id from stretchy_parameter where parameter_variable = 'endDate')"/>
+            <column name="report_parameter_name" value="endDate"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="report"/>
+            <column name="code" value="READ_Settlement Posted Exceptions"/>
+            <column name="entity_name" value="Settlement Posted Exceptions"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
