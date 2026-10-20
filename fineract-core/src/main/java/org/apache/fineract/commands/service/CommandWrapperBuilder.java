@@ -1639,6 +1639,15 @@ public class CommandWrapperBuilder {
         return this;
     }
 
+    public CommandWrapperBuilder savingsAccountReplayInterestForfeiture(final Long accountId) {
+        this.actionName = "REPLAYINTERESTFORFEITURE";
+        this.entityName = "SAVINGSACCOUNT";
+        this.savingsId = accountId;
+        this.entityId = null;
+        this.href = "/savingsaccounts/" + accountId + "/transactions";
+        return this;
+    }
+
     public CommandWrapperBuilder gsimSavingsAccountDeposit(final Long accountId) {
         this.actionName = "DEPOSIT";
         this.entityName = "GSIMACCOUNT";

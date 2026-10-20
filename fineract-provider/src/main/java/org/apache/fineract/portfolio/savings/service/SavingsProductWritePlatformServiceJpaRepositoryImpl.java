@@ -24,7 +24,9 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargesP
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.taxGroupIdParamName;
 
 import jakarta.persistence.PersistenceException;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +42,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuild
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityAccessType;
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
@@ -51,6 +54,8 @@ import org.apache.fineract.portfolio.savings.data.SavingsProductDataValidator;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductWithdrawalRule;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductWithdrawalRuleRepository;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
 import org.apache.fineract.portfolio.tax.domain.TaxGroup;
 import org.springframework.cache.annotation.CacheEvict;
@@ -68,6 +73,7 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsProductAssembler savingsProductAssembler;
     private final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService;
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
+    private final SavingsProductWithdrawalRuleRepository withdrawalRuleRepository;
 
     /*
      * Guaranteed to throw an exception no matter what the data integrity issue is.
@@ -122,6 +128,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             SavingsProductCategoryRules.assertPeriodicAccrual(product);
 
             this.savingProductRepository.saveAndFlush(product);
+
+            this.withdrawalRuleRepository.save(product.getId(), this.savingsProductAssembler.assembleWithdrawalRule(command,
+                    SavingsProductWithdrawalRule.monthStart(DateUtils.getBusinessLocalDate())));
 
             // save accounting mappings
             this.accountMappingWritePlatformService.createSavingProductToGLAccountMapping(product.getId(), command,
@@ -195,6 +204,8 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
                 SavingsProductCategoryRules.assertPeriodicAccrual(product);
             }
 
+            changes.putAll(scheduleWithdrawalRuleChange(productId, command));
+
             if (!changes.isEmpty()) {
                 this.savingProductRepository.saveAndFlush(product);
             }
@@ -209,6 +220,32 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             handleDataIntegrityIssues(command, ExceptionUtils.getRootCause(dve.getCause()), dve);
             return CommandProcessingResult.empty();
         }
+    }
+
+    /**
+     * AB-566: a withdrawal rule change applies from the next business month, so the month Synapse is counting keeps the
+     * rule its customers started it under.
+     */
+    private Map<String, Object> scheduleWithdrawalRuleChange(final Long productId, final JsonCommand command) {
+        if (!command.parameterExists(SavingsApiConstants.withdrawalCounterEnabledParamName)
+                && !command.parameterExists(SavingsApiConstants.monthlyWithdrawalThresholdParamName)
+                && !command.parameterExists(SavingsApiConstants.qualifyingWithdrawalTypesParamName)) {
+            return Map.of();
+        }
+        final LocalDate nextMonth = SavingsProductWithdrawalRule.monthStart(DateUtils.getBusinessLocalDate()).plusMonths(1);
+        final SavingsProductWithdrawalRule scheduled = SavingsProductWithdrawalRule
+                .inEffectOn(this.withdrawalRuleRepository.findByProductId(productId), nextMonth);
+        final SavingsProductWithdrawalRule requested = scheduled.withChangesFrom(command, nextMonth);
+        if (requested.hasSameTermsAs(scheduled)) {
+            return Map.of();
+        }
+        this.withdrawalRuleRepository.save(productId, requested);
+        final Map<String, Object> changes = new LinkedHashMap<>();
+        changes.put(SavingsApiConstants.withdrawalCounterEnabledParamName, requested.withdrawalCounterEnabled());
+        changes.put(SavingsApiConstants.monthlyWithdrawalThresholdParamName, requested.monthlyWithdrawalThreshold());
+        changes.put(SavingsApiConstants.qualifyingWithdrawalTypesParamName, requested.typeCodes());
+        changes.put("withdrawalRuleEffectiveFrom", requested.toData().effectiveFrom());
+        return changes;
     }
 
     @Transactional

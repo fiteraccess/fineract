@@ -141,6 +141,9 @@ public class SavingsApiConstants {
     public static final String maxAllowedLienLimitParamName = "maxAllowedLienLimit";
     public static final String lienAllowedParamName = "lienAllowed";
     public static final String productCategoryParamName = "productCategory";
+    public static final String withdrawalCounterEnabledParamName = "withdrawalCounterEnabled";
+    public static final String monthlyWithdrawalThresholdParamName = "monthlyWithdrawalThreshold";
+    public static final String qualifyingWithdrawalTypesParamName = "qualifyingWithdrawalTypes";
     public static final String minBalanceForInterestCalculationParamName = "minBalanceForInterestCalculation";
     public static final String withdrawBalanceParamName = "withdrawBalance";
     public static final String onHoldFundsParamName = "onHoldFunds";

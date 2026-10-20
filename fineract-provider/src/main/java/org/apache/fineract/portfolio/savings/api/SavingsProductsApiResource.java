@@ -59,6 +59,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.organisation.monetary.service.CurrencyReadPlatformService;
@@ -66,6 +67,7 @@ import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
 import org.apache.fineract.portfolio.paymenttype.service.PaymentTypeReadService;
+import org.apache.fineract.portfolio.savings.QualifyingWithdrawalType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
@@ -73,6 +75,7 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsProductCategory;
 import org.apache.fineract.portfolio.savings.data.SavingsProductData;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductWithdrawalRule;
 import org.apache.fineract.portfolio.savings.service.SavingsDropdownReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsEnumerations;
 import org.apache.fineract.portfolio.savings.service.SavingsProductReadPlatformService;
@@ -285,6 +288,14 @@ public class SavingsProductsApiResource {
                     accountMappingForPayment);
         }
         savingsProductToReturn.setProductCategoryOptions(ApiFacingEnum.getValuesAsStringEnumOptionDataList(SavingsProductCategory.class));
+        savingsProductToReturn.setQualifyingWithdrawalTypeOptions(new ArrayList<>(QualifyingWithdrawalType.codes()));
+        if (savingsProduct == null) {
+            final SavingsProductWithdrawalRule defaults = SavingsProductWithdrawalRule
+                    .defaults(SavingsProductWithdrawalRule.monthStart(DateUtils.getBusinessLocalDate()));
+            savingsProductToReturn.setWithdrawalCounterEnabled(defaults.withdrawalCounterEnabled());
+            savingsProductToReturn.setMonthlyWithdrawalThreshold(defaults.monthlyWithdrawalThreshold());
+            savingsProductToReturn.setQualifyingWithdrawalTypes(defaults.typeCodes());
+        }
 
         return savingsProductToReturn;
     }

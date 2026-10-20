@@ -21,12 +21,16 @@ package org.apache.fineract.portfolio.savings.service.synapse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
@@ -36,6 +40,7 @@ import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction.Operation;
+import org.apache.fineract.portfolio.savings.domain.SavingsInterestForfeitureRepository;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -44,6 +49,8 @@ public class SynapseInterestPostingOutboxWriter {
     private final SynapseInstructionMapper mapper;
     private final SynapseOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final SavingsInterestForfeitureRepository forfeitureRepository;
+    private final ConfigurationDomainService configurationDomainService;
 
     /**
      * Collects eligible interest-posting instructions from the given accounts, writes them to the outbox for
@@ -73,8 +80,10 @@ public class SynapseInterestPostingOutboxWriter {
     public SynapsePostResult postInterestBatch(List<SavingsAccountData> accounts) {
         String batchId = UUID.randomUUID().toString();
 
-        List<AccountCursorUpdate> allCursors = accounts.stream().map(this::toCursorUpdate).toList();
-        List<SynapseTransactionInstruction> instructions = accounts.stream().flatMap(acct -> toInstructions(acct, batchId)).toList();
+        final ForfeitedPeriods forfeited = forfeitedPeriodsOf(accounts);
+        List<AccountCursorUpdate> allCursors = accounts.stream().map(acct -> toCursorUpdate(acct, forfeited)).toList();
+        List<SynapseTransactionInstruction> instructions = accounts.stream().flatMap(acct -> toInstructions(acct, batchId, forfeited))
+                .toList();
 
         if (instructions.isEmpty()) {
             log.debug("Batch {}: no eligible instructions, skipping outbox write", batchId);
@@ -87,17 +96,70 @@ public class SynapseInterestPostingOutboxWriter {
         return new SynapsePostResult(allCursors, allCursors.size(), 0);
     }
 
-    private AccountCursorUpdate toCursorUpdate(SavingsAccountData account) {
+    /**
+     * AB-566: the forfeited months of the page's accounts that have a new posting, in one query. A Regular Savings
+     * month that closed forfeited gets neither its interest nor its withholding tax.
+     */
+    private ForfeitedPeriods forfeitedPeriodsOf(final List<SavingsAccountData> accounts) {
+        final Set<Long> accountIds = new HashSet<>();
+        LocalDate earliestPosting = null;
+        for (SavingsAccountData account : accounts) {
+            for (SavingsAccountTransactionData tx : account.getSavingsAccountTransactionData()) {
+                if (ForfeitedPeriods.isNewForfeitablePosting(tx)) {
+                    accountIds.add(account.getId());
+                    earliestPosting = earliestPosting == null || tx.getTransactionDate().isBefore(earliestPosting) ? tx.getTransactionDate()
+                            : earliestPosting;
+                }
+            }
+        }
+        if (accountIds.isEmpty()) {
+            return ForfeitedPeriods.NONE;
+        }
+        final boolean postingAtPeriodEnd = configurationDomainService.isSavingsInterestPostingAtCurrentPeriodEnd();
+        final LocalDate fromMonth = ForfeitedPeriods.periodMonth(earliestPosting, postingAtPeriodEnd);
+        return new ForfeitedPeriods(forfeitureRepository.findForfeitedMonths(accountIds, fromMonth), postingAtPeriodEnd);
+    }
+
+    private record ForfeitedPeriods(Map<Long, Set<LocalDate>> monthsByAccount, boolean postingAtPeriodEnd) {
+
+        static final ForfeitedPeriods NONE = new ForfeitedPeriods(Map.of(), false);
+
+        static boolean isNewForfeitablePosting(final SavingsAccountTransactionData tx) {
+            return tx.getId() == null && tx.getTransactionType() != null
+                    && (tx.getTransactionType().isInterestPosting() || tx.getTransactionType().isWithholdTax());
+        }
+
+        /** A posting at the period end is dated on the period's last day, otherwise on the day after it. */
+        static LocalDate periodMonth(final LocalDate postingDate, final boolean postingAtPeriodEnd) {
+            return (postingAtPeriodEnd ? postingDate : postingDate.minusDays(1)).withDayOfMonth(1);
+        }
+
+        boolean covers(final Long accountId, final SavingsAccountTransactionData tx) {
+            final Set<LocalDate> months = monthsByAccount.get(accountId);
+            return months != null && isNewForfeitablePosting(tx)
+                    && months.contains(periodMonth(tx.getTransactionDate(), postingAtPeriodEnd));
+        }
+    }
+
+    private AccountCursorUpdate toCursorUpdate(SavingsAccountData account, ForfeitedPeriods forfeited) {
         SavingsAccountSummaryData summary = account.getSummary();
         // AB-401: never fall back to the calculation date; a run that posts nothing must not move the posted-till date,
         // or the next posting starts after it and drops the interest earned before it.
         LocalDate postedTill = summary.getInterestPostedTillDate() != null ? summary.getInterestPostedTillDate()
                 : summary.getPrevInterestPostedTillDate();
+        // AB-566: a forfeited month is settled by not paying it, so the cursor moves past it or the next run re-posts
+        // it.
+        for (SavingsAccountTransactionData tx : account.getSavingsAccountTransactionData()) {
+            if (forfeited.covers(account.getId(), tx) && (postedTill == null || tx.getTransactionDate().isAfter(postedTill))) {
+                postedTill = tx.getTransactionDate();
+            }
+        }
         return new AccountCursorUpdate(account.getId(), postedTill, summary.getLastInterestCalculationDate());
     }
 
-    private Stream<SynapseTransactionInstruction> toInstructions(SavingsAccountData account, String batchId) {
-        return account.getSavingsAccountTransactionData().stream().map(tx -> toInstruction(account, tx, batchId)).filter(Objects::nonNull);
+    private Stream<SynapseTransactionInstruction> toInstructions(SavingsAccountData account, String batchId, ForfeitedPeriods forfeited) {
+        return account.getSavingsAccountTransactionData().stream().filter(tx -> !forfeited.covers(account.getId(), tx))
+                .map(tx -> toInstruction(account, tx, batchId)).filter(Objects::nonNull);
     }
 
     private SynapseTransactionInstruction toInstruction(SavingsAccountData account, SavingsAccountTransactionData tx, String batchId) {

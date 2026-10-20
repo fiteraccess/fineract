@@ -55,6 +55,7 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withdraw
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
@@ -206,6 +207,11 @@ public class SavingsProductAssembler {
         final String category = StringUtils.trimToNull(command.stringValueOfParameterNamedAllowingNull(productCategoryParamName));
         product.setProductCategory(category == null ? null : SavingsProductCategory.valueOf(category));
         return product;
+    }
+
+    /** AB-566: a new product's withdrawal rule, the defaults overridden by the request, from the given month. */
+    public SavingsProductWithdrawalRule assembleWithdrawalRule(final JsonCommand command, final LocalDate effectiveFrom) {
+        return SavingsProductWithdrawalRule.defaults(effectiveFrom).withChangesFrom(command, effectiveFrom);
     }
 
     public Set<Charge> assembleListOfSavingsProductCharges(final JsonCommand command, final String savingsProductCurrencyCode) {

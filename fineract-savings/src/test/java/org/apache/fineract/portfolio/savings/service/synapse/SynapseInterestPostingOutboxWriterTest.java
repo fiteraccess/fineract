@@ -19,18 +19,25 @@
 package org.apache.fineract.portfolio.savings.service.synapse;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.client.data.ClientData;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -41,6 +48,7 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumD
 import org.apache.fineract.portfolio.savings.data.synapse.AccountCursorUpdate;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostResult;
+import org.apache.fineract.portfolio.savings.domain.SavingsInterestForfeitureRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -49,8 +57,10 @@ class SynapseInterestPostingOutboxWriterTest {
     private final SynapseInstructionMapper mapper = new SynapseInstructionMapper();
     private final SynapseOutboxRepository outboxRepository = mock(SynapseOutboxRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final SavingsInterestForfeitureRepository forfeitureRepository = mock(SavingsInterestForfeitureRepository.class);
+    private final ConfigurationDomainService configurationDomainService = mock(ConfigurationDomainService.class);
     private final SynapseInterestPostingOutboxWriter service = new SynapseInterestPostingOutboxWriter(mapper, outboxRepository,
-            objectMapper);
+            objectMapper, forfeitureRepository, configurationDomainService);
 
     private static final LocalDate POSTING_DATE = LocalDate.of(2026, 3, 20);
     private static final LocalDate INTEREST_POSTED_TILL = LocalDate.of(2026, 3, 20);
@@ -348,5 +358,74 @@ class SynapseInterestPostingOutboxWriterTest {
         verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
         assertThat(entriesCaptor.getValue()).extracting(OutboxEntry::getDedupKey).containsExactlyInAnyOrder("REVERSE:99",
                 "POST:INTEREST_POSTING:" + POSTING_DATE);
+    }
+
+    // --- AB-566 interest forfeiture ---
+
+    private static final LocalDate OCTOBER_FIRST = LocalDate.of(2026, 10, 1);
+    private static final LocalDate SEPTEMBER = LocalDate.of(2026, 9, 1);
+
+    @Test
+    void aForfeitedMonthPostsNeitherInterestNorTaxButMovesTheCursorPastIt() {
+        SavingsAccountData acct = buildAccountWithPostingAndTax(1L, OCTOBER_FIRST, SEPTEMBER);
+        when(forfeitureRepository.findForfeitedMonths(Set.of(1L), SEPTEMBER)).thenReturn(Map.of(1L, Set.of(SEPTEMBER)));
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), anyList());
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(OCTOBER_FIRST);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void anEligibleAccountInTheSamePageStillPostsInterestAndTax() {
+        SavingsAccountData forfeited = buildAccountWithPostingAndTax(1L, OCTOBER_FIRST, SEPTEMBER);
+        SavingsAccountData eligible = buildAccountWithPostingAndTax(2L, OCTOBER_FIRST, SEPTEMBER);
+        when(forfeitureRepository.findForfeitedMonths(Set.of(1L, 2L), SEPTEMBER)).thenReturn(Map.of(1L, Set.of(SEPTEMBER)));
+
+        SynapsePostResult result = service.postInterestBatch(List.of(forfeited, eligible));
+
+        ArgumentCaptor<List<OutboxEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(outboxRepository).insertBatch(eq("INTEREST_POSTING"), anyString(), entriesCaptor.capture());
+        assertThat(entriesCaptor.getValue()).extracting(OutboxEntry::getDedupKey)
+                .containsExactlyInAnyOrder("POST:INTEREST_POSTING:" + OCTOBER_FIRST, "POST:WITHHOLD_TAX:" + OCTOBER_FIRST);
+        assertThat(entriesCaptor.getValue()).extracting(OutboxEntry::getAccountId).containsOnly(2L);
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(OCTOBER_FIRST);
+        verify(forfeitureRepository, times(1)).findForfeitedMonths(anyCollection(), any());
+    }
+
+    @Test
+    void aPostingAtThePeriodEndIsKeyedOnItsOwnMonth() {
+        LocalDate septemberEnd = LocalDate.of(2026, 9, 30);
+        when(configurationDomainService.isSavingsInterestPostingAtCurrentPeriodEnd()).thenReturn(true);
+        SavingsAccountData acct = buildAccountWithPostingAndTax(1L, septemberEnd, LocalDate.of(2026, 8, 31));
+        when(forfeitureRepository.findForfeitedMonths(Set.of(1L), SEPTEMBER)).thenReturn(Map.of(1L, Set.of(SEPTEMBER)));
+
+        SynapsePostResult result = service.postInterestBatch(List.of(acct));
+
+        verify(outboxRepository, never()).insertBatch(anyString(), anyString(), anyList());
+        assertThat(result.getCursorUpdates().get(0).getInterestPostedTillDate()).isEqualTo(septemberEnd);
+    }
+
+    @Test
+    void aPageWithNothingToPostDoesNotLookUpForfeitures() {
+        service.postInterestBatch(List.of(buildAccountNoTx(1L, 10L, "NGN")));
+
+        verify(forfeitureRepository, never()).findForfeitedMonths(anyCollection(), any());
+    }
+
+    private static SavingsAccountData buildAccountWithPostingAndTax(Long id, LocalDate postingDate, LocalDate previouslyPostedTill) {
+        SavingsAccountSummaryData summary = new SavingsAccountSummaryData(new CurrencyData("NGN"), null, null, null, null, null, null, null,
+                null, null, null, null, null, postingDate, null, null);
+        summary.setPrevInterestPostedTillDate(previouslyPostedTill);
+        SavingsAccountData account = buildAccountWithSummary(id, 10L, "NGN", summary);
+        account.setSavingsAccountTransactionData(SavingsAccountTransactionData.create(null, interestPostingType(), null, id, "SA-" + id,
+                postingDate, null, new BigDecimal("120.00"), null, null, false, null, false, null, null, postingDate));
+        SavingsAccountTransactionEnumData taxType = new SavingsAccountTransactionEnumData(
+                SavingsAccountTransactionType.WITHHOLD_TAX.getValue().longValue(), SavingsAccountTransactionType.WITHHOLD_TAX.getCode(),
+                SavingsAccountTransactionType.WITHHOLD_TAX.getValue().toString());
+        account.setSavingsAccountTransactionData(SavingsAccountTransactionData.create(null, taxType, null, id, "SA-" + id, postingDate,
+                null, new BigDecimal("12.00"), null, null, false, null, false, null, null, postingDate));
+        return account;
     }
 }
