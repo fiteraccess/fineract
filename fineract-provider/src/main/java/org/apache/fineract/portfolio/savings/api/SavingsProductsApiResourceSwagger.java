@@ -84,6 +84,12 @@ final class SavingsProductsApiResourceSwagger {
         public Boolean isDormancyTrackingActive;
         @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
         public String productCategory;
+        @Schema(example = "true", description = "Whether Synapse counts qualifying withdrawals (default true)")
+        public Boolean withdrawalCounterEnabled;
+        @Schema(example = "4", description = "Qualifying withdrawals allowed per month before its interest is forfeited (default 4)")
+        public Integer monthlyWithdrawalThreshold;
+        @Schema(example = "[\"INTERBANK_TRANSFER\", \"BILL_PAYMENT\"]", description = "Subset of INTERBANK_TRANSFER, INTRABANK_TRANSFER, OWN_ACCOUNT_TRANSFER, BILL_PAYMENT, AIRTIME, DATA (default all)")
+        public List<String> qualifyingWithdrawalTypes;
     }
 
     @Schema(description = "PostSavingsProductsResponse")
@@ -108,6 +114,12 @@ final class SavingsProductsApiResourceSwagger {
         public Double interestRate;
         @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
         public String productCategory;
+        @Schema(example = "true", description = "Takes effect from the first day of the next business month")
+        public Boolean withdrawalCounterEnabled;
+        @Schema(example = "4", description = "Takes effect from the first day of the next business month")
+        public Integer monthlyWithdrawalThreshold;
+        @Schema(example = "[\"INTERBANK_TRANSFER\", \"BILL_PAYMENT\"]", description = "Takes effect from the first day of the next business month")
+        public List<String> qualifyingWithdrawalTypes;
     }
 
     @Schema(description = "PutSavingsProductsProductIdResponse")
@@ -235,6 +247,29 @@ final class SavingsProductsApiResourceSwagger {
         public GetSavingsProductsAccountingRule accountingRule;
         @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
         public String productCategory;
+        @Schema(example = "true", description = "In effect this business month")
+        public Boolean withdrawalCounterEnabled;
+        @Schema(example = "4", description = "In effect this business month")
+        public Integer monthlyWithdrawalThreshold;
+        @Schema(example = "[\"INTERBANK_TRANSFER\", \"BILL_PAYMENT\"]", description = "In effect this business month")
+        public List<String> qualifyingWithdrawalTypes;
+        @Schema(description = "The rule in effect this business month followed by any future-dated rule")
+        public List<GetSavingsProductsWithdrawalRule> withdrawalRules;
+    }
+
+    @Schema(description = "GetSavingsProductsWithdrawalRule")
+    public static final class GetSavingsProductsWithdrawalRule {
+
+        private GetSavingsProductsWithdrawalRule() {}
+
+        @Schema(example = "2026-11-01", description = "First day of the month the rule takes effect, yyyy-MM-dd")
+        public String effectiveFrom;
+        @Schema(example = "true")
+        public Boolean withdrawalCounterEnabled;
+        @Schema(example = "4")
+        public Integer monthlyWithdrawalThreshold;
+        @Schema(example = "[\"INTERBANK_TRANSFER\", \"BILL_PAYMENT\"]")
+        public List<String> qualifyingWithdrawalTypes;
     }
 
     @Schema(description = "GetSavingsProductsProductIdResponse")
@@ -385,6 +420,14 @@ final class SavingsProductsApiResourceSwagger {
         public List<Long> charges;
         @Schema(example = "GOAL", description = "GOAL, AUTOSAVE, DIGITAL or null")
         public String productCategory;
+        @Schema(example = "true", description = "In effect this business month")
+        public Boolean withdrawalCounterEnabled;
+        @Schema(example = "4", description = "In effect this business month")
+        public Integer monthlyWithdrawalThreshold;
+        @Schema(example = "[\"INTERBANK_TRANSFER\", \"BILL_PAYMENT\"]", description = "In effect this business month")
+        public List<String> qualifyingWithdrawalTypes;
+        @Schema(description = "The rule in effect this business month followed by any future-dated rule")
+        public List<GetSavingsProductsWithdrawalRule> withdrawalRules;
     }
 
     @Schema(description = "GetSavingsProductsTemplateResponse")
@@ -693,6 +736,8 @@ final class SavingsProductsApiResourceSwagger {
         public GetSavingsProductsAccountingMappingOptions accountingMappingOptions;
         public Set<GetSavingsProductsChargeOptions> chargeOptions;
         public GetSavingsProductsResponse.GetSavingsCurrency accountMapping;
+        @Schema(example = "[\"INTERBANK_TRANSFER\", \"INTRABANK_TRANSFER\", \"OWN_ACCOUNT_TRANSFER\", \"BILL_PAYMENT\", \"AIRTIME\", \"DATA\"]")
+        public List<String> qualifyingWithdrawalTypeOptions;
 
     }
 

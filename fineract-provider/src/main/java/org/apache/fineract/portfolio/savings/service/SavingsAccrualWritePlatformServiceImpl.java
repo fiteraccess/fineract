@@ -21,13 +21,16 @@ package org.apache.fineract.portfolio.savings.service;
 import jakarta.persistence.OptimisticLockException;
 import java.math.MathContext;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.domain.LocalDateInterval;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -39,6 +42,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
+import org.apache.fineract.portfolio.savings.domain.SavingsInterestForfeitureRepository;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -57,6 +61,8 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
     private final ConfigurationDomainService configurationDomainService;
     private final SavingsAccountDomainService savingsAccountDomainService;
     private final PlatformTransactionManager transactionManager;
+    private final SavingsInterestForfeitureRepository forfeitureRepository;
+    private final JournalEntryWritePlatformService journalEntryWritePlatformService;
 
     /** A concurrent Synapse replay can bump an account's version mid-run; a fresh read of the account then succeeds. */
     private static final int MAX_ATTEMPTS_PER_ACCOUNT = 3;
@@ -68,6 +74,7 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final MathContext mc = MoneyHelper.getMathContext();
+        final Map<Long, Map<LocalDate, Boolean>> forfeitures = loadForfeitures(savingsAccrualData, tillDate);
 
         // AB-401: one account per transaction, so a conflict on one account no longer rolls back every other account's
         // accrual.
@@ -83,7 +90,7 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
                     }
                 }
                 accrueInOwnTransaction(perAccount, savingsAccrual, tillDate, financialYearBeginningMonth,
-                        isSavingsInterestPostingAtCurrentPeriodEnd, mc);
+                        isSavingsInterestPostingAtCurrentPeriodEnd, mc, forfeitures.getOrDefault(savingsAccrual.getId(), Map.of()));
             } catch (Exception e) {
                 log.error("Failed to add accrual transaction for savings {} : {}", savingsAccrual.getAccountNo(), e.getMessage());
                 errors.add(e.getCause() != null ? e.getCause() : e);
@@ -94,9 +101,27 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         }
     }
 
+    /**
+     * AB-566: Regular Savings eligibility for every month the run can touch, in one query. The window opens a month
+     * back so a month Synapse settles after its last end of day, but before it is posted, is still reconciled.
+     */
+    private Map<Long, Map<LocalDate, Boolean>> loadForfeitures(final List<SavingsAccrualData> savingsAccrualData,
+            final LocalDate tillDate) {
+        if (savingsAccrualData.isEmpty()) {
+            return Map.of();
+        }
+        LocalDate from = tillDate.minusMonths(1);
+        for (SavingsAccrualData savingsAccrual : savingsAccrualData) {
+            if (savingsAccrual.getAccruedTill() != null && savingsAccrual.getAccruedTill().isBefore(from)) {
+                from = savingsAccrual.getAccruedTill();
+            }
+        }
+        return forfeitureRepository.findStatesBetween(from.withDayOfMonth(1), tillDate);
+    }
+
     private void accrueInOwnTransaction(final TransactionTemplate perAccount, final SavingsAccrualData savingsAccrual,
             final LocalDate tillDate, final Integer financialYearBeginningMonth, final boolean isSavingsInterestPostingAtCurrentPeriodEnd,
-            final MathContext mc) {
+            final MathContext mc, final Map<LocalDate, Boolean> forfeitureByMonth) {
         for (int attempt = 1;; attempt++) {
             try {
                 perAccount.executeWithoutResult(status -> {
@@ -107,7 +132,7 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
                     }
                     log.debug("Processing savings account {} from date {} till date {}", savingsAccrual.getAccountNo(), fromDate, tillDate);
                     addAccrualTransactions(savingsAccount, fromDate, tillDate, financialYearBeginningMonth,
-                            isSavingsInterestPostingAtCurrentPeriodEnd, mc, null);
+                            isSavingsInterestPostingAtCurrentPeriodEnd, mc, null, forfeitureByMonth);
                 });
                 return;
             } catch (RuntimeException e) {
@@ -135,7 +160,7 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
      */
     private void addAccrualTransactions(SavingsAccount savingsAccount, final LocalDate fromDate, final LocalDate tillDate,
             final Integer financialYearBeginningMonth, final boolean isSavingsInterestPostingAtCurrentPeriodEnd, final MathContext mc,
-            final Function<LocalDate, String> refNoProvider) {
+            final Function<LocalDate, String> refNoProvider, final Map<LocalDate, Boolean> forfeitureByMonth) {
         final Set<Long> existingTransactionIds = new HashSet<>(savingsAccount.findExistingTransactionIds());
         final Set<Long> existingReversedTransactionIds = new HashSet<>(savingsAccount.findExistingReversedTransactionIds());
 
@@ -145,10 +170,12 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
             savingsAccountDomainService.postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds, false);
             return;
         }
+        final List<SavingsAccountTransaction> forfeitedAccruals = new ArrayList<>();
+        final LocalDate startDate = applyForfeitures(savingsAccount, fromDate, forfeitureByMonth, forfeitedAccruals);
         LocalDate accruedTillDate = null;
-        for (LocalDate day = fromDate; !day.isAfter(tillDate) && !DateUtils.isDateInTheFuture(day); day = day.plusDays(1)) {
+        for (LocalDate day = startDate; !day.isAfter(tillDate) && !DateUtils.isDateInTheFuture(day); day = day.plusDays(1)) {
             accruedTillDate = day;
-            if (hasLiveAccrualOn(savingsAccount, day)) {
+            if (isForfeited(forfeitureByMonth, day) || hasLiveAccrualOn(savingsAccount, day)) {
                 continue;
             }
             final PostingPeriod period = periodContaining(
@@ -181,6 +208,33 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         }
         savingsAccountRepository.saveAndFlush(savingsAccount);
         savingsAccountDomainService.postJournalEntries(savingsAccount, existingTransactionIds, existingReversedTransactionIds, false);
+        if (!forfeitedAccruals.isEmpty()) {
+            journalEntryWritePlatformService
+                    .linkSavingsReversalJournalEntries(forfeitedAccruals.stream().map(SavingsAccountTransaction::getId).toList());
+        }
+    }
+
+    /**
+     * AB-566: reverses every live accrual of a forfeited month. A month restored after its last day was processed has
+     * nothing left accrued, so the run restarts on that day and re-books the month there. Returns the day to start on.
+     */
+    private static LocalDate applyForfeitures(final SavingsAccount savingsAccount, final LocalDate fromDate,
+            final Map<LocalDate, Boolean> forfeitureByMonth, final List<SavingsAccountTransaction> forfeitedAccruals) {
+        LocalDate startDate = fromDate;
+        for (Map.Entry<LocalDate, Boolean> month : forfeitureByMonth.entrySet()) {
+            final LocalDate monthStart = month.getKey();
+            final LocalDate monthEnd = monthStart.with(TemporalAdjusters.lastDayOfMonth());
+            if (Boolean.TRUE.equals(month.getValue())) {
+                forfeitedAccruals.addAll(savingsAccount.reverseAccrualsBetween(monthStart, monthEnd));
+            } else if (monthEnd.isBefore(startDate) && savingsAccount.hasOnlyReversedAccrualsBetween(monthStart, monthEnd)) {
+                startDate = monthEnd;
+            }
+        }
+        return startDate;
+    }
+
+    private static boolean isForfeited(final Map<LocalDate, Boolean> forfeitureByMonth, final LocalDate day) {
+        return Boolean.TRUE.equals(forfeitureByMonth.get(day.withDayOfMonth(1)));
     }
 
     private static boolean hasLiveAccrualOn(final SavingsAccount savingsAccount, final LocalDate day) {

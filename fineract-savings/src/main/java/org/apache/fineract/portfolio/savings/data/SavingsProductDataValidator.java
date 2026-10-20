@@ -73,6 +73,7 @@ import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.apache.fineract.portfolio.savings.QualifyingWithdrawalType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
@@ -111,7 +112,9 @@ public class SavingsProductDataValidator {
             minOverdraftForInterestCalculationParamName, SavingsApiConstants.minRequiredBalanceParamName,
             SavingsApiConstants.enforceMinRequiredBalanceParamName, SavingsApiConstants.maxAllowedLienLimitParamName,
             SavingsApiConstants.lienAllowedParamName, SavingsApiConstants.productCategoryParamName,
-            minBalanceForInterestCalculationParamName, withHoldTaxParamName, taxGroupIdParamName));
+            SavingsApiConstants.withdrawalCounterEnabledParamName, SavingsApiConstants.monthlyWithdrawalThresholdParamName,
+            SavingsApiConstants.qualifyingWithdrawalTypesParamName, minBalanceForInterestCalculationParamName, withHoldTaxParamName,
+            taxGroupIdParamName));
 
     public void validateForCreate(final String json) {
 
@@ -275,6 +278,7 @@ public class SavingsProductDataValidator {
         validateTaxWithHoldingParams(baseDataValidator, element, true);
         validateLienParams(baseDataValidator, element);
         validateProductCategoryParam(baseDataValidator, element);
+        validateWithdrawalRuleParams(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -445,6 +449,7 @@ public class SavingsProductDataValidator {
         validateTaxWithHoldingParams(baseDataValidator, element, false);
         validateLienParams(baseDataValidator, element);
         validateProductCategoryParam(baseDataValidator, element);
+        validateWithdrawalRuleParams(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -487,6 +492,33 @@ public class SavingsProductDataValidator {
                     .trimToNull(this.fromApiJsonHelper.extractStringNamed(SavingsApiConstants.productCategoryParamName, element));
             baseDataValidator.reset().parameter(SavingsApiConstants.productCategoryParamName).value(category).ignoreIfNull()
                     .isOneOfEnumValues(SavingsProductCategory.class);
+        }
+    }
+
+    private void validateWithdrawalRuleParams(final DataValidatorBuilder baseDataValidator, final JsonElement element) {
+        if (this.fromApiJsonHelper.parameterExists(SavingsApiConstants.withdrawalCounterEnabledParamName, element)) {
+            final Boolean enabled = this.fromApiJsonHelper.extractBooleanNamed(SavingsApiConstants.withdrawalCounterEnabledParamName,
+                    element);
+            baseDataValidator.reset().parameter(SavingsApiConstants.withdrawalCounterEnabledParamName).value(enabled).notNull();
+        }
+        if (this.fromApiJsonHelper.parameterExists(SavingsApiConstants.monthlyWithdrawalThresholdParamName, element)) {
+            final Integer threshold = this.fromApiJsonHelper
+                    .extractIntegerSansLocaleNamed(SavingsApiConstants.monthlyWithdrawalThresholdParamName, element);
+            baseDataValidator.reset().parameter(SavingsApiConstants.monthlyWithdrawalThresholdParamName).value(threshold).notNull()
+                    .integerZeroOrGreater();
+        }
+        if (this.fromApiJsonHelper.parameterExists(SavingsApiConstants.qualifyingWithdrawalTypesParamName, element)) {
+            final JsonElement types = element.getAsJsonObject().get(SavingsApiConstants.qualifyingWithdrawalTypesParamName);
+            if (!types.isJsonArray()) {
+                baseDataValidator.reset().parameter(SavingsApiConstants.qualifyingWithdrawalTypesParamName).value(types.toString())
+                        .failWithCode("must.be.an.array", "qualifyingWithdrawalTypes must be an array of withdrawal type codes");
+                return;
+            }
+            for (JsonElement type : types.getAsJsonArray()) {
+                final String code = type.isJsonPrimitive() ? type.getAsString() : type.toString();
+                baseDataValidator.reset().parameter(SavingsApiConstants.qualifyingWithdrawalTypesParamName).value(code).notBlank()
+                        .isOneOfEnumValues(QualifyingWithdrawalType.class);
+            }
         }
     }
 

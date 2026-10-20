@@ -21,17 +21,24 @@ package org.apache.fineract.portfolio.savings.service;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.accounting.common.AccountingEnumerations;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityType;
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsProductData;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductWithdrawalRule;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductWithdrawalRuleRepository;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
 import org.apache.fineract.portfolio.tax.data.TaxGroupData;
 import org.springframework.cache.annotation.Cacheable;
@@ -47,9 +54,11 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
     private final SavingProductMapper savingsProductRowMapper = new SavingProductMapper();
     private final SavingProductLookupMapper savingsProductLookupsRowMapper = new SavingProductLookupMapper();
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
+    private final SavingsProductWithdrawalRuleRepository withdrawalRuleRepository;
 
+    // The withdrawal rule shown is the business month's, so the cached entries are per business month.
     @Override
-    @Cacheable(value = "savingsProducts", key = "'savings_products'")
+    @Cacheable(value = "savingsProducts", key = "'savings_products:' + T(org.apache.fineract.infrastructure.core.service.DateUtils).getBusinessLocalDate().withDayOfMonth(1)")
     public Collection<SavingsProductData> retrieveAll() {
 
         this.context.authenticatedUser();
@@ -64,7 +73,12 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
             sql += " and sp.id in ( " + inClause + " ) ";
         }
 
-        return this.jdbcTemplate.query(sql, this.savingsProductRowMapper, new Object[] { DepositAccountType.SAVINGS_DEPOSIT.getValue() }); // NOSONAR
+        final List<SavingsProductData> products = this.jdbcTemplate.query(sql, this.savingsProductRowMapper, // NOSONAR
+                new Object[] { DepositAccountType.SAVINGS_DEPOSIT.getValue() });
+        final Map<Long, List<SavingsProductWithdrawalRule>> rules = this.withdrawalRuleRepository.findAllByProductId();
+        final LocalDate today = DateUtils.getBusinessLocalDate();
+        products.forEach(product -> applyWithdrawalRules(product, rules.getOrDefault(product.getId(), List.of()), today));
+        return products;
     }
 
     @Override
@@ -85,16 +99,28 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
     }
 
     @Override
-    @Cacheable(value = "savingsProductById", key = "'savings_product:' + #savingProductId")
+    @Cacheable(value = "savingsProductById", key = "'savings_product:' + #savingProductId + ':' + T(org.apache.fineract.infrastructure.core.service.DateUtils).getBusinessLocalDate().withDayOfMonth(1)")
     public SavingsProductData retrieveOne(final Long savingProductId) {
         try {
             this.context.authenticatedUser();
             final String sql = "select " + this.savingsProductRowMapper.schema() + " where sp.id = ? and sp.deposit_type_enum = ?";
-            return this.jdbcTemplate.queryForObject(sql, this.savingsProductRowMapper, // NOSONAR
+            final SavingsProductData product = this.jdbcTemplate.queryForObject(sql, this.savingsProductRowMapper, // NOSONAR
                     new Object[] { savingProductId, DepositAccountType.SAVINGS_DEPOSIT.getValue() });
+            applyWithdrawalRules(product, this.withdrawalRuleRepository.findByProductId(savingProductId), DateUtils.getBusinessLocalDate());
+            return product;
         } catch (final EmptyResultDataAccessException e) {
             throw new SavingsProductNotFoundException(savingProductId, e);
         }
+    }
+
+    private static void applyWithdrawalRules(final SavingsProductData product, final List<SavingsProductWithdrawalRule> rules,
+            final LocalDate today) {
+        final SavingsProductWithdrawalRule current = SavingsProductWithdrawalRule.inEffectOn(rules, today);
+        product.setWithdrawalCounterEnabled(current.withdrawalCounterEnabled());
+        product.setMonthlyWithdrawalThreshold(current.monthlyWithdrawalThreshold());
+        product.setQualifyingWithdrawalTypes(current.typeCodes());
+        product.setWithdrawalRules(new ArrayList<>(
+                SavingsProductWithdrawalRule.currentAndFuture(rules, today).stream().map(SavingsProductWithdrawalRule::toData).toList()));
     }
 
     private static final class SavingProductMapper implements RowMapper<SavingsProductData> {

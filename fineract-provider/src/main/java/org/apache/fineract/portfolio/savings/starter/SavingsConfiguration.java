@@ -94,8 +94,10 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRep
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionSummaryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsHelper;
+import org.apache.fineract.portfolio.savings.domain.SavingsInterestForfeitureRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
+import org.apache.fineract.portfolio.savings.domain.SavingsProductWithdrawalRuleRepository;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformServiceImpl;
@@ -451,8 +453,8 @@ public class SavingsConfiguration {
     @Bean
     @ConditionalOnMissingBean(SavingsProductReadPlatformService.class)
     public SavingsProductReadPlatformService savingsProductReadPlatformService(PlatformSecurityContext context, JdbcTemplate jdbcTemplate,
-            FineractEntityAccessUtil fineractEntityAccessUtil) {
-        return new SavingsProductReadPlatformServiceImpl(context, jdbcTemplate, fineractEntityAccessUtil);
+            FineractEntityAccessUtil fineractEntityAccessUtil, SavingsProductWithdrawalRuleRepository withdrawalRuleRepository) {
+        return new SavingsProductReadPlatformServiceImpl(context, jdbcTemplate, fineractEntityAccessUtil, withdrawalRuleRepository);
     }
 
     @Bean
@@ -461,9 +463,9 @@ public class SavingsConfiguration {
             SavingsProductRepository savingProductRepository, SavingsProductDataValidator fromApiJsonDataValidator,
             SavingsProductAssembler savingsProductAssembler,
             ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService,
-            FineractEntityAccessUtil fineractEntityAccessUtil) {
+            FineractEntityAccessUtil fineractEntityAccessUtil, SavingsProductWithdrawalRuleRepository withdrawalRuleRepository) {
         return new SavingsProductWritePlatformServiceJpaRepositoryImpl(context, savingProductRepository, fromApiJsonDataValidator,
-                savingsProductAssembler, accountMappingWritePlatformService, fineractEntityAccessUtil);
+                savingsProductAssembler, accountMappingWritePlatformService, fineractEntityAccessUtil, withdrawalRuleRepository);
     }
 
     @Bean
@@ -514,8 +516,10 @@ public class SavingsConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "fineract.synapse", name = "enabled", havingValue = "true")
     public SynapseInterestPostingOutboxWriter synapseInterestPostingService(SynapseInstructionMapper mapper,
-            SynapseOutboxRepository outboxRepository, ObjectMapper objectMapper) {
-        return new SynapseInterestPostingOutboxWriter(mapper, outboxRepository, objectMapper);
+            SynapseOutboxRepository outboxRepository, ObjectMapper objectMapper, SavingsInterestForfeitureRepository forfeitureRepository,
+            ConfigurationDomainService configurationDomainService) {
+        return new SynapseInterestPostingOutboxWriter(mapper, outboxRepository, objectMapper, forfeitureRepository,
+                configurationDomainService);
     }
 
     @Bean

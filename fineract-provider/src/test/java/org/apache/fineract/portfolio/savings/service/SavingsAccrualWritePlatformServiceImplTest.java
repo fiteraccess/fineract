@@ -32,6 +32,7 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
@@ -39,6 +40,7 @@ import org.apache.fineract.portfolio.savings.data.SavingsAccrualData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
+import org.apache.fineract.portfolio.savings.domain.SavingsInterestForfeitureRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,8 +57,10 @@ class SavingsAccrualWritePlatformServiceImplTest {
     private final SavingsAccountAssembler assembler = mock(SavingsAccountAssembler.class);
     private final SavingsAccountRepositoryWrapper accountRepository = mock(SavingsAccountRepositoryWrapper.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final SavingsInterestForfeitureRepository forfeitureRepository = mock(SavingsInterestForfeitureRepository.class);
     private final SavingsAccrualWritePlatformServiceImpl service = new SavingsAccrualWritePlatformServiceImpl(readService, assembler,
-            accountRepository, mock(ConfigurationDomainService.class), mock(SavingsAccountDomainService.class), transactionManager);
+            accountRepository, mock(ConfigurationDomainService.class), mock(SavingsAccountDomainService.class), transactionManager,
+            forfeitureRepository, mock(JournalEntryWritePlatformService.class));
 
     private MockedStatic<MoneyHelper> moneyHelper;
 

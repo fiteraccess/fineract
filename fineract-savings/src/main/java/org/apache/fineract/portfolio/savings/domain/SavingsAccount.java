@@ -4361,6 +4361,32 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     }
 
     /**
+     * AB-566: reverses the live accruals dated within the range, leaving the accrued-till date alone because the
+     * forfeited days are not to be re-booked. Returns the reversed rows so the caller can journal and link them.
+     */
+    public List<SavingsAccountTransaction> reverseAccrualsBetween(final LocalDate fromDate, final LocalDate toDate) {
+        final List<SavingsAccountTransaction> accrualsToReverse = selectAccrualsToReverse(this.transactions, fromDate).stream()
+                .filter(accrual -> !accrual.getDateOf().isAfter(toDate)).toList();
+        accrualsToReverse.forEach(SavingsAccountTransaction::reverse);
+        return accrualsToReverse;
+    }
+
+    /** Whether the range holds accruals and every one of them is reversed. */
+    public boolean hasOnlyReversedAccrualsBetween(final LocalDate fromDate, final LocalDate toDate) {
+        boolean any = false;
+        for (SavingsAccountTransaction transaction : this.transactions) {
+            if (transaction.getTransactionType() == SavingsAccountTransactionType.ACCRUAL && !transaction.getDateOf().isBefore(fromDate)
+                    && !transaction.getDateOf().isAfter(toDate)) {
+                if (transaction.isNotReversed()) {
+                    return false;
+                }
+                any = true;
+            }
+        }
+        return any;
+    }
+
+    /**
      * AB-401: a closure pays interest through its last day, priced before the sweep that day reverses that day's
      * accrual, and a closed account is never accrued again. Books what was posted but never accrued, so the account's
      * interest payable nets to zero. Postings before its first accrual predate accrual accounting and never touched the

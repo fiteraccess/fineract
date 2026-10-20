@@ -223,13 +223,16 @@ public class SavingsAccountTransactionsApiResource {
         } else if (is(commandParam, "replayCreditRestriction")) {
             final CommandWrapper commandRequest = builder.savingsAccountReplayCreditRestriction(savingsId).build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        } else if (is(commandParam, "replayInterestForfeiture")) {
+            final CommandWrapper commandRequest = builder.savingsAccountReplayInterestForfeiture(savingsId).build();
+            result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         }
 
         if (result == null) {
             //
             throw new UnrecognizedQueryParamException("command", commandParam,
                     new Object[] { "deposit", "withdrawal", SavingsApiConstants.COMMAND_HOLD_AMOUNT, "replayInterestPosting",
-                            "replayChargePosting", "replayDormancyStatus", "replayCreditRestriction" });
+                            "replayChargePosting", "replayDormancyStatus", "replayCreditRestriction", "replayInterestForfeiture" });
         }
 
         return this.toApiJsonSerializer.serialize(result);

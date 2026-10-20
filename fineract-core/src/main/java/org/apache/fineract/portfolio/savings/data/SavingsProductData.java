@@ -94,6 +94,22 @@ public final class SavingsProductData implements Serializable {
     @Setter
     @Getter
     private List<StringEnumOptionData> productCategoryOptions;
+    // AB-566: the monthly withdrawal rule in effect this business month, and that rule plus any future-dated one.
+    @Setter
+    @Getter
+    private Boolean withdrawalCounterEnabled;
+    @Setter
+    @Getter
+    private Integer monthlyWithdrawalThreshold;
+    @Setter
+    @Getter
+    private List<String> qualifyingWithdrawalTypes;
+    @Setter
+    @Getter
+    private List<SavingsProductWithdrawalRuleData> withdrawalRules;
+    @Setter
+    @Getter
+    private List<String> qualifyingWithdrawalTypeOptions;
     private final String accountMappingForPayment;
 
     // accounting
@@ -198,6 +214,7 @@ public final class SavingsProductData implements Serializable {
                 product.isDormancyTrackingActive, product.daysToInactive, product.daysToDormancy, product.daysToEscheat,
                 product.accountMappingForPayment);
         copy.setProductCategory(product.productCategory);
+        copy.copyWithdrawalRulesFrom(product);
         return copy;
     }
 
@@ -232,6 +249,7 @@ public final class SavingsProductData implements Serializable {
                 existingProduct.withHoldTax, existingProduct.taxGroup, taxGroupOptions, existingProduct.isDormancyTrackingActive,
                 existingProduct.daysToInactive, existingProduct.daysToDormancy, existingProduct.daysToEscheat, accountMappingForPayment);
         copy.setProductCategory(existingProduct.productCategory);
+        copy.copyWithdrawalRulesFrom(existingProduct);
         return copy;
     }
 
@@ -270,7 +288,15 @@ public final class SavingsProductData implements Serializable {
                 existingProduct.isDormancyTrackingActive, existingProduct.daysToInactive, existingProduct.daysToDormancy,
                 existingProduct.daysToEscheat, existingProduct.accountMappingForPayment);
         copy.setProductCategory(existingProduct.productCategory);
+        copy.copyWithdrawalRulesFrom(existingProduct);
         return copy;
+    }
+
+    private void copyWithdrawalRulesFrom(final SavingsProductData product) {
+        this.withdrawalCounterEnabled = product.withdrawalCounterEnabled;
+        this.monthlyWithdrawalThreshold = product.monthlyWithdrawalThreshold;
+        this.qualifyingWithdrawalTypes = product.qualifyingWithdrawalTypes;
+        this.withdrawalRules = product.withdrawalRules;
     }
 
     public static SavingsProductData instance(final Long id, final String name, final String shortName, final String description,
