@@ -57,7 +57,7 @@ public record SavingsProductWithdrawalRule(LocalDate effectiveFrom, boolean with
 
     public static SavingsProductWithdrawalRule defaults(final LocalDate effectiveFrom) {
         return new SavingsProductWithdrawalRule(effectiveFrom, DEFAULT_COUNTER_ENABLED, DEFAULT_MONTHLY_THRESHOLD,
-                Arrays.asList(QualifyingWithdrawalType.values()));
+                QualifyingWithdrawalType.DEFAULTS);
     }
 
     public static LocalDate monthStart(final LocalDate date) {

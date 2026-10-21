@@ -41,7 +41,19 @@ class SavingsProductWithdrawalRuleTest {
 
         assertThat(rule).isEqualTo(SavingsProductWithdrawalRule.defaults(OCTOBER));
         assertThat(rule.monthlyWithdrawalThreshold()).isEqualTo(4);
-        assertThat(rule.qualifyingWithdrawalTypes()).containsExactly(QualifyingWithdrawalType.values());
+        assertThat(rule.qualifyingWithdrawalTypes()).containsExactlyElementsOf(QualifyingWithdrawalType.DEFAULTS);
+    }
+
+    @Test
+    void theDefaultsLeaveCashCardAndAtmWithdrawalsUncounted() {
+        assertThat(SavingsProductWithdrawalRule.defaults(OCTOBER).qualifyingWithdrawalTypes()).doesNotContain(
+                QualifyingWithdrawalType.CASH_WITHDRAWAL, QualifyingWithdrawalType.CARD_PURCHASE, QualifyingWithdrawalType.ATM_WITHDRAWAL);
+    }
+
+    @Test
+    void anOptInTypeIsParsedFromItsCode() {
+        assertThat(SavingsProductWithdrawalRule.parseTypes(List.of("cash_withdrawal", "ATM_WITHDRAWAL", "CARD_PURCHASE"))).containsExactly(
+                QualifyingWithdrawalType.CASH_WITHDRAWAL, QualifyingWithdrawalType.ATM_WITHDRAWAL, QualifyingWithdrawalType.CARD_PURCHASE);
     }
 
     @Test
