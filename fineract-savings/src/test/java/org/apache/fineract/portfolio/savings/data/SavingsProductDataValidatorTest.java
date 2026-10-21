@@ -46,7 +46,7 @@ class SavingsProductDataValidatorTest {
     @Test
     void anUnknownQualifyingWithdrawalTypeIsRejected() {
         PlatformApiDataValidationException error = catchThrowableOfType(PlatformApiDataValidationException.class,
-                () -> validator.validateForUpdate("{\"qualifyingWithdrawalTypes\": [\"AIRTIME\", \"CASH_WITHDRAWAL\"]}", product));
+                () -> validator.validateForUpdate("{\"qualifyingWithdrawalTypes\": [\"AIRTIME\", \"CHEQUE_WITHDRAWAL\"]}", product));
 
         assertThat(error.getErrors()).extracting(ApiParameterError::getParameterName).containsExactly("qualifyingWithdrawalTypes");
     }
@@ -72,5 +72,12 @@ class SavingsProductDataValidatorTest {
         assertThatCode(() -> validator.validateForUpdate(
                 "{\"withdrawalCounterEnabled\": false, \"monthlyWithdrawalThreshold\": 0, \"qualifyingWithdrawalTypes\": [\"DATA\", \"BILL_PAYMENT\"]}",
                 product)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void theOptInCashCardAndAtmTypesAreAccepted() {
+        assertThatCode(() -> validator.validateForUpdate(
+                "{\"qualifyingWithdrawalTypes\": [\"CASH_WITHDRAWAL\", \"CARD_PURCHASE\", \"ATM_WITHDRAWAL\"]}", product))
+                .doesNotThrowAnyException();
     }
 }

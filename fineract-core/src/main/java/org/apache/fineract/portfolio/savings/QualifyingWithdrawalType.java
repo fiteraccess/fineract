@@ -32,7 +32,14 @@ public enum QualifyingWithdrawalType {
     BILL_PAYMENT, //
     AIRTIME, //
     DATA, //
+    CASH_WITHDRAWAL, //
+    CARD_PURCHASE, //
+    ATM_WITHDRAWAL, //
     ;
+
+    /** The ticket's six types; the later additions count only when a product opts in. */
+    public static final List<QualifyingWithdrawalType> DEFAULTS = List.of(INTERBANK_TRANSFER, INTRABANK_TRANSFER, OWN_ACCOUNT_TRANSFER,
+            BILL_PAYMENT, AIRTIME, DATA);
 
     public static List<String> codes() {
         return Arrays.stream(values()).map(Enum::name).toList();

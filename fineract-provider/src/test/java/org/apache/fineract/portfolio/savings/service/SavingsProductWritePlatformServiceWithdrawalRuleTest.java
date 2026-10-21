@@ -94,8 +94,7 @@ class SavingsProductWritePlatformServiceWithdrawalRuleTest {
 
         service.create(command);
 
-        verify(ruleRepository).save(PRODUCT_ID,
-                new SavingsProductWithdrawalRule(OCTOBER, true, 3, List.of(QualifyingWithdrawalType.values())));
+        verify(ruleRepository).save(PRODUCT_ID, new SavingsProductWithdrawalRule(OCTOBER, true, 3, QualifyingWithdrawalType.DEFAULTS));
     }
 
     @Test
