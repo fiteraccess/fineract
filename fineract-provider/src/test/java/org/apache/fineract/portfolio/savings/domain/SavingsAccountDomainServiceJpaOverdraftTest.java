@@ -20,7 +20,9 @@ package org.apache.fineract.portfolio.savings.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -64,6 +66,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -271,6 +274,142 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         assertThat(transactionCaptor.getAllValues().getFirst().getOverdraftAmount()).isEqualByComparingTo("30");
         assertThat(transactionCaptor.getAllValues()).extracting(SavingsAccountTransaction::getRefNo).doesNotContainNull()
                 .containsOnly(transactionCaptor.getAllValues().getFirst().getRefNo());
+    }
+
+    @Nested
+    class ReferencePosting {
+
+        @ParameterizedTest
+        @ValueSource(booleans = { false, true })
+        void sameDayReferencesDoNotRequireEitherTimeline(final boolean pivotEnabled) {
+            SavingsAccount account = referenceAccount();
+            MonetaryCurrency currency = account.getCurrency();
+            Office office = account.office();
+            SavingsAccountTransaction parent = SavingsAccountTransaction.withdrawal(account, office, null, BUSINESS_DATE,
+                    Money.of(currency, BigDecimal.TEN), "same-day-bundle");
+            parent.setRunningBalance(Money.of(currency, BigDecimal.valueOf(5)));
+            ArgumentCaptor<SavingsAccountTransaction> historyAccess = ArgumentCaptor.forClass(SavingsAccountTransaction.class);
+            // Either attachment would require a timeline that the optimized caller has not loaded.
+            lenient().doThrow(new AssertionError("Same-day reference accessed full transaction history")).when(account)
+                    .addTransaction(historyAccess.capture());
+            lenient().doThrow(new AssertionError("Same-day reference accessed pivot transaction history")).when(account)
+                    .addTransactionToExisting(historyAccess.capture());
+            ReferenceTransaction reference = new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, BigDecimal.valueOf(7), "EMT",
+                    null);
+
+            List<SavingsAccountTransaction> created = service.applyReferenceTransactions(account, parent, List.of(reference), false,
+                    pivotEnabled);
+
+            assertThat(created).singleElement().satisfies(transaction -> {
+                assertThat(transaction.getTypeOf()).isEqualTo(SavingsAccountTransactionType.EMT_LEVY.getValue());
+                assertThat(transaction.getAmount()).isEqualByComparingTo("7");
+                assertThat(transaction.getRunningBalance(currency).getAmount()).isEqualByComparingTo("-2");
+                assertThat(transaction.getOverdraftAmount(currency).getAmount()).isEqualByComparingTo("2");
+                assertThat(transaction.getRefNo()).isEqualTo("same-day-bundle");
+                assertThat(transaction.getTransactionDate()).isEqualTo(BUSINESS_DATE);
+            });
+            verify(savingsAccountTransactionRepository).saveAndFlush(created.getFirst());
+            verify(savingsAccountRepository).applyReferenceTransactionDelta(11L, BigDecimal.valueOf(7), 1);
+            verify(account).syncAfterDeltaUpdate(new BigDecimal("8.00"));
+            ArgumentCaptor<SavingsAccountingBridgeDTO> bridge = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
+            verify(journalEntryWritePlatformService).createJournalEntriesForSavings(bridge.capture(), eq(office));
+            assertThat(bridge.getValue().getNewSavingsTransactions()).singleElement().satisfies(transaction -> {
+                assertThat(transaction.getAmount()).isEqualByComparingTo("7");
+                assertThat(transaction.getOverdraftAmount()).isEqualByComparingTo("2");
+            });
+        }
+
+        @ParameterizedTest
+        @CsvSource({ "false, 1, 0", "true, 0, 1" })
+        void backdatedReferencesRetainTheirTimeline(final boolean pivotEnabled, final int fullHistoryAttachments,
+                final int pivotAttachments) {
+            SavingsAccount account = referenceAccount();
+            MonetaryCurrency currency = account.getCurrency();
+            Office office = account.office();
+            LocalDate date = BUSINESS_DATE.minusDays(1);
+            SavingsAccountTransaction parent = SavingsAccountTransaction.withdrawal(account, office, null, date,
+                    Money.of(currency, BigDecimal.TEN), "backdated-bundle");
+            parent.setRunningBalance(Money.of(currency, BigDecimal.valueOf(5)));
+            ReferenceTransaction commission = new ReferenceTransaction(SavingsAccountTransactionType.COMMISSION, BigDecimal.valueOf(4),
+                    "Commission",
+                    new ReferenceTransaction.CommissionBreakdown(new ReferenceTransaction.CommissionBreakdownLeg(BigDecimal.ONE),
+                            new ReferenceTransaction.CommissionBreakdownLeg(BigDecimal.valueOf(3))));
+            ReferenceTransaction vat = new ReferenceTransaction(SavingsAccountTransactionType.VAT, BigDecimal.valueOf(2), "VAT", null);
+
+            List<SavingsAccountTransaction> created = service.applyReferenceTransactions(account, parent, List.of(commission, vat), true,
+                    pivotEnabled);
+
+            assertThat(created).hasSize(2);
+            assertThat(created.get(0).getTypeOf()).isEqualTo(SavingsAccountTransactionType.COMMISSION.getValue());
+            assertThat(created.get(0).getAmount()).isEqualByComparingTo("4");
+            assertThat(created.get(0).getRunningBalance(currency).getAmount()).isEqualByComparingTo("1");
+            assertThat(created.get(0).getOverdraftAmount(currency).getAmount()).isEqualByComparingTo("0");
+            assertThat(created.get(1).getTypeOf()).isEqualTo(SavingsAccountTransactionType.VAT.getValue());
+            assertThat(created.get(1).getAmount()).isEqualByComparingTo("2");
+            assertThat(created.get(1).getRunningBalance(currency).getAmount()).isEqualByComparingTo("-1");
+            assertThat(created.get(1).getOverdraftAmount(currency).getAmount()).isEqualByComparingTo("1");
+            assertThat(created).extracting(SavingsAccountTransaction::getRefNo).containsExactly("backdated-bundle", "backdated-bundle");
+            assertThat(created).extracting(SavingsAccountTransaction::getTransactionDate).containsExactly(date, date);
+            verify(savingsAccountRepository).applyReferenceTransactionDelta(11L, BigDecimal.valueOf(4), 1);
+            verify(savingsAccountRepository).applyReferenceTransactionDelta(11L, BigDecimal.valueOf(2), 1);
+            verify(account).syncAfterDeltaUpdate(new BigDecimal("11.00"));
+            verify(account).syncAfterDeltaUpdate(new BigDecimal("9.00"));
+            verify(savingsAccountTransactionRepository).saveAndFlush(created.get(0));
+            verify(savingsAccountTransactionRepository).saveAndFlush(created.get(1));
+            verify(account, times(fullHistoryAttachments)).addTransaction(created.get(0));
+            verify(account, times(fullHistoryAttachments)).addTransaction(created.get(1));
+            verify(account, times(pivotAttachments)).addTransactionToExisting(created.get(0));
+            verify(account, times(pivotAttachments)).addTransactionToExisting(created.get(1));
+            ArgumentCaptor<SavingsAccountingBridgeDTO> bridge = ArgumentCaptor.forClass(SavingsAccountingBridgeDTO.class);
+            verify(journalEntryWritePlatformService, times(2)).createJournalEntriesForSavings(bridge.capture(), eq(office));
+            assertThat(bridge.getAllValues()).allSatisfy(payload -> {
+                assertThat(payload.getSavingsId()).isEqualTo(11L);
+                assertThat(payload.getSavingsProductId()).isEqualTo(22L);
+                assertThat(payload.getOfficeId()).isEqualTo(33L);
+                assertThat(payload.getCurrencyCode()).isEqualTo("NGN");
+                assertThat(payload.isAccountTransfer()).isTrue();
+            });
+            assertThat(bridge.getAllValues().get(0).getNewSavingsTransactions()).singleElement().satisfies(transaction -> {
+                assertThat(transaction.getAmount()).isEqualByComparingTo("4");
+                assertThat(transaction.getOverdraftAmount()).isNull();
+                assertThat(transaction.getCommissionAllocation().switchFeeAmount()).isEqualByComparingTo("1");
+                assertThat(transaction.getCommissionAllocation().bankCommissionAmount()).isEqualByComparingTo("3");
+            });
+            assertThat(bridge.getAllValues().get(1).getNewSavingsTransactions()).singleElement().satisfies(transaction -> {
+                assertThat(transaction.getAmount()).isEqualByComparingTo("2");
+                assertThat(transaction.getOverdraftAmount()).isEqualByComparingTo("1");
+                assertThat(transaction.getTaxDetails()).isEmpty();
+            });
+        }
+
+        @Test
+        void emptyReferencesPerformNoWork() {
+            SavingsAccount account = mock(SavingsAccount.class);
+            SavingsAccountTransaction parent = mock(SavingsAccountTransaction.class);
+
+            assertThat(service.applyReferenceTransactions(account, parent, List.of(), false, false)).isEmpty();
+
+            verifyNoInteractions(account, parent, savingsAccountRepository, savingsAccountTransactionRepository, entityManager,
+                    journalEntryWritePlatformService);
+        }
+
+        private SavingsAccount referenceAccount() {
+            SavingsAccount account = mock(SavingsAccount.class);
+            SavingsAccountSummary summary = mock(SavingsAccountSummary.class);
+            SavingsProduct product = mock(SavingsProduct.class);
+            MonetaryCurrency currency = new MonetaryCurrency("NGN", 2, null);
+            when(account.getId()).thenReturn(11L);
+            when(account.productId()).thenReturn(22L);
+            when(account.officeId()).thenReturn(33L);
+            when(account.office()).thenReturn(mock(Office.class));
+            when(account.getVersion()).thenReturn(1);
+            when(account.getCurrency()).thenReturn(currency);
+            when(account.getSummary()).thenReturn(summary);
+            when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.valueOf(15)));
+            when(account.savingsProduct()).thenReturn(product);
+            when(entityManager.getFlushMode()).thenReturn(FlushModeType.AUTO);
+            return account;
+        }
     }
 
     @Nested

@@ -786,6 +786,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         }
 
         final LocalDate transactionDate = parentTransaction.getTransactionDate();
+        final boolean isBackdated = DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate());
         BigDecimal transactionRunningBalance = parentTransaction.getRunningBalance(account.getCurrency()).getAmount();
         BigDecimal postedAccountBalance = account.getSummary().getAccountBalance(account.getCurrency()).getAmount();
 
@@ -850,14 +851,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             }
 
             this.savingsAccountTransactionRepository.saveAndFlush(referenceTransaction);
-            // Wire the fresh row into the account's aggregate so the bulk-reverse path (findByRefNo +
-            // handleReversal) sees the same managed instance in account.transactions when it cascades
-            // the reversed=true flag on save. Without this, reverseTransaction(isBulk=true) would flip
-            // reversed=true on the freshly-loaded findByRefNo copy but the account.transactions copy
-            // (unreversed) would win the JPA cascade write, leaving the EMT row un-reversed in the DB.
-            if (backdatedTxnsAllowedTill) {
+            // Backdated references need the timeline for running-balance and interest recalculation.
+            // Same-day references already have final balances; attaching them would load account history.
+            if (isBackdated && backdatedTxnsAllowedTill) {
                 account.addTransactionToExisting(referenceTransaction);
-            } else {
+            } else if (isBackdated) {
                 account.addTransaction(referenceTransaction);
             }
 

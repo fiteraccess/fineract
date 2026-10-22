@@ -114,6 +114,9 @@ class NipInboundDepositIntegrationTest extends BaseSavingsIntegrationTest {
                 assertThat(value(principal, "switch_id")).isEqualTo(switchAccounting.switchId());
                 assertThat(value(levy, "switch_id")).isEqualTo(switchAccounting.switchId());
                 assertThat(value(levy, "ref_no")).isEqualTo(value(principal, "ref_no"));
+                assertThat((BigDecimal) value(principal, "running_balance_derived")).isEqualByComparingTo("100");
+                assertThat((BigDecimal) value(levy, "running_balance_derived")).isEqualByComparingTo("95");
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("95");
                 assertJournalEntries(principal, journalPosting("DEBIT", switchAccounting.receivable(), "100.00"),
                         journalPosting("CREDIT", savingsAccounting.savingsControl(), "100.00"));
                 assertJournalEntries(levy, journalPosting("DEBIT", savingsAccounting.savingsControl(), "5.00"),
@@ -140,6 +143,31 @@ class NipInboundDepositIntegrationTest extends BaseSavingsIntegrationTest {
                 assertJournalEntries(principal, journalPosting("DEBIT", switchAccounting.receivable(), "50.00"),
                         journalPosting("CREDIT", overdraftControl, "30.00"),
                         journalPosting("CREDIT", savingsAccounting.savingsControl(), "20.00"));
+            });
+        }
+    }
+
+    @Nested
+    class OrdinaryDepositReferences {
+
+        @Test
+        void emtRemainsADebitWhenThePrincipalIsAnOrdinaryDeposit() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                configureEmtLevyMapping();
+                final Long savingsId = createActiveCashBasedSavingsAccount(date, createSavingsAccounting(), null);
+
+                deposit(savingsId, date, "100", null, List.of(emtLevy("5")));
+
+                final List<Map<String, Object>> principal = transactions(savingsId, DEPOSIT);
+                final List<Map<String, Object>> references = transactions(savingsId, EMT_LEVY);
+                assertThat(principal).hasSize(1);
+                assertThat(references).hasSize(1);
+                assertThat((BigDecimal) value(references.get(0), "amount")).isEqualByComparingTo("5");
+                assertThat((BigDecimal) value(references.get(0), "running_balance_derived")).isEqualByComparingTo("95");
+                assertThat(value(references.get(0), "ref_no")).isEqualTo(value(principal.get(0), "ref_no"));
+                assertThat(value(references.get(0), "switch_id")).isNull();
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("95");
             });
         }
     }
@@ -282,7 +310,7 @@ class NipInboundDepositIntegrationTest extends BaseSavingsIntegrationTest {
 
     private List<Map<String, Object>> transactions(final Long savingsId, final int type) {
         return tenantJdbc().queryForList("""
-                SELECT id, transaction_type_enum, amount, ref_no, switch_id
+                SELECT id, transaction_type_enum, amount, running_balance_derived, ref_no, switch_id
                   FROM m_savings_account_transaction
                  WHERE savings_account_id = ? AND transaction_type_enum = ?
                  ORDER BY id
