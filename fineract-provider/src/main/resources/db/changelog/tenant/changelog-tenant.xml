@@ -279,4 +279,5 @@
     <include file="parts/0257_goal_settlement_interest.xml" relativeToChangelogFile="true" />
     <include file="parts/0258_settlement_reports.xml" relativeToChangelogFile="true" />
     <include file="parts/0259_regular_savings_interest_forfeiture.xml" relativeToChangelogFile="true" />
+    <include file="parts/0260_add_settlement_recon_permissions.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
