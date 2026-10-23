@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+ <!-- One payment type per cross-core direction. Each savings product maps them (advanced accounting, payment type to
+      fund source) to that direction's intrabank transfer bridge GL; Synapse reads the same mapping for the Flexcube
+      posting, so both cores post through one GL. Ids pinned like 9000 (0231); Synapse looks them up by code_name. -->
+ <changeSet id="ab-575-intrabank-flexcube-to-fineract-payment-type" author="fiteraccess">
+  <preConditions onFail="MARK_RAN"><sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_payment_type WHERE id = 9002</sqlCheck></preConditions>
+  <insert tableName="m_payment_type">
+   <column name="id" valueNumeric="9002"/>
+   <column name="value" value="Intrabank Transfer Flexcube to Fineract"/>
+   <column name="description" value="System-defined payment type for the Fineract credit of a Flexcube to Fineract intrabank transfer. Map it on every savings product to the FLEX-FIN Intrabank Transfer Bridge GL: Synapse posts both cores through that GL. Not selectable by customers."/>
+   <column name="is_cash_payment" valueBoolean="false"/>
+   <column name="order_position" valueNumeric="1"/>
+   <column name="code_name" value="INTRABANK_FLEXCUBE_TO_FINERACT"/>
+   <column name="is_system_defined" valueBoolean="true"/>
+  </insert>
+  <rollback><delete tableName="m_payment_type"><where>id = 9002</where></delete></rollback>
+ </changeSet>
+ <changeSet id="ab-575-intrabank-fineract-to-flexcube-payment-type" author="fiteraccess">
+  <preConditions onFail="MARK_RAN"><sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_payment_type WHERE id = 9003</sqlCheck></preConditions>
+  <insert tableName="m_payment_type">
+   <column name="id" valueNumeric="9003"/>
+   <column name="value" value="Intrabank Transfer Fineract to Flexcube"/>
+   <column name="description" value="System-defined payment type for the Fineract debit of a Fineract to Flexcube intrabank transfer. Map it on every savings product to the FIN-FLEX Intrabank Transfer Bridge GL: Synapse posts both cores through that GL. Not selectable by customers."/>
+   <column name="is_cash_payment" valueBoolean="false"/>
+   <column name="order_position" valueNumeric="1"/>
+   <column name="code_name" value="INTRABANK_FINERACT_TO_FLEXCUBE"/>
+   <column name="is_system_defined" valueBoolean="true"/>
+  </insert>
+  <rollback><delete tableName="m_payment_type"><where>id = 9003</where></delete></rollback>
+ </changeSet>
+</databaseChangeLog>

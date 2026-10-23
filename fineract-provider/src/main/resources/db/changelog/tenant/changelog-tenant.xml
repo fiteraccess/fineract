@@ -280,4 +280,5 @@
     <include file="parts/0258_settlement_reports.xml" relativeToChangelogFile="true" />
     <include file="parts/0259_regular_savings_interest_forfeiture.xml" relativeToChangelogFile="true" />
     <include file="parts/0260_add_settlement_recon_permissions.xml" relativeToChangelogFile="true" />
+    <include file="parts/0261_intrabank_transfer_bridge_payment_types.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
