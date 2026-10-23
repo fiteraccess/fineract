@@ -351,6 +351,41 @@ class SynapseInterestTransactionApplierTest {
     }
 
     @Test
+    void aPenaltyIsReversedByTheTraceIdItWasReplayedUnder() throws Exception {
+        var account = buildAccount(569L, new BigDecimal("1000"));
+        goalProduct(account);
+        var service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+        var penalty = service.replay(account, "GOAL_PENALTY", BigDecimal.ZERO, LocalDate.of(2026, 3, 20), null, "penalty-trace")
+                .transaction();
+        setField(AbstractPersistableCustom.class, penalty, "id", 906L);
+
+        var result = service.reverse(account, "GOAL_PENALTY", null, "penalty-trace");
+
+        assertThat(result.alreadyExists()).isFalse();
+        assertThat(result.transaction()).isSameAs(penalty);
+        assertThat(penalty.isReversed()).isTrue();
+        assertThat(service.reverse(account, "GOAL_PENALTY", null, "penalty-trace").alreadyExists()).isTrue();
+    }
+
+    @Test
+    void aReversalNamingNeitherIdNorReferenceIsRefused() throws Exception {
+        var account = buildAccount(570L, new BigDecimal("1000"));
+        var service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+
+        assertThatThrownBy(() -> service.reverse(account, "GOAL_PENALTY", null, " "))
+                .isInstanceOf(PlatformApiDataValidationException.class);
+    }
+
+    @Test
+    void anUnknownReferenceIsRefused() throws Exception {
+        var account = buildAccount(571L, new BigDecimal("1000"));
+        var service = new SynapseInterestTransactionApplier(transactionRepository, summaryWrapper);
+
+        assertThatThrownBy(() -> service.reverse(account, "GOAL_PENALTY", null, "no-such-trace"))
+                .isInstanceOf(GeneralPlatformDomainRuleException.class);
+    }
+
+    @Test
     void reversingOneOfTwoForfeituresKeepsAccrualStopped() throws Exception {
         var account = buildAccount(567L, new BigDecimal("1000"));
         goalProduct(account);

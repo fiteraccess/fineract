@@ -153,21 +153,31 @@ public class SynapseInterestTransactionApplier {
      * @return the original posting, with {@code alreadyExists} true when it was already reversed
      */
     public ReplayResult reverse(SavingsAccount account, String transactionType, Long originalTransactionId) {
-        if (originalTransactionId == null) {
+        return reverse(account, transactionType, originalTransactionId, null);
+    }
+
+    /**
+     * As {@link #reverse(SavingsAccount, String, Long)}, naming the original by the trace id it was replayed under
+     * ({@code ref_no}) when the caller never learned its transaction id — a goal penalty reversed by Synapse (AB-560).
+     * The id wins when both are given.
+     */
+    public ReplayResult reverse(SavingsAccount account, String transactionType, Long originalTransactionId, String originalRefNo) {
+        final boolean byRefNo = originalTransactionId == null;
+        if (byRefNo && (originalRefNo == null || originalRefNo.isBlank())) {
             throw new PlatformApiDataValidationException(
                     List.of(ApiParameterError.parameterError("error.msg.savings.replay.originalTransactionId.required",
-                            "A reversal replay needs the original transaction id", "originalTransactionId")));
+                            "A reversal replay needs the original transaction id or reference", "originalTransactionId")));
         }
+        final Object originalKey = byRefNo ? originalRefNo : originalTransactionId;
         SavingsAccountTransactionType type = resolveTransactionType(transactionType);
-        SavingsAccountTransaction original = account.getTransactions().stream().filter(tx -> originalTransactionId.equals(tx.getId()))
-                .findFirst()
-                .orElseThrow(() -> new GeneralPlatformDomainRuleException("error.msg.savings.replay.original.not.found",
-                        "Transaction " + originalTransactionId + " is not on savings account " + account.getId(), originalTransactionId,
-                        account.getId()));
+        SavingsAccountTransaction original = account.getTransactions().stream()
+                .filter(tx -> byRefNo ? originalRefNo.equals(tx.getRefNo()) && !tx.isReversalTransaction()
+                        : originalTransactionId.equals(tx.getId()))
+                .findFirst().orElseThrow(() -> new GeneralPlatformDomainRuleException("error.msg.savings.replay.original.not.found",
+                        "Transaction " + originalKey + " is not on savings account " + account.getId(), originalKey, account.getId()));
         if (original.getTransactionType() != type || original.isReversalTransaction()) {
             throw new GeneralPlatformDomainRuleException("error.msg.savings.replay.original.type.mismatch",
-                    "Transaction " + originalTransactionId + " is not a " + transactionType + " posting", originalTransactionId,
-                    transactionType);
+                    "Transaction " + originalKey + " is not a " + transactionType + " posting", originalKey, transactionType);
         }
         if (original.isReversed()) {
             log.debug("Reversal already replayed for transaction={} on account={}", originalTransactionId, account.getId());
