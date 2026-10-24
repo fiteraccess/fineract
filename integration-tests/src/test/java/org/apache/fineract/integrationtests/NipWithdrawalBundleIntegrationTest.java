@@ -22,12 +22,14 @@ import com.google.gson.Gson;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.ChargeRequest;
 import org.apache.fineract.client.models.GetFinancialActivityAccountsResponse;
@@ -35,6 +37,8 @@ import org.apache.fineract.client.models.PostChargesResponse;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountsSavingsAccountIdChargesRequest;
 import org.apache.fineract.client.models.PostSavingsProductsRequest;
+import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
+import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -46,8 +50,13 @@ import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.savings.base.BaseSavingsIntegrationTest;
 import org.apache.fineract.integrationtests.support.TenantJdbcSupport;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
@@ -59,6 +68,204 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
     private static final int VAT = 26;
 
     private final Gson gson = new Gson();
+
+    @Nested
+    class ReferencePersistence {
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void missingVatAccountingRollsBackAfterSignedStatementReferencePersistence() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final FinancialActivityAccountHelper mappings = new FinancialActivityAccountHelper(requestSpec);
+                configureVatPayableMapping();
+                final GetFinancialActivityAccountsResponse vatMapping = mappings.getAllFinancialActivityAccounts().stream().filter(
+                        mapping -> mapping.getFinancialActivityData().getId().intValue() == FinancialActivity.VAT_PAYABLE.getValue())
+                        .findFirst().orElseThrow();
+                final Long savingsId = createActiveCashBasedSavingsAccount(date, createSavingsAccounting());
+                deposit(savingsId, date, new BigDecimal("1000"));
+                final List<Long> transactionsBefore = transactionIds(savingsId);
+                final List<Long> journalsBefore = journalEntryIds(savingsId);
+                final BigDecimal balanceBefore = accountBalance(savingsId);
+                final Optional<Long> createdStatementMapping = configureStatementFeeMapping();
+                mappings.deleteFinancialActivityAccount(vatMapping.getId());
+                try {
+                    final List<Map<String, Object>> errors = (List<Map<String, Object>>) postReferenceWithdrawal(savingsId, date,
+                            Map.of("signedStatementFee", true), List.of(vat("2", "Late VAT failure")),
+                            new ResponseSpecBuilder().expectStatusCode(404).build(), CommonConstants.RESPONSE_ERROR);
+
+                    assertThat(errors.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE))
+                            .isEqualTo("error.msg.financialActivityAccount.not.found");
+                    assertThat(transactionIds(savingsId)).isEqualTo(transactionsBefore);
+                    assertThat(journalEntryIds(savingsId)).isEqualTo(journalsBefore);
+                    assertThat(accountBalance(savingsId)).isEqualByComparingTo(balanceBefore);
+                    assertThat(referenceNotes(savingsId)).isEmpty();
+                } finally {
+                    mappings.createFinancialActivityAccount(
+                            new PostFinancialActivityAccountsRequest().financialActivityId((long) FinancialActivity.VAT_PAYABLE.getValue())
+                                    .glAccountId(vatMapping.getGlAccountData().getId()));
+                    createdStatementMapping.ifPresent(mappings::deleteFinancialActivityAccount);
+                }
+            });
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = { false, true })
+        void sameDayNipReferencesPersistUnderEitherPivotSetting(final boolean pivotEnabled) {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            final String configuration = GlobalConfigurationConstants.ALLOW_BACKDATED_TRANSACTION_BEFORE_INTEREST_POSTING;
+            final Boolean original = globalConfigurationHelper.getGlobalConfigurationByName(configuration).getEnabled();
+            try {
+                globalConfigurationHelper.updateGlobalConfiguration(configuration,
+                        new PutGlobalConfigurationsRequest().enabled(!pivotEnabled));
+                runAt(date, () -> {
+                    final String switchId = uniqueSwitchId();
+                    configureSwitch(switchId);
+                    configureVatPayableMapping();
+                    final Long savingsId = createActiveSavingsAccount(date, false);
+                    deposit(savingsId, date, new BigDecimal("1000.00"));
+
+                    withdraw(savingsId, date, "100.00", switchId,
+                            List.of(commission("3.00", "Pivot commission", "1.00", "2.00"), vat("2.00", "Pivot VAT")));
+
+                    final List<Map<String, Object>> rows = bundledTransactions(savingsId);
+                    assertThat(rows).hasSize(3);
+                    assertTransaction(rows.get(0), WITHDRAWAL, "100", "900");
+                    assertTransaction(rows.get(1), COMMISSION, "3", "897");
+                    assertTransaction(rows.get(2), VAT, "2", "895");
+                    assertSharedReferenceAndSwitch(rows, switchId);
+                    assertThat(accountBalance(savingsId)).isEqualByComparingTo("895");
+                });
+            } finally {
+                globalConfigurationHelper.updateGlobalConfiguration(configuration, new PutGlobalConfigurationsRequest().enabled(original));
+            }
+        }
+
+        @Test
+        void signedStatementVatPersistsAsLinkedDebit() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final Long savingsId = createActiveSavingsAccount(date, false);
+                deposit(savingsId, date, new BigDecimal("1000.00"));
+
+                postReferenceWithdrawal(savingsId, date, Map.of("signedStatementFee", true), List.of(vat("2.00", "Statement VAT")));
+
+                final List<Map<String, Object>> rows = referenceRows(savingsId);
+                assertThat(rows).hasSize(2);
+                assertTransaction(rows.get(0), 27, "100", "900");
+                assertTransaction(rows.get(1), VAT, "2", "898");
+                assertThat(value(rows.get(1), "ref_no")).isEqualTo(value(rows.get(0), "ref_no"));
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("898");
+            });
+        }
+
+        @Test
+        void activeHoldIsSubtractedOnlyFromRunningBalances() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final Long savingsId = createActiveSavingsAccount(date, false);
+                deposit(savingsId, date, new BigDecimal("1000.00"));
+                new SavingsAccountHelper(requestSpec, responseSpec).holdAmountInSavingsAccount(savingsId.intValue(), "50", false, date,
+                        CommonConstants.RESPONSE_RESOURCE_ID);
+
+                withdraw(savingsId, date, "100", null, List.of(emtLevy("5")));
+
+                final List<Map<String, Object>> rows = bundledTransactions(savingsId);
+                assertThat(rows).hasSize(2);
+                assertTransaction(rows.get(0), WITHDRAWAL, "100", "850");
+                assertTransaction(rows.get(1), EMT_LEVY, "5", "845");
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("895");
+            });
+        }
+
+        @ParameterizedTest
+        @MethodSource("backdatedPostingCases")
+        void backdatedReferencesRebuildLaterRunningBalances(final boolean pivotEnabled, final Map<String, Object> route,
+                final List<Map<String, Object>> references) {
+            final LocalDate today = Utils.getLocalDateOfTenant();
+            final String date = dateTimeFormatter.format(today);
+            final String openingDate = dateTimeFormatter.format(today.minusDays(2));
+            final String backdate = dateTimeFormatter.format(today.minusDays(1));
+            final String configuration = GlobalConfigurationConstants.ALLOW_BACKDATED_TRANSACTION_BEFORE_INTEREST_POSTING;
+            final Boolean original = globalConfigurationHelper.getGlobalConfigurationByName(configuration).getEnabled();
+            try {
+                globalConfigurationHelper.updateGlobalConfiguration(configuration,
+                        new PutGlobalConfigurationsRequest().enabled(!pivotEnabled));
+                runAt(date, () -> {
+                    final String switchId = (String) route.getOrDefault("switchId", uniqueSwitchId());
+                    configureSwitch(switchId);
+                    configureVatPayableMapping();
+                    final Long savingsId = createActiveSavingsAccount(openingDate, false);
+                    deposit(savingsId, openingDate, new BigDecimal("1000.00"));
+                    deposit(savingsId, date, new BigDecimal("50.00"));
+
+                    postReferenceWithdrawal(savingsId, backdate, route, references);
+
+                    final List<Map<String, Object>> rows = tenantJdbc().queryForList(
+                            "SELECT running_balance_derived FROM m_savings_account_transaction WHERE savings_account_id = ? AND is_reversed = false ORDER BY transaction_date, id",
+                            savingsId);
+                    Assertions.assertThat(rows).extracting(row -> (BigDecimal) row.get("running_balance_derived"))
+                            .usingElementComparator(BigDecimal::compareTo).containsExactly(new BigDecimal("1000"), new BigDecimal("900"),
+                                    new BigDecimal("897"), new BigDecimal("895"), new BigDecimal("945"));
+                    assertThat(accountBalance(savingsId)).isEqualByComparingTo("945");
+                });
+            } finally {
+                globalConfigurationHelper.updateGlobalConfiguration(configuration, new PutGlobalConfigurationsRequest().enabled(original));
+            }
+        }
+
+        static Stream<Arguments> backdatedPostingCases() {
+            final Map<String, Object> nip = Map.of("switchId", Utils.uniqueRandomStringGenerator("BACKDATE_", 8).toUpperCase());
+            final Map<String, Object> bills = Map.of("aggregatorCode", "REF_BACKDATE", "aggregatorCommissionAmount", BigDecimal.ONE);
+            final Map<String, Object> vat = Map.of("type", "VAT", "amount", new BigDecimal("2"), "description", "Backdated VAT");
+            final List<Map<String, Object>> nipReferences = List.of(
+                    Map.of("type", "COMMISSION", "amount", new BigDecimal("3"), "description", "Backdated commission", "breakdown",
+                            Map.of("switchFee", Map.of("amount", BigDecimal.ONE), "bankCommission", Map.of("amount", new BigDecimal("2")))),
+                    vat);
+            final List<Map<String, Object>> billsReferences = List
+                    .of(Map.of("type", "CONVENIENCE_FEE", "amount", new BigDecimal("3"), "description", "Backdated convenience fee"), vat);
+            return Stream.of(Arguments.of(false, nip, nipReferences), Arguments.of(true, nip, nipReferences),
+                    Arguments.of(false, bills, billsReferences), Arguments.of(true, bills, billsReferences));
+        }
+    }
+
+    private Optional<Long> configureStatementFeeMapping() {
+        final FinancialActivityAccountHelper helper = new FinancialActivityAccountHelper(requestSpec);
+        for (final GetFinancialActivityAccountsResponse mapping : helper.getAllFinancialActivityAccounts()) {
+            if (mapping.getFinancialActivityData().getId().intValue() == FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue()) {
+                return Optional.empty();
+            }
+        }
+        final Account income = new AccountHelper(requestSpec, responseSpec).createIncomeAccount("Reference Statement Income");
+        return Optional.of(helper.createFinancialActivityAccount(new PostFinancialActivityAccountsRequest()
+                .financialActivityId((long) FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue())
+                .glAccountId(income.getAccountID().longValue())).getResourceId());
+    }
+
+    private void postReferenceWithdrawal(final Long savingsId, final String date, final Map<String, Object> route,
+            final List<Map<String, Object>> references) {
+        postReferenceWithdrawal(savingsId, date, route, references, responseSpec, CommonConstants.RESPONSE_RESOURCE_ID);
+    }
+
+    private Object postReferenceWithdrawal(final Long savingsId, final String date, final Map<String, Object> route,
+            final List<Map<String, Object>> references, final ResponseSpecification expectedResponse, final String responseAttribute) {
+        final Map<String, Object> body = new LinkedHashMap<>(route);
+        body.put("locale", "en");
+        body.put("dateFormat", DATETIME_PATTERN);
+        body.put("transactionDate", date);
+        body.put("transactionAmount", new BigDecimal("100"));
+        body.put("paymentTypeId", 1);
+        body.put("referenceTransactions", references);
+        return Utils.performServerPost(requestSpec, expectedResponse,
+                "/fineract-provider/api/v1/savingsaccounts/" + savingsId + "/transactions?command=withdrawal&" + Utils.TENANT_IDENTIFIER,
+                gson.toJson(body), responseAttribute);
+    }
+
+    private List<Map<String, Object>> referenceRows(final Long savingsId) {
+        return tenantJdbc().queryForList(
+                "SELECT id, transaction_type_enum, amount, running_balance_derived, ref_no, aggregator_code FROM m_savings_account_transaction WHERE savings_account_id = ? AND transaction_type_enum IN (26,27,28,29) ORDER BY id",
+                savingsId);
+    }
 
     @Test
     void postsPrincipalAndSuppliedReferencesToConfiguredJournalAccounts() {
