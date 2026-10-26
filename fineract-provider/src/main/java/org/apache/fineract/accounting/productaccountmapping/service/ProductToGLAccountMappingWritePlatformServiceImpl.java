@@ -56,6 +56,7 @@ public class ProductToGLAccountMappingWritePlatformServiceImpl implements Produc
     private final LoanProductToGLAccountMappingHelper loanProductToGLAccountMappingHelper;
     private final SavingsProductToGLAccountMappingHelper savingsProductToGLAccountMappingHelper;
     private final ShareProductToGLAccountMappingHelper shareProductToGLAccountMappingHelper;
+    private final SystemPaymentTypeFundSourceLock systemPaymentTypeFundSourceLock;
 
     @Override
     @Transactional
@@ -444,6 +445,7 @@ public class ProductToGLAccountMappingWritePlatformServiceImpl implements Produc
         Map<String, Object> changes = new HashMap<>();
         final JsonElement element = this.fromApiJsonHelper.parse(command.json());
         final AccountingRuleType accountingRuleType = AccountingRuleType.fromInt(accountingRuleTypeId);
+        this.systemPaymentTypeFundSourceLock.assertUnchanged(savingsProductId, element, accountingRuleChanged, accountingRuleType);
 
         /***
          * If the accounting rule has been changed, delete all existing mapping for the product and recreate a new set
