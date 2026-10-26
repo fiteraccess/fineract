@@ -49,7 +49,6 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPosting
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRun;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseReplayStatus;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapseSettlementStatus;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseTransactionInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseZeroCheck;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum;
@@ -336,29 +335,6 @@ class SynapseTransactionClientTest {
             assertEquals("REF-1", status.getFailedNew().get(0).getReference());
             assertEquals(4L, status.getInterestRows().get("INTEREST_POSTING").get("POSTED_TO_FINERACT"));
             assertEquals(false, status.isDrained());
-        }
-
-        @Test
-        void readsTheSettlementStatusForADay() {
-            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/settlement-status?businessDate=2026-10-06"))
-                    .andExpect(method(HttpMethod.GET)).andRespond(
-                            withSuccess("{\"businessDate\":\"2026-10-06\",\"rail\":\"BILLS\",\"byStatus\":{\"COMPLETED\":2},\"inFlight\":0,"
-                                    + "\"cutoff\":\"2026-10-05\",\"cutoffSource\":\"LAST_COMPLETED_RUN\",\"failedNewCount\":0,"
-                                    + "\"failedLegacyCount\":1,\"failedNew\":[],\"failedLegacy\":[{\"batchId\":\"b-old\",\"status\":\"FAILED\","
-                                    + "\"loadedDate\":\"2026-10-02\",\"lastError\":\"bad file\"}],"
-                                    + "\"awaitingEoc\":[\"b-1\"],\"loadedForDate\":2,\"settled\":false}", MediaType.APPLICATION_JSON));
-
-            SynapseSettlementStatus status = client.getSettlementStatus(LocalDate.of(2026, 10, 6));
-
-            assertEquals(List.of("b-1"), status.getAwaitingEoc());
-            assertEquals(2, status.getLoadedForDate());
-            assertEquals(LocalDate.of(2026, 10, 5), status.getCutoff());
-            assertEquals("LAST_COMPLETED_RUN", status.getCutoffSource());
-            assertEquals(0, status.getFailedNewCount());
-            assertEquals(1, status.getFailedLegacyCount());
-            assertEquals("b-old", status.getFailedLegacy().get(0).getBatchId());
-            assertEquals(LocalDate.of(2026, 10, 2), status.getFailedLegacy().get(0).getLoadedDate());
-            assertEquals(false, status.isSettled());
         }
 
         @Test

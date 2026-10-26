@@ -83,7 +83,7 @@ class EodMirrorStepTest {
         when(glAccounts.findById(55L)).thenReturn(Optional.of(bridge));
         run = EodStepTestSupport.run();
         EodStepTestSupport.freshCheckpoints(runService, run);
-        completed(EodBillsGateStep.NAME);
+        completed(EodInterestPostingStep.NAME);
     }
 
     @AfterEach
@@ -95,13 +95,13 @@ class EodMirrorStepTest {
     class Prerequisites {
 
         @Test
-        void depositNeedsTheBillsGate() {
-            when(runService.findStep(run, EodBillsGateStep.NAME)).thenReturn(Optional.empty());
+        void depositNeedsInterestPosting() {
+            when(runService.findStep(run, EodInterestPostingStep.NAME)).thenReturn(Optional.empty());
 
             EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> deposit().execute(run));
 
             assertEquals(AbstractEodStep.CODE_PREREQUISITE, thrown.getCode());
-            assertTrue(thrown.getMessage().contains(EodBillsGateStep.NAME));
+            assertTrue(thrown.getMessage().contains(EodInterestPostingStep.NAME));
             verify(synapse, never()).startMirrorRun(any(), anyString());
         }
 

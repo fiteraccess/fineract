@@ -80,33 +80,35 @@ class EodCompletionStepTest {
     /** A configuration that dropped a required step must never close the day. */
     @Test
     void aRequiredStepThatNeverRanFailsTheCompletion_namingIt() {
-        List<EodStep> withoutBills = allRequiredCompleted().stream().filter(step -> !EodBillsGateStep.NAME.equals(step.getStepName()))
-                .toList();
-        when(runService.steps(run)).thenReturn(withoutBills);
+        List<EodStep> withoutPosting = allRequiredCompleted().stream()
+                .filter(step -> !EodInterestPostingStep.NAME.equals(step.getStepName())).toList();
+        when(runService.steps(run)).thenReturn(withoutPosting);
 
         EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
 
         assertEquals(EodCompletionStep.CODE_INCOMPLETE, thrown.getCode());
-        assertTrue(thrown.getMessage().contains(EodBillsGateStep.NAME + " NOT_RUN"));
+        assertTrue(thrown.getMessage().contains(EodInterestPostingStep.NAME + " NOT_RUN"));
     }
 
     @Test
     void anUnfinishedStepFailsTheCompletion_namingIt() {
-        EodStep failed = EodStep.start(run, EodBillsGateStep.NAME, NOW);
+        EodStep failed = EodStep.start(run, EodInterestPostingStep.NAME, NOW);
         failed.setStatus(EodStep.STATUS_FAILED);
         when(runService.steps(run)).thenReturn(List.of(EodStepTestSupport.completedStep(run, EodRolloverStep.NAME, NOW), failed));
 
         EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
 
         assertEquals(EodCompletionStep.CODE_INCOMPLETE, thrown.getCode());
-        assertTrue(thrown.getMessage().contains(EodBillsGateStep.NAME));
+        assertTrue(thrown.getMessage().contains(EodInterestPostingStep.NAME));
     }
 
-    /** A failed step taken out of the chain is reported, never a reason the day cannot close. */
+    /**
+     * A failed step taken out of the chain, like a day's Bills gate, is reported, never a reason the day cannot close.
+     */
     @Test
     void aFailedStepNoLongerConfiguredIsAWarning_notABlocker() {
         List<EodStep> steps = new ArrayList<>(allRequiredCompleted());
-        EodStep removed = EodStep.start(run, "EOD_MIRROR", NOW);
+        EodStep removed = EodStep.start(run, "EOD_BILLS_GATE", NOW);
         removed.setStatus(EodStep.STATUS_FAILED);
         steps.add(removed);
         when(runService.steps(run)).thenReturn(steps);
@@ -115,7 +117,7 @@ class EodCompletionStepTest {
 
         verify(runService).completed(any(), any());
         verify(runService).recordException(eq(run), eq(EodCompletionStep.NAME), eq(EodException.SEVERITY_WARN),
-                eq(EodCompletionStep.CODE_STEP_UNCONFIGURED), anyString(), eq("EOD_MIRROR"));
+                eq(EodCompletionStep.CODE_STEP_UNCONFIGURED), anyString(), eq("EOD_BILLS_GATE"));
     }
 
     @Test

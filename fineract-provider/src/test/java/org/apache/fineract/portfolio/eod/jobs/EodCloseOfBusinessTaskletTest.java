@@ -242,7 +242,7 @@ class EodCloseOfBusinessTaskletTest {
     @Test
     void anInvalidStoredConfigurationFailsTheRunBeforeAnyStep() {
         List<BatchBusinessStep> config = seededConfig();
-        config.add(row("EOD_MIRROR", 5L));
+        config.add(row("EOD_MIRROR", 4L));
         when(stepConfig.findAllByJobName(EodCloseOfBusinessTasklet.JOB_NAME)).thenReturn(config);
 
         EodStepFailedException thrown = assertThrows(EodStepFailedException.class,
@@ -250,7 +250,7 @@ class EodCloseOfBusinessTaskletTest {
 
         assertEquals(EodCloseOfBusinessTasklet.CODE_STEPS_INVALID, thrown.getCode());
         verify(runService).failRun(any(EodRun.class),
-                eq("invalid EOD step configuration: order 5 is used by [EOD_BILLS_GATE, EOD_MIRROR]"));
+                eq("invalid EOD step configuration: order 4 is used by [EOD_INTEREST_POSTING, EOD_MIRROR]"));
         verify(steps, never()).run(any(), any());
         verify(runService, never()).completeRun(any());
     }

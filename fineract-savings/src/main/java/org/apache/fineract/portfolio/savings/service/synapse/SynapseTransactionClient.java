@@ -32,7 +32,6 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPosting
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRun;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRunRequest;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseReplayStatus;
-import org.apache.fineract.portfolio.savings.data.synapse.SynapseSettlementStatus;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseZeroCheck;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseZeroCheckRequest;
 import org.springframework.http.HttpEntity;
@@ -52,7 +51,6 @@ public class SynapseTransactionClient {
     private static final String MONTHLY_STATEMENT_PLAN_PATH = "/api/v1/proxy/statements/monthly:plan";
     private static final String EOD_BUSINESS_DATE_PATH = "/api/v1/proxy/eod/business-date";
     private static final String EOD_REPLAY_STATUS_PATH = "/api/v1/proxy/eod/replay-status";
-    private static final String EOD_SETTLEMENT_STATUS_PATH = "/api/v1/proxy/eod/settlement-status";
     private static final String EOD_MIRROR_RUNS_PATH = "/api/v1/proxy/eod/mirror-runs";
     private static final String EOD_ZERO_CHECKS_PATH = "/api/v1/proxy/eod/zero-checks";
     private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
@@ -63,7 +61,6 @@ public class SynapseTransactionClient {
     private final String monthlyStatementPlanUrl;
     private final String eodBusinessDateUrl;
     private final String eodReplayStatusUrl;
-    private final String eodSettlementStatusUrl;
     private final String eodMirrorRunsUrl;
     private final String eodZeroChecksUrl;
     private final String apiKey;
@@ -80,7 +77,6 @@ public class SynapseTransactionClient {
         this.monthlyStatementPlanUrl = baseUrl + MONTHLY_STATEMENT_PLAN_PATH;
         this.eodBusinessDateUrl = baseUrl + EOD_BUSINESS_DATE_PATH;
         this.eodReplayStatusUrl = baseUrl + EOD_REPLAY_STATUS_PATH;
-        this.eodSettlementStatusUrl = baseUrl + EOD_SETTLEMENT_STATUS_PATH;
         this.eodMirrorRunsUrl = baseUrl + EOD_MIRROR_RUNS_PATH;
         this.eodZeroChecksUrl = baseUrl + EOD_ZERO_CHECKS_PATH;
         this.apiKey = apiKey;
@@ -165,11 +161,6 @@ public class SynapseTransactionClient {
     /** The replay-drain gate's poll: what dated on or before {@code businessDate} has not reached Fineract. */
     public SynapseReplayStatus getReplayStatus(LocalDate businessDate) {
         return get(eodReplayStatusUrl + "?businessDate=" + businessDate, SynapseReplayStatus.class, "replay status");
-    }
-
-    /** The Bills gate's poll: the BILLS settlement batches loaded on or before {@code businessDate}. */
-    public SynapseSettlementStatus getSettlementStatus(LocalDate businessDate) {
-        return get(eodSettlementStatusUrl + "?businessDate=" + businessDate, SynapseSettlementStatus.class, "settlement status");
     }
 
     /**

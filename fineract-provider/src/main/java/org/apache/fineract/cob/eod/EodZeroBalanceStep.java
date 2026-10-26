@@ -38,7 +38,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * Step 8, the zero-balance check: once every mirror job completed, Synapse checks that each bridge pair, settlement
+ * Step 7, the zero-balance check: once every mirror job completed, Synapse checks that each bridge pair, settlement
  * bridge and the CBN mirror GL nets to what it should. Every check not CLEAR (a FAIL, or an UNVERIFIED balance that
  * could not be read) is a CRITICAL exception row and fails the step, so the day cannot be signed off.
  */

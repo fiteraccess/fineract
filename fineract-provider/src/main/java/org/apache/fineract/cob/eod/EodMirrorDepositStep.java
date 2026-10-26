@@ -42,7 +42,7 @@ public class EodMirrorDepositStep extends EodMirrorStep {
 
     @Override
     protected String previousStep() {
-        return EodBillsGateStep.NAME;
+        return EodInterestPostingStep.NAME;
     }
 
     @Override

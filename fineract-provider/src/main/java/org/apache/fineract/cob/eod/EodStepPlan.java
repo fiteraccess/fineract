@@ -36,7 +36,7 @@ import java.util.TreeMap;
 public final class EodStepPlan {
 
     public static final List<String> REQUIRED = List.of(EodRolloverStep.NAME, EodReplayDrainGateStep.NAME, EodAccrualStep.NAME,
-            EodInterestPostingStep.NAME, EodBillsGateStep.NAME, EodCompletionStep.NAME);
+            EodInterestPostingStep.NAME, EodCompletionStep.NAME);
 
     public record Entry(String stepName, Long order) {
     }
