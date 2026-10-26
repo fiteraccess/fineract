@@ -30,7 +30,7 @@
             <column name="value" valueNumeric="0"/>
             <column name="enabled" valueBoolean="true"/>
             <column name="is_trap_door" valueBoolean="false"/>
-            <column name="description" value="If enabled, a savings product's fund source for a system-defined payment type cannot be changed or removed, and a system-defined payment type cannot be made user-defined. Systems outside Fineract and later reversals resolve the same mapping, so a remap would split one transaction across two GLs. Change a GL in production by creating a new system-defined payment type. Disable only in test environments or under change control. Value is unused."/>
+            <column name="description" value="If enabled, a savings product's fund source for a system-defined payment type cannot be changed or removed, and a system-defined payment type cannot be made user-defined. To change a GL, create a new system-defined payment type. Disable only in test environments or under change control."/>
         </insert>
         <rollback>
             <delete tableName="c_configuration">
