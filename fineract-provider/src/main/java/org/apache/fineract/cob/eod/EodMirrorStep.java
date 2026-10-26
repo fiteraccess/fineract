@@ -39,7 +39,7 @@ import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionC
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * Steps 4 to 7, one per GL mirror job: start Synapse's mirror run for the day (idempotent, a FAILED run is reopened),
+ * Steps 3 to 6, one per GL mirror job: start Synapse's mirror run for the day (idempotent, a FAILED run is reopened),
  * wait for it to complete, then keep its legs as GL result rows and flag every leg whose Fineract movement drifted from
  * what was mirrored. Each job after DEPOSIT runs only once the job before it completed.
  */
@@ -68,8 +68,8 @@ public abstract class EodMirrorStep extends AbstractEodStep {
 
     @Override
     protected Map<String, Object> run(EodRun run, EodStep step) {
-        requirePrerequisite(run, EodBillsGateStep.NAME);
-        if (!EodBillsGateStep.NAME.equals(previousStep())) {
+        requirePrerequisite(run, EodInterestPostingStep.NAME);
+        if (!EodInterestPostingStep.NAME.equals(previousStep())) {
             requirePrerequisite(run, previousStep());
         }
         SynapseTransactionClient client = requireSynapse(synapseClient);

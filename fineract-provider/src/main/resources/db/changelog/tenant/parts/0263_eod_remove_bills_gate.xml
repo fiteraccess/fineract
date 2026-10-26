@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+ <!-- Bills settles from the Pay-Window only, so the EOD chain loses its Bills gate. The steps after it move up one,
+      which keeps any order ops set in Manage Jobs. Past runs keep their EOD_BILLS_GATE step and exception rows. -->
+ <changeSet id="ab-565-eod-remove-bills-gate" author="fiteraccess">
+  <preConditions onFail="MARK_RAN">
+   <sqlCheck expectedResult="1">SELECT COUNT(1) FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_BILLS_GATE'</sqlCheck>
+  </preConditions>
+  <!-- The derived table lets MySQL read the table it updates. -->
+  <sql>UPDATE m_batch_business_steps SET step_order = step_order - 1 WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_order &gt; (SELECT gate_order FROM (SELECT step_order AS gate_order FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_BILLS_GATE') gate)</sql>
+  <sql>DELETE FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_BILLS_GATE'</sql>
+ </changeSet>
+ <changeSet id="ab-565-eod-exceptions-report-description" author="fiteraccess">
+  <update tableName="stretchy_report">
+   <column name="description" value="What the EOD runs in the period flagged without stopping: legacy replay failures, a COB date that did not follow the rollover."/>
+   <where>report_name = 'EOD Exceptions'</where>
+  </update>
+ </changeSet>
+</databaseChangeLog>

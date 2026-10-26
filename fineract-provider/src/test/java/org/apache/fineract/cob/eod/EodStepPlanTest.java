@@ -19,6 +19,7 @@
 package org.apache.fineract.cob.eod;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -27,12 +28,11 @@ import org.junit.jupiter.api.Test;
 
 class EodStepPlanTest {
 
-    /** The configuration changeset 0253 seeds. */
+    /** The configuration changeset 0253 seeds, once changeset 0263 removed the Bills gate. */
     private static List<EodStepPlan.Entry> seeded() {
-        return new ArrayList<>(
-                List.of(new EodStepPlan.Entry(EodRolloverStep.NAME, 1L), new EodStepPlan.Entry(EodReplayDrainGateStep.NAME, 2L),
-                        new EodStepPlan.Entry(EodAccrualStep.NAME, 3L), new EodStepPlan.Entry(EodInterestPostingStep.NAME, 4L),
-                        new EodStepPlan.Entry(EodBillsGateStep.NAME, 5L), new EodStepPlan.Entry(EodCompletionStep.NAME, 9L)));
+        return new ArrayList<>(List.of(new EodStepPlan.Entry(EodRolloverStep.NAME, 1L),
+                new EodStepPlan.Entry(EodReplayDrainGateStep.NAME, 2L), new EodStepPlan.Entry(EodAccrualStep.NAME, 3L),
+                new EodStepPlan.Entry(EodInterestPostingStep.NAME, 4L), new EodStepPlan.Entry(EodCompletionStep.NAME, 8L)));
     }
 
     @Test
@@ -40,15 +40,17 @@ class EodStepPlanTest {
         assertEquals(List.of(), EodStepPlan.problems(seeded()));
     }
 
-    /** The configuration once changeset 0256 has added the GL steps and moved completion to 11. */
+    /**
+     * The configuration once changeset 0256 added the GL steps and 0263 moved every step after the Bills gate up one.
+     */
     @Test
     void theSeededConfigurationWithTheGlStepsIsRunnable() {
         List<EodStepPlan.Entry> entries = seeded();
         entries.replaceAll(
-                entry -> entry.stepName().equals(EodCompletionStep.NAME) ? new EodStepPlan.Entry(EodCompletionStep.NAME, 11L) : entry);
-        entries.addAll(List.of(new EodStepPlan.Entry(EodMirrorDepositStep.NAME, 6L), new EodStepPlan.Entry(EodMirrorIncomeStep.NAME, 7L),
-                new EodStepPlan.Entry(EodMirrorTaxStep.NAME, 8L), new EodStepPlan.Entry(EodMirrorInterestStep.NAME, 9L),
-                new EodStepPlan.Entry(EodZeroBalanceStep.NAME, 10L)));
+                entry -> entry.stepName().equals(EodCompletionStep.NAME) ? new EodStepPlan.Entry(EodCompletionStep.NAME, 10L) : entry);
+        entries.addAll(List.of(new EodStepPlan.Entry(EodMirrorDepositStep.NAME, 5L), new EodStepPlan.Entry(EodMirrorIncomeStep.NAME, 6L),
+                new EodStepPlan.Entry(EodMirrorTaxStep.NAME, 7L), new EodStepPlan.Entry(EodMirrorInterestStep.NAME, 8L),
+                new EodStepPlan.Entry(EodZeroBalanceStep.NAME, 9L)));
 
         assertEquals(List.of(), EodStepPlan.problems(entries));
     }
@@ -56,6 +58,11 @@ class EodStepPlanTest {
     @Test
     void theGlStepsAreOptional() {
         assertTrue(EodStepPlan.REQUIRED.stream().noneMatch(name -> name.startsWith("EOD_MIRROR") || name.equals(EodZeroBalanceStep.NAME)));
+    }
+
+    @Test
+    void theBillsGateIsNoLongerRequired() {
+        assertFalse(EodStepPlan.REQUIRED.contains("EOD_BILLS_GATE"));
     }
 
     @Test
@@ -69,17 +76,17 @@ class EodStepPlanTest {
     @Test
     void aMissingRequiredStepIsNamed() {
         List<EodStepPlan.Entry> entries = seeded();
-        entries.removeIf(entry -> entry.stepName().equals(EodBillsGateStep.NAME));
+        entries.removeIf(entry -> entry.stepName().equals(EodInterestPostingStep.NAME));
 
-        assertEquals(List.of("required steps missing: [" + EodBillsGateStep.NAME + "]"), EodStepPlan.problems(entries));
+        assertEquals(List.of("required steps missing: [" + EodInterestPostingStep.NAME + "]"), EodStepPlan.problems(entries));
     }
 
     @Test
     void aDuplicateOrderIsNamed() {
         List<EodStepPlan.Entry> entries = seeded();
-        entries.add(new EodStepPlan.Entry("EOD_MIRROR", 5L));
+        entries.add(new EodStepPlan.Entry("EOD_MIRROR", 4L));
 
-        assertEquals(List.of("order 5 is used by [" + EodBillsGateStep.NAME + ", EOD_MIRROR]"), EodStepPlan.problems(entries));
+        assertEquals(List.of("order 4 is used by [" + EodInterestPostingStep.NAME + ", EOD_MIRROR]"), EodStepPlan.problems(entries));
     }
 
     @Test
