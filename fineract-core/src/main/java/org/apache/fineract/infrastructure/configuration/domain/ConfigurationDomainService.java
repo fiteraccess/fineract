@@ -161,4 +161,6 @@ public interface ConfigurationDomainService {
     boolean isSynapseInterestPostingEnabled();
 
     boolean isAsynchronousFlexcubePostingEnabled();
+
+    boolean isSystemPaymentTypeFundSourceLockEnabled();
 }

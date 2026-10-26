@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.paymenttype.starter;
 
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.portfolio.paymenttype.domain.PaymentTypeRepository;
 import org.apache.fineract.portfolio.paymenttype.mapper.PaymentTypeCreateRequestMapper;
 import org.apache.fineract.portfolio.paymenttype.mapper.PaymentTypeMapper;
@@ -40,7 +41,8 @@ public class PaymentTypeConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(PaymentTypeWriteService.class)
-    PaymentTypeWriteService paymentTypeWriteService(PaymentTypeRepository repository, PaymentTypeCreateRequestMapper createRequestMapper) {
-        return new PaymentTypeWriteServiceImpl(repository, createRequestMapper);
+    PaymentTypeWriteService paymentTypeWriteService(PaymentTypeRepository repository, PaymentTypeCreateRequestMapper createRequestMapper,
+            ConfigurationDomainService configurationDomainService) {
+        return new PaymentTypeWriteServiceImpl(repository, createRequestMapper, configurationDomainService);
     }
 }

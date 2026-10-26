@@ -84,6 +84,7 @@ public final class GlobalConfigurationConstants {
     public static final String FORCE_PASSWORD_RESET_ON_FIRST_LOGIN = "force-password-reset-on-first-login";
     public static final String ENABLE_SYNAPSE_INTEREST_POSTING = "enable-synapse-interest-posting";
     public static final String ENABLE_ASYNCHRONOUS_FLEXCUBE_POSTING = "enable-asynchronous-flexcube-posting";
+    public static final String LOCK_SYSTEM_PAYMENT_TYPE_FUND_SOURCES = "lock-system-payment-type-fund-sources";
 
     private GlobalConfigurationConstants() {}
 }

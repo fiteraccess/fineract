@@ -22,7 +22,9 @@ import jakarta.validation.Valid;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.Strings;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
+import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeCreateRequest;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeCreateResponse;
@@ -30,6 +32,7 @@ import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeDeleteRequest;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeDeleteResponse;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeUpdateRequest;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeUpdateResponse;
+import org.apache.fineract.portfolio.paymenttype.domain.PaymentType;
 import org.apache.fineract.portfolio.paymenttype.domain.PaymentTypeRepository;
 import org.apache.fineract.portfolio.paymenttype.exception.PaymentTypeNotFoundException;
 import org.apache.fineract.portfolio.paymenttype.mapper.PaymentTypeCreateRequestMapper;
@@ -43,6 +46,7 @@ public class PaymentTypeWriteServiceImpl implements PaymentTypeWriteService {
 
     private final PaymentTypeRepository repository;
     private final PaymentTypeCreateRequestMapper createRequestMapper;
+    private final ConfigurationDomainService configurationDomainService;
 
     @Override
     @Caching(evict = { @CacheEvict(value = "payment_types", key = "'payment_types'"),
@@ -64,6 +68,7 @@ public class PaymentTypeWriteServiceImpl implements PaymentTypeWriteService {
             final var paymentType = repository.findById(request.getId())
                     .orElseThrow(() -> new PaymentTypeNotFoundException(request.getId()));
 
+            assertStaysSystemDefined(paymentType, request);
             if (!Strings.CS.equals(request.getName(), paymentType.getName())) {
                 paymentType.setName(request.getName());
             }
@@ -106,6 +111,20 @@ public class PaymentTypeWriteServiceImpl implements PaymentTypeWriteService {
         }
 
         return PaymentTypeDeleteResponse.builder().resourceId(paymentType.getId()).build();
+    }
+
+    /**
+     * A savings product's fund source for a system-defined payment type is locked; an update that omits
+     * {@code isSystemDefined} defaults it to false and would silently unlock that mapping.
+     */
+    private void assertStaysSystemDefined(final PaymentType paymentType, final PaymentTypeUpdateRequest request) {
+        if (Boolean.TRUE.equals(paymentType.getIsSystemDefined()) && !Boolean.TRUE.equals(request.getIsSystemDefined())
+                && configurationDomainService.isSystemPaymentTypeFundSourceLockEnabled()) {
+            throw new GeneralPlatformDomainRuleException("error.msg.payment.type.system.defined.locked",
+                    "Payment type " + paymentType.getName()
+                            + " is system-defined and stays so while lock-system-payment-type-fund-sources is enabled",
+                    paymentType.getId());
+        }
     }
 
     private void handleDataIntegrityIssues(final Throwable realCause, final Exception dve) {

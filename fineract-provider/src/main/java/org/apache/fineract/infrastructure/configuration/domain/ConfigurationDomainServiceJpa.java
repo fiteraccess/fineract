@@ -590,4 +590,9 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     public boolean isAsynchronousFlexcubePostingEnabled() {
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_ASYNCHRONOUS_FLEXCUBE_POSTING).isEnabled();
     }
+
+    @Override
+    public boolean isSystemPaymentTypeFundSourceLockEnabled() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.LOCK_SYSTEM_PAYMENT_TYPE_FUND_SOURCES).isEnabled();
+    }
 }
