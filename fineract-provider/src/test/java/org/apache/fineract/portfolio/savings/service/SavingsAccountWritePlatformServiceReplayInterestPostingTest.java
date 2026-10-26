@@ -113,7 +113,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         when(original.getId()).thenReturn(21423L);
         when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
         when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
-        when(replayService.reverse(account, "INTEREST_POSTING", 21423L)).thenReturn(new ReplayResult(original, false));
+        when(replayService.reverse(account, "INTEREST_POSTING", 21423L, null)).thenReturn(new ReplayResult(original, false));
         JsonCommand command = mockCommand(LocalDate.of(2026, 9, 30), new BigDecimal("64789.45"), "INTEREST_POSTING", "trace-rev", null);
         when(command.stringValueOfParameterNamed("operation")).thenReturn("REVERSE");
         when(command.longValueOfParameterNamed("originalTransactionId")).thenReturn(21423L);
@@ -138,7 +138,7 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         when(original.getTransactionType()).thenReturn(org.apache.fineract.portfolio.savings.SavingsAccountTransactionType.GOAL_FORFEITURE);
         when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
         when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
-        when(replayService.reverse(account, "GOAL_FORFEITURE", 31L)).thenReturn(new ReplayResult(original, false));
+        when(replayService.reverse(account, "GOAL_FORFEITURE", 31L, null)).thenReturn(new ReplayResult(original, false));
         JsonCommand command = mockCommand(LocalDate.of(2026, 9, 30), BigDecimal.ZERO, "GOAL_FORFEITURE", "trace-forfeit-rev", null);
         when(command.stringValueOfParameterNamed("operation")).thenReturn("REVERSE");
         when(command.longValueOfParameterNamed("originalTransactionId")).thenReturn(31L);
@@ -146,6 +146,28 @@ class SavingsAccountWritePlatformServiceReplayInterestPostingTest {
         service.replayInterestPosting(savingsId, command);
 
         verify(accountRepo).updateGoalAccrualStopped(savingsId, false);
+    }
+
+    @Test
+    void penaltyReversalNamedByReferenceReachesTheApplier() throws Exception {
+        when(configurationDomainService.isSynapseInterestPostingEnabled()).thenReturn(true);
+        Long savingsId = 15L;
+        SavingsAccount account = buildAccount(savingsId);
+        SavingsAccountTransaction original = mock(SavingsAccountTransaction.class);
+        when(original.getId()).thenReturn(29987L);
+        when(original.getTransactionType()).thenReturn(org.apache.fineract.portfolio.savings.SavingsAccountTransactionType.GOAL_PENALTY);
+        when(replayServiceProvider.getIfAvailable()).thenReturn(replayService);
+        when(assembler.assembleFrom(savingsId, false)).thenReturn(account);
+        when(replayService.reverse(account, "GOAL_PENALTY", null, "trace-penalty")).thenReturn(new ReplayResult(original, false));
+        JsonCommand command = mockCommand(LocalDate.of(2026, 11, 26), new BigDecimal("2.05"), "GOAL_PENALTY", "trace-penalty-rev", null);
+        when(command.stringValueOfParameterNamed("operation")).thenReturn("REVERSE");
+        when(command.longValueOfParameterNamed("originalTransactionId")).thenReturn(null);
+        when(command.stringValueOfParameterNamed("originalRefNo")).thenReturn("trace-penalty");
+
+        var result = service.replayInterestPosting(savingsId, command);
+
+        assertThat(result.getResourceId()).isEqualTo(29987L);
+        verify(replayService).reverse(account, "GOAL_PENALTY", null, "trace-penalty");
     }
 
     @Test

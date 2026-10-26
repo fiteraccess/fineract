@@ -41,6 +41,7 @@ import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.savings.base.BaseSavingsIntegrationTest;
 import org.apache.fineract.integrationtests.support.TenantJdbcSupport;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -61,6 +62,95 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
     private static final int JE_DEBIT = 2;
 
     private final Gson gson = new Gson();
+
+    @Nested
+    class BillsReferences {
+
+        @Test
+        void freshBulkReversalRestoresBillsReferencesAndTheirJournals() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final String aggregator = configureAggregator();
+                configureVatPayableMapping();
+                final Long savingsId = createActiveCashBasedSavingsAccount(date, createSavingsAccounting());
+                deposit(savingsId, date, new BigDecimal("1000"));
+
+                postBills(savingsId, date, aggregator);
+
+                final List<Map<String, Object>> booked = transactionRows(savingsId, 28, 29, VAT);
+                assertThat(booked).hasSize(3);
+                assertThat((BigDecimal) booked.get(0).get("running_balance_derived")).isEqualByComparingTo("900");
+                assertThat((BigDecimal) booked.get(1).get("running_balance_derived")).isEqualByComparingTo("897");
+                assertThat((BigDecimal) booked.get(2).get("running_balance_derived")).isEqualByComparingTo("895");
+                assertThat(booked.get(1).get("ref_no")).isEqualTo(booked.get(0).get("ref_no"));
+                assertThat(booked.get(2).get("ref_no")).isEqualTo(booked.get(0).get("ref_no"));
+                assertThat(booked.get(0).get("aggregator_code")).isEqualTo(aggregator);
+                assertThat(booked.get(1).get("aggregator_code")).isEqualTo(aggregator);
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("895");
+
+                reverse(savingsId, id(booked.get(0)), true, true);
+
+                final List<Map<String, Object>> rows = transactionRows(savingsId, 28, 29, VAT);
+                assertThat(rows).hasSize(6);
+                assertThat(bool(rows.get(0), "is_reversed")).isTrue();
+                assertThat(bool(rows.get(1), "is_reversed")).isTrue();
+                assertThat(bool(rows.get(2), "is_reversed")).isTrue();
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("1000");
+                assertBookingEntriesLinked(id(booked.get(0)), 3);
+                assertBookingEntriesLinked(id(booked.get(1)), 2);
+                assertBookingEntriesLinked(id(booked.get(2)), 2);
+            });
+        }
+
+        @Test
+        void undoRetainsTheExistingConvenienceFeeSelection() {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final String aggregator = configureAggregator();
+                configureVatPayableMapping();
+                final Long savingsId = createActiveCashBasedSavingsAccount(date, createSavingsAccounting());
+                deposit(savingsId, date, new BigDecimal("1000"));
+                postBills(savingsId, date, aggregator);
+                final List<Map<String, Object>> booked = transactionRows(savingsId, 28, 29, VAT);
+
+                undo(savingsId, id(booked.get(0)));
+
+                final List<Map<String, Object>> rows = transactionRows(savingsId, 28, 29, VAT);
+                assertThat(rows).hasSize(3);
+                assertThat(bool(rows.get(0), "is_reversed")).isTrue();
+                assertThat(bool(rows.get(1), "is_reversed")).isFalse();
+                assertThat(bool(rows.get(2), "is_reversed")).isTrue();
+                assertThat(accountBalance(savingsId)).isEqualByComparingTo("997");
+                assertBookingEntriesLinked(id(booked.get(0)), 3);
+                assertBookingEntriesLinked(id(booked.get(2)), 2);
+            });
+        }
+    }
+
+    private String configureAggregator() {
+        final AccountHelper helper = new AccountHelper(requestSpec, responseSpec);
+        final String code = Utils.uniqueRandomStringGenerator("REF_BILLS_", 8).toUpperCase();
+        final Map<String, Object> body = Map.of("aggregatorPayableGlAccountId",
+                helper.createLiabilityAccount("Reference Bills Payable").getAccountID(), "commissionIncomeGlAccountId",
+                helper.createIncomeAccount("Reference Bills Commission").getAccountID(), "convenienceFeeIncomeGlAccountId",
+                helper.createIncomeAccount("Reference Convenience Income").getAccountID(), "billsBridgeGlAccountId",
+                helper.createAssetAccount("Reference Bills Bridge").getAccountID(), "active", true);
+        Utils.performServerPut(requestSpec, responseSpec,
+                "/fineract-provider/api/v1/aggregator-accounting-configurations/" + code + "?" + Utils.TENANT_IDENTIFIER,
+                gson.toJson(body));
+        return code;
+    }
+
+    private void postBills(final Long savingsId, final String date, final String aggregator) {
+        final Map<String, Object> body = Map.of("locale", "en", "dateFormat", DATETIME_PATTERN, "transactionDate", date,
+                "transactionAmount", new BigDecimal("100"), "paymentTypeId", 1, "aggregatorCode", aggregator, "aggregatorCommissionAmount",
+                BigDecimal.ONE, "referenceTransactions",
+                List.of(Map.of("type", "CONVENIENCE_FEE", "amount", new BigDecimal("3"), "description", "Bills convenience"),
+                        vat("2", "Bills VAT")));
+        Utils.performServerPost(requestSpec, responseSpec,
+                "/fineract-provider/api/v1/savingsaccounts/" + savingsId + "/transactions?command=withdrawal&" + Utils.TENANT_IDENTIFIER,
+                gson.toJson(body), CommonConstants.RESPONSE_RESOURCE_ID);
+    }
 
     @Test
     void bulkReversalWithIncludeFeesReversesPrincipalCommissionAndVat() {
@@ -562,11 +652,12 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
     // ---------- row readers ----------
 
     private List<Map<String, Object>> transactionRows(final Number savingsId, final int... types) {
-        final StringBuilder sql = new StringBuilder("""
-                SELECT id, transaction_type_enum, amount, is_reversed, is_reversal, original_transaction_id, ref_no
-                  FROM m_savings_account_transaction
-                 WHERE savings_account_id = ?
-                """);
+        final StringBuilder sql = new StringBuilder(
+                """
+                        SELECT id, transaction_type_enum, amount, is_reversed, is_reversal, original_transaction_id, ref_no, running_balance_derived, aggregator_code
+                          FROM m_savings_account_transaction
+                         WHERE savings_account_id = ?
+                        """);
         if (types.length > 0) {
             sql.append(" AND transaction_type_enum IN (");
             for (int i = 0; i < types.length; i++) {

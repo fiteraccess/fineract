@@ -41,7 +41,10 @@ import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.savings.base.BaseSavingsIntegrationTest;
 import org.apache.fineract.integrationtests.support.TenantJdbcSupport;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -56,6 +59,52 @@ class AccountTransferReversalIntegrationTest extends BaseSavingsIntegrationTest 
     private static final int JE_DEBIT = 2;
 
     private final Gson gson = new Gson();
+
+    @Nested
+    class ReferencePostings {
+
+        @ParameterizedTest
+        @CsvSource({ "false, 97.00, 98.00", "true, 100.00, 100.00" })
+        void transferCascadePreservesBothEmtReferencesForLaterReversal(final boolean bulk, final BigDecimal expectedSourceBalance,
+                final BigDecimal expectedDestinationBalance) {
+            final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+            runAt(date, () -> {
+                final Long source = createActivePlainSavingsAccount(date);
+                final Long destination = createActivePlainSavingsAccount(date);
+                deposit(source, date, new BigDecimal("100.00"));
+                deposit(destination, date, new BigDecimal("100.00"));
+
+                final Transfer transfer = settleTransfer(date, "40.00", source, destination,
+                        List.of(Map.of("type", "EMT_LEVY", "amount", new BigDecimal("3.00"))),
+                        List.of(Map.of("type", "EMT_LEVY", "amount", new BigDecimal("2.00"))));
+
+                final Map<String, Object> sourceLevy = tenantJdbc().queryForMap(
+                        "SELECT id, amount, running_balance_derived, ref_no FROM m_savings_account_transaction WHERE savings_account_id = ? AND transaction_type_enum = 24",
+                        source);
+                final Map<String, Object> destinationLevy = tenantJdbc().queryForMap(
+                        "SELECT id, amount, running_balance_derived, ref_no FROM m_savings_account_transaction WHERE savings_account_id = ? AND transaction_type_enum = 24",
+                        destination);
+                assertThat(sourceLevy.get("amount")).isEqualTo(new BigDecimal("3.000000"));
+                assertThat(sourceLevy.get("running_balance_derived")).isEqualTo(new BigDecimal("57.000000"));
+                assertThat(destinationLevy.get("amount")).isEqualTo(new BigDecimal("2.000000"));
+                assertThat(destinationLevy.get("running_balance_derived")).isEqualTo(new BigDecimal("138.000000"));
+                assertThat(sourceLevy.get("ref_no")).isEqualTo(tenantJdbc().queryForObject(
+                        "SELECT ref_no FROM m_savings_account_transaction WHERE id = ?", String.class, transfer.withdrawalLegId()));
+                assertThat(destinationLevy.get("ref_no")).isEqualTo(tenantJdbc().queryForObject(
+                        "SELECT ref_no FROM m_savings_account_transaction WHERE id = ?", String.class, transfer.depositLegId()));
+                assertThat(accountBalance(source)).isEqualByComparingTo("57.00");
+                assertThat(accountBalance(destination)).isEqualByComparingTo("138.00");
+
+                Utils.performServerPost(requestSpec, responseSpec, transferReverseUrl(transfer.transferId()),
+                        gson.toJson(Map.of("isBulk", bulk, "includeFees", true)), "changes");
+
+                assertThat(bool(transactionRow((Number) sourceLevy.get("id")), "is_reversed")).isEqualTo(bulk);
+                assertThat(bool(transactionRow((Number) destinationLevy.get("id")), "is_reversed")).isEqualTo(bulk);
+                assertThat(accountBalance(source)).isEqualByComparingTo(expectedSourceBalance);
+                assertThat(accountBalance(destination)).isEqualByComparingTo(expectedDestinationBalance);
+            });
+        }
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -179,6 +228,11 @@ class AccountTransferReversalIntegrationTest extends BaseSavingsIntegrationTest 
     }
 
     private Transfer settleTransfer(final String date, final String amount, final Long sourceSavingsId, final Long destinationSavingsId) {
+        return settleTransfer(date, amount, sourceSavingsId, destinationSavingsId, List.of(), List.of());
+    }
+
+    private Transfer settleTransfer(final String date, final String amount, final Long sourceSavingsId, final Long destinationSavingsId,
+            final List<Map<String, Object>> sourceReferences, final List<Map<String, Object>> destinationReferences) {
         final Map<String, Object> request = new LinkedHashMap<>();
         request.put("dateFormat", DATETIME_PATTERN);
         request.put("locale", "en");
@@ -193,6 +247,8 @@ class AccountTransferReversalIntegrationTest extends BaseSavingsIntegrationTest 
         request.put("transferDate", date);
         request.put("transferAmount", new BigDecimal(amount));
         request.put("transferDescription", "transfer reversal itest");
+        request.put("sourceReferenceTransactions", sourceReferences);
+        request.put("destinationReferenceTransactions", destinationReferences);
         Utils.performServerPost(requestSpec, responseSpec, "/fineract-provider/api/v1/accounttransfers?" + Utils.TENANT_IDENTIFIER,
                 gson.toJson(request), CommonConstants.RESPONSE_RESOURCE_ID);
 
