@@ -98,6 +98,13 @@ public class EodGlResult extends AbstractPersistableCustom<Long> {
     @Column(name = "actual", precision = 19, scale = 6)
     private BigDecimal actual;
 
+    /** A pair check's balances as each ledger reports them; {@code actual} is their net. */
+    @Column(name = "fin_balance", precision = 19, scale = 6)
+    private BigDecimal finBalance;
+
+    @Column(name = "flex_balance", precision = 19, scale = 6)
+    private BigDecimal flexBalance;
+
     @Column(name = "fin_status", length = 20)
     private String finStatus;
 

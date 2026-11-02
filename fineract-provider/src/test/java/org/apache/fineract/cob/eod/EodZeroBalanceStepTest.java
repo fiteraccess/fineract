@@ -175,6 +175,54 @@ class EodZeroBalanceStepTest {
         verify(runService).completed(any(), any());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void aBillsPairThatNetsToZeroKeepsBothBalancesAndCompletes() {
+        when(synapse.runZeroCheck(D)).thenReturn(
+                zeroCheck("CLEAR", pair(1, "BILLS CORALPAY bridge", "5000.00", "-5000.00", "0.00", "CLEAR", null)));
+
+        underTest.execute(run);
+
+        ArgumentCaptor<List<EodGlResult>> rows = ArgumentCaptor.forClass(List.class);
+        verify(runService).replaceGlResults(eq(run), eq(EodZeroBalanceStep.NAME), rows.capture());
+        EodGlResult row = rows.getValue().get(0);
+        assertEquals("BILLS_BRIDGE_PAIR", row.getKind());
+        assertEquals("PAIR", row.getSide());
+        assertEquals("140061942", row.getFinBridgeGl());
+        assertEquals("140061942", row.getFlexBridgeGl());
+        assertEquals("099", row.getFlexBridgeBranch());
+        assertEquals(new BigDecimal("5000.00"), row.getFinBalance());
+        assertEquals(new BigDecimal("-5000.00"), row.getFlexBalance());
+        assertEquals(new BigDecimal("0.00"), row.getActual());
+        verify(runService, never()).recordException(any(), anyString(), anyString(), anyString(), anyString(), any());
+        verify(runService).completed(any(), any());
+    }
+
+    @Test
+    void aBillsPairOffByANetIsACriticalRowNamingTheGlTheNetAndWhy_andFailsTheStep() {
+        when(synapse.runZeroCheck(D)).thenReturn(zeroCheck("FAILED", pair(1, "BILLS CORALPAY bridge", "5000.00", "-3500.00", "1500.00",
+                "FAIL", "net 1,500; 1 Bills window awaiting Flexcube posting: B-7; re-run EOD once posted")));
+
+        EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
+
+        assertEquals(EodZeroBalanceStep.CODE_ZERO_BALANCE_FAIL, thrown.getCode());
+        verify(runService).recordException(eq(run), eq(EodZeroBalanceStep.NAME), eq(EodException.SEVERITY_CRITICAL),
+                eq(EodZeroBalanceStep.CODE_ZERO_BALANCE_FAIL),
+                eq("FAIL BILLS CORALPAY bridge: gl=140061942 branch=099 fineract=5000.00 flexcube=-3500.00 net=1500.00"
+                        + " (net 1,500; 1 Bills window awaiting Flexcube posting: B-7; re-run EOD once posted)"),
+                eq("BILLS_BRIDGE_PAIR:140061942:PAIR"));
+        verify(runService, never()).completed(any(), any());
+    }
+
+    private static SynapseZeroCheckResult pair(int checkNo, String name, String fineract, String flexcube, String net, String result,
+            String note) {
+        SynapseZeroCheckResult check = check(checkNo, "BILLS_BRIDGE_PAIR", name, "PAIR", "140061942", "099", "0", net, result);
+        check.setFinBalance(new BigDecimal(fineract));
+        check.setFlexBalance(new BigDecimal(flexcube));
+        check.setNote(note);
+        return check;
+    }
+
     private static SynapseZeroCheck zeroCheck(String status, SynapseZeroCheckResult... checks) {
         SynapseZeroCheck.Run checkRun = new SynapseZeroCheck.Run();
         checkRun.setBusinessDate(D);

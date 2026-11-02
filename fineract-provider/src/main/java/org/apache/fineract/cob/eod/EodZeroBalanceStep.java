@@ -38,9 +38,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * Step 7, the zero-balance check: once every mirror job completed, Synapse checks that each bridge pair, settlement
- * bridge and the CBN mirror GL nets to what it should. Every check not CLEAR (a FAIL, or an UNVERIFIED balance that
- * could not be read) is a CRITICAL exception row and fails the step, so the day cannot be signed off.
+ * Step 7, the zero-balance check: once every mirror job completed, Synapse checks that each EOD bridge pair and
+ * settlement bridge holds what it should, and that each Bills Bridge nets to zero across Fineract and Flexcube. Every
+ * check not CLEAR (a FAIL, or an UNVERIFIED balance that could not be read) is a CRITICAL exception row and fails the
+ * step, so the day cannot be signed off.
  */
 @Component
 public class EodZeroBalanceStep extends AbstractEodStep {
@@ -107,6 +108,12 @@ public class EodZeroBalanceStep extends AbstractEodStep {
     }
 
     private static String message(SynapseZeroCheckResult check) {
+        if (SynapseZeroCheckResult.SIDE_PAIR.equals(check.getSide())) {
+            return check.getResult() + " " + check.getName() + ": gl=" + check.getGlCode()
+                    + (check.getBranch() == null ? "" : " branch=" + check.getBranch()) + " fineract=" + plain(check.getFinBalance())
+                    + " flexcube=" + plain(check.getFlexBalance()) + " net=" + plain(check.getActual())
+                    + (check.getNote() == null ? "" : " (" + check.getNote() + ")");
+        }
         BigDecimal shortfall = check.getExpected() == null || check.getActual() == null ? null
                 : check.getExpected().subtract(check.getActual());
         return check.getResult() + " " + check.getName() + ": gl=" + check.getGlCode()
@@ -124,7 +131,13 @@ public class EodZeroBalanceStep extends AbstractEodStep {
         for (SynapseZeroCheckResult check : checks) {
             EodGlResult result = EodGlResult.of(check.getKind(), check.getCheckNo(), check.getName());
             result.setSide(check.getSide());
-            if (SynapseZeroCheckResult.SIDE_FLEXCUBE.equals(check.getSide())) {
+            if (SynapseZeroCheckResult.SIDE_PAIR.equals(check.getSide())) {
+                result.setFinBridgeGl(check.getGlCode());
+                result.setFlexBridgeGl(check.getGlCode());
+                result.setFlexBridgeBranch(check.getBranch());
+                result.setFinBalance(check.getFinBalance());
+                result.setFlexBalance(check.getFlexBalance());
+            } else if (SynapseZeroCheckResult.SIDE_FLEXCUBE.equals(check.getSide())) {
                 result.setFlexBridgeGl(check.getGlCode());
                 result.setFlexBridgeBranch(check.getBranch());
             } else {
