@@ -26,7 +26,8 @@ import lombok.Setter;
 
 /**
  * One zero-balance check: a GL on one side whose balance must equal {@code expected}; {@code actual} is null when
- * unread.
+ * unread. A {@code PAIR} check reads one GL code on both ledgers: {@code actual} is the net of {@code finBalance} and
+ * {@code flexBalance}, which are null on every other check.
  */
 @Getter
 @Setter
@@ -39,6 +40,7 @@ public class SynapseZeroCheckResult {
     public static final String RESULT_UNVERIFIED = "UNVERIFIED";
     public static final String SIDE_FINERACT = "FINERACT";
     public static final String SIDE_FLEXCUBE = "FLEXCUBE";
+    public static final String SIDE_PAIR = "PAIR";
 
     private int checkNo;
     private String kind;
@@ -50,4 +52,6 @@ public class SynapseZeroCheckResult {
     private BigDecimal actual;
     private String result;
     private String note;
+    private BigDecimal finBalance;
+    private BigDecimal flexBalance;
 }

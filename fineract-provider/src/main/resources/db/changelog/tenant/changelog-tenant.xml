@@ -284,4 +284,5 @@
     <include file="parts/0262_lock_system_payment_type_fund_sources.xml" relativeToChangelogFile="true" />
     <include file="parts/0263_eod_remove_bills_gate.xml" relativeToChangelogFile="true" />
     <include file="parts/0263_add_read_opshealth_permissions.xml" relativeToChangelogFile="true" />
+    <include file="parts/0264_eod_gl_result_bills_pair.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
