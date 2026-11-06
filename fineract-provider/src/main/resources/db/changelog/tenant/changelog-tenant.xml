@@ -287,4 +287,5 @@
     <include file="parts/0264_eod_gl_result_bills_pair.xml" relativeToChangelogFile="true" />
     <include file="parts/0265_add_settlement_recovery_permissions.xml" relativeToChangelogFile="true" />
     <include file="parts/0266_add_read_synapsejob_permission.xml" relativeToChangelogFile="true" />
+    <include file="parts/0267_add_synapsejob_control_permissions.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
