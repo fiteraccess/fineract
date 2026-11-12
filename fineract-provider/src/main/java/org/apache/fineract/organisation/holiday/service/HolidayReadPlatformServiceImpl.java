@@ -21,14 +21,12 @@ package org.apache.fineract.organisation.holiday.service;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.holiday.data.HolidayData;
 import org.apache.fineract.organisation.holiday.domain.RescheduleType;
@@ -83,8 +81,6 @@ public class HolidayReadPlatformServiceImpl implements HolidayReadPlatformServic
             final LocalDate toDate) {
         this.context.authenticatedUser();
 
-        final DateTimeFormatter df = DateUtils.DEFAULT_DATE_FORMATTER;
-
         final Object[] objectArray = new Object[3];
         int arrayPos = 0;
 
@@ -100,14 +96,14 @@ public class HolidayReadPlatformServiceImpl implements HolidayReadPlatformServic
             if (fromDate != null) {
                 sql += "h.from_Date >= ? ";
 
-                objectArray[arrayPos] = df.format(fromDate);
+                objectArray[arrayPos] = fromDate;
                 arrayPos = arrayPos + 1;
             }
 
             if (toDate != null) {
                 sql += fromDate != null ? "and " : "";
                 sql += "h.to_date <= ? ";
-                objectArray[arrayPos] = df.format(toDate);
+                objectArray[arrayPos] = toDate;
                 arrayPos = arrayPos + 1;
             }
         }
