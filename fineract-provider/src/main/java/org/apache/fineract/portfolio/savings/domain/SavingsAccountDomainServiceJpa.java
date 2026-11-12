@@ -225,6 +225,19 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 && account.isSynapseCreditRestricted();
     }
 
+    /**
+     * AB-529: with Synapse interest posting on, a correction written here never reaches Synapse's ledger; recalculate
+     * only and let the next Synapse-routed posting run reverse and re-post it in both books.
+     */
+    private boolean repostsInterestLocally(final SavingsAccount account) {
+        return !isCreditRestricted(account) && !isInterestPostedThroughSynapse();
+    }
+
+    private boolean isInterestPostedThroughSynapse() {
+        return fineractProperties.getSynapse() != null && fineractProperties.getSynapse().isEnabled()
+                && configurationDomainService.isSynapseInterestPostingEnabled();
+    }
+
     private SavingsAccountTransaction handleWithdrawal(final SavingsAccount account, final DateTimeFormatter fmt,
             final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail,
             final SavingsTransactionBooleanValues transactionBooleanValues, final String switchId, final String aggregatorCode,
@@ -281,7 +294,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
 
-        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && !isCreditRestricted(account)) {
+        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && repostsInterestLocally(account)) {
             account.postInterest(mc, today, transactionBooleanValues.isInterestTransfer(), isSavingsInterestPostingAtCurrentPeriodEnd,
                     financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
         } else {
@@ -581,7 +594,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
         boolean postReversals = this.configurationDomainService.isReversalTransactionAllowed();
-        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && !isCreditRestricted(account)) {
+        if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && repostsInterestLocally(account)) {
             account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                     postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
         } else {
@@ -1079,7 +1092,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         for (SavingsAccountTransaction savingsAccountTransaction : savingsAccountTransactions) {
             if (savingsAccountTransaction.isPostInterestCalculationRequired()
                     && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), backdatedTxnsAllowedTill)
-                    && !isCreditRestricted(account)) {
+                    && repostsInterestLocally(account)) {
 
                 account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
                         postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
