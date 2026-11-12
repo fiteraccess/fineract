@@ -26,6 +26,8 @@ import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.core.domain.ActionContext;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
 import org.apache.fineract.portfolio.eod.exception.EodStepFailedException;
@@ -86,6 +88,27 @@ public abstract class AbstractEodStep implements EodBusinessStep {
             log.error("EOD {}: step {} failed", run.getBusinessDate(), getEnumStyledName(), e);
             runService.failed(step, CODE_ERROR, String.valueOf(e.getMessage()));
             throw e;
+        }
+    }
+
+    /** Work that may fail with {@code E}. */
+    @FunctionalInterface
+    protected interface Work<E extends Exception> {
+
+        void run() throws E;
+    }
+
+    /**
+     * Runs work that reads "today" from the thread as of N, the date the run rolled to. A step runs in the COB context,
+     * which reads COB_DATE (the closing day): accrual and the period close would stop short of skipped holidays.
+     */
+    protected static <E extends Exception> void asOfNextBusinessDate(Work<E> work) throws E {
+        ActionContext stepContext = ThreadLocalContextUtil.getActionContext();
+        ThreadLocalContextUtil.setActionContext(ActionContext.DEFAULT);
+        try {
+            work.run();
+        } finally {
+            ThreadLocalContextUtil.setActionContext(stepContext);
         }
     }
 

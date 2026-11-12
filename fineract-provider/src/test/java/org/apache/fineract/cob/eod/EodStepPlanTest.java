@@ -28,11 +28,15 @@ import org.junit.jupiter.api.Test;
 
 class EodStepPlanTest {
 
-    /** The configuration changeset 0253 seeds, once changeset 0263 removed the Bills gate. */
+    /**
+     * The configuration of a tenant with no steps of its own: changeset 0253, the Bills gate removed by 0263, and month
+     * end and year end placed before completion by 0270.
+     */
     private static List<EodStepPlan.Entry> seeded() {
         return new ArrayList<>(List.of(new EodStepPlan.Entry(EodRolloverStep.NAME, 1L),
                 new EodStepPlan.Entry(EodReplayDrainGateStep.NAME, 2L), new EodStepPlan.Entry(EodAccrualStep.NAME, 3L),
-                new EodStepPlan.Entry(EodInterestPostingStep.NAME, 4L), new EodStepPlan.Entry(EodCompletionStep.NAME, 8L)));
+                new EodStepPlan.Entry(EodInterestPostingStep.NAME, 4L), new EodStepPlan.Entry(EodMonthEndStep.NAME, 8L),
+                new EodStepPlan.Entry(EodYearEndStep.NAME, 9L), new EodStepPlan.Entry(EodCompletionStep.NAME, 10L)));
     }
 
     @Test
@@ -41,13 +45,18 @@ class EodStepPlanTest {
     }
 
     /**
-     * The configuration once changeset 0256 added the GL steps and 0263 moved every step after the Bills gate up one.
+     * The configuration once changeset 0256 added the GL steps (mirrors 5 to 8, zero balance 9) and 0270 placed month
+     * end and year end at 10 and 11 with completion at 12.
      */
     @Test
     void theSeededConfigurationWithTheGlStepsIsRunnable() {
         List<EodStepPlan.Entry> entries = seeded();
-        entries.replaceAll(
-                entry -> entry.stepName().equals(EodCompletionStep.NAME) ? new EodStepPlan.Entry(EodCompletionStep.NAME, 10L) : entry);
+        entries.replaceAll(entry -> switch (entry.stepName()) {
+            case EodMonthEndStep.NAME -> new EodStepPlan.Entry(EodMonthEndStep.NAME, 10L);
+            case EodYearEndStep.NAME -> new EodStepPlan.Entry(EodYearEndStep.NAME, 11L);
+            case EodCompletionStep.NAME -> new EodStepPlan.Entry(EodCompletionStep.NAME, 12L);
+            default -> entry;
+        });
         entries.addAll(List.of(new EodStepPlan.Entry(EodMirrorDepositStep.NAME, 5L), new EodStepPlan.Entry(EodMirrorIncomeStep.NAME, 6L),
                 new EodStepPlan.Entry(EodMirrorTaxStep.NAME, 7L), new EodStepPlan.Entry(EodMirrorInterestStep.NAME, 8L),
                 new EodStepPlan.Entry(EodZeroBalanceStep.NAME, 9L)));
@@ -61,16 +70,39 @@ class EodStepPlanTest {
     }
 
     @Test
+    void monthEndAndYearEndAreRequired() {
+        assertTrue(EodStepPlan.REQUIRED.containsAll(List.of(EodMonthEndStep.NAME, EodYearEndStep.NAME)));
+    }
+
+    @Test
     void theBillsGateIsNoLongerRequired() {
         assertFalse(EodStepPlan.REQUIRED.contains("EOD_BILLS_GATE"));
     }
 
     @Test
-    void anotherEodStepBeforeCompletionIsAllowed() {
+    void anotherEodStepBeforeMonthEndIsAllowed() {
         List<EodStepPlan.Entry> entries = seeded();
         entries.add(new EodStepPlan.Entry("EOD_MIRROR", 6L));
 
         assertEquals(List.of(), EodStepPlan.problems(entries));
+    }
+
+    /**
+     * The zero-balance check posts nothing, but it reads a period month end is about to close: nothing may follow month
+     * end.
+     */
+    @Test
+    void aStepAfterMonthEndIsRefused_namingIt() {
+        List<EodStepPlan.Entry> entries = seeded();
+        entries.replaceAll(entry -> switch (entry.stepName()) {
+            case EodMonthEndStep.NAME -> new EodStepPlan.Entry(EodMonthEndStep.NAME, 5L);
+            case EodYearEndStep.NAME -> new EodStepPlan.Entry(EodYearEndStep.NAME, 6L);
+            default -> entry;
+        });
+        entries.add(new EodStepPlan.Entry(EodZeroBalanceStep.NAME, 7L));
+
+        assertEquals(List.of(EodZeroBalanceStep.NAME + " must run before " + EodMonthEndStep.NAME
+                + ", which closes the period; it is configured after it"), EodStepPlan.problems(entries));
     }
 
     @Test
@@ -105,11 +137,27 @@ class EodStepPlanTest {
     }
 
     @Test
+    void yearEndBeforeMonthEndIsRefused() {
+        List<EodStepPlan.Entry> entries = seeded();
+        entries.replaceAll(entry -> switch (entry.stepName()) {
+            case EodMonthEndStep.NAME -> new EodStepPlan.Entry(EodMonthEndStep.NAME, 9L);
+            case EodYearEndStep.NAME -> new EodStepPlan.Entry(EodYearEndStep.NAME, 8L);
+            default -> entry;
+        });
+
+        List<String> problems = EodStepPlan.problems(entries);
+
+        assertEquals(1, problems.size());
+        assertTrue(problems.getFirst().startsWith("required steps must run in the order"));
+    }
+
+    @Test
     void completionMustBeLast() {
         List<EodStepPlan.Entry> entries = seeded();
-        entries.add(new EodStepPlan.Entry("EOD_MIRROR", 10L));
+        entries.add(new EodStepPlan.Entry("EOD_MIRROR", 11L));
 
-        assertEquals(List.of(EodCompletionStep.NAME + " must be the last step, EOD_MIRROR runs after it"), EodStepPlan.problems(entries));
+        assertEquals(List.of("EOD_MIRROR must run before " + EodMonthEndStep.NAME + ", which closes the period; it is configured after it",
+                EodCompletionStep.NAME + " must be the last step, EOD_MIRROR runs after it"), EodStepPlan.problems(entries));
     }
 
     @Test

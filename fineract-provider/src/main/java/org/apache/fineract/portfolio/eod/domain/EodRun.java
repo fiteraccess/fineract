@@ -58,6 +58,9 @@ public class EodRun extends AbstractPersistableCustom<Long> {
     @Column(name = "last_error", length = 1000)
     private String lastError;
 
+    @Column(name = "next_business_date")
+    private LocalDate nextBusinessDate;
+
     public static EodRun start(LocalDate businessDate, LocalDateTime now) {
         EodRun run = new EodRun();
         run.businessDate = businessDate;
@@ -65,6 +68,11 @@ public class EodRun extends AbstractPersistableCustom<Long> {
         run.startedAt = now;
         run.attempts = 1;
         return run;
+    }
+
+    /** The business date this run rolls to; runs from before holiday-aware EOD rolled to the next calendar day. */
+    public LocalDate rolledTo() {
+        return nextBusinessDate != null ? nextBusinessDate : businessDate.plusDays(1);
     }
 
     public boolean isCompleted() {

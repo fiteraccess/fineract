@@ -35,9 +35,9 @@ import org.apache.fineract.portfolio.eod.service.EodRunService;
 import org.springframework.stereotype.Component;
 
 /**
- * Step 8: the day is closed only when every required step completed and every other configured step that ran completed;
- * the detail is the run's summary. A step that ran but has since been removed from the configuration is reported as a
- * warning, never a blocker, so taking a step out of the chain cannot leave the day unclosable.
+ * The last step: the day is closed only when every required step completed and every other configured step that ran
+ * completed; the detail is the run's summary. A step that ran but has since been removed from the configuration is
+ * reported as a warning, never a blocker, so taking a step out of the chain cannot leave the day unclosable.
  */
 @Component
 public class EodCompletionStep extends AbstractEodStep {

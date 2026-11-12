@@ -31,12 +31,12 @@ import java.util.TreeMap;
 /**
  * The rule every EOD step configuration must meet, checked when the configuration is saved and again before a run: all
  * required steps present, each once, in dependency order, with unique order values and {@link EodCompletionStep} last.
- * Other EOD steps may sit anywhere before completion.
+ * Any other EOD step must sit before {@link EodMonthEndStep}, which closes the period such a step may post into.
  */
 public final class EodStepPlan {
 
     public static final List<String> REQUIRED = List.of(EodRolloverStep.NAME, EodReplayDrainGateStep.NAME, EodAccrualStep.NAME,
-            EodInterestPostingStep.NAME, EodCompletionStep.NAME);
+            EodInterestPostingStep.NAME, EodMonthEndStep.NAME, EodYearEndStep.NAME, EodCompletionStep.NAME);
 
     public record Entry(String stepName, Long order) {
     }
@@ -73,6 +73,11 @@ public final class EodStepPlan {
         if (!requiredByOrder.equals(expected)) {
             problems.add("required steps must run in the order " + expected + ", configured " + requiredByOrder);
         }
+        entries.stream().filter(entry -> entry.order() != null && EodMonthEndStep.NAME.equals(entry.stepName())).findFirst()
+                .ifPresent(monthEnd -> entries.stream()
+                        .filter(entry -> entry.order() != null && !REQUIRED.contains(entry.stepName()) && entry.order() > monthEnd.order())
+                        .sorted(Comparator.comparing(Entry::order)).forEach(late -> problems.add(late.stepName() + " must run before "
+                                + EodMonthEndStep.NAME + ", which closes the period; it is configured after it")));
         entries.stream().filter(entry -> entry.order() != null).max(Comparator.comparing(Entry::order))
                 .filter(last -> seen.contains(EodCompletionStep.NAME) && !Objects.equals(last.stepName(), EodCompletionStep.NAME))
                 .ifPresent(last -> problems.add(EodCompletionStep.NAME + " must be the last step, " + last.stepName() + " runs after it"));

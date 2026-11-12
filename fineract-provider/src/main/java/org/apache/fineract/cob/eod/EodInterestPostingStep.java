@@ -38,10 +38,12 @@ import org.springframework.stereotype.Component;
 
 /**
  * Step 2: post savings interest every night, as Fineract's own posting job did, with D (the COB date the steps run
- * under) as the cut-off; each product's posting period decides what is due, so most nights nothing is. When this run
- * wrote instructions to the Synapse outbox, wait until the money has actually moved: every one is SENT and Synapse
- * reports D's interest and withholding-tax rows landed in Fineract. A DEAD interest entry holds that account's later
- * entries in the outbox, so any one, however old, stops the step before it posts.
+ * under) as the cut-off; each product's posting period decides what is due, so most nights nothing is, and a month's
+ * interest is booked by the run of the next month's first business day. When this run wrote instructions to the Synapse
+ * outbox, wait until the money has actually moved: every one is SENT and Synapse reports the interest and
+ * withholding-tax rows dated D to N landed in Fineract (a posting is dated its period end or the day after, not D). A
+ * DEAD interest entry holds that account's later entries in the outbox, so any one, however old, stops the step before
+ * it posts.
  */
 @Component
 public class EodInterestPostingStep extends AbstractEodStep {
@@ -92,11 +94,11 @@ public class EodInterestPostingStep extends AbstractEodStep {
                 throw new EodStepFailedException(CODE_POSTING_DEAD, dead + " interest instructions went DEAD in the Synapse outbox");
             }
             long queued = outboxCounts.getOrDefault("PENDING", 0L) + outboxCounts.getOrDefault("DISPATCHED", 0L);
-            SynapseReplayStatus status = client.getReplayStatus(closing);
+            SynapseReplayStatus status = client.getReplayStatus(closing, run.rolledTo());
             long failed = replayCount(status, "FAILED_POST_TO_FINERACT") + replayCount(status, "UNKNOWN") + replayCount(status, "FAILED");
             if (failed > 0) {
                 throw new EodStepFailedException(CODE_POSTING_REPLAY_FAILED,
-                        failed + " interest rows dated " + closing + " failed to reach Fineract");
+                        failed + " interest rows dated " + closing + " to " + run.rolledTo() + " failed to reach Fineract");
             }
             long notLanded = replayCount(status, "PENDING") + replayCount(status, "POSTED_TO_TB");
             Map<String, Object> seen = detail("outboxQueued", queued, "outboxSent", outboxCounts.getOrDefault("SENT", 0L),

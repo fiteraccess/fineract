@@ -25,5 +25,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 public interface OfficeRepository extends JpaRepository<Office, Long>, JpaSpecificationExecutor<Office> {
 
+    Optional<Office> findByParentIsNull();
+
     Optional<Office> findByExternalId(ExternalId externalId);
 }

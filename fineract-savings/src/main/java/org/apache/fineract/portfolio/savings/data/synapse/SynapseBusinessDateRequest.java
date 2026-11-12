@@ -23,7 +23,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** The EOD rollover's push to Synapse: the business date Fineract has just advanced to, as yyyy-MM-dd. */
+/**
+ * The EOD rollover's push to Synapse: the business date Fineract has just advanced to and the day it closed, as
+ * yyyy-MM-dd; the days between them are holidays.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,4 +34,5 @@ import lombok.Setter;
 public class SynapseBusinessDateRequest {
 
     private String date;
+    private String previousBusinessDate;
 }

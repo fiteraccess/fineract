@@ -96,12 +96,12 @@ public class Holiday extends AbstractPersistableCustom<Long> {
         final String name = command.stringValueOfParameterNamed(HolidayApiConstants.nameParamName);
         final LocalDate fromDate = command.localDateValueOfParameterNamed(HolidayApiConstants.fromDateParamName);
         final LocalDate toDate = command.localDateValueOfParameterNamed(HolidayApiConstants.toDateParamName);
-        Integer reschedulingType = null;
+        Integer reschedulingType = RescheduleType.RESCHEDULETONEXTREPAYMENTDATE.getValue();
         if (command.parameterExists(HolidayApiConstants.reschedulingType)) {
             reschedulingType = command.integerValueOfParameterNamed(HolidayApiConstants.reschedulingType);
         }
         LocalDate repaymentsRescheduledTo = null;
-        if (reschedulingType == null || reschedulingType.equals(RescheduleType.RESCHEDULETOSPECIFICDATE.getValue())) {
+        if (reschedulingType.equals(RescheduleType.RESCHEDULETOSPECIFICDATE.getValue())) {
             repaymentsRescheduledTo = command.localDateValueOfParameterNamed(HolidayApiConstants.repaymentsRescheduledToParamName);
         }
         final Integer status = HolidayStatusType.PENDING_FOR_ACTIVATION.getValue();

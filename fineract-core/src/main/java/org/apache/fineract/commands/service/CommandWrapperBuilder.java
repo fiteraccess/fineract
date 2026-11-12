@@ -2952,6 +2952,22 @@ public class CommandWrapperBuilder {
         return this;
     }
 
+    public CommandWrapperBuilder upsertFinancialYear(final String financialCycle) {
+        this.actionName = "UPDATE";
+        this.entityName = "FINANCIALYEAR";
+        this.transactionId = financialCycle;
+        this.href = "/financialyears/" + financialCycle;
+        return this;
+    }
+
+    public CommandWrapperBuilder deleteFinancialYear(final String financialCycle) {
+        this.actionName = "DELETE";
+        this.entityName = "FINANCIALYEAR";
+        this.transactionId = financialCycle;
+        this.href = "/financialyears/" + financialCycle;
+        return this;
+    }
+
     public CommandWrapperBuilder upsertNipSwitchAccountingConfiguration(final String switchId) {
         this.actionName = "UPDATE";
         this.entityName = "NIP_SWITCH_ACCOUNTING_CONFIGURATION";

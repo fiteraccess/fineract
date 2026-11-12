@@ -112,19 +112,36 @@ public class EodRunService {
         stepRepository.saveAndFlush(step);
     }
 
+    /** Fixes the run's target before Fineract moves, so a resumed run rolls to the same date. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void completeRun(EodRun run) {
-        run.setStatus(EodRun.STATUS_COMPLETED);
-        run.setCompletedAt(now());
-        run.setLastError(null);
+    public void saveNextBusinessDate(EodRun run, LocalDate nextBusinessDate) {
+        run.setNextBusinessDate(nextBusinessDate);
         runRepository.saveAndFlush(run);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completeRun(EodRun run) {
+        EodRun stored = stored(run);
+        stored.setStatus(EodRun.STATUS_COMPLETED);
+        stored.setCompletedAt(now());
+        stored.setLastError(null);
+        runRepository.saveAndFlush(stored);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failRun(EodRun run, String error) {
-        run.setStatus(EodRun.STATUS_FAILED);
-        run.setLastError(truncate(error, 1000));
-        runRepository.saveAndFlush(run);
+        EodRun stored = stored(run);
+        stored.setStatus(EodRun.STATUS_FAILED);
+        stored.setLastError(truncate(error, 1000));
+        runRepository.saveAndFlush(stored);
+    }
+
+    /**
+     * The run as stored. Each step works on a reloaded copy, so the tasklet's copy no longer carries what a step saved
+     * (the rolled-to date): writing it back would erase that.
+     */
+    private EodRun stored(EodRun run) {
+        return runRepository.findById(run.getId()).orElse(run);
     }
 
     /**

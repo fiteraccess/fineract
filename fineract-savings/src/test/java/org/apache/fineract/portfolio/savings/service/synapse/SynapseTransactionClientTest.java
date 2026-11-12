@@ -294,12 +294,12 @@ class SynapseTransactionClientTest {
         void pushesTheBusinessDate_andReadsBackWhatSynapseStamps() {
             mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/business-date")).andExpect(method(HttpMethod.POST))
                     .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token")).andExpect(header(TENANT_HEADER, TENANT_ID))
-                    .andExpect(jsonPath("$.date").value("2026-10-07"))
+                    .andExpect(jsonPath("$.date").value("2026-10-07")).andExpect(jsonPath("$.previousBusinessDate").value("2026-10-06"))
                     .andRespond(withSuccess(
                             "{\"businessDate\":\"2026-10-07\",\"fineractBusinessDate\":\"2026-10-07\",\"requestedDate\":\"2026-10-07\"}",
                             MediaType.APPLICATION_JSON));
 
-            SynapseBusinessDateResponse response = client.postBusinessDate(LocalDate.of(2026, 10, 7));
+            SynapseBusinessDateResponse response = client.postBusinessDate(LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 6));
 
             assertEquals(LocalDate.of(2026, 10, 7), response.getBusinessDate());
             mockServer.verify();
@@ -311,7 +311,7 @@ class SynapseTransactionClientTest {
                     .andRespond(withStatus(HttpStatus.CONFLICT).body("Business date 2026-10-08 is ahead of Fineract's 2026-10-07"));
 
             SynapsePostingException thrown = assertThrows(SynapsePostingException.class,
-                    () -> client.postBusinessDate(LocalDate.of(2026, 10, 8)));
+                    () -> client.postBusinessDate(LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 7)));
 
             assertTrue(thrown.getMessage().contains("409"));
             assertTrue(thrown.getMessage().contains("ahead of Fineract"));
@@ -335,6 +335,18 @@ class SynapseTransactionClientTest {
             assertEquals("REF-1", status.getFailedNew().get(0).getReference());
             assertEquals(4L, status.getInterestRows().get("INTEREST_POSTING").get("POSTED_TO_FINERACT"));
             assertEquals(false, status.isDrained());
+        }
+
+        @Test
+        void asksForInterestRowsThroughTheNextBusinessDate() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/replay-status?businessDate=2026-12-24&interestThrough=2026-12-28"))
+                    .andExpect(method(HttpMethod.GET)).andRespond(withSuccess(
+                            "{\"businessDate\":\"2026-12-24\",\"interestRows\":{},\"drained\":true}", MediaType.APPLICATION_JSON));
+
+            SynapseReplayStatus status = client.getReplayStatus(LocalDate.of(2026, 12, 24), LocalDate.of(2026, 12, 28));
+
+            assertEquals(true, status.isDrained());
+            mockServer.verify();
         }
 
         @Test

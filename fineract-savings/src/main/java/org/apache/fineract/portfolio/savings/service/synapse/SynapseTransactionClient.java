@@ -146,10 +146,11 @@ public class SynapseTransactionClient {
      * The EOD rollover's push: tells every Synapse pod the business date Fineract has just advanced to. Synapse refuses
      * a date ahead of its own reading of Fineract (409), which surfaces here as a posting exception.
      */
-    public SynapseBusinessDateResponse postBusinessDate(LocalDate businessDate) {
-        log.debug("Pushing business date {} to {}", businessDate, eodBusinessDateUrl);
+    public SynapseBusinessDateResponse postBusinessDate(LocalDate businessDate, LocalDate previousBusinessDate) {
+        log.debug("Pushing business date {} (previous {}) to {}", businessDate, previousBusinessDate, eodBusinessDateUrl);
         try {
-            return post(eodBusinessDateUrl, new SynapseBusinessDateRequest(businessDate.toString()), SynapseBusinessDateResponse.class);
+            return post(eodBusinessDateUrl, new SynapseBusinessDateRequest(businessDate.toString(), previousBusinessDate.toString()),
+                    SynapseBusinessDateResponse.class);
         } catch (RestClientResponseException e) {
             throw new SynapsePostingException("Synapse business-date push failed with HTTP " + e.getStatusCode() + " date=" + businessDate
                     + ": " + e.getResponseBodyAsString(), e);
@@ -161,6 +162,12 @@ public class SynapseTransactionClient {
     /** The replay-drain gate's poll: what dated on or before {@code businessDate} has not reached Fineract. */
     public SynapseReplayStatus getReplayStatus(LocalDate businessDate) {
         return get(eodReplayStatusUrl + "?businessDate=" + businessDate, SynapseReplayStatus.class, "replay status");
+    }
+
+    /** As {@link #getReplayStatus(LocalDate)}, with the interest rows counted over businessDate..interestThrough. */
+    public SynapseReplayStatus getReplayStatus(LocalDate businessDate, LocalDate interestThrough) {
+        return get(eodReplayStatusUrl + "?businessDate=" + businessDate + "&interestThrough=" + interestThrough, SynapseReplayStatus.class,
+                "replay status");
     }
 
     /**
