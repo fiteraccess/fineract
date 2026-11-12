@@ -22,7 +22,7 @@
 <!--
     Month end and year end are steps of the EOD chain, after every step that posts into the period and before
     completion. Completion moves up by two and the new steps take the freed places, so any order ops set is kept (the
-    reverse of the Bills-gate removal). The year-end step marks the financial year it leaves as closed.
+    reverse of the Bills-gate removal). The financial year the year-end step leaves is marked closed in Synapse.
 -->
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -34,10 +34,5 @@
         <sql>UPDATE m_batch_business_steps SET step_order = step_order + 2 WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_COMPLETION'</sql>
         <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_MONTH_END', step_order - 2 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_COMPLETION'</sql>
         <sql>INSERT INTO m_batch_business_steps (job_name, step_name, step_order) SELECT 'EOD_CLOSE_OF_BUSINESS', 'EOD_YEAR_END', step_order - 1 FROM m_batch_business_steps WHERE job_name = 'EOD_CLOSE_OF_BUSINESS' AND step_name = 'EOD_COMPLETION'</sql>
-    </changeSet>
-    <changeSet id="financial-year-closed-on" author="fiteraccess">
-        <addColumn tableName="m_financial_year">
-            <column name="closed_on" type="DATE"/>
-        </addColumn>
     </changeSet>
 </databaseChangeLog>

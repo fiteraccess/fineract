@@ -22,40 +22,44 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
-import org.apache.fineract.organisation.financialcalendar.domain.FinancialYear;
-import org.apache.fineract.organisation.financialcalendar.service.FinancialCalendarService;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepository;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
 import org.apache.fineract.portfolio.eod.exception.EodStepFailedException;
 import org.apache.fineract.portfolio.eod.service.EodRunService;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseFinancialYearClose;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
  * The year-end step: once the roll has left the closing day's financial year, confirms that month end closed every
  * office through the year's last day and marks the year closed, so its record can no longer change. Every other night
  * it records that the year did not change. The next year's readiness was checked by the rollover before the date moved.
- * The EOD run on a year's last business day is the year-end run; there is no separate job.
+ * The EOD run on a year's last business day is the year-end run; there is no separate job. Financial years live in
+ * Synapse, which records the close.
  */
 @Component
 public class EodYearEndStep extends AbstractEodStep {
 
     public static final String NAME = "EOD_YEAR_END";
     public static final String CODE_YEAR_NOT_CLOSED = "EOD-YEAR-NOT-CLOSED";
+    public static final String CODE_YEAR_CLOSE = "EOD-YEAR-CLOSE";
 
-    private final FinancialCalendarService financialCalendar;
+    private final ObjectProvider<SynapseTransactionClient> synapseClient;
     private final GLClosureRepository closures;
     private final OfficeRepository officeRepository;
 
-    public EodYearEndStep(EodRunService runService, FineractProperties properties, FinancialCalendarService financialCalendar,
+    public EodYearEndStep(EodRunService runService, FineractProperties properties, ObjectProvider<SynapseTransactionClient> synapseClient,
             GLClosureRepository closures, OfficeRepository officeRepository) {
         super(runService, properties);
-        this.financialCalendar = financialCalendar;
+        this.synapseClient = synapseClient;
         this.closures = closures;
         this.officeRepository = officeRepository;
     }
@@ -64,11 +68,12 @@ public class EodYearEndStep extends AbstractEodStep {
     protected Map<String, Object> run(EodRun run, EodStep step) {
         requirePrerequisite(run, EodMonthEndStep.NAME);
         LocalDate closing = run.getBusinessDate();
-        Optional<FinancialYear> found = financialCalendar.findYearCovering(closing);
-        if (found.isEmpty()) {
+        SynapseTransactionClient client = requireSynapse(synapseClient);
+        SynapseEodCalendar calendar = readCalendar(client, closing, run.rolledTo());
+        SynapseEodCalendar.Year year = calendar.getClosingYear();
+        if (year == null) {
             return detail("yearChanged", false, "reason", "no financial year covers " + closing);
         }
-        FinancialYear year = found.get();
         if (!run.rolledTo().isAfter(year.getEndDate())) {
             return detail("yearChanged", false, "financialCycle", year.getFinancialCycle());
         }
@@ -79,15 +84,31 @@ public class EodYearEndStep extends AbstractEodStep {
                     year.getFinancialCycle() + " ends " + year.getEndDate() + " but these offices are not closed through it: " + notClosed
                             + "; " + EodMonthEndStep.NAME + " should have closed them");
         }
-        boolean alreadyClosed = year.isClosed();
-        LocalDate closedOn = alreadyClosed ? year.getClosedOn() : closing;
+        boolean alreadyClosed = year.getClosedOn() != null;
+        LocalDate closedOn = year.getClosedOn();
         if (!alreadyClosed) {
-            financialCalendar.closeYear(year, closing);
+            SynapseFinancialYearClose closed = closeYear(client, year.getFinancialCycle(), closing);
+            alreadyClosed = closed.isAlreadyClosed();
+            closedOn = closed.getClosedOn();
         }
-        String nextCycle = financialCalendar.findYearCovering(run.rolledTo()).map(FinancialYear::getFinancialCycle).orElse(null);
+        String nextCycle = calendar.getNextYear() == null ? null : calendar.getNextYear().getFinancialCycle();
         return detail("yearChanged", true, "financialCycle", year.getFinancialCycle(), "startDate", year.getStartDate().toString(),
                 "endDate", year.getEndDate().toString(), "officesClosedThrough", offices.size(), "closedOn", closedOn.toString(),
                 "alreadyClosed", alreadyClosed, "nextFinancialCycle", nextCycle);
+    }
+
+    /** Synapse stamps the year once; a resumed run is answered with the date already stored. */
+    private SynapseFinancialYearClose closeYear(SynapseTransactionClient client, String cycle, LocalDate closing) {
+        SynapseFinancialYearClose closed;
+        try {
+            closed = client.closeFinancialYear(cycle, closing);
+        } catch (SynapsePostingException e) {
+            throw new EodStepFailedException(CODE_YEAR_CLOSE, "Synapse did not close " + cycle + ": " + e.getMessage(), e);
+        }
+        if (closed == null || closed.getClosedOn() == null) {
+            throw new EodStepFailedException(CODE_YEAR_CLOSE, "Synapse answered the close of " + cycle + " without a closing date");
+        }
+        return closed;
     }
 
     private List<String> officesNotClosedThrough(List<Office> offices, LocalDate date) {

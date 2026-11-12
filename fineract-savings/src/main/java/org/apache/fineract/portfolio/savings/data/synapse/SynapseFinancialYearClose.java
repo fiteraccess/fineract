@@ -16,17 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.organisation.financialcalendar.data;
+package org.apache.fineract.portfolio.savings.data.synapse;
 
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.time.LocalDate;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-/**
- * A financial year as the API shows it; dates are ISO yyyy-MM-dd, as the API accepts them. {@code closedOn} is the
- * business date of the EOD run that closed the year, null while it is open.
- */
-public record FinancialYearData(String financialCycle, String description, String startDate, String endDate, boolean holidaysConfirmed,
-        String closedOn, List<FinancialPeriodData> periods) {
+/** Synapse's answer to closing a financial year: the stored date, and whether an earlier call had already closed it. */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class SynapseFinancialYearClose {
 
-    public record FinancialPeriodData(String periodCode, String startDate, String endDate) {
-    }
+    private String financialCycle;
+    private LocalDate closedOn;
+    private boolean alreadyClosed;
 }

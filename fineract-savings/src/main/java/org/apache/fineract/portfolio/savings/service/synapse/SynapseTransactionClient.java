@@ -28,6 +28,9 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateReq
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseFinancialYearClose;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseFinancialYearCloseRequest;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRun;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRunRequest;
@@ -53,6 +56,8 @@ public class SynapseTransactionClient {
     private static final String EOD_REPLAY_STATUS_PATH = "/api/v1/proxy/eod/replay-status";
     private static final String EOD_MIRROR_RUNS_PATH = "/api/v1/proxy/eod/mirror-runs";
     private static final String EOD_ZERO_CHECKS_PATH = "/api/v1/proxy/eod/zero-checks";
+    private static final String EOD_CALENDAR_PATH = "/api/v1/proxy/eod/calendar";
+    private static final String EOD_FINANCIAL_YEARS_PATH = "/api/v1/proxy/eod/financial-years";
     private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
 
     private final RestTemplate restTemplate;
@@ -63,6 +68,8 @@ public class SynapseTransactionClient {
     private final String eodReplayStatusUrl;
     private final String eodMirrorRunsUrl;
     private final String eodZeroChecksUrl;
+    private final String eodCalendarUrl;
+    private final String eodFinancialYearsUrl;
     private final String apiKey;
 
     @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW")
@@ -79,6 +86,8 @@ public class SynapseTransactionClient {
         this.eodReplayStatusUrl = baseUrl + EOD_REPLAY_STATUS_PATH;
         this.eodMirrorRunsUrl = baseUrl + EOD_MIRROR_RUNS_PATH;
         this.eodZeroChecksUrl = baseUrl + EOD_ZERO_CHECKS_PATH;
+        this.eodCalendarUrl = baseUrl + EOD_CALENDAR_PATH;
+        this.eodFinancialYearsUrl = baseUrl + EOD_FINANCIAL_YEARS_PATH;
         this.apiKey = apiKey;
     }
 
@@ -194,6 +203,21 @@ public class SynapseTransactionClient {
 
     public SynapseZeroCheck getZeroCheck(LocalDate businessDate) {
         return get(eodZeroChecksUrl + "/" + businessDate, SynapseZeroCheck.class, "zero check");
+    }
+
+    /**
+     * The financial period and year covering {@code closing} and {@code next}, and what stops a roll into a new year.
+     */
+    public SynapseEodCalendar getEodCalendar(LocalDate closing, LocalDate next) {
+        return get(eodCalendarUrl + "?closing=" + closing + "&next=" + next, SynapseEodCalendar.class, "EOD calendar");
+    }
+
+    /**
+     * Marks {@code financialCycle} closed by the run that closed {@code closedOn}; a repeat answers the stored date.
+     */
+    public SynapseFinancialYearClose closeFinancialYear(String financialCycle, LocalDate closedOn) {
+        return postEod(eodFinancialYearsUrl + "/" + financialCycle + "/close", new SynapseFinancialYearCloseRequest(closedOn.toString()),
+                SynapseFinancialYearClose.class, "financial-year close cycle=" + financialCycle + " closedOn=" + closedOn);
     }
 
     private <ReqT, ResT> ResT postEod(String url, ReqT body, Class<ResT> responseType, String what) {

@@ -22,24 +22,24 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.fineract.accounting.closure.service.GLClosureWritePlatformService;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
-import org.apache.fineract.organisation.financialcalendar.domain.FinancialPeriod;
-import org.apache.fineract.organisation.financialcalendar.service.FinancialCalendarService;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepository;
 import org.apache.fineract.portfolio.eod.domain.EodException;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
 import org.apache.fineract.portfolio.eod.service.EodRunService;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
  * The month-end step: once the roll has left the closing day's period, closes every office's books through the period's
  * last day, so nothing can post into it again. The plan places it after every step that posts into the period, and a
  * closure binds only its own office, hence every office. Every other night it records that the period did not change.
- * The EOD run on a month's last business day is the month-end run; there is no separate job.
+ * The EOD run on a month's last business day is the month-end run; there is no separate job. Periods live in Synapse.
  */
 @Component
 public class EodMonthEndStep extends AbstractEodStep {
@@ -47,14 +47,14 @@ public class EodMonthEndStep extends AbstractEodStep {
     public static final String NAME = "EOD_MONTH_END";
     public static final String CODE_PERIOD_UNKNOWN = "EOD-PERIOD-UNKNOWN";
 
-    private final FinancialCalendarService financialCalendar;
+    private final ObjectProvider<SynapseTransactionClient> synapseClient;
     private final GLClosureWritePlatformService closures;
     private final OfficeRepository officeRepository;
 
-    public EodMonthEndStep(EodRunService runService, FineractProperties properties, FinancialCalendarService financialCalendar,
+    public EodMonthEndStep(EodRunService runService, FineractProperties properties, ObjectProvider<SynapseTransactionClient> synapseClient,
             GLClosureWritePlatformService closures, OfficeRepository officeRepository) {
         super(runService, properties);
-        this.financialCalendar = financialCalendar;
+        this.synapseClient = synapseClient;
         this.closures = closures;
         this.officeRepository = officeRepository;
     }
@@ -62,14 +62,13 @@ public class EodMonthEndStep extends AbstractEodStep {
     @Override
     protected Map<String, Object> run(EodRun run, EodStep step) {
         LocalDate closing = run.getBusinessDate();
-        Optional<FinancialPeriod> found = financialCalendar.findPeriodCovering(closing);
-        if (found.isEmpty()) {
+        SynapseEodCalendar.Period period = readCalendar(requireSynapse(synapseClient), closing, run.rolledTo()).getClosingPeriod();
+        if (period == null) {
             runService.recordException(run, NAME, EodException.SEVERITY_WARN, CODE_PERIOD_UNKNOWN,
                     "no financial period covers " + closing + "; its books cannot be closed by EOD", null);
             return detail("periodChanged", false, "reason", "no financial period covers " + closing);
         }
-        FinancialPeriod period = found.get();
-        String cycle = period.getFinancialYear().getFinancialCycle();
+        String cycle = period.getFinancialCycle();
         if (!run.rolledTo().isAfter(period.getEndDate())) {
             return detail("periodChanged", false, "period", period.getPeriodCode(), "financialCycle", cycle);
         }

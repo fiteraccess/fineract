@@ -45,6 +45,8 @@ import org.apache.fineract.portfolio.savings.data.synapse.SynapseBatchPostingRes
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateResponse;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusInstruction;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseDormancyStatusResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseFinancialYearClose;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseInterestPostingBatch;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseMirrorRun;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapsePostingResult;
@@ -410,6 +412,69 @@ class SynapseTransactionClientTest {
             assertEquals(null, ran.getChecks().get(1).getActual());
             assertEquals("UNVERIFIED", read.getChecks().get(1).getResult());
             mockServer.verify();
+        }
+
+        @Test
+        void readsTheFinancialCalendarForARoll() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/calendar?closing=2026-12-30&next=2027-01-02"))
+                    .andExpect(method(HttpMethod.GET)).andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
+                    .andExpect(header(TENANT_HEADER, TENANT_ID))
+                    .andRespond(withSuccess("{\"closing\":\"2026-12-30\",\"next\":\"2027-01-02\","
+                            + "\"closingPeriod\":{\"financialCycle\":\"FY2026\",\"periodCode\":\"M12\",\"startDate\":\"2026-12-01\",\"endDate\":\"2026-12-31\"},"
+                            + "\"closingYear\":{\"financialCycle\":\"FY2026\",\"startDate\":\"2026-01-01\",\"endDate\":\"2026-12-31\",\"holidaysConfirmed\":true,\"closedOn\":null},"
+                            + "\"nextPeriod\":null,\"nextYear\":null,"
+                            + "\"yearReadinessProblems\":[\"FY2027 holidays are not confirmed\"]}", MediaType.APPLICATION_JSON));
+
+            SynapseEodCalendar calendar = client.getEodCalendar(LocalDate.of(2026, 12, 30), LocalDate.of(2027, 1, 2));
+
+            assertEquals("M12", calendar.getClosingPeriod().getPeriodCode());
+            assertEquals(LocalDate.of(2026, 12, 31), calendar.getClosingPeriod().getEndDate());
+            assertEquals("FY2026", calendar.getClosingYear().getFinancialCycle());
+            assertEquals(null, calendar.getClosingYear().getClosedOn());
+            assertEquals(null, calendar.getNextPeriod());
+            assertEquals(null, calendar.getNextYear());
+            assertEquals(List.of("FY2027 holidays are not confirmed"), calendar.getYearReadinessProblems());
+            mockServer.verify();
+        }
+
+        @Test
+        void aCalendarOutageIsAPostingExceptionWithTheCause() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/calendar?closing=2026-12-30&next=2027-01-02"))
+                    .andRespond(withServerError());
+
+            SynapsePostingException thrown = assertThrows(SynapsePostingException.class,
+                    () -> client.getEodCalendar(LocalDate.of(2026, 12, 30), LocalDate.of(2027, 1, 2)));
+
+            assertTrue(thrown.getMessage().contains("EOD calendar"));
+            assertTrue(thrown.getCause() instanceof RestClientResponseException);
+        }
+
+        @Test
+        void closesAFinancialYear_andReadsBackTheStoredDate() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/financial-years/FY2026/close")).andExpect(method(HttpMethod.POST))
+                    .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token")).andExpect(header(TENANT_HEADER, TENANT_ID))
+                    .andExpect(jsonPath("$.closedOn").value("2026-12-30"))
+                    .andRespond(withSuccess("{\"financialCycle\":\"FY2026\",\"closedOn\":\"2026-12-30\",\"alreadyClosed\":false}",
+                            MediaType.APPLICATION_JSON));
+
+            SynapseFinancialYearClose closed = client.closeFinancialYear("FY2026", LocalDate.of(2026, 12, 30));
+
+            assertEquals("FY2026", closed.getFinancialCycle());
+            assertEquals(LocalDate.of(2026, 12, 30), closed.getClosedOn());
+            assertEquals(false, closed.isAlreadyClosed());
+            mockServer.verify();
+        }
+
+        @Test
+        void anUnknownFinancialYearKeepsSynapsesReason() {
+            mockServer.expect(requestTo(BASE_URL + "/api/v1/proxy/eod/financial-years/FY2099/close"))
+                    .andRespond(withStatus(HttpStatus.NOT_FOUND).body("No financial year FY2099"));
+
+            SynapsePostingException thrown = assertThrows(SynapsePostingException.class,
+                    () -> client.closeFinancialYear("FY2099", LocalDate.of(2026, 12, 30)));
+
+            assertTrue(thrown.getMessage().contains("404"));
+            assertTrue(thrown.getMessage().contains("No financial year FY2099"));
         }
 
         @Test

@@ -20,6 +20,7 @@ package org.apache.fineract.cob.eod;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -32,6 +33,8 @@ import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
 import org.apache.fineract.portfolio.eod.exception.EodStepFailedException;
 import org.apache.fineract.portfolio.eod.service.EodRunService;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
+import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.ResourceAccessException;
@@ -50,6 +53,7 @@ public abstract class AbstractEodStep implements EodBusinessStep {
     public static final String CODE_TIMEOUT = "EOD-STEP-TIMEOUT";
     public static final String CODE_ERROR = "EOD-STEP-ERROR";
     public static final String CODE_SYNAPSE_DISABLED = "EOD-SYNAPSE-DISABLED";
+    public static final String CODE_CALENDAR_UNAVAILABLE = "EOD-CALENDAR-UNAVAILABLE";
     public static final String CODE_SYNAPSE_REFUSED = "EOD-SYNAPSE-REFUSED";
     public static final String CODE_POLL_ERROR = "EOD-POLL-ERROR";
 
@@ -210,6 +214,25 @@ public abstract class AbstractEodStep implements EodBusinessStep {
                     "fineract.synapse.enabled is off: " + getEnumStyledName() + " needs Synapse");
         }
         return client;
+    }
+
+    /**
+     * Financial years and periods live in Synapse: the period and year covering the closing day and N, and what stops a
+     * roll into a new year. No answer fails the step, so nothing is closed or rolled on a guess.
+     */
+    protected SynapseEodCalendar readCalendar(SynapseTransactionClient client, LocalDate closing, LocalDate next) {
+        SynapseEodCalendar calendar;
+        try {
+            calendar = client.getEodCalendar(closing, next);
+        } catch (SynapsePostingException e) {
+            throw new EodStepFailedException(CODE_CALENDAR_UNAVAILABLE,
+                    "Synapse did not answer the financial calendar for " + closing + " to " + next + ": " + e.getMessage(), e);
+        }
+        if (calendar == null) {
+            throw new EodStepFailedException(CODE_CALENDAR_UNAVAILABLE,
+                    "Synapse answered the financial calendar for " + closing + " to " + next + " with no body");
+        }
+        return calendar;
     }
 
     protected void sleep(Duration interval) {

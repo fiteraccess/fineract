@@ -20,7 +20,6 @@ package org.apache.fineract.cob.eod;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +31,13 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.exception.AbstractPlatformException;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
-import org.apache.fineract.organisation.financialcalendar.service.FinancialCalendarService;
 import org.apache.fineract.portfolio.eod.domain.EodException;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
 import org.apache.fineract.portfolio.eod.exception.EodStepFailedException;
 import org.apache.fineract.portfolio.eod.service.EodRunService;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
 import org.springframework.beans.factory.ObjectProvider;
@@ -67,19 +66,17 @@ public class EodRolloverStep extends AbstractEodStep {
     private final BusinessDateWritePlatformService businessDateWritePlatformService;
     private final ObjectProvider<SynapseTransactionClient> synapseClient;
     private final NextBusinessDate nextBusinessDate;
-    private final FinancialCalendarService financialCalendar;
 
     public EodRolloverStep(EodRunService runService, FineractProperties properties, ConfigurationDomainService configurationDomainService,
             BusinessDateReadPlatformService businessDateReadPlatformService,
             BusinessDateWritePlatformService businessDateWritePlatformService, ObjectProvider<SynapseTransactionClient> synapseClient,
-            NextBusinessDate nextBusinessDate, FinancialCalendarService financialCalendar) {
+            NextBusinessDate nextBusinessDate) {
         super(runService, properties);
         this.configurationDomainService = configurationDomainService;
         this.businessDateReadPlatformService = businessDateReadPlatformService;
         this.businessDateWritePlatformService = businessDateWritePlatformService;
         this.synapseClient = synapseClient;
         this.nextBusinessDate = nextBusinessDate;
-        this.financialCalendar = financialCalendar;
     }
 
     /**
@@ -102,7 +99,12 @@ public class EodRolloverStep extends AbstractEodStep {
         if (current == null) {
             throw new EodStepFailedException(CODE_PREFLIGHT, "Fineract has no BUSINESS_DATE row to advance");
         }
-        LocalDate next = run.getNextBusinessDate() != null ? run.getNextBusinessDate() : planNext(closing);
+        SynapseTransactionClient client = synapseClient.getIfAvailable();
+        if (client == null) {
+            throw new EodStepFailedException(CODE_SYNAPSE_DISABLED,
+                    "fineract.synapse.enabled is off: Synapse cannot be told the business date");
+        }
+        LocalDate next = run.getNextBusinessDate() != null ? run.getNextBusinessDate() : planNext(client, closing);
         boolean alreadyRolled = next.equals(current);
         if (!alreadyRolled && !closing.equals(current)) {
             throw new EodStepFailedException(CODE_PREFLIGHT,
@@ -127,11 +129,6 @@ public class EodRolloverStep extends AbstractEodStep {
         }
         useClosingDates(closing, next);
 
-        SynapseTransactionClient client = synapseClient.getIfAvailable();
-        if (client == null) {
-            throw new EodStepFailedException(CODE_SYNAPSE_DISABLED,
-                    "fineract.synapse.enabled is off: Synapse cannot be told the business date");
-        }
         SynapseBusinessDateResponse pushed;
         try {
             pushed = client.postBusinessDate(next, closing);
@@ -143,20 +140,18 @@ public class EodRolloverStep extends AbstractEodStep {
     }
 
     /**
-     * Resolves N and refuses it unless the calendar is ready: entering a new year needs that year's twelve periods and
-     * confirmed holidays (checked before trusting a walk through its holidays), and N needs a period of its own.
+     * Resolves N and refuses it unless Synapse's financial calendar is ready: entering a new year needs that year's
+     * twelve periods and confirmed holidays, and N needs a period of its own. Nothing has moved yet when this halts.
      */
-    private LocalDate planNext(LocalDate closing) {
+    private LocalDate planNext(SynapseTransactionClient client, LocalDate closing) {
         LocalDate next = nextBusinessDate.after(closing);
-        List<String> notReady = new ArrayList<>();
-        for (int year = closing.getYear() + 1; year <= next.getYear(); year++) {
-            notReady.addAll(financialCalendar.findYearReadinessProblems(year));
-        }
+        SynapseEodCalendar calendar = readCalendar(client, closing, next);
+        List<String> notReady = calendar.getYearReadinessProblems();
         if (!notReady.isEmpty()) {
             throw new EodStepFailedException(CODE_YEAR_NOT_READY,
                     "cannot roll from " + closing + " into " + next.getYear() + ": " + String.join("; ", notReady));
         }
-        if (financialCalendar.findPeriodCovering(next).isEmpty()) {
+        if (calendar.getNextPeriod() == null) {
             throw new EodStepFailedException(CODE_PERIOD_MISSING, "no financial period covers the next business date " + next
                     + " (expected " + String.format("M%02d", next.getMonthValue()) + "); the business date stays " + closing);
         }

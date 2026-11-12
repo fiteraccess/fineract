@@ -16,13 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.organisation.financialcalendar.exception;
+package org.apache.fineract.portfolio.savings.data.synapse;
 
-import org.apache.fineract.infrastructure.core.exception.AbstractPlatformResourceNotFoundException;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-public class FinancialYearNotFoundException extends AbstractPlatformResourceNotFoundException {
+/** Tells Synapse the closing business date (yyyy-MM-dd) of the EOD run that left a financial year. */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class SynapseFinancialYearCloseRequest {
 
-    public FinancialYearNotFoundException(String financialCycle) {
-        super("error.msg.financialyear.not.found", "Financial year " + financialCycle + " does not exist", financialCycle);
-    }
+    private String closedOn;
 }

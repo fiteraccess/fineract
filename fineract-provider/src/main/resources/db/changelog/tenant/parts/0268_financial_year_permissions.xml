@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    Permissions for the financial years and periods (M01..M12) that Synapse keeps: its financial-years admin API
+    authorises against READ/UPDATE/DELETE, and CLOSE is what the EOD year-end step needs to mark a year closed.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="1" author="fiteraccess">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'READ_FINANCIALYEAR'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="organisation"/>
+            <column name="code" value="READ_FINANCIALYEAR"/>
+            <column name="entity_name" value="FINANCIALYEAR"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+    <changeSet id="2" author="fiteraccess">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'UPDATE_FINANCIALYEAR'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="organisation"/>
+            <column name="code" value="UPDATE_FINANCIALYEAR"/>
+            <column name="entity_name" value="FINANCIALYEAR"/>
+            <column name="action_name" value="UPDATE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+    <changeSet id="3" author="fiteraccess">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'DELETE_FINANCIALYEAR'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="organisation"/>
+            <column name="code" value="DELETE_FINANCIALYEAR"/>
+            <column name="entity_name" value="FINANCIALYEAR"/>
+            <column name="action_name" value="DELETE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+    <changeSet id="4" author="fiteraccess">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM m_permission WHERE code = 'CLOSE_FINANCIALYEAR'</sqlCheck>
+        </preConditions>
+        <insert tableName="m_permission">
+            <column name="grouping" value="organisation"/>
+            <column name="code" value="CLOSE_FINANCIALYEAR"/>
+            <column name="entity_name" value="FINANCIALYEAR"/>
+            <column name="action_name" value="CLOSE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

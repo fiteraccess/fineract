@@ -35,7 +35,6 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.fineract.infrastructure.businessdate.data.service.BusinessDateDTO;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.businessdate.exception.BusinessDateActionException;
@@ -43,14 +42,12 @@ import org.apache.fineract.infrastructure.businessdate.service.BusinessDateReadP
 import org.apache.fineract.infrastructure.businessdate.service.BusinessDateWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
-import org.apache.fineract.organisation.financialcalendar.domain.FinancialPeriod;
-import org.apache.fineract.organisation.financialcalendar.domain.FinancialYear;
-import org.apache.fineract.organisation.financialcalendar.service.FinancialCalendarService;
 import org.apache.fineract.portfolio.eod.domain.EodException;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.exception.EodStepFailedException;
 import org.apache.fineract.portfolio.eod.service.EodRunService;
 import org.apache.fineract.portfolio.savings.data.synapse.SynapseBusinessDateResponse;
+import org.apache.fineract.portfolio.savings.data.synapse.SynapseEodCalendar;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
 import org.junit.jupiter.api.AfterEach;
@@ -69,7 +66,6 @@ class EodRolloverStepTest {
     private BusinessDateWritePlatformService businessDateWrite;
     private SynapseTransactionClient synapse;
     private NextBusinessDate nextBusinessDate;
-    private FinancialCalendarService calendar;
     private EodRolloverStep underTest;
     private EodRun run;
 
@@ -83,11 +79,10 @@ class EodRolloverStepTest {
         businessDateWrite = mock(BusinessDateWritePlatformService.class);
         synapse = mock(SynapseTransactionClient.class);
         nextBusinessDate = mock(NextBusinessDate.class);
-        calendar = mock(FinancialCalendarService.class);
         ObjectProvider<SynapseTransactionClient> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(synapse);
         underTest = new EodRolloverStep(runService, EodStepTestSupport.fastProperties(), configuration, businessDateRead, businessDateWrite,
-                provider, nextBusinessDate, calendar);
+                provider, nextBusinessDate);
         run = EodStepTestSupport.run();
         EodStepTestSupport.freshCheckpoints(runService, run);
         when(configuration.isBusinessDateEnabled()).thenReturn(true);
@@ -145,6 +140,7 @@ class EodRolloverStepTest {
             underTest.execute(run);
 
             verify(nextBusinessDate, never()).after(any());
+            verify(synapse, never()).getEodCalendar(any(), any());
             verify(runService, never()).saveNextBusinessDate(any(), any());
             verify(businessDateWrite, never()).updateBusinessDate(any());
             verify(synapse).postBusinessDate(afterBoxingDay, christmasEve);
@@ -156,11 +152,12 @@ class EodRolloverStepTest {
 
         @Test
         void aNextDateWithoutAPeriodHalts_namingIt_andDoesNotMove() {
+            LocalDate lastOfJune = LocalDate.of(2026, 6, 30);
             LocalDate firstOfJuly = LocalDate.of(2026, 7, 1);
-            run.setBusinessDate(firstOfJuly.minusDays(1));
-            fineractIsOn(firstOfJuly.minusDays(1));
-            when(nextBusinessDate.after(firstOfJuly.minusDays(1))).thenReturn(firstOfJuly);
-            when(calendar.findPeriodCovering(firstOfJuly)).thenReturn(Optional.empty());
+            run.setBusinessDate(lastOfJune);
+            fineractIsOn(lastOfJune);
+            when(nextBusinessDate.after(lastOfJune)).thenReturn(firstOfJuly);
+            when(synapse.getEodCalendar(lastOfJune, firstOfJuly)).thenReturn(calendar(lastOfJune, firstOfJuly, null, List.of()));
 
             EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
 
@@ -172,38 +169,54 @@ class EodRolloverStepTest {
         @Test
         void theRollIntoANewYearHaltsWhenThatYearIsNotReady() {
             LocalDate newYearsEve = LocalDate.of(2026, 12, 31);
+            LocalDate newYearsDay = LocalDate.of(2027, 1, 1);
             run.setBusinessDate(newYearsEve);
             fineractIsOn(newYearsEve);
-            when(nextBusinessDate.after(newYearsEve)).thenReturn(LocalDate.of(2027, 1, 1));
-            when(calendar.findYearReadinessProblems(2027)).thenReturn(List.of("FY2027 holidays are not confirmed"));
+            when(nextBusinessDate.after(newYearsEve)).thenReturn(newYearsDay);
+            when(synapse.getEodCalendar(newYearsEve, newYearsDay)).thenReturn(calendar(newYearsEve, newYearsDay, period(newYearsDay),
+                    List.of("FY2027 has 11 of 12 periods (missing M07)", "FY2027 holidays are not confirmed")));
 
             EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
 
             assertEquals(EodRolloverStep.CODE_YEAR_NOT_READY, thrown.getCode());
-            assertTrue(thrown.getMessage().contains("FY2027 holidays are not confirmed"), thrown.getMessage());
+            assertEquals(
+                    "cannot roll from 2026-12-31 into 2027: FY2027 has 11 of 12 periods (missing M07); FY2027 holidays are not confirmed",
+                    thrown.getMessage());
             assertNothingMoved();
         }
 
         @Test
-        void aHolidayOnNewYearsDayStillChecksTheNewYear_andRollsToTheSecond() {
+        void aHolidayOnNewYearsDayRollsToTheSecondOnceSynapseReportsTheNewYearReady() {
             LocalDate newYearsEve = LocalDate.of(2026, 12, 31);
             LocalDate second = LocalDate.of(2027, 1, 2);
             run.setBusinessDate(newYearsEve);
             fineractIsOn(newYearsEve);
             rollsTo(newYearsEve, second);
-            when(calendar.findYearReadinessProblems(2027)).thenReturn(List.of());
 
             underTest.execute(run);
 
-            verify(calendar).findYearReadinessProblems(2027);
+            verify(synapse).getEodCalendar(newYearsEve, second);
             verify(businessDateWrite).updateBusinessDate(eq(moveTo(second)));
         }
 
+        /** The calendar lives in Synapse: without its answer the date must not move on a guess. */
         @Test
-        void aRollWithinTheYearDoesNotCheckYearReadiness() {
-            underTest.execute(run);
+        void aCalendarSynapseCannotAnswerHaltsBeforeTheDateMoves() {
+            when(synapse.getEodCalendar(D, NEXT)).thenThrow(new SynapsePostingException("connection error", null));
 
-            verify(calendar, never()).findYearReadinessProblems(org.mockito.ArgumentMatchers.anyInt());
+            EodStepFailedException thrown = assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
+
+            assertEquals(AbstractEodStep.CODE_CALENDAR_UNAVAILABLE, thrown.getCode());
+            assertNothingMoved();
+        }
+
+        @Test
+        void aCalendarAnswerWithoutABodyHaltsBeforeTheDateMoves() {
+            when(synapse.getEodCalendar(D, NEXT)).thenReturn(null);
+
+            assertEquals(AbstractEodStep.CODE_CALENDAR_UNAVAILABLE,
+                    assertThrows(EodStepFailedException.class, () -> underTest.execute(run)).getCode());
+            assertNothingMoved();
         }
 
         private void assertNothingMoved() {
@@ -274,19 +287,29 @@ class EodRolloverStepTest {
         ObjectProvider<SynapseTransactionClient> absent = mock(ObjectProvider.class);
         when(absent.getIfAvailable()).thenReturn(null);
         underTest = new EodRolloverStep(runService, EodStepTestSupport.fastProperties(), configuration, businessDateRead, businessDateWrite,
-                absent, nextBusinessDate, calendar);
+                absent, nextBusinessDate);
 
         assertEquals(AbstractEodStep.CODE_SYNAPSE_DISABLED,
                 assertThrows(EodStepFailedException.class, () -> underTest.execute(run)).getCode());
+        verify(businessDateWrite, never()).updateBusinessDate(any());
     }
 
     private void rollsTo(LocalDate closing, LocalDate next) {
         when(nextBusinessDate.after(closing)).thenReturn(next);
-        when(calendar.findPeriodCovering(next)).thenReturn(Optional.of(FinancialPeriod.create(FinancialYear.create("FY" + next.getYear()),
-                String.format("M%02d", next.getMonthValue()), next.withDayOfMonth(1), next.withDayOfMonth(next.lengthOfMonth()))));
+        when(synapse.getEodCalendar(closing, next)).thenReturn(calendar(closing, next, period(next), List.of()));
         SynapseBusinessDateResponse pushed = new SynapseBusinessDateResponse();
         pushed.setBusinessDate(next);
         when(synapse.postBusinessDate(next, closing)).thenReturn(pushed);
+    }
+
+    private static SynapseEodCalendar calendar(LocalDate closing, LocalDate next, SynapseEodCalendar.Period nextPeriod,
+            List<String> yearReadinessProblems) {
+        return new SynapseEodCalendar(closing, next, period(closing), null, nextPeriod, null, yearReadinessProblems);
+    }
+
+    private static SynapseEodCalendar.Period period(LocalDate date) {
+        return new SynapseEodCalendar.Period("FY" + date.getYear(), String.format("M%02d", date.getMonthValue()), date.withDayOfMonth(1),
+                date.withDayOfMonth(date.lengthOfMonth()));
     }
 
     private static BusinessDateDTO moveTo(LocalDate date) {
