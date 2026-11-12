@@ -107,7 +107,7 @@ public class EodCloseOfBusinessTasklet implements Tasklet {
         try {
             requireRunnablePlan();
             if (runService.findStep(run, EodRolloverStep.NAME).map(EodStep::isCompleted).orElse(false)) {
-                EodRolloverStep.useClosingDates(businessDate);
+                EodRolloverStep.useClosingDates(businessDate, run.rolledTo());
             }
             for (var step : executionMap().entrySet()) {
                 cobBusinessStepService.run(new TreeMap<>(Map.of(step.getKey(), step.getValue())), run);

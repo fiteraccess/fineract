@@ -78,6 +78,8 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
             final Set<Office> offices = getSelectedOffices(command);
 
             final Holiday holiday = Holiday.createNew(offices, command);
+            rejectProcessedDates(holiday.getFromDate());
+            holiday.activate();
 
             this.holidayRepository.saveAndFlush(holiday);
 
@@ -102,7 +104,9 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
             this.fromApiJsonDeserializer.validateForUpdate(command.json());
 
             final Holiday holiday = this.holidayRepository.findOneWithNotFoundDetection(command.entityId());
+            rejectProcessedDates(holiday.getFromDate());
             Map<String, Object> changes = holiday.update(command);
+            rejectProcessedDates(holiday.getFromDate());
 
             validateInputDates(holiday.getFromDate(), holiday.getToDate(), holiday.getRepaymentsRescheduledTo());
 
@@ -133,6 +137,7 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
     public CommandProcessingResult activateHoliday(final Long holidayId) {
         this.context.authenticatedUser();
         final Holiday holiday = this.holidayRepository.findOneWithNotFoundDetection(holidayId);
+        rejectProcessedDates(holiday.getFromDate());
 
         holiday.activate();
         this.holidayRepository.saveAndFlush(holiday);
@@ -145,9 +150,23 @@ public class HolidayWritePlatformServiceJpaRepositoryImpl implements HolidayWrit
     public CommandProcessingResult deleteHoliday(final Long holidayId) {
         this.context.authenticatedUser();
         final Holiday holiday = this.holidayRepository.findOneWithNotFoundDetection(holidayId);
+        rejectProcessedDates(holiday.getFromDate());
         holiday.delete();
         this.holidayRepository.saveAndFlush(holiday);
         return new CommandProcessingResultBuilder().withEntityId(holidayId).build();
+    }
+
+    /**
+     * EOD has already rolled past, or is still posting on, every date up to the business date: a holiday there would
+     * rewrite a day that was processed as a working day.
+     */
+    static void rejectProcessedDates(final LocalDate fromDate) {
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+        if (!DateUtils.isAfter(fromDate, businessDate)) {
+            throw new HolidayDateException("holiday.date.already.processed",
+                    "A holiday must start after the business date " + businessDate + "; " + fromDate + " has already been processed",
+                    fromDate.toString(), businessDate.toString());
+        }
     }
 
     private Set<Office> getSelectedOffices(final JsonCommand command) {

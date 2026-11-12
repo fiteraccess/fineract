@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -34,9 +35,12 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.fineract.infrastructure.core.domain.ActionContext;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.domain.EodStep;
@@ -86,6 +90,27 @@ class EodInterestPostingStepTest {
         ThreadLocalContextUtil.reset();
     }
 
+    /**
+     * Posting keeps Fineract's own timing: a period's interest is booked the night its posting date is the closing day.
+     */
+    @Test
+    void postsAsOfTheClosingDay_theDateTheCobContextReads() throws Exception {
+        EodRun run = rolledAndAccrued(D);
+        run.setNextBusinessDate(D.plusDays(3));
+        EodRolloverStep.useClosingDates(D, D.plusDays(3));
+        ThreadLocalContextUtil.setActionContext(ActionContext.COB);
+        when(outbox.countByStatusSince("INTEREST_POSTING", ROLLED_AT_INSTANT)).thenReturn(Map.of());
+        List<LocalDate> cutOffSeenByPosting = new ArrayList<>();
+        doAnswer(invocation -> {
+            cutOffSeenByPosting.add(DateUtils.getBusinessLocalDate());
+            return null;
+        }).when(posting).postInterest(10, 100);
+
+        underTest.execute(run);
+
+        assertEquals(List.of(D), cutOffSeenByPosting);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void nothingDueCompletesAfterPostingWithoutAskingSynapse() throws Exception {
@@ -95,10 +120,23 @@ class EodInterestPostingStepTest {
         underTest.execute(run);
 
         verify(posting).postInterest(10, 100);
-        verify(synapse, never()).getReplayStatus(any());
+        verify(synapse, never()).getReplayStatus(any(), any());
         ArgumentCaptor<Map<String, Object>> detail = ArgumentCaptor.forClass(Map.class);
         verify(runService).completed(any(), detail.capture());
         assertEquals(0, detail.getValue().get("posted"));
+    }
+
+    @Test
+    void acrossAHolidayGapTheWaitCountsInterestRowsDatedUpToTheNextBusinessDate() throws Exception {
+        EodRun run = rolledAndAccrued(D);
+        run.setNextBusinessDate(D.plusDays(4));
+        when(outbox.countByStatusSince("INTEREST_POSTING", ROLLED_AT_INSTANT)).thenReturn(Map.of("SENT", 2L));
+        when(synapse.getReplayStatus(D, D.plusDays(4))).thenReturn(replay(Map.of("POSTED_TO_FINERACT", 2L)));
+
+        underTest.execute(run);
+
+        verify(synapse).getReplayStatus(D, D.plusDays(4));
+        verify(runService).completed(any(), any());
     }
 
     @Test
@@ -106,13 +144,13 @@ class EodInterestPostingStepTest {
         EodRun run = rolledAndAccrued(D);
         when(outbox.countByStatusSince("INTEREST_POSTING", ROLLED_AT_INSTANT)).thenReturn(Map.of("PENDING", 7L),
                 Map.of("PENDING", 2L, "SENT", 5L), Map.of("SENT", 7L));
-        when(synapse.getReplayStatus(D)).thenReturn(replay(Map.of("POSTED_TO_TB", 3L, "POSTED_TO_FINERACT", 4L)),
+        when(synapse.getReplayStatus(D, D.plusDays(1))).thenReturn(replay(Map.of("POSTED_TO_TB", 3L, "POSTED_TO_FINERACT", 4L)),
                 replay(Map.of("POSTED_TO_FINERACT", 7L)));
 
         underTest.execute(run);
 
         verify(posting).postInterest(10, 100);
-        verify(synapse, times(2)).getReplayStatus(D);
+        verify(synapse, times(2)).getReplayStatus(D, D.plusDays(1));
         verify(runService).waiting(any(), any());
         verify(runService).completed(any(), any());
     }
@@ -127,7 +165,7 @@ class EodInterestPostingStepTest {
         });
         when(outbox.countByStatusSince("INTEREST_POSTING", ROLLED_AT_INSTANT)).thenReturn(Map.of("PENDING", 4L), Map.of("PENDING", 4L),
                 Map.of("SENT", 4L));
-        when(synapse.getReplayStatus(D)).thenReturn(replay(Map.of("POSTED_TO_FINERACT", 4L)));
+        when(synapse.getReplayStatus(D, D.plusDays(1))).thenReturn(replay(Map.of("POSTED_TO_FINERACT", 4L)));
 
         underTest.execute(run);
 
@@ -164,7 +202,7 @@ class EodInterestPostingStepTest {
     void anInterestRowThatFailedToReachFineractFailsTheStep() throws Exception {
         EodRun run = rolledAndAccrued(D);
         when(outbox.countByStatusSince("INTEREST_POSTING", ROLLED_AT_INSTANT)).thenReturn(Map.of("SENT", 7L));
-        when(synapse.getReplayStatus(D)).thenReturn(replay(Map.of("POSTED_TO_FINERACT", 6L, "FAILED_POST_TO_FINERACT", 1L)));
+        when(synapse.getReplayStatus(D, D.plusDays(1))).thenReturn(replay(Map.of("POSTED_TO_FINERACT", 6L, "FAILED_POST_TO_FINERACT", 1L)));
 
         assertEquals(EodInterestPostingStep.CODE_POSTING_REPLAY_FAILED,
                 assertThrows(EodStepFailedException.class, () -> underTest.execute(run)).getCode());

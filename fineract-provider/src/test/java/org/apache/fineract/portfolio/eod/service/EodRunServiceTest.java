@@ -79,6 +79,38 @@ class EodRunServiceTest {
         ThreadLocalContextUtil.reset();
     }
 
+    /** Steps save the rolled-to date on reloaded copies of the run; the tasklet's own copy never sees it. */
+    @Test
+    void failingARunKeepsTheRolledToDateAStepStored() {
+        EodRun taskletsCopy = EodRun.start(D, AT);
+        EodRun stored = EodRun.start(D, AT);
+        stored.setNextBusinessDate(D.plusDays(3));
+        when(runs.findById(taskletsCopy.getId())).thenReturn(Optional.of(stored));
+
+        underTest.failRun(taskletsCopy, "mirror refused");
+
+        verify(runs).saveAndFlush(stored);
+        verify(runs, never()).saveAndFlush(taskletsCopy);
+        assertEquals(EodRun.STATUS_FAILED, stored.getStatus());
+        assertEquals("mirror refused", stored.getLastError());
+        assertEquals(D.plusDays(3), stored.rolledTo());
+    }
+
+    @Test
+    void completingARunKeepsTheRolledToDateAStepStored() {
+        EodRun taskletsCopy = EodRun.start(D, AT);
+        EodRun stored = EodRun.start(D, AT);
+        stored.setNextBusinessDate(D.plusDays(3));
+        when(runs.findById(taskletsCopy.getId())).thenReturn(Optional.of(stored));
+
+        underTest.completeRun(taskletsCopy);
+
+        verify(runs).saveAndFlush(stored);
+        verify(runs, never()).saveAndFlush(taskletsCopy);
+        assertEquals(EodRun.STATUS_COMPLETED, stored.getStatus());
+        assertEquals(D.plusDays(3), stored.rolledTo());
+    }
+
     @Test
     void aNewDayStartsARunningRun() {
         when(runs.findByBusinessDate(D)).thenReturn(Optional.empty());

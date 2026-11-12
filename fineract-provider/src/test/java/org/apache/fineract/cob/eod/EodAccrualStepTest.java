@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -34,10 +35,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.exception.MultiException;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.eod.domain.EodRun;
 import org.apache.fineract.portfolio.eod.exception.EodStepFailedException;
@@ -93,6 +98,52 @@ class EodAccrualStepTest {
         verify(runService).completed(any(), detail.capture());
         assertEquals(new BigDecimal("160.00"), detail.getValue().get("accruedTotal"));
         assertEquals(2, ((List<?>) detail.getValue().get("accruedByGl")).size());
+    }
+
+    @Test
+    void beforeAHolidayGapAccruesEveryDayUpToTheNextBusinessDate() throws Exception {
+        run.setNextBusinessDate(D.plusDays(4));
+        when(jdbc.queryForObject(EodAccrualStep.MAX_JOURNAL_ENTRY_ID_SQL, Long.class)).thenReturn(5000L);
+        when(jdbc.queryForList(EodAccrualStep.ACCRUED_BY_GL_SQL, 5000L)).thenReturn(List.of());
+
+        underTest.execute(run);
+
+        verify(accrual).addAccrualEntries(D.plusDays(3));
+        ArgumentCaptor<Map<String, Object>> detail = ArgumentCaptor.forClass(Map.class);
+        verify(runService).completed(any(), detail.capture());
+        assertEquals(D.toString(), detail.getValue().get("fromDate"));
+        assertEquals(D.plusDays(3).toString(), detail.getValue().get("tillDate"));
+    }
+
+    /** The chain runs every step in the COB context, whose date is the closing day: accrual would stop there. */
+    @Test
+    void accruesAsOfTheNextBusinessDate_thoughTheStepRunsInTheCobContext() throws Exception {
+        LocalDate next = D.plusDays(4);
+        run.setNextBusinessDate(next);
+        EodRolloverStep.useClosingDates(D, next);
+        ThreadLocalContextUtil.setActionContext(ActionContext.COB);
+        when(jdbc.queryForObject(EodAccrualStep.MAX_JOURNAL_ENTRY_ID_SQL, Long.class)).thenReturn(5000L);
+        when(jdbc.queryForList(EodAccrualStep.ACCRUED_BY_GL_SQL, 5000L)).thenReturn(List.of());
+        List<LocalDate> cutOffSeenByAccrual = new ArrayList<>();
+        doAnswer(invocation -> {
+            cutOffSeenByAccrual.add(DateUtils.getBusinessLocalDate());
+            return null;
+        }).when(accrual).addAccrualEntries(D.plusDays(3));
+
+        underTest.execute(run);
+
+        assertEquals(List.of(next), cutOffSeenByAccrual);
+        assertEquals(ActionContext.COB, ThreadLocalContextUtil.getActionContext());
+    }
+
+    @Test
+    void aFailedAccrualStillHandsTheCobContextBack() throws Exception {
+        ThreadLocalContextUtil.setActionContext(ActionContext.COB);
+        doThrow(new MultiException(List.of(new RuntimeException("closed period")))).when(accrual).addAccrualEntries(D);
+
+        assertThrows(EodStepFailedException.class, () -> underTest.execute(run));
+
+        assertEquals(ActionContext.COB, ThreadLocalContextUtil.getActionContext());
     }
 
     /**

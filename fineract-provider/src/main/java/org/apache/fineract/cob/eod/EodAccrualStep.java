@@ -19,6 +19,7 @@
 package org.apache.fineract.cob.eod;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +34,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Step 1: accrue savings interest for the closing day, after the gate confirmed Fineract holds the day's transactions.
- * The totals credited to each accrued-interest-payable GL are recorded as the step's detail: the one figure Synapse
- * does not own, declared here for the INTEREST mirror.
+ * Step 1: accrue savings interest for the closing day and every holiday up to the next business date (each day dated
+ * itself), after the gate confirmed Fineract holds the day's transactions. The totals credited to each
+ * accrued-interest-payable GL are recorded as the step's detail: the one figure Synapse does not own, declared here for
+ * the INTEREST mirror.
  */
 @Component
 public class EodAccrualStep extends AbstractEodStep {
@@ -68,12 +70,13 @@ public class EodAccrualStep extends AbstractEodStep {
     @Override
     protected Map<String, Object> run(EodRun run, EodStep step) {
         requirePrerequisite(run, EodReplayDrainGateStep.NAME);
+        LocalDate tillDate = run.rolledTo().minusDays(1);
         Long before = jdbcTemplate.queryForObject(MAX_JOURNAL_ENTRY_ID_SQL, Long.class);
         try {
-            accrualService.addAccrualEntries(run.getBusinessDate());
+            asOfNextBusinessDate(() -> accrualService.addAccrualEntries(tillDate));
         } catch (MultiException e) {
             throw new EodStepFailedException(CODE_ACCRUAL,
-                    "accrual for " + run.getBusinessDate() + " failed for some accounts: " + e.getMessage(), e);
+                    "accrual for " + run.getBusinessDate() + " to " + tillDate + " failed for some accounts: " + e.getMessage(), e);
         }
         List<Map<String, Object>> byGl = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
@@ -82,8 +85,8 @@ public class EodAccrualStep extends AbstractEodStep {
             byGl.add(detail("glCode", row.get("gl_code"), "glName", row.get("name"), "amount", amount));
             total = total.add(amount);
         }
-        return detail("tillDate", run.getBusinessDate().toString(), "accruedByGl", byGl, "accruedTotal", total, "note",
-                "movement booked by this attempt; a retried step reports only its own");
+        return detail("fromDate", run.getBusinessDate().toString(), "tillDate", tillDate.toString(), "accruedByGl", byGl, "accruedTotal",
+                total, "note", "movement booked by this attempt; a retried step reports only its own");
     }
 
     @Override

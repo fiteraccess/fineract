@@ -87,7 +87,7 @@ public class HolidayDataValidator {
         }
 
         LocalDate repaymentsRescheduledTo = null;
-        if (reschedulingType == null || reschedulingType.equals(RescheduleType.RESCHEDULETOSPECIFICDATE.getValue())) {
+        if (RescheduleType.RESCHEDULETOSPECIFICDATE.getValue().equals(reschedulingType)) {
             repaymentsRescheduledTo = this.fromApiJsonHelper.extractLocalDateNamed(HolidayApiConstants.repaymentsRescheduledToParamName,
                     element);
             baseDataValidator.reset().parameter(HolidayApiConstants.repaymentsRescheduledToParamName).value(repaymentsRescheduledTo)

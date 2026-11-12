@@ -18,8 +18,10 @@
  */
 package org.apache.fineract.accounting.closure.service;
 
+import java.time.LocalDate;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.organisation.office.domain.Office;
 
 public interface GLClosureWritePlatformService {
 
@@ -28,5 +30,11 @@ public interface GLClosureWritePlatformService {
     CommandProcessingResult updateGLClosure(Long glClosureId, JsonCommand command);
 
     CommandProcessingResult deleteGLClosure(Long glClosureId);
+
+    /**
+     * Closes {@code office}'s books through {@code closingDate} unless they already are; true when a closure was
+     * created. Used by EOD to close a financial period once the business date has left it.
+     */
+    boolean closeOfficeThrough(Office office, LocalDate closingDate, String comments);
 
 }

@@ -57,7 +57,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
-    @CacheEvict(value = "glClosures", allEntries = true)
+    @CacheEvict(value = { "glClosures", "glClosuresByOfficeId" }, allEntries = true)
     public CommandProcessingResult createGLClosure(final JsonCommand command) {
         try {
             final GLClosureCommand closureCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
@@ -93,7 +93,22 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
-    @CacheEvict(value = "glClosures", allEntries = true)
+    @CacheEvict(value = { "glClosures", "glClosuresByOfficeId" }, allEntries = true)
+    public boolean closeOfficeThrough(final Office office, final LocalDate closingDate, final String comments) {
+        if (DateUtils.isDateInTheFuture(closingDate)) {
+            throw new GLClosureInvalidException(GlClosureInvalidReason.FUTURE_DATE, closingDate);
+        }
+        final GLClosure latest = this.glClosureRepository.getLatestGLClosureByBranch(office.getId());
+        if (latest != null && !DateUtils.isBefore(latest.getClosingDate(), closingDate)) {
+            return false;
+        }
+        this.glClosureRepository.saveAndFlush(new GLClosure(office, closingDate, comments));
+        return true;
+    }
+
+    @Transactional
+    @Override
+    @CacheEvict(value = { "glClosures", "glClosuresByOfficeId" }, allEntries = true)
     public CommandProcessingResult updateGLClosure(final Long glClosureId, final JsonCommand command) {
         final GLClosureCommand closureCommand = this.fromApiJsonDeserializer.commandFromApiJson(command.json());
         closureCommand.validateForUpdate();
@@ -114,7 +129,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
     @Transactional
     @Override
-    @CacheEvict(value = "glClosures", allEntries = true)
+    @CacheEvict(value = { "glClosures", "glClosuresByOfficeId" }, allEntries = true)
     public CommandProcessingResult deleteGLClosure(final Long glClosureId) {
         final GLClosure glClosure = this.glClosureRepository.findById(glClosureId)
                 .orElseThrow(() -> new GLClosureNotFoundException(glClosureId));
