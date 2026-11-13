@@ -64,7 +64,9 @@ import org.apache.fineract.organisation.office.domain.Office;
 @Accessors(chain = true)
 public class Holiday extends AbstractPersistableCustom<Long> {
 
-    @Column(name = "name", unique = true, nullable = false, length = 100)
+    private static final int NAME_LENGTH = 100;
+
+    @Column(name = "name", unique = true, nullable = false, length = NAME_LENGTH)
     private String name;
 
     @Column(name = "from_date", nullable = false)
@@ -252,6 +254,15 @@ public class Holiday extends AbstractPersistableCustom<Long> {
             }
         }
         this.status = HolidayStatusType.DELETED.getValue();
+        this.name = nameFreedForReuse();
+    }
+
+    /**
+     * A name is unique across every holiday ever stored: a deleted one gives it up, so the same day can be added back.
+     */
+    private String nameFreedForReuse() {
+        final String suffix = "#" + getId();
+        return StringUtils.left(this.name, NAME_LENGTH - suffix.length()) + suffix;
     }
 
     public RescheduleType getReScheduleType() {
