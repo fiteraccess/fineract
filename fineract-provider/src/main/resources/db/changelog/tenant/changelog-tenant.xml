@@ -291,4 +291,5 @@
     <include file="parts/0268_financial_year_permissions.xml" relativeToChangelogFile="true" />
     <include file="parts/0269_eod_run_next_business_date.xml" relativeToChangelogFile="true" />
     <include file="parts/0270_eod_month_end_year_end.xml" relativeToChangelogFile="true" />
+    <include file="parts/0271_add_ledger_recon_permissions.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>
