@@ -20,11 +20,12 @@ package org.apache.fineract.portfolio.savings.service;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Orchestrator for the savings daily-balance sync subsystem (§4.2 of the optimization plan).
@@ -51,13 +52,28 @@ import org.springframework.transaction.annotation.Transactional;
  * the next batch run's watermark scan catches the missed ones.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SavingsDailyBalanceSyncService {
 
     private static final int MAX_WINDOW_HOURS = 1;
 
+    /**
+     * Dates re-derived per drain statement. Each batch is its own transaction, so a run after the nightly accrual job,
+     * which touches a date on every interest-bearing account, proceeds in bounded steps instead of one long statement.
+     */
+    static final int DRAIN_BATCH_SIZE = 5_000;
+
     private final SavingsDailyBalanceSyncRepository repo;
+    private final TransactionTemplate transactionTemplate;
+
+    public SavingsDailyBalanceSyncService(final SavingsDailyBalanceSyncRepository repo,
+            final PlatformTransactionManager transactionManager) {
+        this.repo = repo;
+        // Own transactions, whatever the caller has open: the watermark lock is released as soon as the touched dates
+        // are recorded, and each drain batch commits by itself.
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     /**
      * Bounded result of a single {@link #syncNow()} invocation. Used by the tasklet for log lines / metrics.
@@ -75,29 +91,44 @@ public class SavingsDailyBalanceSyncService {
      */
     private static final int UP_TO_PULLBACK_MILLIS = 100;
 
-    @Transactional
+    /**
+     * Records the dates touched since the watermark and advances it, then drains the recorded dates in batches. The
+     * recorded dates are durable, so advancing the watermark first is safe: a drain that fails leaves its dates in the
+     * dirty table for the next run.
+     */
     public SyncResult syncNow() {
+        final SyncResult recorded = this.transactionTemplate.execute(status -> recordTouchedDates());
+        int drained = 0;
+        int batch;
+        do {
+            final Integer drainedInBatch = this.transactionTemplate.execute(status -> this.repo.drainDirty(DRAIN_BATCH_SIZE));
+            batch = drainedInBatch == null ? 0 : drainedInBatch;
+            drained += batch;
+        } while (batch >= DRAIN_BATCH_SIZE);
+        return new SyncResult(recorded.upserted(), drained, recorded.from(), recorded.to());
+    }
+
+    private SyncResult recordTouchedDates() {
         OffsetDateTime watermark = repo.readAndLockWatermark();
         OffsetDateTime upTo = OffsetDateTime.now(ZoneOffset.UTC).minusNanos(UP_TO_PULLBACK_MILLIS * 1_000_000L);
 
         if (!watermark.isBefore(upTo)) {
-            // Edge case: clock skew across replicas pushed watermark past now(). Drain dirty anyway in case a reversal
-            // landed since the previous run, but skip Pass 1 and the watermark advance (would be non-monotonic).
-            int drainedOnly = repo.drainDirty();
-            return new SyncResult(0, drainedOnly, watermark, upTo);
+            // Edge case: clock skew across replicas pushed watermark past now(). The caller still drains, in case a
+            // reversal landed since the previous run, but nothing is recorded and the watermark stays (advancing it
+            // would be non-monotonic).
+            return new SyncResult(0, 0, watermark, upTo);
         }
 
-        int upserted = 0;
+        int recorded = 0;
         OffsetDateTime cursor = watermark;
         while (cursor.plusHours(MAX_WINDOW_HOURS).isBefore(upTo)) {
             OffsetDateTime windowEnd = cursor.plusHours(MAX_WINDOW_HOURS);
-            upserted += repo.syncFromTransactions(cursor, windowEnd);
+            recorded += repo.syncFromTransactions(cursor, windowEnd);
             cursor = windowEnd;
         }
-        upserted += repo.syncFromTransactions(cursor, upTo);
+        recorded += repo.syncFromTransactions(cursor, upTo);
 
-        int drained = repo.drainDirty();
         repo.advanceWatermark(upTo);
-        return new SyncResult(upserted, drained, watermark, upTo);
+        return new SyncResult(recorded, 0, watermark, upTo);
     }
 }

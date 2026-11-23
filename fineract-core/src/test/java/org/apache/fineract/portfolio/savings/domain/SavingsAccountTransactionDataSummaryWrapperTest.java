@@ -62,6 +62,16 @@ class SavingsAccountTransactionDataSummaryWrapperTest {
     }
 
     @Test
+    void withdrawalTotalCountsSignedStatementFeesButNotReversedOnes() {
+        BigDecimal total = wrapper.calculateTotalWithdrawals(NGN,
+                List.of(transaction(SavingsAccountTransactionType.WITHDRAWAL, "100.00", false),
+                        transaction(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "20.00", false),
+                        transaction(SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "20.00", true)));
+
+        assertThat(total).isEqualByComparingTo("120.00");
+    }
+
+    @Test
     void otherDebitsLeaveOutWhatTheNamedTotalsAlreadyCount() {
         BigDecimal total = wrapper.calculateTotalOtherDebits(NGN,
                 List.of(transaction(SavingsAccountTransactionType.WITHDRAWAL, "100.00", false),
@@ -71,8 +81,8 @@ class SavingsAccountTransactionDataSummaryWrapperTest {
                         transaction(SavingsAccountTransactionType.VAT, "0.45", false),
                         transaction(SavingsAccountTransactionType.WITHDRAWAL_FEE, "5.00", false)));
 
-        // signed-statement fee 20 + commission 8 + VAT 0.45 + withdrawal fee 5
-        assertThat(total).isEqualByComparingTo("33.45");
+        // commission 8 + VAT 0.45 + withdrawal fee 5; the signed-statement fee is in the withdrawal total
+        assertThat(total).isEqualByComparingTo("13.45");
     }
 
     @Test

@@ -69,12 +69,14 @@ public interface SavingsDailyBalanceSyncRepository {
     void enqueueDirty(Long savingsAccountId, LocalDate balanceDate);
 
     /**
-     * Pass 2b: drain the dirty set. For each recorded {@code (account, date)}: DELETE the snapshot row if no standing
-     * transaction remains on that date; otherwise UPSERT it from the last standing transaction's
-     * {@code running_balance_derived}. Runs as one statement that consumes exactly the rows it processes, so a pair
-     * enqueued concurrently is left for the next run instead of being discarded.
+     * Pass 2b: drain one batch of the dirty set. For each recorded {@code (account, date)}: DELETE the snapshot row if
+     * no standing transaction remains on that date; otherwise UPSERT it from the last standing transaction's
+     * {@code running_balance_derived}. One statement, which consumes exactly the rows it processes, so a pair enqueued
+     * concurrently is left for a later batch instead of being discarded.
      *
-     * @return number of dirty rows drained
+     * @param batchSize
+     *            the most dirty rows to drain in this call
+     * @return number of dirty rows drained; fewer than {@code batchSize} means the set is empty
      */
-    int drainDirty();
+    int drainDirty(int batchSize);
 }

@@ -71,7 +71,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1303,23 +1305,30 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     }
 
     /**
-     * The running balance at the end of the given date, by the rule {@link #recalculateDailyBalances} applies row by
-     * row: standing credits and hold releases add, standing debits and holds subtract. Used to stamp rows that are
-     * booked outside a full recalculation, so their running balance matches what the next recalculation would write.
+     * The running balance at the end of every date that has a standing transaction, by the rule
+     * {@link #recalculateDailyBalances} applies row by row: standing credits and hold releases add, standing debits and
+     * holds subtract. The balance on any other date is that of the latest earlier entry. Built in one pass, for
+     * stamping rows that are booked outside a full recalculation.
      */
-    public Money runningBalanceAtEndOf(final LocalDate date) {
-        Money balance = Money.zero(this.currency);
+    public NavigableMap<LocalDate, Money> endOfDayRunningBalances() {
+        final NavigableMap<LocalDate, Money> balances = new TreeMap<>();
         for (final SavingsAccountTransaction transaction : this.transactions) {
-            if (transaction.isReversed() || transaction.isReversalTransaction() || transaction.getTransactionDate().isAfter(date)) {
+            if (transaction.isReversed() || transaction.isReversalTransaction()) {
                 continue;
             }
+            final Money amount = transaction.getAmount(this.currency);
             if (transaction.isCredit() || transaction.isAmountRelease()) {
-                balance = balance.plus(transaction.getAmount(this.currency));
+                balances.merge(transaction.getTransactionDate(), amount, Money::plus);
             } else if (transaction.isDebit() || transaction.isAmountOnHold()) {
-                balance = balance.minus(transaction.getAmount(this.currency));
+                balances.merge(transaction.getTransactionDate(), amount.negated(), Money::plus);
             }
         }
-        return balance;
+        Money running = Money.zero(this.currency);
+        for (final Map.Entry<LocalDate, Money> entry : balances.entrySet()) {
+            running = running.plus(entry.getValue());
+            entry.setValue(running);
+        }
+        return balances;
     }
 
     protected void recalculateDailyBalances(final Money openingAccountBalance, final LocalDate interestPostingUpToDate,

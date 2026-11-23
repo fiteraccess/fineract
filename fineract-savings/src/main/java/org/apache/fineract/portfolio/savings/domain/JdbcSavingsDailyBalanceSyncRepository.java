@@ -90,39 +90,32 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
             ON CONFLICT (savings_account_id, balance_date) DO NOTHING
             """;
 
-    // One statement so the work is taken, applied and cleared against a single snapshot of the dirty set. The dirty
-    // rows are consumed by the DELETE ... RETURNING itself; a pair enqueued by a concurrent transaction after this
-    // statement started is simply not part of it and waits for the next run. (The previous TRUNCATE dropped such rows
-    // unprocessed.)
+    // One statement per batch, so each batch is taken, applied and cleared against a single snapshot of the dirty set.
+    // The dirty rows are consumed by the DELETE ... RETURNING itself; a pair enqueued by a concurrent transaction after
+    // the statement started is simply not part of it and waits for a later batch. (The previous TRUNCATE dropped such
+    // rows unprocessed.) SKIP LOCKED keeps two drains from waiting on each other.
+    // - One probe per date: the last standing row, read off the (savings_account_id, transaction_date, id) index.
     // - A date with no standing transaction left loses its snapshot row.
-    // - Any other date takes the running balance of its last standing row.
+    // - Any other date takes the running balance of that last standing row.
     private static final String DRAIN_SQL = """
-            WITH taken AS (
-                DELETE FROM m_savings_daily_balance_dirty
-                RETURNING savings_account_id, balance_date
+            WITH picked AS (
+                SELECT savings_account_id, balance_date
+                FROM m_savings_daily_balance_dirty
+                ORDER BY savings_account_id, balance_date
+                LIMIT :batchSize
+                FOR UPDATE SKIP LOCKED
             ),
-            emptied AS (
-                DELETE FROM m_savings_account_daily_balance s
-                USING taken d
-                WHERE s.savings_account_id = d.savings_account_id
-                  AND s.balance_date       = d.balance_date
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM m_savings_account_transaction t
-                      WHERE t.savings_account_id = d.savings_account_id
-                        AND t.transaction_date   = d.balance_date
-                        AND t.is_reversed = false
-                        AND t.is_reversal = false
-                        AND t.original_transaction_id IS NULL
-                        AND t.running_balance_derived IS NOT NULL
-                  )
-                RETURNING 1
+            taken AS (
+                DELETE FROM m_savings_daily_balance_dirty d
+                USING picked p
+                WHERE d.savings_account_id = p.savings_account_id
+                  AND d.balance_date       = p.balance_date
+                RETURNING d.savings_account_id, d.balance_date
             ),
-            refreshed AS (
-                INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance)
-                SELECT d.savings_account_id, d.balance_date, t.running_balance_derived
+            latest AS (
+                SELECT d.savings_account_id, d.balance_date, t.running_balance_derived AS end_of_day_balance
                 FROM taken d
-                JOIN LATERAL (
+                LEFT JOIN LATERAL (
                     SELECT running_balance_derived
                     FROM m_savings_account_transaction
                     WHERE savings_account_id = d.savings_account_id
@@ -134,6 +127,20 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
                     ORDER BY id DESC
                     LIMIT 1
                 ) t ON TRUE
+            ),
+            emptied AS (
+                DELETE FROM m_savings_account_daily_balance s
+                USING latest l
+                WHERE s.savings_account_id = l.savings_account_id
+                  AND s.balance_date       = l.balance_date
+                  AND l.end_of_day_balance IS NULL
+                RETURNING 1
+            ),
+            refreshed AS (
+                INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance)
+                SELECT savings_account_id, balance_date, end_of_day_balance
+                FROM latest
+                WHERE end_of_day_balance IS NOT NULL
                 ON CONFLICT (savings_account_id, balance_date)
                 DO UPDATE SET end_of_day_balance = EXCLUDED.end_of_day_balance
                 WHERE m_savings_account_daily_balance.end_of_day_balance
@@ -181,8 +188,9 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
     }
 
     @Override
-    public int drainDirty() {
-        final Integer drained = jdbcTemplate.queryForObject(DRAIN_SQL, Collections.emptyMap(), (rs, rowNum) -> rs.getInt("drained"));
+    public int drainDirty(final int batchSize) {
+        final Integer drained = jdbcTemplate.queryForObject(DRAIN_SQL, new MapSqlParameterSource().addValue("batchSize", batchSize),
+                (rs, rowNum) -> rs.getInt("drained"));
         return drained == null ? 0 : drained;
     }
 }
