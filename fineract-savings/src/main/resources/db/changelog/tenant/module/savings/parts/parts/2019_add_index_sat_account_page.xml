@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <!--
+        Covering index for GET /v1/savingsaccounts/{savingsId}/transactions/page.
+        Key order matches the endpoint's keyset (transaction_date, id; DESC, or ASC by backward scan), so a
+        page seeks to its cursor and reads ids in order, stopping at LIMIT with no sort. The INCLUDE columns
+        are the endpoint's filters, so the page-id query is an index-only scan instead of visiting the
+        account's heap pages (an EXPLAIN on a 7k-transaction account showed 358 heap pages read just to
+        count it). The endpoint deliberately runs no COUNT.
+        CREATE INDEX CONCURRENTLY cannot run inside a transaction, hence runInTransaction="false"; the
+        IF NOT EXISTS guard makes a re-run after a manual pre-build a no-op.
+    -->
+    <changeSet author="fineract" id="1" context="postgresql" runInTransaction="false">
+        <sql splitStatements="false">
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sat_account_page
+                ON m_savings_account_transaction (savings_account_id, transaction_date DESC, id DESC)
+                INCLUDE (is_reversed, is_reversal, transaction_type_enum);
+        </sql>
+    </changeSet>
+</databaseChangeLog>
