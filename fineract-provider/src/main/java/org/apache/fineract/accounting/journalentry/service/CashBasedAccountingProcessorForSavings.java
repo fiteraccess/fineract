@@ -69,6 +69,13 @@ public class CashBasedAccountingProcessorForSavings implements AccountingProcess
 
                 this.helper.checkForBranchClosures(savingsDTO.getOfficeId(), transactionDate);
 
+                if (isReversal && AccountingProcessorHelper.isConfigurationRoutedSavingsLeg(savingsTransactionDTO)
+                        && this.helper.appendReversalOfBookedSavingsJournalEntries(office, currencyCode, savingsId, transactionId,
+                                transactionDate, journalEntries)) {
+                    // Contra'd from what was actually booked, not from today's switch/aggregator configuration.
+                    continue;
+                }
+
                 if (savingsTransactionDTO.getTransactionType().isDeposit() && StringUtils.isNotBlank(savingsTransactionDTO.getSwitchId())) {
                     createNipDepositJournalEntries(savingsProductId, savingsId, currencyCode, journalEntries, savingsTransactionDTO,
                             transactionDate, transactionId, office, paymentTypeId, isReversal, amount, overdraftAmount);

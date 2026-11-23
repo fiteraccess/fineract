@@ -180,8 +180,7 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         when(account.depositAccountType()).thenReturn(DepositAccountType.SAVINGS_DEPOSIT);
         when(account.getWithdrawableBalanceWithoutMinimumBalance()).thenReturn(BigDecimal.valueOf(5));
         when(account.getSummary()).thenReturn(summary);
-        when(summary.getAccountBalance()).thenReturn(BigDecimal.valueOf(15));
-        when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.valueOf(15)));
+        trackPostedBalance(account, summary, currency, BigDecimal.valueOf(15));
         when(account.getOnHoldFunds()).thenReturn(BigDecimal.valueOf(6));
         when(account.getSavingsHoldAmount()).thenReturn(BigDecimal.valueOf(4));
         when(account.getSubStatus()).thenReturn(0);
@@ -244,8 +243,7 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         when(account.allowDeposit()).thenReturn(true);
         when(account.getActivationDate()).thenReturn(BUSINESS_DATE.minusYears(1));
         when(account.getSummary()).thenReturn(summary);
-        when(summary.getAccountBalance()).thenReturn(BigDecimal.valueOf(-30));
-        when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.valueOf(-30)));
+        trackPostedBalance(account, summary, currency, BigDecimal.valueOf(-30));
         when(account.getOnHoldFunds()).thenReturn(BigDecimal.ZERO);
         when(account.getSavingsHoldAmount()).thenReturn(BigDecimal.ZERO);
         when(account.getSubStatus()).thenReturn(0);
@@ -308,6 +306,8 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
                 assertThat(transaction.getRefNo()).isEqualTo("same-day-bundle");
                 assertThat(transaction.getTransactionDate()).isEqualTo(BUSINESS_DATE);
             });
+            // The reference debit is checked against the balance before anything is posted.
+            verify(balanceValidationService).validateBalance(account, BigDecimal.valueOf(7), false);
             verify(savingsAccountTransactionRepository).saveAndFlush(created.getFirst());
             verify(savingsAccountRepository).applyReferenceTransactionDelta(11L, BigDecimal.valueOf(7), 1);
             verify(account).syncAfterDeltaUpdate(new BigDecimal("8.00"));
@@ -406,6 +406,8 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
             when(account.getCurrency()).thenReturn(currency);
             when(account.getSummary()).thenReturn(summary);
             when(summary.getAccountBalance(currency)).thenReturn(Money.of(currency, BigDecimal.valueOf(15)));
+            // The parent rows in these tests run 10 below the posted balance: that much is on hold.
+            lenient().when(account.getOnHoldFunds()).thenReturn(BigDecimal.TEN);
             when(account.savingsProduct()).thenReturn(product);
             when(entityManager.getFlushMode()).thenReturn(FlushModeType.AUTO);
             return account;
@@ -472,5 +474,28 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         account.holdAmount(BigDecimal.valueOf(4));
 
         assertThat(account.getWithdrawableBalanceWithoutMinimumBalance()).isEqualByComparingTo("5");
+    }
+
+    @Test
+    void onlyReversingACreditOrHoldCanLowerTheBalance() {
+        SavingsAccountTransaction withdrawal = mock(SavingsAccountTransaction.class);
+        when(withdrawal.isDebitType()).thenReturn(true);
+        SavingsAccountTransaction deposit = mock(SavingsAccountTransaction.class);
+        when(deposit.isDebitType()).thenReturn(false);
+
+        assertThat(SavingsAccountDomainServiceJpa.reversalCanLowerBalance(withdrawal)).isFalse();
+        assertThat(SavingsAccountDomainServiceJpa.reversalCanLowerBalance(deposit)).isTrue();
+    }
+
+    /** Makes the mocked summary follow {@code syncAfterDeltaUpdate}, as the real entity's posted balance does. */
+    private static void trackPostedBalance(final SavingsAccount account, final SavingsAccountSummary summary,
+            final MonetaryCurrency currency, final BigDecimal opening) {
+        final java.util.concurrent.atomic.AtomicReference<BigDecimal> posted = new java.util.concurrent.atomic.AtomicReference<>(opening);
+        lenient().when(summary.getAccountBalance()).thenAnswer(invocation -> posted.get());
+        lenient().when(summary.getAccountBalance(currency)).thenAnswer(invocation -> Money.of(currency, posted.get()));
+        lenient().doAnswer(invocation -> {
+            posted.set(invocation.getArgument(0));
+            return null;
+        }).when(account).syncAfterDeltaUpdate(any(BigDecimal.class));
     }
 }

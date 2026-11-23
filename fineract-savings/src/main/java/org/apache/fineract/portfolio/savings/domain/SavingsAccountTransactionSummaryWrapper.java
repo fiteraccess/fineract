@@ -46,7 +46,11 @@ public final class SavingsAccountTransactionSummaryWrapper {
     public BigDecimal calculateTotalWithdrawals(final MonetaryCurrency currency, final List<SavingsAccountTransaction> transactions) {
         Money total = Money.zero(currency);
         for (final SavingsAccountTransaction transaction : transactions) {
-            if (transaction.isWithdrawal() && transaction.isNotReversed() && !transaction.isReversalTransaction()) {
+            // A signed-statement fee is posted as the primary leg through the withdrawal delta, which books it into
+            // totalWithdrawals. It is not a withdrawal type, so it has to be named here or a full recompute drops it
+            // and hands the fee back to the account balance.
+            final boolean countsAsWithdrawal = transaction.isWithdrawal() || transaction.getTransactionType().isSignedStatementFee();
+            if (countsAsWithdrawal && transaction.isNotReversed() && !transaction.isReversalTransaction()) {
                 total = total.plus(transaction.getAmount(currency));
             }
         }
@@ -114,6 +118,23 @@ public final class SavingsAccountTransactionSummaryWrapper {
         for (final SavingsAccountTransaction transaction : transactions) {
             final SavingsAccountTransactionType type = transaction.getTransactionType();
             if (type.isReferenceDebit() && transaction.isNotReversed() && !transaction.isReversalTransaction()) {
+                total = total.plus(transaction.getAmount(currency));
+            }
+        }
+        return total.getAmount();
+    }
+
+    /**
+     * Every standing debit that is in none of the totals the pivot recompute names (withdrawals, withhold tax,
+     * overdraft interest): withdrawal and annual fees, charges, and the reference debits. Without it that recompute
+     * rebuilds the balance from the pivot forward as if those debits had never happened.
+     */
+    public BigDecimal calculateTotalOtherDebits(final MonetaryCurrency currency, final List<SavingsAccountTransaction> transactions) {
+        Money total = Money.zero(currency);
+        for (final SavingsAccountTransaction transaction : transactions) {
+            final boolean countedElsewhere = transaction.isWithdrawal() || transaction.getTransactionType().isSignedStatementFee()
+                    || transaction.isWithHoldTaxAndNotReversed() || transaction.isOverdraftInterestAndNotReversed();
+            if (transaction.isDebit() && !countedElsewhere) {
                 total = total.plus(transaction.getAmount(currency));
             }
         }
@@ -217,8 +238,11 @@ public final class SavingsAccountTransactionSummaryWrapper {
                     delta.setAccountBalance(amount);
                 }
             break;
+            // Bill payments and signed-statement fees are primary debit legs booked into the withdrawal total.
             case WITHDRAWAL:
-                if (transaction.isWithdrawal() && transaction.isNotReversed()) {
+            case BILL_PAYMENT:
+            case SIGNED_STATEMENT_FEE:
+                if (transaction.isNotReversed()) {
                     delta.setTotalWithdrawals(amount);
                     delta.setAccountBalance(amount.negate());
                 }

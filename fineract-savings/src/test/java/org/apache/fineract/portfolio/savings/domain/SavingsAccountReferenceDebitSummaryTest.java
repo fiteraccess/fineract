@@ -101,6 +101,66 @@ class SavingsAccountReferenceDebitSummaryTest {
         assertThat(total).isEqualByComparingTo(new BigDecimal("8.00"));
     }
 
+    @Test
+    void signedStatementFeeStaysInTheWithdrawalTotalOnAFullRecompute() {
+        var fee = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("20.00"),
+                SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "ref");
+        var withdrawal = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("100.00"),
+                SavingsAccountTransactionType.WITHDRAWAL, "ref");
+        var reversedFee = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("20.00"),
+                SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "ref");
+        reversedFee.reverse();
+
+        var total = wrapper.calculateTotalWithdrawals(NGN, List.of(fee, withdrawal, reversedFee));
+
+        assertThat(total).isEqualByComparingTo(new BigDecimal("120.00"));
+    }
+
+    @Test
+    void otherDebitsCoverFeesAndReferenceLegsButNotWhatTheNamedTotalsAlreadyCount() {
+        var withdrawal = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("100.00"), "ref");
+        var statementFee = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("20.00"),
+                SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "ref");
+        var deposit = SavingsAccountTransaction.deposit(account(), office(), null, DATE, money("500.00"), "ref");
+        var reversedVat = vat("0.45");
+        reversedVat.reverse();
+
+        var total = wrapper.calculateTotalOtherDebits(NGN,
+                List.of(withdrawal, statementFee, deposit, commission("8.00"), vat("0.45"), emtLevy("50.00"), reversedVat));
+
+        assertThat(total).isEqualByComparingTo(new BigDecimal("58.45"));
+    }
+
+    @Test
+    void pivotRecomputeSubtractsEveryDebitSinceThePivot() {
+        var summary = new SavingsAccountSummary();
+        summary.setRunningBalanceOnPivotDate(new BigDecimal("100.00"));
+        var sincePivot = List.of(SavingsAccountTransaction.deposit(account(), office(), null, DATE, money("50.00"), "ref"),
+                SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("10.00"), "ref"),
+                SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("20.00"),
+                        SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "ref"),
+                commission("8.00"), vat("0.45"));
+
+        summary.updateSummaryWithPivotConfig(NGN, wrapper, null, sincePivot);
+
+        // 100 + 50 - 10 - 20 - 8 - 0.45
+        assertThat(summary.getAccountBalance()).isEqualByComparingTo(new BigDecimal("111.55"));
+    }
+
+    @Test
+    void pivotSingleTransactionUpdateDebitsBillPaymentsAndSignedStatementFees() {
+        var summary = new SavingsAccountSummary();
+        var statementFee = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("20.00"),
+                SavingsAccountTransactionType.SIGNED_STATEMENT_FEE, "ref");
+        var billPayment = SavingsAccountTransaction.withdrawal(account(), office(), null, DATE, money("30.00"),
+                SavingsAccountTransactionType.BILL_PAYMENT, "ref");
+
+        summary.updateSummaryWithPivotConfig(NGN, wrapper, statementFee, List.of());
+        summary.updateSummaryWithPivotConfig(NGN, wrapper, billPayment, List.of());
+
+        assertThat(summary.getAccountBalance()).isEqualByComparingTo(new BigDecimal("-50.00"));
+    }
+
     private SavingsAccountTransaction emtLevy(String amount) {
         return SavingsAccountTransaction.emtLevy(account(), office(), DATE, money(amount), "ref");
     }

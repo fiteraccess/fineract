@@ -194,8 +194,11 @@ public final class SavingsAccountSummary {
                         this.accountBalance = Money.of(currency, this.accountBalance).plus(transactionAmount).getAmount();
                     }
                 break;
+                // Bill payments and signed-statement fees are primary debit legs booked into the withdrawal total.
                 case WITHDRAWAL:
-                    if (transaction.isWithdrawal() && transaction.isNotReversed()) {
+                case BILL_PAYMENT:
+                case SIGNED_STATEMENT_FEE:
+                    if (transaction.isNotReversed()) {
                         this.totalWithdrawals = Money.of(currency, this.totalWithdrawals).plus(transactionAmount).getAmount();
                         this.accountBalance = Money.of(currency, this.accountBalance).minus(transactionAmount).getAmount();
                     }
@@ -269,7 +272,9 @@ public final class SavingsAccountSummary {
             this.accountBalance = getRunningBalanceOnPivotDate();
             this.accountBalance = Money.of(currency, this.accountBalance).plus(Money.of(currency, this.totalDeposits))
                     .plus(this.totalInterestPosted).minus(this.totalWithdrawals).minus(this.totalWithholdTax)
-                    .minus(this.totalOverdraftInterestDerived).getAmount();
+                    .minus(this.totalOverdraftInterestDerived)
+                    // Fees, charges and reference debits since the pivot are debits too.
+                    .minus(wrapper.calculateTotalOtherDebits(currency, savingsAccountTransactions)).getAmount();
         }
     }
 

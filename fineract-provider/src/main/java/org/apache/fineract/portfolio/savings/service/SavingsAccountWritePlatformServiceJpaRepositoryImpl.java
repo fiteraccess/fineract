@@ -893,13 +893,15 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
 
     /**
      * The requested transaction is always retained so the already-reversed guard fires on idempotent retries. Reversal
-     * mirror rows share the parent's refNo but are never swept. Commission/VAT siblings join the sweep only when the
-     * caller asks for a fee-inclusive reversal.
+     * mirror rows share the parent's refNo but are never swept, and neither are siblings that are already reversed (a
+     * fee leg reversed on its own, or one a recalculation replaced with a re-booked row under the same refNo).
+     * Commission/VAT siblings join the sweep only when the caller asks for a fee-inclusive reversal.
      */
     static List<SavingsAccountTransaction> selectTransactionsForBulkReversal(final Long requestedTransactionId,
             final List<SavingsAccountTransaction> linkedTransactions, final boolean includeFees) {
         return linkedTransactions.stream().filter(transaction -> requestedTransactionId.equals(transaction.getId())
-                || (!transaction.isReversalTransaction() && (includeFees || !isNipFeeReference(transaction)))).toList();
+                || (!transaction.isReversalTransaction() && !transaction.isReversed() && (includeFees || !isNipFeeReference(transaction))))
+                .toList();
     }
 
     private static boolean isNipFeeReference(final SavingsAccountTransaction transaction) {

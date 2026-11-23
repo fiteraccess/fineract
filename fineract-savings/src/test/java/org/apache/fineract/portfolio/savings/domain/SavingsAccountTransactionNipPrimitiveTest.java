@@ -84,6 +84,27 @@ class SavingsAccountTransactionNipPrimitiveTest {
     }
 
     @Test
+    void rebookingCopyKeepsSwitchRoutingAndCommissionSplit() {
+        SavingsAccount account = mock(SavingsAccount.class);
+        Office office = mock(Office.class);
+        Money amount = mock(Money.class);
+        when(office.getId()).thenReturn(12L);
+        when(amount.getAmount()).thenReturn(BigDecimal.valueOf(22));
+        SavingsAccountTransaction original = SavingsAccountTransaction.commission(account, office, LocalDate.of(2026, 7, 25), amount,
+                "root-reference", "NIBSS", BigDecimal.valueOf(15), BigDecimal.valueOf(7));
+
+        SavingsAccountTransaction copy = SavingsAccountTransaction.copyForRebooking(original);
+
+        assertThat(copy.getTransactionType()).isEqualTo(SavingsAccountTransactionType.COMMISSION);
+        assertThat(copy.getRefNo()).isEqualTo("root-reference");
+        assertThat(copy.toAccountingBridgeDTO("NGN").getSwitchId()).isEqualTo("NIBSS");
+        SavingsAccountingBridgeCommissionAllocationDTO allocation = copy.toAccountingBridgeDTO("NGN").getCommissionAllocation();
+        assertThat(allocation).isNotNull();
+        assertThat(allocation.switchFeeAmount()).isEqualTo(BigDecimal.valueOf(15));
+        assertThat(allocation.bankCommissionAmount()).isEqualTo(BigDecimal.valueOf(7));
+    }
+
+    @Test
     void commissionWithoutPersistedSplitYieldsNullAllocation() {
         SavingsAccount account = mock(SavingsAccount.class);
         Office office = mock(Office.class);

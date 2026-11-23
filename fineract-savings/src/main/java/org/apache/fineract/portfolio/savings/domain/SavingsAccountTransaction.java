@@ -431,6 +431,24 @@ public final class SavingsAccountTransaction extends AbstractAuditableWithUTCDat
                 accountTransaction.isManualTransaction, accountTransaction.lienTransaction, accountTransaction.refNo);
     }
 
+    /**
+     * Copy used when balance recalculation reverses a row and books it again because its overdraft portion changed. The
+     * replacement must journal exactly like the row it replaces, so it carries the switch/aggregator routing and the
+     * commission split; without them a NIP fee leg re-books with no journal while its original is contra'd.
+     */
+    public static SavingsAccountTransaction copyForRebooking(final SavingsAccountTransaction accountTransaction) {
+        final SavingsAccountTransaction copy = copyTransaction(accountTransaction);
+        copy.switchId = accountTransaction.switchId;
+        copy.aggregatorCode = accountTransaction.aggregatorCode;
+        copy.aggregatorCommissionAmount = accountTransaction.aggregatorCommissionAmount;
+        copy.switchFeeAmount = accountTransaction.switchFeeAmount;
+        copy.bankCommissionAmount = accountTransaction.bankCommissionAmount;
+        for (final SavingsAccountTransactionTaxDetails taxDetail : accountTransaction.taxDetails) {
+            copy.taxDetails.add(new SavingsAccountTransactionTaxDetails(copy, taxDetail.getTaxComponent(), taxDetail.getAmount()));
+        }
+        return copy;
+    }
+
     public static SavingsAccountTransaction holdAmount(final SavingsAccount savingsAccount, final Office office,
             final PaymentDetail paymentDetail, final LocalDate date, final Money amount, final Boolean lienTransaction) {
         final boolean isReversed = false;

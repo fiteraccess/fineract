@@ -81,6 +81,19 @@ class SavingsAccountWritePlatformServiceReversalSelectionTest {
     }
 
     @Test
+    void shouldNotSweepSiblingsThatAreAlreadyReversed() {
+        SavingsAccountTransaction principal = transaction(10L, SavingsAccountTransactionType.WITHDRAWAL);
+        SavingsAccountTransaction replacedCommission = transaction(12L, SavingsAccountTransactionType.COMMISSION);
+        when(replacedCommission.isReversed()).thenReturn(true);
+        SavingsAccountTransaction rebookedCommission = transaction(15L, SavingsAccountTransactionType.COMMISSION);
+
+        List<SavingsAccountTransaction> selected = SavingsAccountWritePlatformServiceJpaRepositoryImpl
+                .selectTransactionsForBulkReversal(10L, List.of(principal, replacedCommission, rebookedCommission), true);
+
+        assertThat(selected).containsExactly(principal, rebookedCommission);
+    }
+
+    @Test
     void shouldAlwaysRetainTheRequestedTransactionSoTheAlreadyReversedGuardFires() {
         SavingsAccountTransaction reversedPrincipal = transaction(10L, SavingsAccountTransactionType.WITHDRAWAL);
         SavingsAccountTransaction mirror = transaction(14L, SavingsAccountTransactionType.WITHDRAWAL);

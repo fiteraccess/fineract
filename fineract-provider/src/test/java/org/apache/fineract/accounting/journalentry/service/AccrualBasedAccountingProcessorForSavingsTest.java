@@ -217,6 +217,25 @@ class AccrualBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldReverseBookedEntriesInsteadOfRederivingThemInAccrualAccounting() {
+        SavingsAccountTransactionEnumData commissionType = new SavingsAccountTransactionEnumData(
+                Long.valueOf(SavingsAccountTransactionType.COMMISSION.getValue()), SavingsAccountTransactionType.COMMISSION.getCode(),
+                SavingsAccountTransactionType.COMMISSION.name());
+        // Reversed, with no stored split: booked before the split was persisted.
+        SavingsTransactionDTO reversedCommission = new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, commissionType,
+                BigDecimal.TEN, true, List.of(), List.of(), null, false, List.of(), "NIBSS", null, null, null);
+        when(helper.reverseBookedSavingsJournalEntries(org.mockito.ArgumentMatchers.any(), eq("NGN"), eq(11L), eq("55"),
+                eq(TRANSACTION_DATE))).thenReturn(true);
+
+        processor.createJournalEntriesForSavings(savings(reversedCommission));
+
+        verifyNoInteractions(configurationProvider);
+        verify(helper, never()).createBalancedJournalEntriesForSavings(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), anyList(), anyList(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     void shouldRejectMismatchedCommissionAllocationInAccrualAccounting() {
         SavingsTransactionDTO commission = transaction(SavingsAccountTransactionType.COMMISSION, "NIBSS", BigDecimal.TEN, null,
                 new SavingsAccountingBridgeCommissionAllocationDTO(BigDecimal.ONE, BigDecimal.TWO));

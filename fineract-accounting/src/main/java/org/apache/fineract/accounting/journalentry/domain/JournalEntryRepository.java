@@ -42,6 +42,9 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Long
     @Query("select journalEntry from JournalEntry journalEntry where journalEntry.transactionId= :transactionId and journalEntry.reversed=false and journalEntry.entityType = :entityType order by journalEntry.transactionDate asc, journalEntry.createdDate asc, journalEntry.id asc")
     List<JournalEntry> findJournalEntries(@Param("transactionId") String transactionId, @Param("entityType") Integer entityType);
 
+    /** Whether any entry of the transaction is already flagged reversed, i.e. a reversal was posted and linked. */
+    boolean existsByTransactionIdAndEntityTypeAndReversedTrue(String transactionId, Integer entityType);
+
     @Query("""
             SELECT DISTINCT je.transactionDate
             FROM JournalEntry je

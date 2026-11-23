@@ -112,6 +112,18 @@ class SavingsAccountingBridgeDataHelperTest {
     }
 
     @Test
+    void findNewTransactionsShouldNeverJournalReversalMirrorRows() {
+        when(account.getTransactions()).thenReturn(List.of(firstTransaction, secondTransaction));
+        when(firstTransaction.isReversalTransaction()).thenReturn(true);
+        when(secondTransaction.getId()).thenReturn(2L);
+        when(secondTransaction.isReversed()).thenReturn(false);
+
+        List<SavingsAccountTransaction> result = SavingsAccountingBridgeDataHelper.findNewTransactions(account, Set.of(), Set.of(), false);
+
+        assertThat(result).containsExactly(secondTransaction);
+    }
+
+    @Test
     void findNewTransactionsShouldUsePivotTransactionsWhenBackdated() {
         when(account.getSavingsAccountTransactionsWithPivotConfig()).thenReturn(List.of(secondTransaction));
         when(secondTransaction.getId()).thenReturn(9L);

@@ -63,6 +63,11 @@ public final class SavingsAccountingBridgeDataHelper {
                 : account.getTransactions();
         final List<SavingsAccountTransaction> newTransactions = new ArrayList<>();
         for (final SavingsAccountTransaction transaction : transactions) {
+            // A reversal mirror row is the statement-side record of a reversal. Its GL effect is the contra posted
+            // for the row it mirrors; journaling the mirror as well would book the original's legs a second time.
+            if (transaction.isReversalTransaction()) {
+                continue;
+            }
             if (transaction.isReversed() && !existingReversedTransactionIds.contains(transaction.getId())) {
                 newTransactions.add(transaction);
             } else if (!existingTransactionIds.contains(transaction.getId())) {

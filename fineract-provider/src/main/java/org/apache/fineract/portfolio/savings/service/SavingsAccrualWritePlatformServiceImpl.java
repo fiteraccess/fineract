@@ -198,7 +198,10 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
             final String refNo = refNoProvider != null ? refNoProvider.apply(day) : null;
             final SavingsAccountTransaction accrual = SavingsAccountTransaction.accrual(savingsAccount, savingsAccount.office(), day,
                     amount, false, refNo);
-            accrual.setRunningBalance(period.getClosingBalance());
+            // The posting period's closing balance leaves out interest already posted. Stamp the true end-of-day
+            // balance,
+            // which is what the next recalculation would write and what the daily balance snapshot copies.
+            accrual.setRunningBalance(savingsAccount.runningBalanceAtEndOf(day));
             accrual.setOverdraftAmount(earned.isLessThanZero() ? amount.negated() : amount);
             savingsAccount.addTransaction(accrual);
         }
