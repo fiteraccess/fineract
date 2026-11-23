@@ -319,6 +319,26 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
             });
         }
 
+        /**
+         * A lien or minimum balance must not turn away money coming in: legs riding on a credit are not
+         * balance-checked.
+         */
+        @Test
+        void referencesUnderACreditParentAreNotBalanceChecked() {
+            SavingsAccount account = referenceAccount();
+            MonetaryCurrency currency = account.getCurrency();
+            SavingsAccountTransaction parent = SavingsAccountTransaction.deposit(account, account.office(), null, BUSINESS_DATE,
+                    Money.of(currency, BigDecimal.TEN), "inbound-with-levy");
+            parent.setRunningBalance(Money.of(currency, BigDecimal.valueOf(5)));
+            ReferenceTransaction levy = new ReferenceTransaction(SavingsAccountTransactionType.EMT_LEVY, BigDecimal.valueOf(7), "EMT",
+                    null);
+
+            List<SavingsAccountTransaction> created = service.applyReferenceTransactions(account, parent, List.of(levy), false, false);
+
+            assertThat(created).hasSize(1);
+            verifyNoInteractions(balanceValidationService);
+        }
+
         @ParameterizedTest
         @CsvSource({ "false, 1, 0", "true, 0, 1" })
         void backdatedReferencesRetainTheirTimeline(final boolean pivotEnabled, final int fullHistoryAttachments,

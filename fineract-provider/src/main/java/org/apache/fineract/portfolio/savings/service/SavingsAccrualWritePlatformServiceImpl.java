@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Set;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
@@ -173,6 +174,8 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         final List<SavingsAccountTransaction> forfeitedAccruals = new ArrayList<>();
         final LocalDate startDate = applyForfeitures(savingsAccount, fromDate, forfeitureByMonth, forfeitedAccruals);
         LocalDate accruedTillDate = null;
+        // Accrual rows do not move the balance, so one pass up front serves every day booked below.
+        final NavigableMap<LocalDate, Money> endOfDayBalances = savingsAccount.endOfDayRunningBalances();
         for (LocalDate day = startDate; !day.isAfter(tillDate) && !DateUtils.isDateInTheFuture(day); day = day.plusDays(1)) {
             accruedTillDate = day;
             if (isForfeited(forfeitureByMonth, day) || hasLiveAccrualOn(savingsAccount, day)) {
@@ -199,9 +202,9 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
             final SavingsAccountTransaction accrual = SavingsAccountTransaction.accrual(savingsAccount, savingsAccount.office(), day,
                     amount, false, refNo);
             // The posting period's closing balance leaves out interest already posted. Stamp the true end-of-day
-            // balance,
-            // which is what the next recalculation would write and what the daily balance snapshot copies.
-            accrual.setRunningBalance(savingsAccount.runningBalanceAtEndOf(day));
+            // balance, which is what the next recalculation would write and what the daily balance snapshot copies.
+            final Map.Entry<LocalDate, Money> endOfDay = endOfDayBalances == null ? null : endOfDayBalances.floorEntry(day);
+            accrual.setRunningBalance(endOfDay == null ? Money.zero(savingsAccount.getCurrency()) : endOfDay.getValue());
             accrual.setOverdraftAmount(earned.isLessThanZero() ? amount.negated() : amount);
             savingsAccount.addTransaction(accrual);
         }

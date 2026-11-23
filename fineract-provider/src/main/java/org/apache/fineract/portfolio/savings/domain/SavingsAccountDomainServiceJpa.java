@@ -541,7 +541,6 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction deposit = handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail,
                 isAccountTransfer, isRegularTransaction, SavingsAccountTransactionType.DEPOSIT, switchId, backdatedTxnsAllowedTill);
-        validateReferenceDebitsAreCovered(account, references);
         applyReferenceTransactions(account, deposit, references, isAccountTransfer, backdatedTxnsAllowedTill, switchId, null);
         return deposit;
     }
@@ -784,13 +783,17 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     public List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
             final SavingsAccountTransaction parentTransaction, final List<ReferenceTransaction> references, final boolean isAccountTransfer,
             final boolean backdatedTxnsAllowedTill) {
-        validateReferenceDebitsAreCovered(account, references);
+        if (references != null && !references.isEmpty() && parentTransaction.isDebitType()) {
+            validateReferenceDebitsAreCovered(account, references);
+        }
         return applyReferenceTransactions(account, parentTransaction, references, isAccountTransfer, backdatedTxnsAllowedTill, null, null);
     }
 
     /**
-     * The reference legs are debits on top of the primary transaction, which has already been applied. They must be
-     * covered by the balance it left, exactly as the bundled NIP, bills and signed-statement-fee withdrawals check.
+     * The reference legs are debits on top of a primary debit that has already been applied. They must be covered by
+     * the balance it left, exactly as the bundled NIP, bills and signed-statement-fee withdrawals check. Legs riding on
+     * a credit (an inbound deposit, the destination side of a transfer) are not checked: the check nets off holds and
+     * the minimum balance, so it would turn away money arriving on an account that is under lien.
      */
     private void validateReferenceDebitsAreCovered(final SavingsAccount account, final List<ReferenceTransaction> references) {
         if (references == null || references.isEmpty()) {

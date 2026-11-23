@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.api;
 
+import com.google.common.base.Splitter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -83,11 +84,7 @@ public class SavingsAccountTransactionsPageApiResource {
             return null;
         }
         final List<Integer> ids = new ArrayList<>();
-        for (String token : csv.split(",")) {
-            final String trimmed = token.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
+        for (String trimmed : Splitter.on(',').trimResults().omitEmptyStrings().split(csv)) {
             try {
                 ids.add(Integer.valueOf(trimmed));
             } catch (NumberFormatException e) {

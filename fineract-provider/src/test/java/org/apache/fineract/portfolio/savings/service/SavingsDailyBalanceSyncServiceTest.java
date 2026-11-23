@@ -20,8 +20,10 @@ package org.apache.fineract.portfolio.savings.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -31,13 +33,14 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.apache.fineract.portfolio.savings.domain.SavingsDailyBalanceSyncRepository;
 import org.apache.fineract.portfolio.savings.service.SavingsDailyBalanceSyncService.SyncResult;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Unit tests for {@link SavingsDailyBalanceSyncService} covering the §7.1 verification cases. The repository is mocked
@@ -49,23 +52,27 @@ class SavingsDailyBalanceSyncServiceTest {
     @Mock
     private SavingsDailyBalanceSyncRepository repo;
 
-    @InjectMocks
     private SavingsDailyBalanceSyncService subject;
+
+    @BeforeEach
+    void setUp() {
+        subject = new SavingsDailyBalanceSyncService(repo, mock(PlatformTransactionManager.class));
+    }
 
     @Test
     void syncNowEmptySource_advancesWatermarkAndDrainsOnce() {
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(30);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(0);
-        when(repo.drainDirty()).thenReturn(0);
+        when(repo.drainDirty(anyInt())).thenReturn(0);
 
         SyncResult result = subject.syncNow();
 
         InOrder order = inOrder(repo);
         order.verify(repo).readAndLockWatermark();
         order.verify(repo).syncFromTransactions(any(), any());
-        order.verify(repo).drainDirty();
         order.verify(repo).advanceWatermark(any());
+        order.verify(repo).drainDirty(anyInt());
 
         assertThat(result.upserted()).isEqualTo(0);
         assertThat(result.drained()).isEqualTo(0);
@@ -77,13 +84,13 @@ class SavingsDailyBalanceSyncServiceTest {
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(15);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(7);
-        when(repo.drainDirty()).thenReturn(2);
+        when(repo.drainDirty(anyInt())).thenReturn(2);
 
         SyncResult result = subject.syncNow();
 
         // Watermark within 1h of now → exactly one tail call, no full-hour windows.
         verify(repo, times(1)).syncFromTransactions(any(), any());
-        verify(repo).drainDirty();
+        verify(repo).drainDirty(anyInt());
         verify(repo).advanceWatermark(any());
 
         assertThat(result.upserted()).isEqualTo(7);
@@ -97,12 +104,12 @@ class SavingsDailyBalanceSyncServiceTest {
         OffsetDateTime watermark = now.minusHours(3).minusMinutes(30);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(1);
-        when(repo.drainDirty()).thenReturn(0);
+        when(repo.drainDirty(anyInt())).thenReturn(0);
 
         SyncResult result = subject.syncNow();
 
         verify(repo, times(4)).syncFromTransactions(any(), any());
-        verify(repo).drainDirty();
+        verify(repo).drainDirty(anyInt());
         verify(repo).advanceWatermark(any());
 
         // Sum of all calls: 1 per call * 4 = 4 upserts.
@@ -119,19 +126,19 @@ class SavingsDailyBalanceSyncServiceTest {
     }
 
     @Test
-    void syncNowOrdering_lockBeforeSyncBeforeDrainBeforeAdvance() {
+    void syncNowOrdering_lockBeforeSyncBeforeAdvanceBeforeDrain() {
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(5);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(3);
-        when(repo.drainDirty()).thenReturn(1);
+        when(repo.drainDirty(anyInt())).thenReturn(1);
 
         subject.syncNow();
 
         InOrder order = inOrder(repo);
         order.verify(repo).readAndLockWatermark();
         order.verify(repo).syncFromTransactions(any(), any());
-        order.verify(repo).drainDirty();
         order.verify(repo).advanceWatermark(any());
+        order.verify(repo).drainDirty(anyInt());
     }
 
     @Test
@@ -139,7 +146,7 @@ class SavingsDailyBalanceSyncServiceTest {
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(10);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(0);
-        when(repo.drainDirty()).thenReturn(0);
+        when(repo.drainDirty(anyInt())).thenReturn(0);
 
         SyncResult result = subject.syncNow();
 
@@ -158,13 +165,13 @@ class SavingsDailyBalanceSyncServiceTest {
         // which is at-or-before watermark, so it should drain only and not advance.
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
-        when(repo.drainDirty()).thenReturn(0);
+        when(repo.drainDirty(anyInt())).thenReturn(0);
 
         SyncResult result = subject.syncNow();
 
         verify(repo, never()).syncFromTransactions(any(), any());
         verify(repo, never()).advanceWatermark(any());
-        verify(repo).drainDirty();
+        verify(repo).drainDirty(anyInt());
         assertThat(result.upserted()).isEqualTo(0);
     }
 
@@ -175,7 +182,7 @@ class SavingsDailyBalanceSyncServiceTest {
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusHours(1);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(5);
-        when(repo.drainDirty()).thenReturn(0);
+        when(repo.drainDirty(anyInt())).thenReturn(0);
 
         SyncResult result = subject.syncNow();
 
@@ -188,10 +195,24 @@ class SavingsDailyBalanceSyncServiceTest {
         OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(2);
         when(repo.readAndLockWatermark()).thenReturn(watermark);
         when(repo.syncFromTransactions(any(), any())).thenReturn(0);
-        when(repo.drainDirty()).thenReturn(42);
+        when(repo.drainDirty(anyInt())).thenReturn(42);
 
         SyncResult result = subject.syncNow();
 
         assertThat(result.drained()).isEqualTo(42);
+    }
+
+    @Test
+    void syncNowDrainsInBatchesUntilABatchComesBackShort() {
+        OffsetDateTime watermark = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(2);
+        when(repo.readAndLockWatermark()).thenReturn(watermark);
+        when(repo.syncFromTransactions(any(), any())).thenReturn(0);
+        when(repo.drainDirty(anyInt())).thenReturn(SavingsDailyBalanceSyncService.DRAIN_BATCH_SIZE,
+                SavingsDailyBalanceSyncService.DRAIN_BATCH_SIZE, 7);
+
+        SyncResult result = subject.syncNow();
+
+        verify(repo, times(3)).drainDirty(SavingsDailyBalanceSyncService.DRAIN_BATCH_SIZE);
+        assertThat(result.drained()).isEqualTo(2 * SavingsDailyBalanceSyncService.DRAIN_BATCH_SIZE + 7);
     }
 }

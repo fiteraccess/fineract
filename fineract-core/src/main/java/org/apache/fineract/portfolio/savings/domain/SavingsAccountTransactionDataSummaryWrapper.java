@@ -44,11 +44,21 @@ public final class SavingsAccountTransactionDataSummaryWrapper {
     public BigDecimal calculateTotalWithdrawals(final CurrencyData currency, final List<SavingsAccountTransactionData> transactions) {
         Money total = Money.zero(currency);
         for (final SavingsAccountTransactionData transaction : transactions) {
-            if (transaction.isWithdrawal() && transaction.isNotReversed() && !transaction.isReversalTransaction()) {
+            if (countsAsWithdrawal(transaction) && transaction.isNotReversed() && !transaction.isReversalTransaction()) {
                 total = total.plus(transaction.getAmount());
             }
         }
         return total.getAmountDefaultedToNullIfZero();
+    }
+
+    /**
+     * A signed-statement fee is a primary debit leg booked into the withdrawal total, though it is not a withdrawal
+     * type. Counting it here keeps the withdrawal total the same on the incremental and recompute paths, and the same
+     * as the entity-side wrapper.
+     */
+    private static boolean countsAsWithdrawal(final SavingsAccountTransactionData transaction) {
+        return transaction.isWithdrawal()
+                || (transaction.getTransactionType() != null && transaction.getTransactionType().isSignedStatementFee());
     }
 
     /**
@@ -70,12 +80,12 @@ public final class SavingsAccountTransactionDataSummaryWrapper {
 
     /**
      * Every standing debit that is in none of the totals the pivot recompute names (withdrawals, withhold tax,
-     * overdraft interest): withdrawal and annual fees, charges, signed-statement fees and the reference debits.
+     * overdraft interest): withdrawal and annual fees, charges and the reference debits.
      */
     public BigDecimal calculateTotalOtherDebits(final CurrencyData currency, final List<SavingsAccountTransactionData> transactions) {
         Money total = Money.zero(currency);
         for (final SavingsAccountTransactionData transaction : transactions) {
-            final boolean countedElsewhere = transaction.isWithdrawal() || transaction.isWithHoldTaxAndNotReversed()
+            final boolean countedElsewhere = countsAsWithdrawal(transaction) || transaction.isWithHoldTaxAndNotReversed()
                     || transaction.isOverdraftInterestAndNotReversed();
             if (transaction.isDebit() && !countedElsewhere) {
                 total = total.plus(transaction.getAmount());
