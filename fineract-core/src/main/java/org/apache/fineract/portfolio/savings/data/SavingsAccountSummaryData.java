@@ -107,8 +107,11 @@ public class SavingsAccountSummaryData implements Serializable {
                         this.accountBalance = Money.of(currency, this.accountBalance).plus(transactionAmount).getAmount();
                     }
                 break;
+                // Bill payments and signed-statement fees are primary debit legs booked into the withdrawal total.
                 case WITHDRAWAL:
-                    if (transaction.isWithdrawal() && transaction.isNotReversed()) {
+                case BILL_PAYMENT:
+                case SIGNED_STATEMENT_FEE:
+                    if (transaction.isNotReversed()) {
                         this.totalWithdrawals = Money.of(currency, this.totalWithdrawals).plus(transactionAmount).getAmount();
                         this.accountBalance = Money.of(currency, this.accountBalance).minus(transactionAmount).getAmount();
                     }
@@ -182,7 +185,9 @@ public class SavingsAccountSummaryData implements Serializable {
             this.totalOverdraftInterestDerived = overdraftInterestTotal.getAmountDefaultedToNullIfZero();
             this.accountBalance = getRunningBalanceOnPivotDate();
             this.accountBalance = Money.of(currency, this.accountBalance).plus(Money.of(currency, this.totalDeposits)).plus(deltaInterest)
-                    .minus(this.totalWithdrawals).minus(deltaWithholdTax).minus(deltaOverdraftInterestDerived).getAmount();
+                    .minus(this.totalWithdrawals).minus(deltaWithholdTax).minus(deltaOverdraftInterestDerived)
+                    // Fees, charges and reference debits since the pivot are debits too.
+                    .minus(wrapper.calculateTotalOtherDebits(currency, savingsAccountTransactions)).getAmount();
         }
     }
 
@@ -261,9 +266,9 @@ public class SavingsAccountSummaryData implements Serializable {
         // boolean isUpdated = false;
         updateRunningBalanceAndPivotDate(false, transactions, null, null, null);
 
-        this.accountBalance = Money.of(currency, this.totalDeposits).plus(this.totalInterestPosted).minus(this.totalWithdrawals)
-                .minus(this.totalWithdrawalFees).minus(this.totalAnnualFees).minus(this.totalFeeCharge).minus(this.totalPenaltyCharge)
-                .minus(totalOverdraftInterestDerived).minus(totalWithholdTax).getAmount();
+        // Credits less debits over the standing rows. The category totals above overlap for bill payments and annual
+        // fees and the fee-charge total holds the waived amount, so summing them does not give the balance.
+        this.accountBalance = wrapper.calculateNetBalance(currency, transactions);
     }
 
     public void setRunningBalanceOnPivotDate(final BigDecimal runningBalanceOnPivotDate) {

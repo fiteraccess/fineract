@@ -67,6 +67,12 @@ public class AccrualBasedAccountingProcessorForSavings implements AccountingProc
 
                 this.helper.checkForBranchClosures(savingsDTO.getOfficeId(), transactionDate);
 
+                if (isReversal && AccountingProcessorHelper.isConfigurationRoutedSavingsLeg(savingsTransactionDTO) && this.helper
+                        .reverseBookedSavingsJournalEntries(office, currencyCode, savingsId, transactionId, transactionDate)) {
+                    // Contra'd from what was actually booked, not from today's switch/aggregator configuration.
+                    continue;
+                }
+
                 final NipAccountingContext nipAccountingContext = new NipAccountingContext(savingsProductId, savingsId, currencyCode,
                         savingsTransactionDTO, office);
                 if (tryCreateNipJournalEntries(nipAccountingContext)) {

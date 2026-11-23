@@ -51,6 +51,39 @@ public final class SavingsAccountTransactionDataSummaryWrapper {
         return total.getAmountDefaultedToNullIfZero();
     }
 
+    /**
+     * The balance as the sum of every standing credit less every standing debit: the same rule the running-balance walk
+     * applies row by row. The per-category totals overlap on this side (a bill payment is both a withdrawal and a fee
+     * deduction, an annual fee is counted twice), so the balance is not derived from them.
+     */
+    public BigDecimal calculateNetBalance(final CurrencyData currency, final List<SavingsAccountTransactionData> transactions) {
+        Money balance = Money.zero(currency);
+        for (final SavingsAccountTransactionData transaction : transactions) {
+            if (transaction.isCredit()) {
+                balance = balance.plus(transaction.getAmount());
+            } else if (transaction.isDebit()) {
+                balance = balance.minus(transaction.getAmount());
+            }
+        }
+        return balance.getAmount();
+    }
+
+    /**
+     * Every standing debit that is in none of the totals the pivot recompute names (withdrawals, withhold tax,
+     * overdraft interest): withdrawal and annual fees, charges, signed-statement fees and the reference debits.
+     */
+    public BigDecimal calculateTotalOtherDebits(final CurrencyData currency, final List<SavingsAccountTransactionData> transactions) {
+        Money total = Money.zero(currency);
+        for (final SavingsAccountTransactionData transaction : transactions) {
+            final boolean countedElsewhere = transaction.isWithdrawal() || transaction.isWithHoldTaxAndNotReversed()
+                    || transaction.isOverdraftInterestAndNotReversed();
+            if (transaction.isDebit() && !countedElsewhere) {
+                total = total.plus(transaction.getAmount());
+            }
+        }
+        return total.getAmount();
+    }
+
     public BigDecimal calculateTotalInterestPosted(final CurrencyData currency, final List<SavingsAccountTransactionData> transactions) {
         Money total = Money.zero(currency);
         for (final SavingsAccountTransactionData transaction : transactions) {

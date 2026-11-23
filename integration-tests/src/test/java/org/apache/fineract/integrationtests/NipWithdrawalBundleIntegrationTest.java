@@ -325,7 +325,8 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
 
             final List<Map<String, Object>> transactions = bundledTransactions(savingsId);
             assertThat(transactions).hasSize(5);
-            assertTransaction(transactions.get(0), WITHDRAWAL, "100.00", "890.00");
+            // Running balances step down row by row: principal, product withdrawal fee, then each reference leg.
+            assertTransaction(transactions.get(0), WITHDRAWAL, "100.00", "900.00");
             assertTransaction(transactions.get(1), WITHDRAWAL_FEE, "10.00", "890.00");
             assertTransaction(transactions.get(2), VAT, "7.00", "883.00");
             assertTransaction(transactions.get(3), COMMISSION, "3.00", "880.00");
@@ -500,6 +501,30 @@ class NipWithdrawalBundleIntegrationTest extends BaseSavingsIntegrationTest {
             assertThat(accountBalance(savingsId)).isEqualByComparingTo(balanceBefore);
             assertThat(transactionIds(savingsId)).isEqualTo(transactionIdsBefore);
             assertThat(referenceNotes(savingsId)).isEmpty();
+        });
+    }
+
+    /**
+     * A plain withdrawal (no switch, no aggregator) carrying reference legs used to check only the principal: the legs
+     * were then debited unconditionally and pushed a non-overdraft account below zero.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void rollsBackPlainWithdrawalWhenReferenceLegsExceedTheRemainingBalance() {
+        final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+        runAt(date, () -> {
+            final Long savingsId = createActiveSavingsAccount(date, false);
+            deposit(savingsId, date, new BigDecimal("100.00"));
+            final List<Long> transactionIdsBefore = transactionIds(savingsId);
+            final ResponseSpecification forbidden = new ResponseSpecBuilder().expectStatusCode(403).build();
+
+            final List<Map<String, Object>> errors = (List<Map<String, Object>>) withdraw(savingsId, date, "90.00", null,
+                    List.of(emtLevy("20")), forbidden, CommonConstants.RESPONSE_ERROR);
+
+            assertThat(errors.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE))
+                    .isEqualTo("error.msg.savingsaccount.transaction.insufficient.account.balance");
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("100.00");
+            assertThat(transactionIds(savingsId)).isEqualTo(transactionIdsBefore);
         });
     }
 

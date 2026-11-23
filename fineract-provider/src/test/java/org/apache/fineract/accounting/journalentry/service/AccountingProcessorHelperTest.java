@@ -194,6 +194,85 @@ class AccountingProcessorHelperTest {
     }
 
     @Test
+    void reverseBookedSavingsJournalEntriesShouldMirrorEveryStandingLegOnItsOriginalAccount() {
+        Office office = mock(Office.class);
+        GLAccount savingsControl = glAccount(8L);
+        GLAccount bookedIncome = glAccount(3L);
+        // Both commission credits were booked to one account; the switch has since moved its switch fee elsewhere.
+        List<JournalEntry> booked = List.of(bookedLeg(savingsControl, true, "8.00"), bookedLeg(bookedIncome, false, "3.75"),
+                bookedLeg(bookedIncome, false, "4.25"));
+        when(glJournalEntryRepository.findJournalEntries("S2247", 2)).thenReturn(booked);
+        List<JournalEntry> contras = new ArrayList<>();
+
+        boolean handled = underTest.appendReversalOfBookedSavingsJournalEntries(office, "NGN", 476L, "2247", LocalDate.of(2026, 2, 3),
+                contras);
+
+        assertThat(handled).isTrue();
+        assertThat(contras).extracting(JournalEntry::getType).containsExactly(JournalEntryType.CREDIT.getValue(),
+                JournalEntryType.DEBIT.getValue(), JournalEntryType.DEBIT.getValue());
+        assertThat(contras).extracting(JournalEntry::getGlAccount).containsExactly(savingsControl, bookedIncome, bookedIncome);
+        assertThat(contras).extracting(JournalEntry::getAmount).containsExactly(new BigDecimal("8.00"), new BigDecimal("3.75"),
+                new BigDecimal("4.25"));
+        assertThat(contras).extracting(JournalEntry::getTransactionId).containsOnly("S2247");
+        assertThat(contras).extracting(JournalEntry::getSavingsTransactionId).containsOnly(2247L);
+        verifyNoInteractions(glAccountRepository);
+    }
+
+    @Test
+    void reverseBookedSavingsJournalEntriesShouldPostNothingWhenTheReversalIsAlreadyLinked() {
+        when(glJournalEntryRepository.existsByTransactionIdAndEntityTypeAndReversedTrue("S55", 2)).thenReturn(true);
+        List<JournalEntry> contras = new ArrayList<>();
+
+        boolean handled = underTest.appendReversalOfBookedSavingsJournalEntries(mock(Office.class), "NGN", 44L, "55",
+                LocalDate.of(2026, 2, 3), contras);
+
+        assertThat(handled).isTrue();
+        assertThat(contras).isEmpty();
+        verify(glJournalEntryRepository, never()).findJournalEntries(any(), any());
+    }
+
+    @Test
+    void reverseBookedSavingsJournalEntriesShouldDeferToCallerWhenNothingIsBooked() {
+        when(glJournalEntryRepository.findJournalEntries("S55", 2)).thenReturn(List.of());
+
+        boolean handled = underTest.reverseBookedSavingsJournalEntries(mock(Office.class), "NGN", 44L, "55", LocalDate.of(2026, 2, 3));
+
+        assertThat(handled).isFalse();
+        verify(glJournalEntryRepository, never()).saveAndFlush(any(JournalEntry.class));
+    }
+
+    @Test
+    void reverseBookedSavingsJournalEntriesShouldPostNothingWhenTheBookingIsAlreadyContraed() {
+        GLAccount savingsControl = glAccount(8L);
+        GLAccount vatPayable = glAccount(2L);
+        List<JournalEntry> standing = List.of(bookedLeg(savingsControl, true, "0.45"), bookedLeg(vatPayable, false, "0.45"),
+                bookedLeg(savingsControl, false, "0.45"), bookedLeg(vatPayable, true, "0.45"));
+        when(glJournalEntryRepository.findJournalEntries("S55", 2)).thenReturn(standing);
+        List<JournalEntry> contras = new ArrayList<>();
+
+        boolean handled = underTest.appendReversalOfBookedSavingsJournalEntries(mock(Office.class), "NGN", 44L, "55",
+                LocalDate.of(2026, 2, 3), contras);
+
+        assertThat(handled).isTrue();
+        assertThat(contras).isEmpty();
+    }
+
+    private static GLAccount glAccount(final Long id) {
+        GLAccount account = mock(GLAccount.class);
+        when(account.getId()).thenReturn(id);
+        return account;
+    }
+
+    private static JournalEntry bookedLeg(final GLAccount account, final boolean debit, final String amount) {
+        JournalEntry entry = mock(JournalEntry.class);
+        when(entry.getReversalJournalEntry()).thenReturn(null);
+        when(entry.getGlAccount()).thenReturn(account);
+        when(entry.isDebitEntry()).thenReturn(debit);
+        when(entry.getAmount()).thenReturn(new BigDecimal(amount));
+        return entry;
+    }
+
+    @Test
     void createBalancedJournalEntriesForSavingsShouldOmitZeroAllocationsBeforeAccountResolution() {
         Office office = mock(Office.class);
         GLAccount debitAccount = mock(GLAccount.class);

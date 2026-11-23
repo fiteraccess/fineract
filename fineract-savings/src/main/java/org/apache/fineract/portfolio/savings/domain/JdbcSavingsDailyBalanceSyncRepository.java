@@ -55,30 +55,33 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
             WHERE id = 1
             """;
 
-    // Filters:
-    // - is_reversed = false: skip txns that were undone.
-    // - original_transaction_id IS NULL: skip bookkeeping reversal records. The is_reversal flag on these rows
-    // is unreliable in practice (Fineract's reversal flow persists is_reversal=false on most accounts; only
-    // rarely does it stick as true), but original_transaction_id is set exclusively by the reversal()
-    // factory and is reliable. Without this filter the reversal record's polluted running_balance_derived
-    // (rewritten by upstream recalc as if it were a regular deposit) would clobber the snapshot.
-    // - running_balance_derived IS NOT NULL: legacy rows / certain txn types never get a value set, and the
-    // snapshot table's end_of_day_balance is NOT NULL.
-    private static final String SYNC_FROM_TRANSACTIONS_SQL = """
-            INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance)
-            SELECT DISTINCT ON (savings_account_id, transaction_date)
-                   savings_account_id, transaction_date, running_balance_derived
+    // Pass 1 does not copy balances itself. It only records WHICH (account, date) pairs had a transaction touched in
+    // the
+    // window, and the drain then re-derives each of those dates from the rows that still stand. Copying straight from
+    // the touched rows was wrong in two ways: a touched row is not necessarily the last standing row of its date, and
+    // a row that was reversed in the window was skipped altogether, so a date it emptied kept a stale snapshot row.
+    //
+    // Two statements, one per partial index on last_modified_on_utc (standing rows, reversed rows).
+    // - original_transaction_id IS NULL / is_reversal = false: skip reversal mirror rows. Older data carries mirrors
+    // with is_reversal = false, so both markers are checked.
+    private static final String ENQUEUE_TOUCHED_STANDING_SQL = """
+            INSERT INTO m_savings_daily_balance_dirty (savings_account_id, balance_date)
+            SELECT DISTINCT savings_account_id, transaction_date
             FROM m_savings_account_transaction
             WHERE last_modified_on_utc >  :watermark
               AND last_modified_on_utc <= :upTo
               AND is_reversed = false
-              AND original_transaction_id IS NULL
-              AND running_balance_derived IS NOT NULL
-            ORDER BY savings_account_id, transaction_date, id DESC
-            ON CONFLICT (savings_account_id, balance_date)
-            DO UPDATE SET end_of_day_balance = EXCLUDED.end_of_day_balance
-            WHERE m_savings_account_daily_balance.end_of_day_balance
-                  IS DISTINCT FROM EXCLUDED.end_of_day_balance
+            ON CONFLICT (savings_account_id, balance_date) DO NOTHING
+            """;
+
+    private static final String ENQUEUE_TOUCHED_REVERSED_SQL = """
+            INSERT INTO m_savings_daily_balance_dirty (savings_account_id, balance_date)
+            SELECT DISTINCT savings_account_id, transaction_date
+            FROM m_savings_account_transaction
+            WHERE last_modified_on_utc >  :watermark
+              AND last_modified_on_utc <= :upTo
+              AND is_reversed = true
+            ON CONFLICT (savings_account_id, balance_date) DO NOTHING
             """;
 
     private static final String ENQUEUE_DIRTY_SQL = """
@@ -87,45 +90,60 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
             ON CONFLICT (savings_account_id, balance_date) DO NOTHING
             """;
 
-    private static final String COUNT_DIRTY_SQL = "SELECT COUNT(*) FROM m_savings_daily_balance_dirty";
-
-    private static final String DRAIN_DELETE_EMPTY_DAYS_SQL = """
-            DELETE FROM m_savings_account_daily_balance s
-            USING m_savings_daily_balance_dirty d
-            WHERE s.savings_account_id = d.savings_account_id
-              AND s.balance_date       = d.balance_date
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM m_savings_account_transaction t
-                  WHERE t.savings_account_id = d.savings_account_id
-                    AND t.transaction_date   = d.balance_date
-                    AND t.is_reversed = false
-                    AND t.original_transaction_id IS NULL
-              )
+    // One statement so the work is taken, applied and cleared against a single snapshot of the dirty set. The dirty
+    // rows are consumed by the DELETE ... RETURNING itself; a pair enqueued by a concurrent transaction after this
+    // statement started is simply not part of it and waits for the next run. (The previous TRUNCATE dropped such rows
+    // unprocessed.)
+    // - A date with no standing transaction left loses its snapshot row.
+    // - Any other date takes the running balance of its last standing row.
+    private static final String DRAIN_SQL = """
+            WITH taken AS (
+                DELETE FROM m_savings_daily_balance_dirty
+                RETURNING savings_account_id, balance_date
+            ),
+            emptied AS (
+                DELETE FROM m_savings_account_daily_balance s
+                USING taken d
+                WHERE s.savings_account_id = d.savings_account_id
+                  AND s.balance_date       = d.balance_date
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM m_savings_account_transaction t
+                      WHERE t.savings_account_id = d.savings_account_id
+                        AND t.transaction_date   = d.balance_date
+                        AND t.is_reversed = false
+                        AND t.is_reversal = false
+                        AND t.original_transaction_id IS NULL
+                        AND t.running_balance_derived IS NOT NULL
+                  )
+                RETURNING 1
+            ),
+            refreshed AS (
+                INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance)
+                SELECT d.savings_account_id, d.balance_date, t.running_balance_derived
+                FROM taken d
+                JOIN LATERAL (
+                    SELECT running_balance_derived
+                    FROM m_savings_account_transaction
+                    WHERE savings_account_id = d.savings_account_id
+                      AND transaction_date   = d.balance_date
+                      AND is_reversed = false
+                      AND is_reversal = false
+                      AND original_transaction_id IS NULL
+                      AND running_balance_derived IS NOT NULL
+                    ORDER BY id DESC
+                    LIMIT 1
+                ) t ON TRUE
+                ON CONFLICT (savings_account_id, balance_date)
+                DO UPDATE SET end_of_day_balance = EXCLUDED.end_of_day_balance
+                WHERE m_savings_account_daily_balance.end_of_day_balance
+                      IS DISTINCT FROM EXCLUDED.end_of_day_balance
+                RETURNING 1
+            )
+            SELECT (SELECT COUNT(*) FROM taken) AS drained,
+                   (SELECT COUNT(*) FROM emptied) AS emptied,
+                   (SELECT COUNT(*) FROM refreshed) AS refreshed
             """;
-
-    private static final String DRAIN_UPSERT_SQL = """
-            INSERT INTO m_savings_account_daily_balance (savings_account_id, balance_date, end_of_day_balance)
-            SELECT d.savings_account_id, d.balance_date, t.running_balance_derived
-            FROM m_savings_daily_balance_dirty d
-            JOIN LATERAL (
-                SELECT running_balance_derived
-                FROM m_savings_account_transaction
-                WHERE savings_account_id = d.savings_account_id
-                  AND transaction_date   = d.balance_date
-                  AND is_reversed = false
-                  AND original_transaction_id IS NULL
-                  AND running_balance_derived IS NOT NULL
-                ORDER BY id DESC
-                LIMIT 1
-            ) t ON TRUE
-            ON CONFLICT (savings_account_id, balance_date)
-            DO UPDATE SET end_of_day_balance = EXCLUDED.end_of_day_balance
-            WHERE m_savings_account_daily_balance.end_of_day_balance
-                  IS DISTINCT FROM EXCLUDED.end_of_day_balance
-            """;
-
-    private static final String TRUNCATE_DIRTY_SQL = "TRUNCATE m_savings_daily_balance_dirty";
 
     @Override
     public OffsetDateTime readAndLockWatermark() {
@@ -152,7 +170,7 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
     public int syncFromTransactions(OffsetDateTime watermark, OffsetDateTime upTo) {
         MapSqlParameterSource params = new MapSqlParameterSource().addValue("watermark", Timestamp.from(watermark.toInstant()))
                 .addValue("upTo", Timestamp.from(upTo.toInstant()));
-        return jdbcTemplate.update(SYNC_FROM_TRANSACTIONS_SQL, params);
+        return jdbcTemplate.update(ENQUEUE_TOUCHED_STANDING_SQL, params) + jdbcTemplate.update(ENQUEUE_TOUCHED_REVERSED_SQL, params);
     }
 
     @Override
@@ -164,14 +182,7 @@ public class JdbcSavingsDailyBalanceSyncRepository implements SavingsDailyBalanc
 
     @Override
     public int drainDirty() {
-        Integer pending = jdbcTemplate.queryForObject(COUNT_DIRTY_SQL, Collections.emptyMap(), Integer.class);
-        int total = pending == null ? 0 : pending;
-        if (total == 0) {
-            return 0;
-        }
-        jdbcTemplate.update(DRAIN_DELETE_EMPTY_DAYS_SQL, Collections.emptyMap());
-        jdbcTemplate.update(DRAIN_UPSERT_SQL, Collections.emptyMap());
-        jdbcTemplate.getJdbcTemplate().execute(TRUNCATE_DIRTY_SQL);
-        return total;
+        final Integer drained = jdbcTemplate.queryForObject(DRAIN_SQL, Collections.emptyMap(), (rs, rowNum) -> rs.getInt("drained"));
+        return drained == null ? 0 : drained;
     }
 }

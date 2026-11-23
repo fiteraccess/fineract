@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -540,6 +541,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final boolean backdatedTxnsAllowedTill) {
         final SavingsAccountTransaction deposit = handleDeposit(account, fmt, transactionDate, transactionAmount, paymentDetail,
                 isAccountTransfer, isRegularTransaction, SavingsAccountTransactionType.DEPOSIT, switchId, backdatedTxnsAllowedTill);
+        validateReferenceDebitsAreCovered(account, references);
         applyReferenceTransactions(account, deposit, references, isAccountTransfer, backdatedTxnsAllowedTill, switchId, null);
         return deposit;
     }
@@ -782,7 +784,20 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     public List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
             final SavingsAccountTransaction parentTransaction, final List<ReferenceTransaction> references, final boolean isAccountTransfer,
             final boolean backdatedTxnsAllowedTill) {
+        validateReferenceDebitsAreCovered(account, references);
         return applyReferenceTransactions(account, parentTransaction, references, isAccountTransfer, backdatedTxnsAllowedTill, null, null);
+    }
+
+    /**
+     * The reference legs are debits on top of the primary transaction, which has already been applied. They must be
+     * covered by the balance it left, exactly as the bundled NIP, bills and signed-statement-fee withdrawals check.
+     */
+    private void validateReferenceDebitsAreCovered(final SavingsAccount account, final List<ReferenceTransaction> references) {
+        if (references == null || references.isEmpty()) {
+            return;
+        }
+        final BigDecimal referenceDebit = references.stream().map(ReferenceTransaction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.balanceValidationService.validateBalance(account, referenceDebit, false);
     }
 
     private List<SavingsAccountTransaction> applyReferenceTransactions(final SavingsAccount account,
@@ -800,8 +815,16 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
 
         final LocalDate transactionDate = parentTransaction.getTransactionDate();
         final boolean isBackdated = DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate());
-        BigDecimal transactionRunningBalance = parentTransaction.getRunningBalance(account.getCurrency()).getAmount();
         BigDecimal postedAccountBalance = account.getSummary().getAccountBalance(account.getCurrency()).getAmount();
+        // The legs step down from the balance left by everything already posted with the parent. On the same-day path
+        // the parent row carries the principal alone and its product fee rows follow it, so starting from the parent's
+        // own running balance would leave every leg high by those fees. The posted balance already reflects them; the
+        // running balance is that figure net of holds, as the primary posting stamps it. A backdated parent keeps its
+        // recalculated running balance and is re-chained afterwards.
+        final BigDecimal activeHolds = (account.getOnHoldFunds() != null ? account.getOnHoldFunds() : BigDecimal.ZERO)
+                .add(account.getSavingsHoldAmount() != null ? account.getSavingsHoldAmount() : BigDecimal.ZERO);
+        BigDecimal transactionRunningBalance = isBackdated ? parentTransaction.getRunningBalance(account.getCurrency()).getAmount()
+                : postedAccountBalance.subtract(activeHolds);
 
         final List<SavingsAccountTransaction> created = new ArrayList<>(references.size());
         for (final ReferenceTransaction ref : references) {
@@ -876,6 +899,14 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             created.add(referenceTransaction);
         }
         return created;
+    }
+
+    /**
+     * Reversing a debit only gives money back, so it cannot push the balance below its floor and must not be refused
+     * because the account is already short for some other reason. Only reversing a credit (or a hold) is checked.
+     */
+    static boolean reversalCanLowerBalance(final SavingsAccountTransaction reversedTransaction) {
+        return !reversedTransaction.isDebitType();
     }
 
     static BigDecimal calculateIncrementalOverdraftAmount(final BigDecimal availableBalanceBeforeDebit, final BigDecimal debitAmount) {
@@ -1102,22 +1133,37 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             }
             account.validatePivotDateTransaction(savingsAccountTransaction.getTransactionDate(), backdatedTxnsAllowedTill,
                     relaxingDaysConfigForPivotDate, "savingsaccount");
-            account.validateAccountBalanceDoesNotBecomeNegativeMinimal(savingsAccountTransaction.getAmount(), false);
+            if (reversalCanLowerBalance(savingsAccountTransaction)) {
+                account.validateAccountBalanceDoesNotBecomeNegativeMinimal(savingsAccountTransaction.getAmount(), false);
+            }
             account.activateAccountBasedOnBalance();
         }
-        this.savingsAccountRepository.save(account);
+        // Flush so rows the recalculation re-booked (a later row whose overdraft portion changed) get their IDs before
+        // the journal step reads them; an unflushed row reaches the accounting bridge with a null ID. Non-pivot rows
+        // cascade from the account; pivot-mode rows sit in the transient list and are flushed with the mirrors.
+        this.savingsAccountRepository.saveAndFlush(account);
         newTransactions.addAll(account.getSavingsAccountTransactionsWithPivotConfig());
-        this.savingsAccountTransactionRepository.saveAll(newTransactions);
+        this.savingsAccountTransactionRepository.saveAllAndFlush(newTransactions);
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds, false, backdatedTxnsAllowedTill);
 
-        final List<Long> reversedTransactionIds = new ArrayList<>();
+        // Link every row this operation reversed: the requested ones, the accruals, and any later row the
+        // recalculation reversed in order to re-book it.
+        final Set<Long> reversedTransactionIds = new LinkedHashSet<>();
         for (SavingsAccountTransaction savingsAccountTransaction : savingsAccountTransactions) {
             reversedTransactionIds.add(savingsAccountTransaction.getId());
         }
         for (SavingsAccountTransaction reversedAccrual : reversedAccruals) {
             reversedTransactionIds.add(reversedAccrual.getId());
         }
-        this.journalEntryWritePlatformService.linkSavingsReversalJournalEntries(reversedTransactionIds);
+        final List<SavingsAccountTransaction> recalculated = backdatedTxnsAllowedTill
+                ? account.getSavingsAccountTransactionsWithPivotConfig()
+                : account.getTransactions();
+        for (SavingsAccountTransaction transaction : recalculated) {
+            if (transaction.isReversed() && transaction.getId() != null && !existingReversedTransactionIds.contains(transaction.getId())) {
+                reversedTransactionIds.add(transaction.getId());
+            }
+        }
+        this.journalEntryWritePlatformService.linkSavingsReversalJournalEntries(new ArrayList<>(reversedTransactionIds));
 
         return reversal;
     }

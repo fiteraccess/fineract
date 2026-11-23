@@ -50,15 +50,15 @@ public interface SavingsDailyBalanceSyncRepository {
     void advanceWatermark(OffsetDateTime newValue);
 
     /**
-     * Pass 1: bulk UPSERT into {@code m_savings_account_daily_balance} from the latest non-reversed transaction's
-     * {@code running_balance_derived} for every account/date whose transaction was modified after {@code watermark} and
-     * up to {@code upTo}.
+     * Pass 1: record every {@code (account, date)} that had a transaction modified after {@code watermark} and up to
+     * {@code upTo}, standing or reversed, in {@code m_savings_daily_balance_dirty}. Nothing is copied here; the drain
+     * re-derives each recorded date from the rows that still stand.
      *
      * @param watermark
      *            exclusive lower bound on {@code last_modified_on_utc}
      * @param upTo
      *            inclusive upper bound on {@code last_modified_on_utc}
-     * @return number of rows affected
+     * @return number of {@code (account, date)} pairs newly recorded
      */
     int syncFromTransactions(OffsetDateTime watermark, OffsetDateTime upTo);
 
@@ -69,10 +69,10 @@ public interface SavingsDailyBalanceSyncRepository {
     void enqueueDirty(Long savingsAccountId, LocalDate balanceDate);
 
     /**
-     * Pass 2b: drain the dirty set. For each enqueued {@code (account, date)}: DELETE the snapshot row if no
-     * non-reversed transaction remains on that date; otherwise UPSERT it from the latest remaining transaction's
-     * {@code running_balance_derived}. Truncates the dirty table on success — all three steps run in a single DB
-     * transaction.
+     * Pass 2b: drain the dirty set. For each recorded {@code (account, date)}: DELETE the snapshot row if no standing
+     * transaction remains on that date; otherwise UPSERT it from the last standing transaction's
+     * {@code running_balance_derived}. Runs as one statement that consumes exactly the rows it processes, so a pair
+     * enqueued concurrently is left for the next run instead of being discarded.
      *
      * @return number of dirty rows drained
      */

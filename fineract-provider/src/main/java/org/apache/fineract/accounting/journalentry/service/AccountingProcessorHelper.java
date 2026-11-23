@@ -859,6 +859,74 @@ public class AccountingProcessorHelper {
         journalEntries.addAll(balancedEntries);
     }
 
+    /**
+     * Reverses a savings transaction by posting the exact opposite of every journal entry still standing for it,
+     * instead of re-deriving the legs from today's configuration. A switch's GL accounts (or a commission's stored
+     * split) can differ from what was in force at booking; a contra built from the current configuration then lands on
+     * accounts the booking never touched and cannot be paired with it.
+     *
+     * @return {@code false} when nothing is booked for the transaction, so the caller falls back to the
+     *         configuration-derived legs; {@code true} when the reversal is fully handled here
+     */
+    public boolean reverseBookedSavingsJournalEntries(final Office office, final String currencyCode, final Long savingsId,
+            final String transactionId, final LocalDate transactionDate) {
+        final List<JournalEntry> contraEntries = new ArrayList<>();
+        final boolean handled = appendReversalOfBookedSavingsJournalEntries(office, currencyCode, savingsId, transactionId, transactionDate,
+                contraEntries);
+        persistJournalEntries(contraEntries);
+        return handled;
+    }
+
+    /** As {@link #reverseBookedSavingsJournalEntries}, appending the contra entries to a batch the caller persists. */
+    public boolean appendReversalOfBookedSavingsJournalEntries(final Office office, final String currencyCode, final Long savingsId,
+            final String transactionId, final LocalDate transactionDate, final List<JournalEntry> journalEntries) {
+        if (!StringUtils.isNumeric(transactionId)) {
+            return false;
+        }
+        final String journalTransactionId = SAVINGS_TRANSACTION_IDENTIFIER + transactionId;
+        final Integer savingsEntity = PortfolioProductType.SAVING.getValue();
+        if (this.glJournalEntryRepository.existsByTransactionIdAndEntityTypeAndReversedTrue(journalTransactionId, savingsEntity)) {
+            // Already reversed and linked. What still stands are the contra legs; mirroring those would re-book the
+            // original.
+            return true;
+        }
+        final List<JournalEntry> standing = this.glJournalEntryRepository.findJournalEntries(journalTransactionId, savingsEntity).stream()
+                .filter(entry -> entry.getReversalJournalEntry() == null).toList();
+        if (standing.isEmpty()) {
+            return false;
+        }
+        final Map<Long, BigDecimal> netByAccount = new HashMap<>();
+        for (final JournalEntry entry : standing) {
+            netByAccount.merge(entry.getGlAccount().getId(), entry.isDebitEntry() ? entry.getAmount() : entry.getAmount().negate(),
+                    BigDecimal::add);
+        }
+        if (netByAccount.values().stream().allMatch(net -> net.signum() == 0)) {
+            // Every standing leg already has its opposite: the booking was contra'd before and there is nothing left.
+            return true;
+        }
+        for (final JournalEntry entry : standing) {
+            journalEntries.add(entry.isDebitEntry()
+                    ? buildCreditJournalEntryForSavings(office, currencyCode, entry.getGlAccount(), savingsId, transactionId,
+                            transactionDate, entry.getAmount())
+                    : buildDebitJournalEntryForSavings(office, currencyCode, entry.getGlAccount(), savingsId, transactionId,
+                            transactionDate, entry.getAmount()));
+        }
+        return true;
+    }
+
+    /**
+     * Savings legs whose GL accounts come from switch, aggregator or financial-activity configuration rather than the
+     * product mapping alone: NIP deposit/withdrawal/commission, VAT, signed-statement fee, bills principal and
+     * convenience fee. Their reversals mirror the booked entries.
+     */
+    public static boolean isConfigurationRoutedSavingsLeg(final SavingsTransactionDTO transaction) {
+        final SavingsAccountTransactionEnumData type = transaction.getTransactionType();
+        final boolean hasSwitch = StringUtils.isNotBlank(transaction.getSwitchId());
+        final boolean hasAggregator = StringUtils.isNotBlank(transaction.getAggregatorCode());
+        return ((type.isDeposit() || type.isWithdrawal() || type.isCommission()) && hasSwitch) || type.isVat()
+                || type.isSignedStatementFee() || (type.isWithdrawal() && hasAggregator) || type.isConvenienceFee();
+    }
+
     private List<SavingsJournalEntryAllocation> validateAllocations(final List<SavingsJournalEntryAllocation> allocations) {
         if (allocations == null) {
             throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.DEBIT_CREDIT_ACCOUNT_OR_AMOUNT_EMPTY, null, null, null);

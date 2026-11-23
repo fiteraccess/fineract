@@ -351,6 +351,23 @@ class CashBasedAccountingProcessorForSavingsTest {
     }
 
     @Test
+    void shouldReverseBookedEntriesInsteadOfRederivingThem() {
+        SavingsAccountTransactionEnumData commissionType = new SavingsAccountTransactionEnumData(
+                Long.valueOf(SavingsAccountTransactionType.COMMISSION.getValue()), SavingsAccountTransactionType.COMMISSION.getCode(),
+                SavingsAccountTransactionType.COMMISSION.name());
+        // Reversed, with no stored split: booked before the split was persisted.
+        SavingsTransactionDTO reversedCommission = new SavingsTransactionDTO(33L, 44L, "55", TRANSACTION_DATE, commissionType,
+                BigDecimal.TEN, true, List.of(), List.of(), null, false, List.of(), "NIBSS", null, null, null);
+        when(helper.appendReversalOfBookedSavingsJournalEntries(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("NGN"),
+                org.mockito.ArgumentMatchers.eq(11L), org.mockito.ArgumentMatchers.eq("55"),
+                org.mockito.ArgumentMatchers.eq(TRANSACTION_DATE), org.mockito.ArgumentMatchers.anyList())).thenReturn(true);
+
+        processor.createJournalEntriesForSavings(savings(reversedCommission));
+
+        verifyNoInteractions(configurationProvider);
+    }
+
+    @Test
     void shouldRejectMismatchedCommissionAllocationBeforeConfigurationOrJournalWork() {
         SavingsTransactionDTO commission = commission(BigDecimal.TEN, null, BigDecimal.ONE, BigDecimal.TWO);
 

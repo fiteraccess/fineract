@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.integrationtests;
 
+import static org.assertj.core.api.Assertions.within;
+
 import com.google.gson.Gson;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.specification.ResponseSpecification;
@@ -30,6 +32,8 @@ import java.util.Set;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.GetFinancialActivityAccountsResponse;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
+import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
+import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -192,6 +196,138 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
         });
     }
 
+    /**
+     * Two same-day NIP transfers on an overdraft-enabled account, where the second one's Commission and VAT legs are
+     * booked into overdraft (the only way a fee leg may legitimately carry an overdraft portion). Reversing the first
+     * transfer with its fees lifts those later legs out of overdraft, so the recalculation reverses and re-books them.
+     * The re-booked rows used to reach the journal step unflushed (null ID, HTTP 500) and without their switch routing
+     * or commission split (no journal).
+     */
+    @Test
+    void bulkReversalRebooksLaterOverdrawnNipFeeLegsWithTheirJournals() {
+        final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+        runAt(date, () -> {
+            final String switchId = uniqueSwitchId();
+            final SwitchAccounting switchAccounting = configureSwitch(switchId);
+            final Account vatPayable = configureVatPayableMapping();
+            final Long savingsId = createActiveOverdraftAccrualSavingsAccount(date);
+            deposit(savingsId, date, new BigDecimal("20.00"));
+
+            withdraw(savingsId, date, "1.00", switchId,
+                    List.of(commission("8.00", "First commission", "3.75", "4.25"), vat("0.45", "First VAT")));
+            final Number firstPrincipalId = id(transactionRows(savingsId, WITHDRAWAL).get(0));
+            withdraw(savingsId, date, "5.00", switchId,
+                    List.of(commission("8.00", "Second commission", "3.75", "4.25"), vat("0.45", "Second VAT")));
+
+            final List<Map<String, Object>> overdrawn = liveFeeRows(savingsId).stream()
+                    .filter(row -> ((BigDecimal) row.get("overdraft_amount_derived")).signum() > 0).toList();
+            assertThat(overdrawn).as("precondition: the second transfer's fee legs are booked into overdraft").hasSize(2);
+            final Number overdrawnCommissionId = id(overdrawn.get(0));
+            final Number overdrawnVatId = id(overdrawn.get(1));
+            final Map<Long, Integer> bookingLegCounts = Map.of(overdrawnCommissionId.longValue(),
+                    journalEntries(overdrawnCommissionId).size(), overdrawnVatId.longValue(), journalEntries(overdrawnVatId).size());
+            final Number secondPrincipalId = id(transactionRows(savingsId, WITHDRAWAL).get(1));
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("-2.90");
+
+            reverse(savingsId, firstPrincipalId, true, true);
+
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("6.55");
+            assertDailySnapshotMatchesLedger(savingsId);
+            final List<Map<String, Object>> liveFees = liveFeeRows(savingsId);
+            assertThat(liveFees).as("one live Commission and one live VAT remain for the second transfer").hasSize(2);
+            final Map<String, Object> rebookedCommission = liveFees.get(0);
+            final Map<String, Object> rebookedVat = liveFees.get(1);
+            assertThat(((Number) rebookedCommission.get("transaction_type_enum")).intValue()).isEqualTo(COMMISSION);
+            assertThat(((Number) rebookedVat.get("transaction_type_enum")).intValue()).isEqualTo(VAT);
+            for (final Map<String, Object> rebooked : liveFees) {
+                assertThat(id(rebooked).longValue()).as("re-booked as a new row").isNotIn(overdrawnCommissionId.longValue(),
+                        overdrawnVatId.longValue());
+                assertThat((BigDecimal) rebooked.get("overdraft_amount_derived")).isEqualByComparingTo("0");
+                assertThat(rebooked.get("switch_id")).as("re-booked row keeps its switch routing").isEqualTo(switchId);
+            }
+            assertThat((BigDecimal) rebookedCommission.get("switch_fee_amount")).isEqualByComparingTo("3.75");
+            assertThat((BigDecimal) rebookedCommission.get("bank_commission_amount")).isEqualByComparingTo("4.25");
+
+            assertCreditLegs(id(rebookedCommission), 3, Map.of(switchAccounting.switchFee().getAccountID(), "3.75",
+                    switchAccounting.commissionIncome().getAccountID(), "4.25"));
+            assertCreditLegs(id(rebookedVat), 2, Map.of(vatPayable.getAccountID(), "0.45"));
+
+            for (final Number replacedId : List.of(overdrawnCommissionId, overdrawnVatId)) {
+                final Map<String, Object> replaced = tenantJdbc()
+                        .queryForMap("SELECT is_reversed FROM m_savings_account_transaction WHERE id = ?", replacedId.longValue());
+                assertThat(bool(replaced, "is_reversed")).as("overdrawn original %s is reversed", replacedId).isTrue();
+                final int bookingLegs = bookingLegCounts.get(replacedId.longValue());
+                final List<Map<String, Object>> entries = journalEntries(replacedId);
+                assertThat(entries).as("original %s has one contra leg per booking leg", replacedId).hasSize(bookingLegs * 2);
+                final Map<Integer, BigDecimal> netByAccount = new LinkedHashMap<>();
+                for (final Map<String, Object> leg : entries) {
+                    final BigDecimal legAmount = (BigDecimal) leg.get("amount");
+                    final boolean debit = ((Number) leg.get("type_enum")).intValue() == JE_DEBIT;
+                    netByAccount.merge(((Number) leg.get("gl_account_id")).intValue(), debit ? legAmount : legAmount.negate(),
+                            BigDecimal::add);
+                }
+                netByAccount.forEach((glAccountId, net) -> assertThat(net)
+                        .as("original %s nets to zero on GL account %s", replacedId, glAccountId).isEqualByComparingTo("0"));
+                assertBookingEntriesLinked(replacedId, bookingLegs);
+            }
+
+            final Integer mirrorJournals = tenantJdbc().queryForObject("""
+                    SELECT count(*)
+                      FROM acc_gl_journal_entry je
+                      JOIN m_savings_account_transaction t ON t.id = je.savings_transaction_id
+                     WHERE t.savings_account_id = ? AND t.is_reversal = true
+                    """, Integer.class, savingsId);
+            assertThat(mirrorJournals).as("reversal mirror rows are never journaled").isZero();
+
+            // The re-booked fee legs share the second transfer's ref_no with the rows they replaced; a fee-inclusive
+            // reversal of that transfer must sweep the live legs and skip the already-reversed ones.
+            reverse(savingsId, secondPrincipalId, true, true);
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("20.00");
+            assertThat(liveFeeRows(savingsId)).isEmpty();
+            assertDailySnapshotMatchesLedger(savingsId);
+        });
+    }
+
+    /**
+     * A reversal recomputes the stored account balance from the full history. A signed-statement fee is a debit that is
+     * not a withdrawal type; the recompute used to leave it out and hand the fee back to the balance, which then let
+     * later debits through on money the account did not have.
+     */
+    @Test
+    void reversalRecomputeKeepsSignedStatementFeeDebited() {
+        final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
+        runAt(date, () -> {
+            final String switchId = uniqueSwitchId();
+            configureSwitch(switchId);
+            configureVatPayableMapping();
+            configureSignedStatementFeeIncomeMapping();
+            final Long savingsId = createActiveCashBasedSavingsAccount(date, createSavingsAccounting());
+            deposit(savingsId, date, new BigDecimal("1000.00"));
+
+            final Map<String, Object> statementFee = new LinkedHashMap<>();
+            statementFee.put("signedStatementFee", true);
+            statementFee.put("locale", "en");
+            statementFee.put("dateFormat", DATETIME_PATTERN);
+            statementFee.put("transactionDate", date);
+            statementFee.put("transactionAmount", new BigDecimal("20.00"));
+            statementFee.put("paymentTypeId", 1);
+            statementFee.put("referenceTransactions", List.of(vat("1.50", "Statement VAT")));
+            new SavingsAccountHelper(requestSpec, responseSpec).withdrawalFromSavingsAccount(savingsId.intValue(),
+                    gson.toJson(statementFee), CommonConstants.RESPONSE_RESOURCE_ID);
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("978.50");
+
+            withdraw(savingsId, date, "100.00", switchId,
+                    List.of(commission("3.00", "Commission to reverse", "1.00", "2.00"), vat("7.00", "VAT to reverse")));
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("868.50");
+            final Number principalId = id(transactionRows(savingsId, WITHDRAWAL).get(0));
+
+            reverse(savingsId, principalId, true, true);
+
+            assertThat(accountBalance(savingsId)).as("the 20.00 signed-statement fee and its VAT stay debited after the recompute")
+                    .isEqualByComparingTo("978.50");
+        });
+    }
+
     @Test
     void bulkReversalWithoutIncludeFeesLeavesNipFeesStanding() {
         final String date = dateTimeFormatter.format(Utils.getLocalDateOfTenant());
@@ -324,6 +460,269 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
             assertThat(rebooked).as("affected dates must be re-booked after the job re-runs").hasSameSizeAs(affectedAccruals);
             rebooked.forEach(row -> assertThat(amount(row)).isEqualByComparingTo(singleBalanceDailyAccrual));
         });
+    }
+
+    /**
+     * Two consecutive months on an accrual-accounted, monthly-posting account, with a NIP transfer, a signed-statement
+     * fee and a back-dated fee-inclusive reversal in the first month. At each month end the daily accruals must add up
+     * to the interest posted, the posting must match an independent daily-balance calculation, interest payable must be
+     * settled, and the stored balance must equal the ledger. Runs in its own office so no branch closure applies.
+     */
+    @Test
+    void interestAndAccrualsReconcileMonthOnMonthAroundFeesAndABackdatedReversal() {
+        runAt("01 December 2020", () -> {
+            final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+            final String switchId = uniqueSwitchId();
+            configureSwitch(switchId);
+            configureVatPayableMapping();
+            configureSignedStatementFeeIncomeMapping();
+
+            final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
+            final Account savingsReference = accountHelper.createAssetAccount("MoM Savings Reference");
+            final Account interestExpense = accountHelper.createExpenseAccount("MoM Interest Expense");
+            final Account savingsControl = accountHelper.createLiabilityAccount("MoM Savings Control");
+            final Account interestPayable = accountHelper.createLiabilityAccount("MoM Interest Payable");
+            final Account feeIncome = accountHelper.createIncomeAccount("MoM Fee Income");
+            final Account[] accountList = { savingsReference, savingsControl, interestExpense, interestPayable, feeIncome };
+            final String productJson = new SavingsProductHelper().withNominalAnnualInterestRate(new BigDecimal("10.0"))
+                    .withAccountingRuleAsAccrualBased(accountList).withSavingsReferenceAccountId(savingsReference.getAccountID().toString())
+                    .withSavingsControlAccountId(savingsControl.getAccountID().toString())
+                    .withInterestOnSavingsAccountId(interestExpense.getAccountID().toString())
+                    .withInterestPayableAccountId(interestPayable.getAccountID().toString())
+                    .withIncomeFromFeeAccountId(feeIncome.getAccountID().toString()).build();
+            final Long productId = SavingsProductHelper.createSavingsProduct(productJson, requestSpec, responseSpec).longValue();
+
+            final Integer officeId = new org.apache.fineract.integrationtests.common.OfficeHelper(requestSpec, responseSpec)
+                    .createOffice("01 January 2020");
+            final Long clientId = ClientHelper.createClient(requestSpec, responseSpec, "01 January 2020", officeId.toString()).longValue();
+            final Long savingsId = applySavingsAccount(applySavingsRequest(clientId, productId, "01 December 2020")).getSavingsId();
+            approveSavingsAccount(savingsId, "01 December 2020");
+            activateSavingsAccount(savingsId, "01 December 2020");
+            deposit(savingsId, "01 December 2020", new BigDecimal("10000.00"));
+
+            // 10 Dec: a NIP transfer with fees, later reversed.
+            moveBusinessDateTo("10 December 2020");
+            withdraw(savingsId, "10 December 2020", "1000.00", switchId,
+                    List.of(commission("8.00", "MoM commission", "3.75", "4.25"), vat("0.45", "MoM VAT")));
+            final Number nipPrincipalId = id(transactionRows(savingsId, WITHDRAWAL).get(0));
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("8991.55");
+
+            // 15 Dec: accruals booked for 1-14 Dec on the balances as they stand, then a signed-statement fee.
+            moveBusinessDateTo("15 December 2020");
+            schedulerJobHelper.executeAndAwaitJob("Add Accrual Transactions For Savings");
+            assertThat(liveAccruals(savingsId, "2020-12-01", "2020-12-31")).as("accruals booked mid-month").isNotEmpty();
+            final Map<String, Object> statementFee = new LinkedHashMap<>();
+            statementFee.put("signedStatementFee", true);
+            statementFee.put("locale", "en");
+            statementFee.put("dateFormat", DATETIME_PATTERN);
+            statementFee.put("transactionDate", "15 December 2020");
+            statementFee.put("transactionAmount", new BigDecimal("20.00"));
+            statementFee.put("paymentTypeId", 1);
+            statementFee.put("referenceTransactions", List.of(vat("1.50", "MoM statement VAT")));
+            savingsAccountHelper.withdrawalFromSavingsAccount(savingsId.intValue(), gson.toJson(statementFee),
+                    CommonConstants.RESPONSE_RESOURCE_ID);
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("8970.05");
+            assertDailySnapshotMatchesLedger(savingsId);
+
+            // 21 Dec: the 10 Dec transfer is reversed with its fees, so December must accrue as if it never happened.
+            moveBusinessDateTo("21 December 2020");
+            reverse(savingsId, nipPrincipalId, true, true);
+            assertThat(accountBalance(savingsId)).isEqualByComparingTo("9978.50");
+            // The reversal also reversed the accruals booked for 10-15 December. Until the accrual job re-books them
+            // those dates have no standing transaction, so their snapshot rows must go rather than keep the old
+            // balance.
+            assertDailySnapshotMatchesLedger(savingsId);
+
+            // December month end.
+            moveBusinessDateTo("01 January 2021");
+            schedulerJobHelper.executeAndAwaitJob("Add Accrual Transactions For Savings");
+            savingsAccountHelper.postInterestForSavings(savingsId.intValue());
+
+            // 14 days at 10,000.00 and 17 days at 9,978.50, at 10% over 365 days.
+            final BigDecimal expectedDecember = dailyBalanceInterest(new BigDecimal("10000.00"), 14, new BigDecimal("9978.50"), 17);
+            final List<Map<String, Object>> decemberPostings = livePostings(savingsId);
+            assertThat(decemberPostings).as("exactly one interest posting after the first month end").hasSize(1);
+            final BigDecimal decemberInterest = amount(decemberPostings.get(0));
+            assertThat(decemberInterest).as("December interest posted").isCloseTo(expectedDecember, within(new BigDecimal("0.02")));
+            assertThat(sum(liveAccruals(savingsId, "2020-12-01", "2020-12-31"))).as("December accruals add up to the December posting")
+                    .isCloseTo(decemberInterest, within(new BigDecimal("0.02")));
+            assertThat(liveAccruals(savingsId, "2020-12-01", "2020-12-31")).as("one live accrual per day of December").hasSize(31);
+            final BigDecimal balanceAfterDecember = new BigDecimal("9978.50").add(decemberInterest);
+            assertBalanceMatchesLedger(savingsId, balanceAfterDecember);
+            // The accrual job books through the business date, so the first day of the new month is already accrued
+            // and is the only interest still payable.
+            final BigDecimal accruedAfterDecember = sum(liveAccruals(savingsId, "2021-01-01", "2099-12-31"));
+            assertThat(netCredit(savingsId, interestPayable)).as("the December posting settles December's interest payable")
+                    .isCloseTo(accruedAfterDecember, within(new BigDecimal("0.02")));
+            assertThat(netCredit(savingsId, interestExpense).negate()).as("interest expense equals interest posted plus accrued")
+                    .isCloseTo(decemberInterest.add(accruedAfterDecember), within(new BigDecimal("0.02")));
+
+            // January: a deposit on the 11th, then the second month end.
+            moveBusinessDateTo("11 January 2021");
+            deposit(savingsId, "11 January 2021", new BigDecimal("5000.00"));
+            moveBusinessDateTo("01 February 2021");
+            schedulerJobHelper.executeAndAwaitJob("Add Accrual Transactions For Savings");
+            savingsAccountHelper.postInterestForSavings(savingsId.intValue());
+
+            // 10 days on the balance that includes December's interest, then 21 days with the deposit on top.
+            final BigDecimal expectedJanuary = dailyBalanceInterest(balanceAfterDecember, 10,
+                    balanceAfterDecember.add(new BigDecimal("5000.00")), 21);
+            final List<Map<String, Object>> postings = livePostings(savingsId);
+            assertThat(postings).as("exactly two interest postings after the second month end").hasSize(2);
+            assertThat(amount(postings.get(0))).as("December posting is unchanged by the January run")
+                    .isEqualByComparingTo(decemberInterest);
+            final BigDecimal januaryInterest = amount(postings.get(1));
+            assertThat(januaryInterest).as("January interest posted").isCloseTo(expectedJanuary, within(new BigDecimal("0.02")));
+            assertThat(sum(liveAccruals(savingsId, "2021-01-01", "2021-01-31"))).as("January accruals add up to the January posting")
+                    .isCloseTo(januaryInterest, within(new BigDecimal("0.02")));
+            assertThat(liveAccruals(savingsId, "2021-01-01", "2021-01-31")).as("one live accrual per day of January").hasSize(31);
+            final BigDecimal balanceAfterJanuary = balanceAfterDecember.add(new BigDecimal("5000.00")).add(januaryInterest);
+            assertBalanceMatchesLedger(savingsId, balanceAfterJanuary);
+            final BigDecimal accruedAfterJanuary = sum(liveAccruals(savingsId, "2021-02-01", "2099-12-31"));
+            assertThat(netCredit(savingsId, interestPayable)).as("the January posting settles January's interest payable")
+                    .isCloseTo(accruedAfterJanuary, within(new BigDecimal("0.02")));
+            assertThat(netCredit(savingsId, interestExpense).negate()).as("interest expense equals interest posted plus accrued")
+                    .isCloseTo(decemberInterest.add(januaryInterest).add(accruedAfterJanuary), within(new BigDecimal("0.02")));
+
+            // Running the month end again must change nothing.
+            final int accrualRowsBefore = accrualRows(savingsId).size();
+            schedulerJobHelper.executeAndAwaitJob("Add Accrual Transactions For Savings");
+            savingsAccountHelper.postInterestForSavings(savingsId.intValue());
+            assertThat(accrualRows(savingsId)).as("no accrual is booked twice").hasSize(accrualRowsBefore);
+            assertThat(livePostings(savingsId)).as("no interest is posted twice").hasSize(2);
+            assertBalanceMatchesLedger(savingsId, balanceAfterJanuary);
+
+            // February, posted the way it is with Synapse interest posting on: Fineract books the daily accruals and
+            // the
+            // month-end posting arrives from Synapse as a replay, here sent exactly as Synapse sends it.
+            moveBusinessDateTo("01 March 2021");
+            schedulerJobHelper.executeAndAwaitJob("Add Accrual Transactions For Savings");
+            final List<Map<String, Object>> februaryAccruals = liveAccruals(savingsId, "2021-02-01", "2021-02-28");
+            assertThat(februaryAccruals).as("one live accrual per day of February").hasSize(28);
+            final BigDecimal februaryAccrued = sum(februaryAccruals);
+            assertThat(februaryAccrued).as("February accruals match 28 days on the balance carried out of January")
+                    .isCloseTo(dailyBalanceInterest(balanceAfterJanuary, 28, BigDecimal.ZERO, 0), within(new BigDecimal("0.02")));
+
+            globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING,
+                    new PutGlobalConfigurationsRequest().enabled(true));
+            try {
+                final String traceId = java.util.UUID.randomUUID().toString();
+                final String replay = SavingsAccountHelper.buildReplayInterestPostingJson(februaryAccrued.toPlainString(), "01 March 2021",
+                        "INTEREST_POSTING", traceId, null);
+                final Integer replayedId = savingsAccountHelper.replayInterestPosting(savingsId.intValue(), replay);
+                final Integer replayedAgainId = savingsAccountHelper.replayInterestPosting(savingsId.intValue(), replay);
+                assertThat(replayedAgainId).as("a repeated replay returns the same posting").isEqualTo(replayedId);
+            } finally {
+                globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_SYNAPSE_INTEREST_POSTING,
+                        new PutGlobalConfigurationsRequest().enabled(false));
+            }
+
+            final List<Map<String, Object>> allPostings = livePostings(savingsId);
+            assertThat(allPostings).as("three interest postings after the third month end").hasSize(3);
+            assertThat(amount(allPostings.get(2))).as("the replayed February posting").isEqualByComparingTo(februaryAccrued);
+            final BigDecimal balanceAfterFebruary = balanceAfterJanuary.add(februaryAccrued);
+            assertBalanceMatchesLedger(savingsId, balanceAfterFebruary);
+            final BigDecimal accruedAfterFebruary = sum(liveAccruals(savingsId, "2021-03-01", "2099-12-31"));
+            assertThat(netCredit(savingsId, interestPayable)).as("the replayed posting settles February's interest payable")
+                    .isCloseTo(accruedAfterFebruary, within(new BigDecimal("0.02")));
+            assertThat(netCredit(savingsId, interestExpense).negate()).as("interest expense equals interest posted plus accrued").isCloseTo(
+                    decemberInterest.add(januaryInterest).add(februaryAccrued).add(accruedAfterFebruary), within(new BigDecimal("0.02")));
+
+            // The daily balance snapshot must agree with the ledger on every date it holds, including the days whose
+            // only row is an accrual and the days rewritten by the back-dated reversal.
+            assertDailySnapshotMatchesLedger(savingsId);
+        });
+    }
+
+    /** Syncs the daily balance snapshot and compares every row with the end-of-day balance summed from the ledger. */
+    private void assertDailySnapshotMatchesLedger(final Long savingsId) {
+        schedulerJobHelper.executeAndAwaitJob("Sync Savings Daily Balance");
+        final Integer snapshotRows = tenantJdbc().queryForObject(
+                "SELECT count(*) FROM m_savings_account_daily_balance WHERE savings_account_id = ?", Integer.class, savingsId);
+        assertThat(snapshotRows).as("snapshot rows exist").isPositive();
+        final Integer mismatches = tenantJdbc().queryForObject("""
+                WITH signed AS (
+                    SELECT transaction_date,
+                           SUM(CASE WHEN transaction_type_enum IN (1, 3, 8) THEN amount
+                                    WHEN transaction_type_enum IN (2, 4, 5, 7, 17, 18, 24, 25, 26, 27, 28, 29) THEN -amount
+                                    ELSE 0 END) AS day_net
+                      FROM m_savings_account_transaction
+                     WHERE savings_account_id = ? AND is_reversed = false AND is_reversal = false
+                     GROUP BY transaction_date
+                ), eod AS (
+                    SELECT transaction_date, SUM(day_net) OVER (ORDER BY transaction_date) AS balance FROM signed
+                )
+                SELECT count(*)
+                  FROM m_savings_account_daily_balance s
+                  LEFT JOIN eod e ON e.transaction_date = s.balance_date
+                 WHERE s.savings_account_id = ?
+                   AND (e.balance IS NULL OR s.end_of_day_balance <> e.balance)
+                """, Integer.class, savingsId, savingsId);
+        assertThat(mismatches).as("snapshot rows that disagree with the ledger").isZero();
+    }
+
+    private void moveBusinessDateTo(final String date) {
+        businessDateHelper.updateBusinessDate(new org.apache.fineract.client.models.BusinessDateUpdateRequest()
+                .type(org.apache.fineract.client.models.BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE).date(date)
+                .dateFormat(DATETIME_PATTERN).locale("en"));
+    }
+
+    /** Simple daily-balance interest at 10% over a 365-day year for two consecutive balance stretches. */
+    private static BigDecimal dailyBalanceInterest(final BigDecimal firstBalance, final int firstDays, final BigDecimal secondBalance,
+            final int secondDays) {
+        final BigDecimal balanceDays = firstBalance.multiply(BigDecimal.valueOf(firstDays))
+                .add(secondBalance.multiply(BigDecimal.valueOf(secondDays)));
+        return balanceDays.multiply(new BigDecimal("0.10")).divide(BigDecimal.valueOf(365), 6, java.math.RoundingMode.HALF_EVEN);
+    }
+
+    private List<Map<String, Object>> liveAccruals(final Number savingsId, final String fromIso, final String toIso) {
+        return tenantJdbc().queryForList("""
+                SELECT id, transaction_date, amount
+                  FROM m_savings_account_transaction
+                 WHERE savings_account_id = ?
+                   AND transaction_type_enum = %d
+                   AND is_reversed = false AND is_reversal = false
+                   AND transaction_date BETWEEN CAST(? AS date) AND CAST(? AS date)
+                 ORDER BY transaction_date, id
+                """.formatted(ACCRUAL), savingsId.longValue(), fromIso, toIso);
+    }
+
+    private List<Map<String, Object>> livePostings(final Number savingsId) {
+        return tenantJdbc().queryForList("""
+                SELECT id, transaction_date, amount
+                  FROM m_savings_account_transaction
+                 WHERE savings_account_id = ?
+                   AND transaction_type_enum = 3
+                   AND is_reversed = false AND is_reversal = false
+                 ORDER BY transaction_date, id
+                """, savingsId.longValue());
+    }
+
+    private BigDecimal sum(final List<Map<String, Object>> rows) {
+        return rows.stream().map(this::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Credits less debits booked to the GL account by this savings account's transactions. */
+    private BigDecimal netCredit(final Number savingsId, final Account glAccount) {
+        return tenantJdbc().queryForObject("""
+                SELECT COALESCE(SUM(CASE WHEN je.type_enum = %d THEN je.amount ELSE -je.amount END), 0)
+                  FROM acc_gl_journal_entry je
+                  JOIN m_savings_account_transaction t ON t.id = je.savings_transaction_id
+                 WHERE t.savings_account_id = ? AND je.account_id = ?
+                """.formatted(JE_CREDIT), BigDecimal.class, savingsId.longValue(), glAccount.getAccountID());
+    }
+
+    /** The stored balance, the sum of the standing ledger rows and the expected figure must all agree. */
+    private void assertBalanceMatchesLedger(final Long savingsId, final BigDecimal expected) {
+        final BigDecimal ledger = tenantJdbc().queryForObject("""
+                SELECT COALESCE(SUM(CASE WHEN transaction_type_enum IN (1, 3, 8) THEN amount
+                                         WHEN transaction_type_enum IN (2, 4, 5, 7, 17, 18, 24, 25, 26, 27, 28, 29) THEN -amount
+                                         ELSE 0 END), 0)
+                  FROM m_savings_account_transaction
+                 WHERE savings_account_id = ? AND is_reversed = false AND is_reversal = false
+                """, BigDecimal.class, savingsId);
+        assertThat(ledger).as("ledger balance").isCloseTo(expected, within(new BigDecimal("0.02")));
+        assertThat(accountBalance(savingsId)).as("stored balance equals the ledger").isEqualByComparingTo(ledger);
     }
 
     // ---------- undo (flag-only) semantics ----------
@@ -554,6 +953,19 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
         return configureFinancialActivityMapping(FinancialActivity.EMT_LEVY.getValue(), "Reversal EMT Levy Payable");
     }
 
+    private void configureSignedStatementFeeIncomeMapping() {
+        final long financialActivityId = FinancialActivity.SIGNED_STATEMENT_FEE_INCOME.getValue();
+        final FinancialActivityAccountHelper helper = new FinancialActivityAccountHelper(requestSpec);
+        for (final GetFinancialActivityAccountsResponse mapping : helper.getAllFinancialActivityAccounts()) {
+            if (mapping.getFinancialActivityData().getId() == financialActivityId) {
+                return;
+            }
+        }
+        final Account income = new AccountHelper(requestSpec, responseSpec).createIncomeAccount("Reversal Statement Fee Income");
+        helper.createFinancialActivityAccount(new PostFinancialActivityAccountsRequest().financialActivityId(financialActivityId)
+                .glAccountId(income.getAccountID().longValue()));
+    }
+
     private Account configureFinancialActivityMapping(final long financialActivityId, final String accountName) {
         final FinancialActivityAccountHelper helper = new FinancialActivityAccountHelper(requestSpec);
         for (final GetFinancialActivityAccountsResponse mapping : helper.getAllFinancialActivityAccounts()) {
@@ -587,8 +999,12 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
         return savingsId;
     }
 
-    @SuppressWarnings("removal")
     private AccrualProduct createAccrualProduct() {
+        return createAccrualProduct(null);
+    }
+
+    @SuppressWarnings("removal")
+    private AccrualProduct createAccrualProduct(final String overdraftLimit) {
         final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
         final Account savingsReference = accountHelper.createAssetAccount("Accrual Reversal Savings Reference");
         final Account interestOnSavings = accountHelper.createExpenseAccount("Accrual Reversal Interest Expense");
@@ -596,12 +1012,16 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
         final Account interestPayable = accountHelper.createLiabilityAccount("Accrual Reversal Interest Payable");
         final Account incomeFromFees = accountHelper.createIncomeAccount("Accrual Reversal Fee Income");
         final Account[] accountList = { savingsReference, savingsControl, interestOnSavings, interestPayable, incomeFromFees };
-        final String productJson = new SavingsProductHelper().withNominalAnnualInterestRate(new BigDecimal("10.0"))
+        final SavingsProductHelper productHelper = new SavingsProductHelper().withNominalAnnualInterestRate(new BigDecimal("10.0"))
                 .withAccountingRuleAsAccrualBased(accountList).withSavingsReferenceAccountId(savingsReference.getAccountID().toString())
                 .withSavingsControlAccountId(savingsControl.getAccountID().toString())
                 .withInterestOnSavingsAccountId(interestOnSavings.getAccountID().toString())
                 .withInterestPayableAccountId(interestPayable.getAccountID().toString())
-                .withIncomeFromFeeAccountId(incomeFromFees.getAccountID().toString()).build();
+                .withIncomeFromFeeAccountId(incomeFromFees.getAccountID().toString());
+        if (overdraftLimit != null) {
+            productHelper.withOverDraft(overdraftLimit);
+        }
+        final String productJson = productHelper.build();
         return new AccrualProduct(SavingsProductHelper.createSavingsProduct(productJson, requestSpec, responseSpec));
     }
 
@@ -667,6 +1087,45 @@ class SavingsTransactionReversalIntegrationTest extends BaseSavingsIntegrationTe
         }
         sql.append(" ORDER BY is_reversal, id");
         return tenantJdbc().queryForList(sql.toString(), savingsId.longValue());
+    }
+
+    /** Commission and VAT rows that are neither reversed nor reversal mirrors, Commission first. */
+    private List<Map<String, Object>> liveFeeRows(final Number savingsId) {
+        return tenantJdbc().queryForList("""
+                SELECT id, transaction_type_enum, amount, overdraft_amount_derived, switch_id, switch_fee_amount, bank_commission_amount
+                  FROM m_savings_account_transaction
+                 WHERE savings_account_id = ?
+                   AND transaction_type_enum IN (%d, %d)
+                   AND is_reversed = false
+                   AND is_reversal = false
+                   AND ref_no = (SELECT ref_no FROM m_savings_account_transaction
+                                  WHERE savings_account_id = ? AND transaction_type_enum = %d AND amount = 5
+                                    AND is_reversal = false)
+                 ORDER BY transaction_type_enum, id
+                """.formatted(COMMISSION, VAT, WITHDRAWAL), savingsId.longValue(), savingsId.longValue());
+    }
+
+    /** Asserts the transaction booked exactly the expected number of journal legs and the given credit legs. */
+    private void assertCreditLegs(final Number savingsTransactionId, final int totalLegs, final Map<Integer, String> expectedCredits) {
+        final List<Map<String, Object>> entries = journalEntries(savingsTransactionId);
+        assertThat(entries).as("journal legs of re-booked transaction %s", savingsTransactionId).hasSize(totalLegs);
+        final Map<Integer, BigDecimal> credits = new LinkedHashMap<>();
+        for (final Map<String, Object> leg : entries) {
+            if (((Number) leg.get("type_enum")).intValue() == JE_CREDIT) {
+                credits.put(((Number) leg.get("gl_account_id")).intValue(), (BigDecimal) leg.get("amount"));
+            }
+        }
+        Assertions.assertThat(credits.keySet()).containsExactlyInAnyOrderElementsOf(expectedCredits.keySet());
+        expectedCredits.forEach((glAccountId, expected) -> assertThat(credits.get(glAccountId)).isEqualByComparingTo(expected));
+    }
+
+    private Long createActiveOverdraftAccrualSavingsAccount(final String date) {
+        final Long clientId = createClient();
+        final Long productId = createAccrualProduct("100").productId().longValue();
+        final Long savingsId = applySavingsAccount(applySavingsRequest(clientId, productId, date)).getSavingsId();
+        approveSavingsAccount(savingsId, date);
+        activateSavingsAccount(savingsId, date);
+        return savingsId;
     }
 
     private List<Map<String, Object>> accrualRows(final Number savingsId) {

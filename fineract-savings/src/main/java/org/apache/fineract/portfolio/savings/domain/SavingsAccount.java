@@ -1302,6 +1302,26 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         recalculateDailyBalances(openingAccountBalance, upToDate, backdatedTxnsAllowedTill, postReversals);
     }
 
+    /**
+     * The running balance at the end of the given date, by the rule {@link #recalculateDailyBalances} applies row by
+     * row: standing credits and hold releases add, standing debits and holds subtract. Used to stamp rows that are
+     * booked outside a full recalculation, so their running balance matches what the next recalculation would write.
+     */
+    public Money runningBalanceAtEndOf(final LocalDate date) {
+        Money balance = Money.zero(this.currency);
+        for (final SavingsAccountTransaction transaction : this.transactions) {
+            if (transaction.isReversed() || transaction.isReversalTransaction() || transaction.getTransactionDate().isAfter(date)) {
+                continue;
+            }
+            if (transaction.isCredit() || transaction.isAmountRelease()) {
+                balance = balance.plus(transaction.getAmount(this.currency));
+            } else if (transaction.isDebit() || transaction.isAmountOnHold()) {
+                balance = balance.minus(transaction.getAmount(this.currency));
+            }
+        }
+        return balance;
+    }
+
     protected void recalculateDailyBalances(final Money openingAccountBalance, final LocalDate interestPostingUpToDate,
             final boolean backdatedTxnsAllowedTill, boolean postReversals) {
         Money runningBalance = openingAccountBalance;
@@ -1349,7 +1369,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                     transaction.setOverdraftAmount(overdraftAmount);
                 } else if (!MathUtil.isEqualTo(overdraftAmount, transaction.getOverdraftAmount(this.currency))
                         && !transaction.isAccrual()) {
-                    SavingsAccountTransaction accountTransaction = SavingsAccountTransaction.copyTransaction(transaction);
+                    SavingsAccountTransaction accountTransaction = SavingsAccountTransaction.copyForRebooking(transaction);
                     if (transaction.isChargeTransaction()) {
                         Set<SavingsAccountChargePaidBy> chargesPaidBy = transaction.getSavingsAccountChargesPaid();
                         final Set<SavingsAccountChargePaidBy> newChargePaidBy = new HashSet<>();
