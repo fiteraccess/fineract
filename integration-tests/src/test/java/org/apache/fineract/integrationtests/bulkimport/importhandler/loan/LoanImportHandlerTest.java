@@ -28,10 +28,10 @@ import io.restassured.specification.ResponseSpecification;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.ParseException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -41,13 +41,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.client.models.PaymentTypeCreateRequest;
 import org.apache.fineract.infrastructure.bulkimport.constants.LoanConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
-import org.apache.fineract.integrationtests.bulkimport.importhandler.LocalContentStorageUtil;
+import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
-import org.apache.fineract.integrationtests.common.OfficeDomain;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -57,7 +57,6 @@ import org.apache.fineract.integrationtests.common.funds.FundsResourceHandler;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -93,11 +92,11 @@ public class LoanImportHandlerTest {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON);
 
         // in order to populate helper sheets
-        OfficeHelper officeHelper = new OfficeHelper(requestSpec, responseSpec);
-        Integer outcome_office_creation = officeHelper.createOffice("02 May 2000");
+        OfficeHelper officeHelper = new OfficeHelper();
+        Integer outcome_office_creation = officeHelper.createOffice(java.time.LocalDate.of(2000, 5, 2)).getResourceId().intValue();
         Assertions.assertNotNull(outcome_office_creation, "Could not create office");
 
-        OfficeDomain office = officeHelper.retrieveOfficeByID(outcome_office_creation);
+        GetOfficesResponse office = officeHelper.retrieveOffice(outcome_office_creation.longValue());
         Assertions.assertNotNull(office, "Could not retrieve created office");
 
         String firstName = Utils.randomStringGenerator("Client_FirstName_", 5);
@@ -227,35 +226,33 @@ public class LoanImportHandlerTest {
         firstLoanRow.createCell(LoanConstants.CHARGE_AMOUNT_1).setCellValue(disbursementChargeJSON.getFloat("amount"));
         firstLoanRow.createCell(LoanConstants.CHARGE_AMOUNT_TYPE_1).setCellValue(disbursementChargeJSON.getString("chargeCalculationType"));
 
-        String currentdirectory = new File("").getAbsolutePath();
-        File directory = new File(currentdirectory + File.separator + "src" + File.separator + "integrationTest" + File.separator
-                + "resources" + File.separator + "bulkimport" + File.separator + "importhandler" + File.separator + "loan");
-        if (!directory.exists()) {
-            directory.mkdirs();
+        Path directory = Path.of("").toAbsolutePath().resolve("src").resolve("integrationTest").resolve("resources").resolve("bulkimport")
+                .resolve("importhandler").resolve("loan");
+        if (!directory.toFile().exists()) {
+            directory.toFile().mkdirs();
         }
-        File file = new File(directory + File.separator + "Loan.xls");
-        OutputStream outputStream = new FileOutputStream(file);
-        workbook.write(outputStream);
-        outputStream.close();
+        File file = directory.resolve("Loan.xls").toFile();
+        try (OutputStream outputStream = Files.newOutputStream(file.toPath())) {
+            workbook.write(outputStream);
+        }
 
         String importDocumentId = loanTransactionHelper.importLoanTemplate(file);
         file.delete();
         Assertions.assertNotNull(importDocumentId);
 
         // Wait for the creation of output excel
-        Thread.sleep(10000);
+        Thread.sleep(1000);
 
         // check status column of output excel
-        String location = LocalContentStorageUtil.path(loanTransactionHelper.getOutputTemplateLocation(importDocumentId));
-        FileInputStream fileInputStream = new FileInputStream(location);
-        Workbook outputworkbook = new HSSFWorkbook(fileInputStream);
-        Sheet outputLoanSheet = outputworkbook.getSheet(TemplatePopulateImportConstants.LOANS_SHEET_NAME);
-        Row row = outputLoanSheet.getRow(1);
+        try (Workbook outputworkbook = BulkImportOutputTemplateHelper.waitForWorkbook(
+                () -> loanTransactionHelper.downloadOutputTemplate(importDocumentId), TemplatePopulateImportConstants.LOANS_SHEET_NAME, 1,
+                LoanConstants.STATUS_COL)) {
+            Sheet outputLoanSheet = outputworkbook.getSheet(TemplatePopulateImportConstants.LOANS_SHEET_NAME);
+            Row row = outputLoanSheet.getRow(1);
 
-        LOG.info("Output location: {}", location);
-        LOG.info("Failure reason column: {}", row.getCell(LoanConstants.FAILURE_REPORT_COL).getStringCellValue());
+            LOG.info("Failure reason column: {}", row.getCell(LoanConstants.FAILURE_REPORT_COL).getStringCellValue());
 
-        Assertions.assertEquals("Imported", row.getCell(LoanConstants.STATUS_COL).getStringCellValue());
-        outputworkbook.close();
+            Assertions.assertEquals("Imported", row.getCell(LoanConstants.STATUS_COL).getStringCellValue());
+        }
     }
 }

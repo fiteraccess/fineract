@@ -29,6 +29,8 @@ import static org.springframework.http.HttpHeaders.CONTENT_LENGTH;
 import static org.springframework.http.MediaType.APPLICATION_OCTET_STREAM_VALUE;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
@@ -48,7 +50,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.fineract.command.core.CommandPipeline;
+import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.contentstore.detector.ContentDetectorContext;
 import org.apache.fineract.infrastructure.contentstore.detector.ContentDetectorManager;
 import org.apache.fineract.infrastructure.documentmanagement.command.DocumentCreateCommand;
@@ -89,10 +91,9 @@ public class DocumentApiResource {
     private final DocumentReadPlatformService documentReadPlatformService;
     private final FileUploadValidator fileUploadValidator;
     private final ContentDetectorManager contentDetectorManager;
-    private final CommandPipeline commandPipeline;
+    private final CommandDispatcher dispatcher;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "List documents", description = """
             Example Requests:
@@ -109,7 +110,6 @@ public class DocumentApiResource {
 
     @GET
     @Path("{documentId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a Document", description = """
             Example Requests:
@@ -127,7 +127,6 @@ public class DocumentApiResource {
 
     @GET
     @Path("{documentId}/attachment")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_OCTET_STREAM })
     @Operation(summary = "Retrieve Binary File associated with Document", description = """
             Request used to download the file associated with the document
@@ -166,7 +165,7 @@ public class DocumentApiResource {
             - file
             - description
             """)
-    @ApiResponse(responseCode = "200", description = "Not Shown (multi-part form data)")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = DocumentCreateResponse.class)))
     public DocumentCreateResponse createDocument(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId, @HeaderParam(CONTENT_LENGTH) final Long fileSize,
             @FormDataParam(DOCUMENT_API_PARAM_FILE) final InputStream is,
@@ -187,7 +186,7 @@ public class DocumentApiResource {
         command.setPayload(DocumentCreateRequest.builder().entityId(entityId).entityType(entityType).name(name).description(description)
                 .fileName(fileDetails.getFileName()).size(fileSize).type(type).stream(is).build());
 
-        final Supplier<DocumentCreateResponse> response = commandPipeline.send(command);
+        final Supplier<DocumentCreateResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }
@@ -206,7 +205,7 @@ public class DocumentApiResource {
             - description: description of the document
             - file: the file to be uploaded
             """)
-    @ApiResponse(responseCode = "200", description = "Not Shown (multi-part form data)")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = DocumentUpdateResponse.class)))
     public DocumentUpdateResponse updateDocument(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId, @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId,
             @HeaderParam(CONTENT_LENGTH) final Long fileSize, @FormDataParam(DOCUMENT_API_PARAM_FILE) final InputStream is,
@@ -227,7 +226,7 @@ public class DocumentApiResource {
         command.setPayload(DocumentUpdateRequest.builder().id(documentId).entityId(entityId).entityType(entityType).name(name)
                 .description(description).stream(is).build());
 
-        final Supplier<DocumentUpdateResponse> response = commandPipeline.send(command);
+        final Supplier<DocumentUpdateResponse> response = dispatcher.dispatch(command);
 
         // TODO: does not return list of changes, should be done for consistency with rest of API
         return response.get();
@@ -237,7 +236,7 @@ public class DocumentApiResource {
     @Path("{documentId}")
     @Operation(summary = "Remove a Document", description = """
             """)
-    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = DocumentDeleteResponse.class)))
     public DocumentDeleteResponse deleteDocument(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
@@ -246,7 +245,7 @@ public class DocumentApiResource {
 
         command.setPayload(DocumentDeleteRequest.builder().id(documentId).entityId(entityId).entityType(entityType).build());
 
-        final Supplier<DocumentDeleteResponse> response = commandPipeline.send(command);
+        final Supplier<DocumentDeleteResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }

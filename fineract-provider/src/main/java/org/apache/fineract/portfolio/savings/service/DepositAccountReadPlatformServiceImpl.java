@@ -44,7 +44,7 @@ import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecific
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.organisation.staff.data.StaffData;
-import org.apache.fineract.organisation.staff.service.StaffReadPlatformService;
+import org.apache.fineract.organisation.staff.service.StaffReadService;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
 import org.apache.fineract.portfolio.account.data.AccountTransferData;
@@ -65,7 +65,7 @@ import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
 import org.apache.fineract.portfolio.group.data.GroupGeneralData;
 import org.apache.fineract.portfolio.group.service.GroupReadPlatformService;
 import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartData;
-import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadPlatformService;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadService;
 import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
 import org.apache.fineract.portfolio.paymenttype.service.PaymentTypeReadService;
@@ -111,7 +111,7 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
     private final PlatformSecurityContext context;
     private final JdbcTemplate jdbcTemplate;
     private final DepositAccountInterestRateChartReadPlatformService accountChartReadPlatformService;
-    private final InterestRateChartReadPlatformService productChartReadPlatformService;
+    private final InterestRateChartReadService productChartReadPlatformService;
     private final PaginationParametersDataValidator paginationParametersDataValidator;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final PaginationHelper paginationHelper;
@@ -121,7 +121,7 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
     private final DepositProductReadPlatformService depositProductReadPlatformService;
     private final SavingsDropdownReadPlatformService savingsDropdownReadPlatformService;
     private final ChargeReadPlatformService chargeReadPlatformService;
-    private final StaffReadPlatformService staffReadPlatformService;
+    private final StaffReadService staffReadPlatformService;
     private final DepositsDropdownReadPlatformService depositsDropdownReadPlatformService;
     private final SavingsAccountReadPlatformService savingsAccountReadPlatformService;
     private final RecurringAccountDepositTransactionTemplateMapper rdTransactionTemplateMapper = new RecurringAccountDepositTransactionTemplateMapper();
@@ -242,10 +242,10 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
             final Collection<PaymentTypeData> paymentTypeOptions = this.paymentTypeReadPlatformService.retrieveAllPaymentTypes();
             final Collection<SavingsAccountData> savingsAccountDatas = this.savingsAccountReadPlatformService
                     .retrieveActiveForLookup(account.getClientId(), DepositAccountType.SAVINGS_DEPOSIT);
-            if (depositAccountType.isFixedDeposit()) {
+            if (depositAccountType == DepositAccountType.FIXED_DEPOSIT) {
                 account = FixedDepositAccountData.withClosureTemplateDetails((FixedDepositAccountData) account, onAccountClosureOptions,
                         paymentTypeOptions, savingsAccountDatas);
-            } else if (depositAccountType.isRecurringDeposit()) {
+            } else if (depositAccountType == DepositAccountType.RECURRING_DEPOSIT) {
                 account = RecurringDepositAccountData.withClosureTemplateDetails((RecurringDepositAccountData) account,
                         onAccountClosureOptions, paymentTypeOptions, savingsAccountDatas);
             }
@@ -262,9 +262,9 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
         DepositAccountData depositAccount = this.retrieveOne(depositAccountType, accountId);
         DepositAccountInterestRateChartData chart = this.accountChartReadPlatformService.retrieveOneWithSlabsOnAccountId(accountId);
 
-        if (depositAccountType.isFixedDeposit()) {
+        if (depositAccountType == DepositAccountType.FIXED_DEPOSIT) {
             depositAccount = FixedDepositAccountData.withInterestChart((FixedDepositAccountData) depositAccount, chart);
-        } else if (depositAccountType.isRecurringDeposit()) {
+        } else if (depositAccountType == DepositAccountType.RECURRING_DEPOSIT) {
             CalendarData calendar = this.calendarReadPlatformService.retrieveCollctionCalendarByEntity(accountId,
                     CalendarEntityType.SAVINGS.getValue());
             final Integer frequency = calendar.getInterval() == -1 ? 1 : calendar.getInterval();
@@ -384,7 +384,7 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
             final InterestRateChartData productChartData = this.productChartReadPlatformService.retrieveActiveChartWithTemplate(productId);
             final DepositAccountInterestRateChartData accountChart = DepositAccountInterestRateChartData.from(productChartData);
 
-            if (depositAccountType.isFixedDeposit()) {
+            if (depositAccountType == DepositAccountType.FIXED_DEPOSIT) {
 
                 template = FixedDepositAccountData.withTemplateOptions((FixedDepositAccountData) template, productOptions,
                         fieldOfficerOptions, interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions,
@@ -393,7 +393,7 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
                         periodFrequencyTypeOptions, savingsAccountDatas, maturityInstructionOptions);
 
                 template = FixedDepositAccountData.withInterestChart((FixedDepositAccountData) template, accountChart);
-            } else if (depositAccountType.isRecurringDeposit()) {
+            } else if (depositAccountType == DepositAccountType.RECURRING_DEPOSIT) {
                 template = RecurringDepositAccountData.withTemplateOptions((RecurringDepositAccountData) template, productOptions,
                         fieldOfficerOptions, interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions,
                         interestCalculationTypeOptions, interestCalculationDaysInYearTypeOptions, lockinPeriodFrequencyTypeOptions,
@@ -432,7 +432,7 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
             final Collection<ChargeData> chargeOptions = this.chargeReadPlatformService
                     .retrieveSavingsProductApplicableCharges(feeChargesOnly);
 
-            if (depositAccountType.isFixedDeposit()) {
+            if (depositAccountType == DepositAccountType.FIXED_DEPOSIT) {
 
                 template = FixedDepositAccountData.withClientTemplate(clientId, clientName, groupId, groupName);
 
@@ -441,7 +441,7 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
                         interestCalculationTypeOptions, interestCalculationDaysInYearTypeOptions, lockinPeriodFrequencyTypeOptions,
                         withdrawalFeeTypeOptions, transactions, charges, chargeOptions, preClosurePenalInterestOnTypeOptions,
                         periodFrequencyTypeOptions, savingsAccountDatas, maturityInstructionOptions);
-            } else if (depositAccountType.isRecurringDeposit()) {
+            } else if (depositAccountType == DepositAccountType.RECURRING_DEPOSIT) {
 
                 template = RecurringDepositAccountData.withClientTemplate(clientId, clientName, groupId, groupName);
 
@@ -508,9 +508,9 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
     }
 
     private DepositAccountMapper getDepositAccountMapper(final DepositAccountType depositAccountType) {
-        if (depositAccountType.isFixedDeposit()) {
+        if (depositAccountType == DepositAccountType.FIXED_DEPOSIT) {
             return FIXED_DEPOSIT_ACCOUNT_MAPPER;
-        } else if (depositAccountType.isRecurringDeposit()) {
+        } else if (depositAccountType == DepositAccountType.RECURRING_DEPOSIT) {
             return RECURRING_DEPOSIT_ACCOUNT_MAPPER;
         }
         return null;
@@ -518,9 +518,9 @@ public class DepositAccountReadPlatformServiceImpl implements DepositAccountRead
 
     private DepositAccountTemplateMapper getDepositAccountTemplaMapper(final DepositAccountType depositAccountType, ClientData client,
             GroupGeneralData group) {
-        if (depositAccountType.isFixedDeposit()) {
+        if (depositAccountType == DepositAccountType.FIXED_DEPOSIT) {
             return new FixedDepositAccountTemplateMapper(client, group);
-        } else if (depositAccountType.isRecurringDeposit()) {
+        } else if (depositAccountType == DepositAccountType.RECURRING_DEPOSIT) {
             return new RecurringDepositAccountTemplateMapper(client, group);
         }
         return null;

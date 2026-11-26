@@ -18,14 +18,15 @@
  */
 package org.apache.fineract.mix.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.mix.data.MixTaxonomyData;
 import org.apache.fineract.mix.service.MixTaxonomyReadService;
 import org.springframework.stereotype.Component;
@@ -39,8 +40,9 @@ public class MixTaxonomyApiResource {
     private final MixTaxonomyReadService readTaxonomyService;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "List Mix Taxonomies", operationId = "retrieveAllMixTaxonomies")
+    @AlternativeOperationId("retrieveAll_14")
     public List<MixTaxonomyData> retrieveAll() {
         return readTaxonomyService.retrieveAll();
     }

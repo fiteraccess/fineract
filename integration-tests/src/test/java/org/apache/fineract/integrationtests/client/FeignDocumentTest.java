@@ -27,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import org.apache.fineract.client.feign.FeignException;
 import org.apache.fineract.client.feign.FineractMultipartEncoder;
 import org.apache.fineract.client.models.DocumentData;
@@ -39,7 +40,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class FeignDocumentTest extends FeignIntegrationTest {
 
-    final File testFile = new File(getClass().getResource("/michael.vorburger-crepes.jpg").getFile());
+    final File testFile = Path.of(getClass().getResource("/michael.vorburger-crepes.jpg").getFile()).toFile();
 
     Long clientId;
     Long documentId;
@@ -133,7 +134,7 @@ public class FeignDocumentTest extends FeignIntegrationTest {
 
         FeignException exception = assertThrows(FeignException.class,
                 () -> fineractClient().documentsFixed().getDocument("clients", clientId, documentId));
-        assertEquals(403, exception.status());
+        assertEquals(404, exception.status());
     }
 
     @Test

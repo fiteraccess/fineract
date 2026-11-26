@@ -32,7 +32,7 @@ public class PaymentDetailConfiguration {
     @Bean
     @ConditionalOnMissingBean(PaymentDetailWritePlatformService.class)
     PaymentDetailWritePlatformService paymentDetailWritePlatformService(PaymentDetailRepository paymentDetailRepository,
-            PaymentTypeRepositoryWrapper paymentTyperepositoryWrapper) {
-        return new PaymentDetailWritePlatformServiceJpaRepositoryImpl(paymentDetailRepository, paymentTyperepositoryWrapper);
+            PaymentTypeRepositoryWrapper paymentTypeRepositoryWrapper) {
+        return new PaymentDetailWritePlatformServiceJpaRepositoryImpl(paymentDetailRepository, paymentTypeRepositoryWrapper);
     }
 }

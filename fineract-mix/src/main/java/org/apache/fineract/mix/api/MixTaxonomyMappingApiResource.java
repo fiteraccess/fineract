@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.mix.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -27,7 +28,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.command.core.CommandPipeline;
+import org.apache.fineract.command.core.CommandDispatcher;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.mix.command.MixTaxonomyMappingUpdateCommand;
 import org.apache.fineract.mix.data.MixTaxonomyMappingData;
 import org.apache.fineract.mix.data.MixTaxonomyMappingUpdateRequest;
@@ -42,11 +44,12 @@ import org.springframework.stereotype.Component;
 public class MixTaxonomyMappingApiResource {
 
     private final MixTaxonomyMappingReadService readTaxonomyMappingService;
-    private final CommandPipeline commandPipeline;
+    private final CommandDispatcher dispatcher;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Mix Taxonomy Mapping", operationId = "retrieveMixTaxonomyMapping")
+    @AlternativeOperationId("retrieveTaxonomyMapping")
     public MixTaxonomyMappingData retrieveTaxonomyMapping() {
         return this.readTaxonomyMappingService.retrieveTaxonomyMapping();
     }
@@ -54,6 +57,8 @@ public class MixTaxonomyMappingApiResource {
     @PUT
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Update Mix Taxonomy Mapping", operationId = "updateMixTaxonomyMapping")
+    @AlternativeOperationId("updateTaxonomyMapping")
     public MixTaxonomyMappingUpdateResponse updateTaxonomyMapping(final MixTaxonomyMappingUpdateRequest request) {
         // TODO support multiple configuration file loading; this is the legacy behavior
         if (request.getId() == null) {
@@ -64,7 +69,7 @@ public class MixTaxonomyMappingApiResource {
 
         command.setPayload(request);
 
-        final Supplier<MixTaxonomyMappingUpdateResponse> response = commandPipeline.send(command);
+        final Supplier<MixTaxonomyMappingUpdateResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }

@@ -84,7 +84,6 @@ public class CodeValuesApiResource {
 
     @GET
     @Path("{codeId}/codevalues")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "List Code Values", description = "Returns the list of Code Values for a given Code\n" + "\n"
             + "Example Requests:\n" + "\n" + "codes/1/codevalues", parameters = @Parameter(name = "codeId", description = "co"))
@@ -102,7 +101,6 @@ public class CodeValuesApiResource {
 
     @GET
     @Path("{codeId}/codevalues/{codeValueId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a Code description", description = "Returns the details of a Code Value\n" + "\n" + "Example Requests:\n"
             + "\n" + "codes/1/codevalues/1")
@@ -158,7 +156,6 @@ public class CodeValuesApiResource {
 
     @DELETE
     @Path("{codeId}/codevalues/{codeValueId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Delete a Code description", description = "Deletes a code description")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CodeValuesApiResourceSwagger.DeleteCodeValueDataResponse.class)))
@@ -174,10 +171,9 @@ public class CodeValuesApiResource {
 
     @GET
     @Path("name/{codeName}/codevalues")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Code Values", description = "Returns the list of Code Values for a given Code\n" + "\n"
-            + "Example Requests:\n" + "\n" + "codes/1/codevalues", parameters = @Parameter(name = "codeId", description = "co"))
+    @Operation(summary = "List Code Values", operationId = "retrieveAllCodeValuesByCodeName", description = "Returns the list of Code Values for a given Code\n"
+            + "\n" + "Example Requests:\n" + "\n" + "codes/1/codevalues", parameters = @Parameter(name = "codeId", description = "co"))
     @ApiResponse(responseCode = "200", description = "A List of code values for a given code", content = @Content(array = @ArraySchema(schema = @Schema(implementation = CodeValuesApiResourceSwagger.GetCodeValuesDataResponse.class))))
     public List<CodeValueData> retrieveAllCodeValues(@Context final UriInfo uriInfo,
             @PathParam("codeName") @Parameter(description = "codeName") final String codeName) {
@@ -189,7 +185,6 @@ public class CodeValuesApiResource {
 
     @GET
     @Path("name/{codeName}/codevalues/{codeValueId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a Code description", description = "Returns the details of a Code Value\n" + "\n" + "Example Requests:\n"
             + "\n" + "codes/name/ADDRESS_TYPE/codevalues/1")
@@ -207,7 +202,7 @@ public class CodeValuesApiResource {
     @Path("name/{codeName}/codevalues")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a Code description", description = "")
+    @Operation(summary = "Create a Code description", operationId = "createCodeValueByCodeName", description = "")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CodeValuesApiResourceSwagger.PostCodeValuesDataRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CodeValuesApiResourceSwagger.PostCodeValueDataResponse.class)))
     public CommandProcessingResult createCodeValue(@PathParam("codeName") @Parameter(description = "codeName") final String codeName,
@@ -223,7 +218,7 @@ public class CodeValuesApiResource {
     @Path("name/{codeName}/codevalues/{codeValueId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a Code description", description = "Updates the details of a code description.")
+    @Operation(summary = "Update a Code description", operationId = "updateCodeValueByCodeName", description = "Updates the details of a code description.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CodeValuesApiResourceSwagger.PutCodeValuesDataRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CodeValuesApiResourceSwagger.PutCodeValueDataResponse.class)))
     public CommandProcessingResult updateCodeValue(@PathParam("codeName") @Parameter(description = "codeName") final String codeName,
@@ -239,7 +234,6 @@ public class CodeValuesApiResource {
 
     @DELETE
     @Path("name/{codeName}/codevalues/{codeValueId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Delete a Code description", description = "Deletes a code description")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CodeValuesApiResourceSwagger.DeleteCodeValueDataResponse.class)))

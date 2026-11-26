@@ -154,6 +154,10 @@ public interface ConfigurationDomainService {
 
     String getAssetOwnerTransferOustandingInterestStrategy();
 
+    boolean isForceWithdrawalOnSavingsAccountEnabled();
+
+    Long retrieveForceWithdrawalOnSavingsAccountLimit();
+
     Integer getPasswordReuseRestrictionCount();
 
     boolean isForcePasswordResetOnFirstLoginEnabled();
@@ -163,4 +167,24 @@ public interface ConfigurationDomainService {
     boolean isAsynchronousFlexcubePostingEnabled();
 
     boolean isSystemPaymentTypeFundSourceLockEnabled();
+
+    boolean isMaxLoginRetriesEnabled();
+
+    Integer retrieveMaxLoginRetries();
+
+    String getIncomeExpenseGlAccounts();
+
+    String getRetainedEarningGlAccount();
+
+    Long getLastDayOfFinancialYear();
+
+    Long getLastMonthOfFinancialYear();
+
+    String getRetainedEarningUsedByReportName();
+
+    Long getOfficeId();
+
+    boolean isAllowCashAndNonCashAccrual();
+
+    boolean isBlockTransactionsOnClosedOverpaidLoansEnabled();
 }

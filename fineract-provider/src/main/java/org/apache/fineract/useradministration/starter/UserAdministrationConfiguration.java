@@ -24,9 +24,8 @@ import org.apache.fineract.infrastructure.security.service.PlatformPasswordEncod
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
-import org.apache.fineract.organisation.staff.domain.StaffRepositoryWrapper;
-import org.apache.fineract.organisation.staff.service.StaffReadPlatformService;
-import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
+import org.apache.fineract.organisation.staff.domain.StaffRepository;
+import org.apache.fineract.organisation.staff.service.StaffReadService;
 import org.apache.fineract.useradministration.data.PasswordPreferencesDataValidator;
 import org.apache.fineract.useradministration.domain.AppUserPreviousPasswordRepository;
 import org.apache.fineract.useradministration.domain.AppUserRepository;
@@ -65,7 +64,7 @@ public class UserAdministrationConfiguration {
     @ConditionalOnMissingBean(AppUserReadPlatformService.class)
     public AppUserReadPlatformService appUserReadPlatformService(PlatformSecurityContext context, JdbcTemplate jdbcTemplate,
             OfficeReadPlatformService officeReadPlatformService, RoleReadPlatformService roleReadPlatformService,
-            AppUserRepository appUserRepository, StaffReadPlatformService staffReadPlatformService) {
+            AppUserRepository appUserRepository, StaffReadService staffReadPlatformService) {
         return new AppUserReadPlatformServiceImpl(context, jdbcTemplate, officeReadPlatformService, roleReadPlatformService,
                 appUserRepository, staffReadPlatformService);
     }
@@ -75,11 +74,11 @@ public class UserAdministrationConfiguration {
     public AppUserWritePlatformService appUserWritePlatformService(PlatformSecurityContext context, UserDomainService userDomainService,
             PlatformPasswordEncoder platformPasswordEncoder, AppUserRepository appUserRepository,
             OfficeRepositoryWrapper officeRepositoryWrapper, RoleRepository roleRepository, UserDataValidator fromApiJsonDeserializer,
-            AppUserPreviousPasswordRepository appUserPreviewPasswordRepository, StaffRepositoryWrapper staffRepositoryWrapper,
-            ClientRepositoryWrapper clientRepositoryWrapper, ConfigurationDomainService configurationDomainService) {
+            AppUserPreviousPasswordRepository appUserPreviewPasswordRepository, StaffRepository staffRepository,
+            ConfigurationDomainService configurationDomainService) {
         return new AppUserWritePlatformServiceJpaRepositoryImpl(context, userDomainService, platformPasswordEncoder, appUserRepository,
-                officeRepositoryWrapper, roleRepository, fromApiJsonDeserializer, appUserPreviewPasswordRepository, staffRepositoryWrapper,
-                clientRepositoryWrapper, configurationDomainService);
+                officeRepositoryWrapper, roleRepository, fromApiJsonDeserializer, appUserPreviewPasswordRepository, staffRepository,
+                configurationDomainService);
     }
 
     @Bean

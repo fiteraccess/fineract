@@ -19,6 +19,8 @@
 
 package org.apache.fineract.infrastructure.core.config.cache;
 
+import static org.apache.fineract.infrastructure.event.external.repository.ExternalEventConfigurationRepository.EXTERNAL_EVENT_CONFIGURATION_CACHE_NAME;
+
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Arrays;
@@ -70,8 +72,8 @@ public class CacheConfig {
         SpecifiedCacheSupportingCacheManager cacheManager = new SpecifiedCacheSupportingCacheManager();
         cacheManager.setNoOpCacheManager(new NoOpCacheManager());
         cacheManager.setDelegateCacheManager(ehCacheManager);
-        cacheManager.setSupportedCaches(CONFIG_BY_NAME_CACHE_NAME, GL_CLOSURES_BY_OFFICE_ID_CACHE_NAME, PAYMENT_TYPES_BY_ID_CACHE_NAME,
-                SAVINGS_PRODUCT_TO_GL_ACCOUNTS_CACHE_NAME);
+        cacheManager.setSupportedCaches(CONFIG_BY_NAME_CACHE_NAME, EXTERNAL_EVENT_CONFIGURATION_CACHE_NAME,
+                GL_CLOSURES_BY_OFFICE_ID_CACHE_NAME, PAYMENT_TYPES_BY_ID_CACHE_NAME, SAVINGS_PRODUCT_TO_GL_ACCOUNTS_CACHE_NAME);
         return new TransactionBoundCacheManager(cacheManager);
     }
 

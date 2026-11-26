@@ -24,26 +24,47 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface LoanAccountLockRepository
-        extends CustomLoanAccountLockRepository, JpaRepository<LoanAccountLock, Long>, JpaSpecificationExecutor<LoanAccountLock> {
+        extends AccountLockRepository<LoanAccountLock>, JpaRepository<LoanAccountLock, Long>, JpaSpecificationExecutor<LoanAccountLock> {
 
+    @Override
     Optional<LoanAccountLock> findByLoanIdAndLockOwner(Long loanId, LockOwner lockOwner);
 
+    @Override
     void deleteByLoanIdInAndLockOwner(List<Long> loanIds, LockOwner lockOwner);
 
+    @Override
     List<LoanAccountLock> findAllByLoanIdIn(List<Long> loanIds);
 
+    @Override
     boolean existsByLoanIdAndLockOwner(Long loanId, LockOwner lockOwner);
 
+    @Override
     boolean existsByLoanIdAndLockOwnerAndErrorIsNotNull(Long loanId, LockOwner lockOwner);
 
-    @Query("""
-            delete from LoanAccountLock lck where lck.lockPlacedOnCobBusinessDate is not null and lck.error is not null and
-            lck.lockOwner in (org.apache.fineract.cob.domain.LockOwner.LOAN_COB_CHUNK_PROCESSING,org.apache.fineract.cob.domain.LockOwner.LOAN_INLINE_COB_PROCESSING)
-            """)
-    @Modifying(flushAutomatically = true)
-    void removeLockByOwner();
-
+    @Override
     List<LoanAccountLock> findAllByLoanIdInAndLockOwner(List<Long> loanIds, LockOwner lockOwner);
+
+    @Override
+    void removeByLockOwnerInAndErrorIsNotNullAndLockPlacedOnCobBusinessDateIsNotNull(List<LockOwner> lockOwners);
+
+    @Override
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            DELETE FROM LoanAccountLock lck
+            WHERE lck.error IS NULL
+              AND lck.lockPlacedOnCobBusinessDate IS NOT NULL
+              AND lck.lockOwner IN :lockOwners
+              AND EXISTS (
+                SELECT l FROM Loan l
+                WHERE l.id = lck.loanId
+                  AND l.lastClosedBusinessDate = lck.lockPlacedOnCobBusinessDate
+              )
+            """)
+    int deleteOrphanedLocksForProcessedAccounts(@Param("lockOwners") List<LockOwner> lockOwners);
+
 }

@@ -33,6 +33,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuild
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.infrastructure.core.service.TransactionBoundApplicationEventPublisher;
 import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanBuyDownFeeAdjustmentTransactionCreatedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanBuyDownFeeTransactionCreatedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
@@ -53,7 +54,6 @@ import org.apache.fineract.portfolio.note.data.NoteCreateRequest;
 import org.apache.fineract.portfolio.note.domain.NoteType;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -69,7 +69,7 @@ public class BuyDownFeeWritePlatformServiceImpl implements BuyDownFeePlatformSer
     private final LoanBuyDownFeeBalanceRepository loanBuyDownFeeBalanceRepository;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final CodeValueRepository codeValueRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final TransactionBoundApplicationEventPublisher eventPublisher;
 
     @Transactional
     @Override
@@ -190,9 +190,13 @@ public class BuyDownFeeWritePlatformServiceImpl implements BuyDownFeePlatformSer
         businessEventNotifierService
                 .notifyPostBusinessEvent(new LoanBuyDownFeeAdjustmentTransactionCreatedBusinessEvent(savedBuyDownFeeAdjustment));
 
-        return new CommandProcessingResultBuilder().withEntityId(savedBuyDownFeeAdjustment.getId())
-                .withEntityExternalId(savedBuyDownFeeAdjustment.getExternalId()).withOfficeId(loan.getOfficeId())
-                .withClientId(loan.getClientId()).withLoanId(loan.getId()).build();
+        return new CommandProcessingResultBuilder() //
+                .withEntityId(savedBuyDownFeeAdjustment.getId()) //
+                .withEntityExternalId(savedBuyDownFeeAdjustment.getExternalId()) //
+                .withOfficeId(loan.getOfficeId()) //
+                .withClientId(loan.getClientId()) //
+                .withLoanId(loan.getId()) //
+                .build();
     }
 
     private void checkClientOrGroupActive(final Loan loan) {

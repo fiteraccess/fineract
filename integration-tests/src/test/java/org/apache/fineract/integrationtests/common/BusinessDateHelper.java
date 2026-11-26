@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.integrationtests.common;
 
+import static org.apache.fineract.client.feign.util.FeignCalls.ok;
+
 import com.google.gson.Gson;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
@@ -29,8 +31,6 @@ import org.apache.fineract.client.models.BusinessDateResponse;
 import org.apache.fineract.client.models.BusinessDateUpdateRequest;
 import org.apache.fineract.client.models.BusinessDateUpdateResponse;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
-import org.apache.fineract.client.util.Calls;
-import org.apache.fineract.client.util.JSON;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 
@@ -38,60 +38,40 @@ import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationC
 public final class BusinessDateHelper {
 
     private static final String DATETIME_PATTERN = "dd MMMM yyyy";
-    private static final Gson GSON = new JSON().getGson();
 
     public BusinessDateHelper() {}
 
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
+    // Access: REST-assured overload kept for the Access integration tests; upstream 1.15.0 removed it.
     public static HashMap updateBusinessDate(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final BusinessDateType type, final LocalDate date) {
-        final String BUSINESS_DATE_API = "/fineract-provider/api/v1/businessdate?" + Utils.TENANT_IDENTIFIER;
+        final String businessDateApi = "/fineract-provider/api/v1/businessdate?" + Utils.TENANT_IDENTIFIER;
         log.info("------------------UPDATE BUSINESS DATE----------------------");
         log.info("------------------Type: {}, date: {}----------------------", type, date);
-        return Utils.performServerPost(requestSpec, responseSpec, BUSINESS_DATE_API, buildBusinessDateRequest(type, date), "changes");
-    }
-
-    public static BusinessDateUpdateResponse updateBusinessDate(final BusinessDateUpdateRequest request) {
-        log.info("------------------UPDATE BUSINESS DATE----------------------");
-        log.info("------------------Type: {}, date: {}----------------------", request.getType(), request.getDate());
-        return Calls.ok(FineractClientHelper.getFineractClient().businessDateManagement.updateBusinessDate(request));
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public BusinessDateResponse getBusinessDateByType(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
-            final BusinessDateType type) {
-        final String BUSINESS_DATE_API = "/fineract-provider/api/v1/businessdate/" + type.name() + "?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, BUSINESS_DATE_API);
-        log.info("{}", response);
-        return GSON.fromJson(response, BusinessDateResponse.class);
-    }
-
-    public BusinessDateResponse getBusinessDate(final String type) {
-        return Calls.ok(FineractClientHelper.getFineractClient().businessDateManagement.getBusinessDate(type));
-    }
-
-    public List<BusinessDateResponse> getBusinessDates() {
-        return Calls.ok(FineractClientHelper.getFineractClient().businessDateManagement.getBusinessDates());
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    private static String buildBusinessDateRequest(BusinessDateType type, LocalDate date) {
         final HashMap<String, String> map = new HashMap<>();
         map.put("type", type.name());
         map.put("date", Utils.dateFormatter.format(date));
         map.put("dateFormat", Utils.DATE_FORMAT);
         map.put("locale", "en");
-        log.info("map :  {}", map);
-        return new Gson().toJson(map);
+        return Utils.performServerPost(requestSpec, responseSpec, businessDateApi, new Gson().toJson(map), "changes");
+    }
+
+    public static BusinessDateUpdateResponse updateBusinessDate(final BusinessDateUpdateRequest request) {
+        log.info("------------------UPDATE BUSINESS DATE----------------------");
+        log.info("------------------Type: {}, date: {}----------------------", request.getType(), request.getDate());
+        return ok(() -> FineractFeignClientHelper.getFineractFeignClient().businessDateManagement().updateBusinessDate(request));
+    }
+
+    public static BusinessDateUpdateResponse updateBusinessDate(final BusinessDateType type, final LocalDate date) {
+        return updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.valueOf(type.name()))
+                .date(Utils.dateFormatter.format(date)).dateFormat(Utils.DATE_FORMAT).locale("en"));
+    }
+
+    public BusinessDateResponse getBusinessDate(final String type) {
+        return ok(() -> FineractFeignClientHelper.getFineractFeignClient().businessDateManagement().getBusinessDate(type));
+    }
+
+    public List<BusinessDateResponse> getBusinessDates() {
+        return ok(() -> FineractFeignClientHelper.getFineractFeignClient().businessDateManagement().getBusinessDates());
     }
 
     public static void runAt(String date, Runnable runnable) {
@@ -106,5 +86,4 @@ public final class BusinessDateHelper {
                     new PutGlobalConfigurationsRequest().enabled(false));
         }
     }
-
 }

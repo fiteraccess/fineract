@@ -45,4 +45,5 @@
   <include file="parts/2018_add_dedup_key_to_synapse_outbox.xml" relativeToChangelogFile="true" />
   <include file="parts/2019_add_index_sat_account_page.xml" relativeToChangelogFile="true" />
   <include file="parts/2020_add_index_sat_lastmodified_reversed.xml" relativeToChangelogFile="true" />
+  <include file="parts/2005_add_external_id_to_savings_transaction.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

@@ -18,14 +18,15 @@
  */
 package org.apache.fineract.infrastructure.survey.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.survey.data.LikeliHoodPovertyLineData;
@@ -46,8 +47,9 @@ public class PovertyLineApiResource {
 
     @GET
     @Path("{ppiName}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(operationId = "retrieveAll_6")
+    @AlternativeOperationId("retrieveAll_12")
     public String retrieveAll(@PathParam("ppiName") final String ppiName) {
 
         this.context.authenticatedUser().validateHasReadPermission(PovertyLineApiConstants.POVERTY_LINE_RESOURCE_NAME);
@@ -59,8 +61,9 @@ public class PovertyLineApiResource {
 
     @GET
     @Path("{ppiName}/{likelihoodId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(operationId = "retrieveAll_7")
+    @AlternativeOperationId("retrieveAll_13")
     public String retrieveAll(@PathParam("ppiName") final String ppiName, @PathParam("likelihoodId") final Long likelihoodId) {
 
         this.context.authenticatedUser().validateHasReadPermission(PovertyLineApiConstants.POVERTY_LINE_RESOURCE_NAME);

@@ -22,13 +22,15 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -84,7 +86,7 @@ public class ExecuteReportMailingJobsTasklet implements Tasklet {
                 final ReportMailingJobEmailAttachmentFileFormat emailAttachmentFileFormat = ReportMailingJobEmailAttachmentFileFormat
                         .newInstance(reportMailingJob.getEmailAttachmentFileFormat());
 
-                if (emailAttachmentFileFormat != null && emailAttachmentFileFormat.isValid()) {
+                if (emailAttachmentFileFormat != null && emailAttachmentFileFormat != ReportMailingJobEmailAttachmentFileFormat.INVALID) {
                     final Report stretchyReport = reportMailingJob.getStretchyReport();
                     final String reportName = (stretchyReport != null) ? stretchyReport.getReportName() : null;
                     final StringBuilder errorLog = new StringBuilder();
@@ -98,11 +100,11 @@ public class ExecuteReportMailingJobsTasklet implements Tasklet {
                             String key = validateStretchyReportParamMapEntry.getKey();
                             String value = validateStretchyReportParamMapEntry.getValue();
 
-                            if (StringUtils.containsIgnoreCase(key, "date")) {
+                            if (key != null && key.toLowerCase(Locale.ROOT).contains("date")) {
                                 ReportMailingJobStretchyReportParamDateOption reportMailingJobStretchyReportParamDateOption = ReportMailingJobStretchyReportParamDateOption
                                         .newInstance(value);
 
-                                if (reportMailingJobStretchyReportParamDateOption.isValid()) {
+                                if (reportMailingJobStretchyReportParamDateOption != ReportMailingJobStretchyReportParamDateOption.INVALID) {
                                     value = ReportMailingJobDateUtil.getDateAsString(reportMailingJobStretchyReportParamDateOption);
                                 }
                             }
@@ -124,8 +126,7 @@ public class ExecuteReportMailingJobsTasklet implements Tasklet {
             final ReportMailingJobEmailAttachmentFileFormat emailAttachmentFileFormat, final MultivaluedMap<String, String> reportParams,
             final String reportName, final StringBuilder errorLog) {
         try {
-            final boolean isSelfServiceUserReport = false;
-            final String reportType = readReportingService.getReportType(reportName, isSelfServiceUserReport, false);
+            final String reportType = readReportingService.getReportType(reportName, false);
             final ReportingProcessService reportingProcessService = reportingProcessServiceProvider.findReportingProcessService(reportType);
 
             if (reportingProcessService != null) {
@@ -134,17 +135,18 @@ public class ExecuteReportMailingJobsTasklet implements Tasklet {
 
                 if (responseObject != null && responseObject.getClass().equals(ByteArrayOutputStream.class)) {
                     final ByteArrayOutputStream byteArrayOutputStream = (ByteArrayOutputStream) responseObject;
-                    final String fileLocation = fineractProperties.getContent().getFilesystem().getRootFolder() + File.separator + "";
-                    final String fileNameWithoutExtension = fileLocation + File.separator + reportName;
+                    final Path fileLocation = Path.of(fineractProperties.getContent().getFilesystem().getRootFolder());
+                    final Path fileNameWithoutExtension = fileLocation.resolve(reportName);
 
-                    if (!new File(fileLocation).isDirectory()) {
-                        new File(fileLocation).mkdirs();
+                    if (!Files.isDirectory(fileLocation)) {
+                        Files.createDirectories(fileLocation);
                     }
 
                     if (byteArrayOutputStream.size() == 0) {
                         errorLog.append("Report processing failed, empty output stream created");
                     } else if ((errorLog != null && errorLog.length() == 0) && (byteArrayOutputStream.size() > 0)) {
-                        final String fileName = fileNameWithoutExtension + "." + emailAttachmentFileFormat.getValue();
+                        final Path fileName = fileNameWithoutExtension
+                                .resolveSibling(reportName + "." + emailAttachmentFileFormat.getValue());
 
                         sendReportFileToEmailRecipients(reportMailingJob, fileName, byteArrayOutputStream, errorLog);
                     }
@@ -193,14 +195,19 @@ public class ExecuteReportMailingJobsTasklet implements Tasklet {
                 reportMailingJobPreviousRunStatus.getValue());
     }
 
-    private void sendReportFileToEmailRecipients(final ReportMailingJob reportMailingJob, final String fileName,
+    private void sendReportFileToEmailRecipients(final ReportMailingJob reportMailingJob, final Path fileName,
             final ByteArrayOutputStream byteArrayOutputStream, final StringBuilder errorLog) {
         final Set<String> emailRecipients = this.reportMailingJobValidator.validateEmailRecipients(reportMailingJob.getEmailRecipients());
 
         try {
-            final File file = new File(fileName);
-            final FileOutputStream outputStream = new FileOutputStream(file);
-            byteArrayOutputStream.writeTo(outputStream);
+            final Path parent = fileName.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            final File file = fileName.toFile();
+            try (var outputStream = Files.newOutputStream(fileName)) {
+                byteArrayOutputStream.writeTo(outputStream);
+            }
 
             for (String emailRecipient : emailRecipients) {
                 final ReportMailingJobEmailData reportMailingJobEmailData = new ReportMailingJobEmailData().setTo(emailRecipient)
@@ -208,9 +215,6 @@ public class ExecuteReportMailingJobsTasklet implements Tasklet {
 
                 reportMailingJobEmailService.sendEmailWithAttachment(reportMailingJobEmailData);
             }
-
-            outputStream.close();
-
         } catch (IOException e) {
             errorLog.append("The ReportMailingJobWritePlatformServiceImpl.sendReportFileToEmailRecipients method threw an IOException "
                     + "exception: ").append(e).append(" ---------- ");

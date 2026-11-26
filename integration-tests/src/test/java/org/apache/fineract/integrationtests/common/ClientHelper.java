@@ -20,8 +20,11 @@ package org.apache.fineract.integrationtests.common;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import io.restassured.builder.RequestSpecBuilder;
+import io.restassured.builder.ResponseSpecBuilder;
+import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -39,6 +42,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.client.feign.util.FeignCalls;
 import org.apache.fineract.client.models.AddressData;
 import org.apache.fineract.client.models.ClientAddressRequest;
 import org.apache.fineract.client.models.ClientTextSearch;
@@ -56,10 +60,12 @@ import org.apache.fineract.client.models.PagedRequestClientTextSearch;
 import org.apache.fineract.client.models.PostClientClientIdAddressesResponse;
 import org.apache.fineract.client.models.PostClientsClientIdIdentifiersRequest;
 import org.apache.fineract.client.models.PostClientsClientIdIdentifiersResponse;
+import org.apache.fineract.client.models.PostClientsClientIdRequest;
 import org.apache.fineract.client.models.PostClientsClientIdResponse;
 import org.apache.fineract.client.models.PostClientsClientIdTransactionsTransactionIdResponse;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.PutClientsClientIdRequest;
 import org.apache.fineract.client.models.PutClientsClientIdResponse;
 import org.apache.fineract.client.models.SortOrder;
 import org.apache.fineract.client.util.Calls;
@@ -116,7 +122,71 @@ public class ClientHelper {
     }
 
     public static PostClientsResponse createClient(final PostClientsRequest request) {
-        return Calls.ok(FineractClientHelper.getFineractClient().clients.create6(request));
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.createClient(request));
+    }
+
+    public static PostClientsResponse addClientAsPerson(final String officeId, final Long legalFormId, final String externalId) {
+        PostClientsRequest request = new PostClientsRequest().officeId(officeId != null ? Long.parseLong(officeId) : 1L)
+                .legalFormId(legalFormId).firstname(Utils.randomFirstNameGenerator()).lastname(Utils.randomLastNameGenerator())
+                .externalId(externalId).dateFormat(Utils.DATE_FORMAT).locale("en").active(true).activationDate(DEFAULT_DATE);
+        return createClient(request);
+    }
+
+    public static GetClientsClientIdResponse getClientByExternalId(final String externalId) {
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.retrieveOneClientByExternalId(externalId, null));
+    }
+
+    public static PutClientsClientIdResponse updateClientByExternalId(final String externalId, final PutClientsClientIdRequest request) {
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.updateClientByExternalId(externalId, request));
+    }
+
+    public static DeleteClientsClientIdResponse deleteClientByExternalId(final String externalId) {
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.deleteClientByExternalId(externalId));
+    }
+
+    public static GetClientsClientIdAccountsResponse getClientAccounts(final String externalId) {
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.retrieveAllClientAccountsByExternalId(externalId));
+    }
+
+    public static GetClientTransferProposalDateResponse getProposedTransferDate(final String externalId) {
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.retrieveClientTransferTemplateByExternalId(externalId));
+    }
+
+    public static List<GetObligeeData> getObligeeData(final String externalId) {
+        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "/obligeedetails?" + Utils.TENANT_IDENTIFIER;
+        final RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON)
+                .addHeader("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey()).build();
+        final String response = Utils.performServerGet(requestSpec, new ResponseSpecBuilder().expectStatusCode(200).build(), url, null);
+        return GSON.fromJson(response, new TypeToken<List<GetObligeeData>>() {}.getType());
+    }
+
+    public static PostClientsClientIdResponse closeClient(final String externalId, final Integer closureReasonId) {
+        PostClientsClientIdRequest request = new PostClientsClientIdRequest().locale(CommonConstants.LOCALE)
+                .dateFormat(CommonConstants.DATE_FORMAT).closureDate(CREATED_DATE_PLUS_ONE).closureReasonId(closureReasonId.longValue());
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.handleCommandClientByExternalId(externalId, request,
+                CLOSE_CLIENT_COMMAND));
+    }
+
+    public static PostClientsClientIdResponse reactivateClient(final String externalId) {
+        PostClientsClientIdRequest request = new PostClientsClientIdRequest().locale(CommonConstants.LOCALE)
+                .dateFormat(CommonConstants.DATE_FORMAT).reactivationDate(CREATED_DATE_PLUS_ONE);
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.handleCommandClientByExternalId(externalId, request,
+                REACTIVATE_CLIENT_COMMAND));
+    }
+
+    public static PostClientsClientIdResponse rejectClient(final String externalId, final Integer rejectionReasonId) {
+        PostClientsClientIdRequest request = new PostClientsClientIdRequest().locale(CommonConstants.LOCALE)
+                .dateFormat(CommonConstants.DATE_FORMAT).rejectionDate(CREATED_DATE_PLUS_ONE)
+                .rejectionReasonId(rejectionReasonId.longValue());
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.handleCommandClientByExternalId(externalId, request,
+                REJECT_CLIENT_COMMAND));
+    }
+
+    public static PostClientsClientIdResponse activateClient(final String externalId, final String activationDate) {
+        PostClientsClientIdRequest request = new PostClientsClientIdRequest().locale(CommonConstants.LOCALE)
+                .dateFormat(CommonConstants.DATE_FORMAT).activationDate(activationDate);
+        return Calls.ok(FineractClientHelper.getFineractClient().clients.handleCommandClientByExternalId(externalId, request,
+                ACTIVATE_CLIENT_COMMAND));
     }
 
     public PostClientsClientIdIdentifiersResponse createClientIdentifer(final Long clientId,
@@ -152,78 +222,11 @@ public class ClientHelper {
     }
 
     public PageClientSearchData searchClients(PagedRequestClientTextSearch request) {
-        return Calls.ok(FineractClientHelper.getFineractClient().clientSearchV2.searchByText(request));
+        return Calls.ok(FineractClientHelper.getFineractClient().clientSearchV2.searchClientsByText(request));
     }
 
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static PostClientsResponse addClientAsPerson(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
-            final String jsonPayload) {
-        final String response = Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL, jsonPayload);
-        log.info("{}", response);
-        return GSON.fromJson(response, PostClientsResponse.class);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static PutClientsClientIdResponse updateClient(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
-            final String externalId, final String jsonPayload) {
-        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerPut(requestSpec, responseSpec, url, jsonPayload);
-        log.info("{}", response);
-        return GSON.fromJson(response, PutClientsClientIdResponse.class);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static DeleteClientsClientIdResponse deleteClient(final RequestSpecification requestSpec,
-            final ResponseSpecification responseSpec, final String externalId) {
-        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerDelete(requestSpec, responseSpec, url, Utils.emptyJson(), null);
-        log.info("{}", response);
-        return GSON.fromJson(response, DeleteClientsClientIdResponse.class);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static GetClientsClientIdAccountsResponse getClientAccounts(final RequestSpecification requestSpec,
-            final ResponseSpecification responseSpec, final String externalId) {
-        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "/accounts?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, url);
-        log.info("{}", response);
-        return GSON.fromJson(response, GetClientsClientIdAccountsResponse.class);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static GetClientTransferProposalDateResponse getProposedTransferDate(final RequestSpecification requestSpec,
-            final ResponseSpecification responseSpec, final String externalId) {
-        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "/transferproposaldate?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, url);
-        log.info("{}", response);
-        return GSON.fromJson(response, GetClientTransferProposalDateResponse.class);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static List<GetObligeeData> getObligeeData(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
-            final String externalId) {
-        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "/obligeedetails?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, url);
-        log.info("{}", response);
-        return GSON.fromJson(response, new TypeToken<List<GetObligeeData>>() {}.getType());
+    public static GetClientsClientIdAccountsResponse getClientAccounts(final long clientId) {
+        return FeignCalls.ok(() -> FineractFeignClientHelper.getFineractFeignClient().clients().retrieveAllClientAccounts(clientId));
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -493,19 +496,6 @@ public class ClientHelper {
     // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
-    public static String getBasicClientAsJSON(final String officeId, final Long legalFormId, final String externalId) {
-        HashMap<String, Object> map = setInitialClientValues(officeId, legalFormId, externalId);
-        map.put("active", "true");
-        map.put("activationDate", DEFAULT_DATE);
-        final String basicClientAsJson = GSON.toJson(map);
-        log.info("Client JSON :  {}", basicClientAsJson);
-        return basicClientAsJson;
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
     public static String getTestClientAsJSON(final String dateOfJoining, final String officeId) {
         HashMap<String, Object> map = setInitialClientValues(officeId, LEGALFORM_ID_PERSON);
         map.put("active", "true");
@@ -681,17 +671,6 @@ public class ClientHelper {
             final int clientId) {
         String clientResponseStr = (String) getClient(requestSpec, responseSpec, Integer.toString(clientId), null);
         return GSON.fromJson(clientResponseStr, GetClientsClientIdResponse.class);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public static GetClientsClientIdResponse getClientByExternalId(final RequestSpecification requestSpec,
-            final ResponseSpecification responseSpec, final String externalId) {
-        final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, url);
-        return GSON.fromJson(response, GetClientsClientIdResponse.class);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1173,31 +1152,32 @@ public class ClientHelper {
     }
 
     public GetClientsClientIdTransactionsResponse getAllClientTransactionsByExternalId(final String externalId) {
-        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.retrieveAllClientTransactions1(externalId, 0, 100));
+        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions
+                .retrieveAllClientTransactionsByClientExternalId(externalId, 0, 100));
     }
 
     public GetClientsClientIdTransactionsTransactionIdResponse getClientTransactionByExternalId(final String externalId,
             final String transactionId) {
-        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.retrieveClientTransaction2(externalId,
+        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.retrieveClientTransactionByClientExternalId(externalId,
                 Long.parseLong(transactionId)));
     }
 
     public GetClientsClientIdTransactionsTransactionIdResponse getClientTransactionByTransactionExternalId(final Long clientId,
             final String transactionExternalId) {
-        return Calls.ok(
-                FineractClientHelper.getFineractClient().clientTransactions.retrieveClientTransaction1(clientId, transactionExternalId));
+        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions
+                .retrieveClientTransactionByTransactionExternalId(clientId, transactionExternalId));
     }
 
     public PostClientsClientIdTransactionsTransactionIdResponse undoClientTransactionByExternalId(final String externalId,
             final String transactionId) {
-        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.undoClientTransaction2(externalId,
+        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.undoClientTransactionByClientExternalId(externalId,
                 Long.parseLong(transactionId), "undo"));
     }
 
     public PostClientsClientIdTransactionsTransactionIdResponse undoClientTransactionByTransactionExternalId(final Long clientId,
             final String transactionExternalId) {
-        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.undoClientTransaction1(clientId, transactionExternalId,
-                "undo"));
+        return Calls.ok(FineractClientHelper.getFineractClient().clientTransactions.undoClientTransactionByTransactionExternalId(clientId,
+                transactionExternalId, "undo"));
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1221,6 +1201,13 @@ public class ClientHelper {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN);
         return Utils.performServerOutputTemplateLocationGet(requestSpec, responseSpec,
                 "/fineract-provider/api/v1/imports/getOutputTemplateLocation" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
+    }
+
+    @Deprecated(forRemoval = true)
+    public byte[] downloadOutputTemplate(final String importDocumentId) {
+        requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
+        return Utils.performServerOutputTemplateDownloadGet(requestSpec, responseSpec,
+                "/fineract-provider/api/v1/imports/downloadOutputTemplate" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
     // TODO: Rewrite to use fineract-client instead!

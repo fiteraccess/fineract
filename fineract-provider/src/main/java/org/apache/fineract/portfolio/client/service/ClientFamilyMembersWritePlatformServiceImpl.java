@@ -123,7 +123,10 @@ public class ClientFamilyMembersWritePlatformServiceImpl implements ClientFamily
 
         this.clientFamilyRepository.saveAndFlush(clientFamilyMembers);
 
-        return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(clientFamilyMembers.getId()).build();
+        return new CommandProcessingResultBuilder() //
+                .withCommandId(command.commandId()) //
+                .withEntityId(clientFamilyMembers.getId()) //
+                .build();
 
     }
 
@@ -221,7 +224,6 @@ public class ClientFamilyMembersWritePlatformServiceImpl implements ClientFamily
                     date = LocalDate.parse(member.get("dateOfBirth").getAsString(), formatter);
                     dateOfBirth = date;
                 } catch (DateTimeParseException e) {
-                    // TODO Auto-generated catch block
                     LOG.error("Problem occurred in addClientFamilyMember function", e);
                 }
 
@@ -238,7 +240,10 @@ public class ClientFamilyMembersWritePlatformServiceImpl implements ClientFamily
 
         }
 
-        return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(familyMember.getId()).build();
+        return new CommandProcessingResultBuilder() //
+                .withCommandId(command.commandId()) //
+                .withEntityId(familyMember.getId()) //
+                .build();
 
     }
 
@@ -349,7 +354,10 @@ public class ClientFamilyMembersWritePlatformServiceImpl implements ClientFamily
 
         this.clientFamilyRepository.saveAndFlush(clientFamilyMember);
 
-        return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(clientFamilyMember.getId()).build();
+        return new CommandProcessingResultBuilder() //
+                .withCommandId(command.commandId()) //
+                .withEntityId(clientFamilyMember.getId()) //
+                .build();
     }
 
     @Override
@@ -361,7 +369,10 @@ public class ClientFamilyMembersWritePlatformServiceImpl implements ClientFamily
         ClientFamilyMembers clientFamilyMember = clientFamilyRepository.getReferenceById(clientFamilyMemberId);
         clientFamilyRepository.delete(clientFamilyMember);
 
-        return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(clientFamilyMember.getId()).build();
+        return new CommandProcessingResultBuilder() //
+                .withCommandId(command.commandId()) //
+                .withEntityId(clientFamilyMember.getId()) //
+                .build();
 
     }
 

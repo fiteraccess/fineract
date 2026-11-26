@@ -135,7 +135,8 @@ public class LoanReAgingService {
                 .withClientId(loan.getClientId()) //
                 .withGroupId(loan.getGroupId()) //
                 .withLoanId(command.getLoanId()) //
-                .with(changes).build();
+                .with(changes) //
+                .build();
     }
 
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
@@ -201,7 +202,8 @@ public class LoanReAgingService {
                 .withClientId(loan.getClientId()) //
                 .withGroupId(loan.getGroupId()) //
                 .withLoanId(command.getLoanId()) //
-                .with(changes).build();
+                .with(changes) //
+                .build();
     }
 
     private void processReAgeTransaction(final Loan loan, final LoanTransaction reAgeTransaction, final boolean withPostTransactionChecks) {
@@ -209,7 +211,9 @@ public class LoanReAgingService {
                 || LoanReAgeInterestHandlingType.EQUAL_AMORTIZATION_FULL_INTEREST
                         .equals(reAgeTransaction.getLoanReAgeParameter().getInterestHandlingType())
                 || LoanReAgeInterestHandlingType.EQUAL_AMORTIZATION_PAYABLE_INTEREST
-                        .equals(reAgeTransaction.getLoanReAgeParameter().getInterestHandlingType())) {
+                        .equals(reAgeTransaction.getLoanReAgeParameter().getInterestHandlingType())
+                || loan.getActiveLoanTermVariations().stream()
+                        .anyMatch(ltv -> ltv.getTermApplicableFrom().isAfter(reAgeTransaction.getSubmittedOnDate()))) {
             final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, null);
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO,
                     cacheableLoanProductConfigService.getProductConfig(loan.getProductId()));

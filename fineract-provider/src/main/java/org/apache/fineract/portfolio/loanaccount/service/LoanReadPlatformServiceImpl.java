@@ -66,7 +66,7 @@ import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepos
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.staff.data.StaffData;
-import org.apache.fineract.organisation.staff.service.StaffReadPlatformService;
+import org.apache.fineract.organisation.staff.service.StaffReadService;
 import org.apache.fineract.portfolio.account.data.AccountTransferData;
 import org.apache.fineract.portfolio.accountdetails.data.LoanAccountSummaryData;
 import org.apache.fineract.portfolio.accountdetails.domain.AccountType;
@@ -146,6 +146,7 @@ import org.apache.fineract.portfolio.loanproduct.data.LoanProductData;
 import org.apache.fineract.portfolio.loanproduct.data.TransactionProcessingStrategyData;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepositoryWrapper;
+import org.apache.fineract.portfolio.loanproduct.domain.RepaymentStartDateType;
 import org.apache.fineract.portfolio.loanproduct.service.CacheableLoanProductConfigService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanDropdownReadPlatformService;
 import org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations;
@@ -179,7 +180,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
     private final ChargeReadPlatformService chargeReadPlatformService;
     private final CodeValueReadPlatformService codeValueReadPlatformService;
     private final CalendarReadPlatformService calendarReadPlatformService;
-    private final StaffReadPlatformService staffReadPlatformService;
+    private final StaffReadService staffReadPlatformService;
     private final PaginationHelper paginationHelper;
     private final PaymentTypeReadService paymentTypeReadPlatformService;
     private final FloatingRatesReadPlatformService floatingRatesReadPlatformService;
@@ -651,7 +652,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
         final BigDecimal availableDisbursementAmountWithOverApplied = delinquencyReadPlatformService
                 .calculateAvailableDisbursementAmountWithOverApplied(loan);
         return new LoanApprovalData(loan.getProposedPrincipal(), DateUtils.getBusinessLocalDate(), loan.getNetDisbursalAmount(),
-                appCurrency.toData(), availableDisbursementAmountWithOverApplied);
+                appCurrency.toData(), availableDisbursementAmountWithOverApplied, loan.getExpectedDisbursementDate());
     }
 
     @Override
@@ -868,7 +869,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                     + " topup.topup_amount as topupAmount, l.last_closed_business_date as lastClosedBusinessDate,l.overpaidon_date as overpaidOnDate, "
                     + " l.is_charged_off as isChargedOff, l.charge_off_reason_cv_id as chargeOffReasonId, codec.code_value as chargeOffReason, l.charged_off_on_date as chargedOffOnDate, l.enable_down_payment as enableDownPayment, l.disbursed_amount_percentage_for_down_payment as disbursedAmountPercentageForDownPayment, l.enable_auto_repayment_for_down_payment as enableAutoRepaymentForDownPayment,"
                     + " cobu.username as chargedOffByUsername, cobu.firstname as chargedOffByFirstname, cobu.lastname as chargedOffByLastname, l.loan_schedule_type as loanScheduleType, l.loan_schedule_processing_type as loanScheduleProcessingType, "
-                    + " l.charge_off_behaviour as chargeOffBehaviour, l.interest_recognition_on_disbursement_date as interestRecognitionOnDisbursementDate, l.allow_full_term_for_tranche as allowFullTermForTranche " //
+                    + " l.charge_off_behaviour as chargeOffBehaviour, l.interest_recognition_on_disbursement_date as interestRecognitionOnDisbursementDate, l.allow_full_term_for_tranche as allowFullTermForTranche, l.repayment_start_date_type_enum as repaymentStartDateType " //
                     + " from m_loan l" //
                     + " join m_product_loan lp on lp.id = l.product_id" //
                     + " left join m_loan_recalculation_details lir on lir.loan_id = l.id join m_currency rc on rc."
@@ -1233,6 +1234,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
             final boolean enableDownPayment = rs.getBoolean("enableDownPayment");
             final BigDecimal disbursedAmountPercentageForDownPayment = rs.getBigDecimal("disbursedAmountPercentageForDownPayment");
             final boolean enableAutoRepaymentForDownPayment = rs.getBoolean("enableAutoRepaymentForDownPayment");
+            final EnumOptionData repaymentStartDateType = LoanEnumerations
+                    .repaymentStartDateType(RepaymentStartDateType.fromInt(JdbcSupport.getInteger(rs, "repaymentStartDateType")));
             final boolean enableInstallmentLevelDelinquency = rs.getBoolean("enableInstallmentLevelDelinquency");
             final String loanScheduleTypeStr = rs.getString("loanScheduleType");
             final LoanScheduleType loanScheduleType = LoanScheduleType.valueOf(loanScheduleTypeStr);
@@ -1276,11 +1279,12 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                     canUseForTopup, isTopup, closureLoanId, closureLoanAccountNo, topupAmount, isEqualAmortization,
                     fixedPrincipalPercentagePerInstallment, delinquencyRange, disallowExpectedDisbursements, isFraud,
                     lastClosedBusinessDate, overpaidOnDate, isChargedOff, enableDownPayment, disbursedAmountPercentageForDownPayment,
-                    enableAutoRepaymentForDownPayment, enableInstallmentLevelDelinquency, loanScheduleType.asEnumOptionData(),
-                    loanScheduleProcessingType.asEnumOptionData(), fixedLength, chargeOffBehaviour.getValueAsStringEnumOptionData(),
-                    interestRecognitionOnDisbursementDate, allowFullTermForTranche, daysInYearCustomStrategy, enableIncomeCapitalization,
-                    capitalizedIncomeCalculationType, capitalizedIncomeStrategy, capitalizedIncomeType, enableBuyDownFee,
-                    buyDownFeeCalculationType, buyDownFeeStrategy, buyDownFeeIncomeType, merchantBuyDownFee);
+                    enableAutoRepaymentForDownPayment, repaymentStartDateType, enableInstallmentLevelDelinquency,
+                    loanScheduleType.asEnumOptionData(), loanScheduleProcessingType.asEnumOptionData(), fixedLength,
+                    chargeOffBehaviour.getValueAsStringEnumOptionData(), interestRecognitionOnDisbursementDate, allowFullTermForTranche,
+                    daysInYearCustomStrategy, enableIncomeCapitalization, capitalizedIncomeCalculationType, capitalizedIncomeStrategy,
+                    capitalizedIncomeType, enableBuyDownFee, buyDownFeeCalculationType, buyDownFeeStrategy, buyDownFeeIncomeType,
+                    merchantBuyDownFee);
         }
     }
 
@@ -2053,16 +2057,17 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
     @Override
     public Collection<Long> retrieveLoanIdsWithPendingIncomePostingTransactions() {
         LocalDate currentdate = DateUtils.getBusinessLocalDate();
-        StringBuilder sqlBuilder = new StringBuilder().append(" select distinct loan.id from m_loan as loan ").append(
-                " inner join m_loan_recalculation_details as recdet on (recdet.loan_id = loan.id and recdet.is_compounding_to_be_posted_as_transaction is not null and recdet.is_compounding_to_be_posted_as_transaction = true) ")
-                .append(" inner join m_loan_repayment_schedule as repsch on repsch.loan_id = loan.id ")
-                .append(" inner join m_loan_interest_recalculation_additional_details as adddet on adddet.loan_repayment_schedule_id = repsch.id ")
-                .append(" left join m_loan_transaction as trans on (trans.is_reversed <> true and trans.transaction_type_enum = 19 and trans.loan_id = loan.id and trans.transaction_date = adddet.effective_date) ")
-                .append(" where loan.loan_status_id = 300 ").append(" and loan.is_npa = false and loan.is_charged_off = false ")
-                .append(" and adddet.effective_date is not null ").append(" and trans.transaction_date is null ")
-                .append(" and adddet.effective_date < ? ");
+        final String sql = """
+                select distinct loan.id from m_loan as loan
+                inner join m_loan_recalculation_details as recdet on (recdet.loan_id = loan.id and recdet.is_compounding_to_be_posted_as_transaction is not null and recdet.is_compounding_to_be_posted_as_transaction = true)
+                inner join m_loan_repayment_schedule as repsch on repsch.loan_id = loan.id
+                inner join m_loan_interest_recalculation_additional_details as adddet on adddet.loan_repayment_schedule_id = repsch.id
+                left join m_loan_transaction as trans on (trans.is_reversed <> true and trans.transaction_type_enum = 19 and trans.loan_id = loan.id and trans.transaction_date = adddet.effective_date)
+                where loan.loan_status_id = 300  and loan.is_npa = false and loan.is_charged_off = false
+                and adddet.effective_date is not null  and trans.transaction_date is null
+                and adddet.effective_date < ?\s""";
         try {
-            return this.jdbcTemplate.queryForList(sqlBuilder.toString(), Long.class, new Object[] { currentdate });
+            return this.jdbcTemplate.queryForList(sql, Long.class, new Object[] { currentdate });
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }
@@ -2128,20 +2133,29 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
 
         public String schema() {
             // TODO: investigate whether it can be refactored to be more efficient
-            return " GREATEST(loan_transaction.transaction_date, ls.dueDate) as transactionDate,"
-                    + " coalesce(ls.principal_amount, 0) - coalesce(ls.principal_writtenoff_derived, 0) - coalesce(ls.principal_completed_derived, 0) as principalDue,"
-                    + " coalesce(ls.interest_amount, 0) - coalesce(ls.interest_completed_derived, 0) - coalesce(ls.interest_waived_derived, 0) - coalesce(ls.interest_writtenoff_derived, 0) as interestDue,"
-                    + " coalesce(ls.fee_charges_amount, 0) - coalesce(ls.fee_charges_completed_derived, 0) - coalesce(ls.fee_charges_writtenoff_derived, 0) - coalesce(ls.fee_charges_waived_derived, 0) as feeDue,"
-                    + " coalesce(ls.penalty_charges_amount, 0) - coalesce(ls.penalty_charges_completed_derived, 0) - coalesce(ls.penalty_charges_writtenoff_derived, 0) - coalesce(ls.penalty_charges_waived_derived, 0) as penaltyDue,"
-                    + " l.currency_code as currencyCode," + " l.currency_digits as currencyDigits,"
-                    + " l.currency_multiplesof as inMultiplesOf," + " l.net_disbursal_amount as netDisbursalAmount," + " rc."
-                    + sqlGenerator.escape("name") + " as currencyName," + " rc.display_symbol as currencyDisplaySymbol,"
-                    + " rc.internationalized_name_code as currencyNameCode" + " FROM" + " m_loan l" + " JOIN m_currency rc on rc."
-                    + sqlGenerator.escape("code") + " = l.currency_code" + " JOIN m_loan_repayment_schedule ls ON ls.loan_id = l.id"
-                    + " LEFT JOIN (" + " select tr.loan_id, max(tr.transaction_date) as transaction_date" + " from m_loan_transaction tr"
+            final String principalDueExpression = "coalesce(ls.principal_amount, 0) - coalesce(ls.principal_writtenoff_derived, 0)"
+                    + " - coalesce(ls.principal_completed_derived, 0)";
+            final String interestDueExpression = "coalesce(ls.interest_amount, 0) - coalesce(ls.interest_completed_derived, 0)"
+                    + " - coalesce(ls.interest_waived_derived, 0) - coalesce(ls.interest_writtenoff_derived, 0)";
+            final String feeDueExpression = "coalesce(ls.fee_charges_amount, 0) - coalesce(ls.fee_charges_completed_derived, 0)"
+                    + " - coalesce(ls.fee_charges_writtenoff_derived, 0) - coalesce(ls.fee_charges_waived_derived, 0)";
+            final String penaltyDueExpression = "coalesce(ls.penalty_charges_amount, 0)"
+                    + " - coalesce(ls.penalty_charges_completed_derived, 0) - coalesce(ls.penalty_charges_writtenoff_derived, 0)"
+                    + " - coalesce(ls.penalty_charges_waived_derived, 0)";
+            final String totalDueExpression = principalDueExpression + " + " + interestDueExpression + " + " + feeDueExpression + " + "
+                    + penaltyDueExpression;
+            return " GREATEST(loan_transaction.transaction_date, ls.dueDate) as transactionDate," + " " + principalDueExpression
+                    + " as principalDue," + " " + interestDueExpression + " as interestDue," + " " + feeDueExpression + " as feeDue," + " "
+                    + penaltyDueExpression + " as penaltyDue," + " l.currency_code as currencyCode,"
+                    + " l.currency_digits as currencyDigits," + " l.currency_multiplesof as inMultiplesOf,"
+                    + " l.net_disbursal_amount as netDisbursalAmount," + " rc." + sqlGenerator.escape("name") + " as currencyName,"
+                    + " rc.display_symbol as currencyDisplaySymbol," + " rc.internationalized_name_code as currencyNameCode" + " FROM"
+                    + " m_loan l" + " JOIN m_currency rc on rc." + sqlGenerator.escape("code") + " = l.currency_code"
+                    + " JOIN m_loan_repayment_schedule ls ON ls.loan_id = l.id" + " LEFT JOIN ("
+                    + " select tr.loan_id, max(tr.transaction_date) as transaction_date" + " from m_loan_transaction tr"
                     + " where tr.transaction_type_enum in (?,?)" + " AND tr.is_reversed = false" + " group by tr.loan_id"
-                    + " ) loan_transaction ON loan_transaction.loan_id = l.id" + " WHERE l.id = ?" + " ORDER BY ls.installment"
-                    + " LIMIT 1";
+                    + " ) loan_transaction ON loan_transaction.loan_id = l.id" + " WHERE l.id = ?" + " ORDER BY CASE WHEN ("
+                    + totalDueExpression + ") > 0 THEN 0 ELSE 1 END, ls.installment" + " LIMIT 1";
         }
 
         @Override

@@ -41,6 +41,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.ResourceNotFoundException;
@@ -69,8 +70,9 @@ public class ProductsApiResource {
 
     @GET
     @Path("template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Share Product Template", operationId = "retrieveTemplateShareProduct")
+    @AlternativeOperationId("retrieveTemplate_13")
     public String retrieveTemplate(@PathParam("type") @Parameter(description = "type") final String productType,
             @Context final UriInfo uriInfo) {
         String serviceName = productType + ProductsApiConstants.READPLATFORM_NAME;
@@ -86,10 +88,10 @@ public class ProductsApiResource {
 
     @GET
     @Path("{productId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a Share Product", description = "Retrieves a Share Product\n\n" + "Example Requests:\n" + "\n"
-            + "products/share/1\n" + "\n" + "\n" + "products/share/1?template=true")
+    @Operation(summary = "Retrieve a Share Product", operationId = "retrieveOneShareProduct", description = "Retrieves a Share Product\n\n"
+            + "Example Requests:\n" + "\n" + "products/share/1\n" + "\n" + "\n" + "products/share/1?template=true")
+    @AlternativeOperationId("retrieveProduct")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = ProductsApiResourceSwagger.GetProductsTypeProductIdResponse.class))) })
     public String retrieveProduct(@PathParam("productId") @Parameter(description = "productId") final Long productId,
@@ -106,10 +108,10 @@ public class ProductsApiResource {
     }
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Share Products", description = "Lists Share Products\n\n" + "Mandatory Fields: limit, offset\n\n"
-            + "Example Requests:\n" + "\n" + "shareproducts")
+    @Operation(summary = "List Share Products", operationId = "retrieveAllShareProducts", description = "Lists Share Products\n\n"
+            + "Mandatory Fields: limit, offset\n\n" + "Example Requests:\n" + "\n" + "shareproducts")
+    @AlternativeOperationId("retrieveAllProducts")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = ProductsApiResourceSwagger.GetProductsTypeResponse.class))) })
     public String retrieveAllProducts(@PathParam("type") @Parameter(description = "type") final String productType,
@@ -129,10 +131,11 @@ public class ProductsApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a Share Product", description = "Creates a Share Product\n\n"
+    @Operation(summary = "Create a Share Product", operationId = "createShareProduct", description = "Creates a Share Product\n\n"
             + "Mandatory Fields: name, shortName, description, currencyCode, digitsAfterDecimal,inMultiplesOf, locale, totalShares, unitPrice, nominalShares,allowDividendCalculationForInactiveClients,accountingRule\n\n"
             + "Mandatory Fields for Cash based accounting (accountingRule = 2): shareReferenceId, shareSuspenseId, shareEquityId, incomeFromFeeAccountId\n\n"
             + "Optional Fields: sharesIssued, minimumShares, maximumShares, minimumActivePeriodForDividends, minimumactiveperiodFrequencyType, lockinPeriodFrequency, lockinPeriodFrequencyType, marketPricePeriods, chargesSelected")
+    @AlternativeOperationId("createProduct")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = ProductsApiResourceSwagger.PostProductsTypeRequest.class)))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = ProductsApiResourceSwagger.PostProductsTypeResponse.class))) })
@@ -149,6 +152,8 @@ public class ProductsApiResource {
     @Path("{productId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Handle Share Product commands", operationId = "handleCommandsShareProduct")
+    @AlternativeOperationId("handleCommands_3")
     public String handleCommands(@PathParam("type") @Parameter(description = "type") final String productType,
             @PathParam("productId") @Parameter(description = "productId") final Long productId,
             @QueryParam("command") @Parameter(description = "command") final String commandParam,
@@ -163,7 +168,8 @@ public class ProductsApiResource {
     @Path("{productId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a Share Product", description = "Updates a Share Product")
+    @Operation(summary = "Update a Share Product", operationId = "updateShareProduct", description = "Updates a Share Product")
+    @AlternativeOperationId("updateProduct")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = ProductsApiResourceSwagger.PutProductsTypeProductIdRequest.class)))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = ProductsApiResourceSwagger.PutProductsTypeProductIdResponse.class))) })

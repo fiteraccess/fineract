@@ -83,7 +83,7 @@ public class SavingsInterestPostingIntegrationTest {
         try {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, today);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, today);
             // client activation, savings activation and 1st transaction date
             final String startDate = "01 November 2021";
             final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, startDate);
@@ -101,7 +101,7 @@ public class SavingsInterestPostingIntegrationTest {
             ArrayList<HashMap<String, Object>> transactions = (ArrayList<HashMap<String, Object>>) accountDetails.get("transactions");
             HashMap<String, Object> interestPostingTransaction = transactions.get(transactions.size() - 2);
             for (Map.Entry<String, Object> entry : interestPostingTransaction.entrySet()) {
-                LOG.info("{} - {}", entry.getKey(), entry.getValue().toString());
+                LOG.info("{} - {}", entry.getKey(), String.valueOf(entry.getValue()));
             }
             assertEquals("0.274", interestPostingTransaction.get("amount").toString(), "Equality check for interest posted amount");
             assertEquals("[2021, 11, 2]", interestPostingTransaction.get("date").toString(), "Date check for Interest Posting transaction");

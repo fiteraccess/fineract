@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.organisation.office.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -36,6 +37,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -63,7 +65,6 @@ public class OfficeTransactionsApiResource {
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public String retrieveOfficeTransactions(@Context final UriInfo uriInfo) {
 
@@ -77,7 +78,6 @@ public class OfficeTransactionsApiResource {
 
     @GET
     @Path("template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public String newOfficeTransactionDetails(@Context final UriInfo uriInfo) {
 
@@ -103,8 +103,9 @@ public class OfficeTransactionsApiResource {
 
     @DELETE
     @Path("{transactionId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(operationId = "delete_2")
+    @AlternativeOperationId("delete_7")
     public String delete(@PathParam("transactionId") final Long transactionId) {
 
         final CommandWrapper commandRequest = new CommandWrapperBuilder().deleteOfficeTransaction(transactionId).build();

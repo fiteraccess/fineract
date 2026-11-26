@@ -19,7 +19,6 @@
 package org.apache.fineract.integrationtests;
 
 import com.google.gson.Gson;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
@@ -36,7 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @Deprecated // TODO move this into new org.apache.fineract.integrationtests.client.StaffTest
-@SuppressFBWarnings(value = "RV_EXCEPTION_NOT_THROWN", justification = "False positive")
+
 public class StaffTest {
 
     private RequestSpecification requestSpec;
@@ -50,6 +49,7 @@ public class StaffTest {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        // TODO: fiugre out why Jakarta validation throws 403 instead of 400
         this.responseSpecForValidationError = new ResponseSpecBuilder().expectStatusCode(400).build();
         this.responseSpecForNotFoundError = new ResponseSpecBuilder().expectStatusCode(404).build();
     }
@@ -172,8 +172,7 @@ public class StaffTest {
         final String firstname = Utils.uniqueRandomStringGenerator("michael_", 10);
         final String lastname = Utils.uniqueRandomStringGenerator("Doe_", 10);
         final String externalId = UUID.randomUUID().toString();
-        final String mobileNo = Utils.uniqueRandomStringGenerator("num_", 10);
-
+        final String mobileNo = "+14155552671";
         map.put("firstname", firstname);
         map.put("lastname", lastname);
         map.put("externalId", externalId);

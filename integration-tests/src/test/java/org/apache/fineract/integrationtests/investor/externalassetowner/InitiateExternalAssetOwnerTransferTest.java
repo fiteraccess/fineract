@@ -146,7 +146,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
         SCHEDULER_JOB_HELPER = new SchedulerJobHelper(REQUEST_SPEC);
         FINANCIAL_ACTIVITY_ACCOUNT_HELPER = new FinancialActivityAccountHelper(REQUEST_SPEC);
         LOAN_TRANSACTION_HELPER = new LoanTransactionHelper(REQUEST_SPEC, RESPONSE_SPEC);
-        OFFICE_HELPER = new OfficeHelper(REQUEST_SPEC, RESPONSE_SPEC);
+        OFFICE_HELPER = new OfficeHelper();
 
         TODAYS_DATE = Utils.getLocalDateOfTenant();
         new BusinessStepHelper().updateSteps("LOAN_CLOSE_OF_BUSINESS", "APPLY_CHARGE_TO_OVERDUE_LOANS", "LOAN_DELINQUENCY_CLASSIFICATION",
@@ -933,13 +933,13 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
                 createSaleTransfer(loanID, "2020-03-05");
             });
             assertTrue(exception5.getMessage().contains("This loan cannot be sold, there is already an in progress transfer"));
-            CallFailedRuntimeException exception6 = assertThrows(CallFailedRuntimeException.class, () -> {
-                Integer loanID2 = createLoanForClient(clientID);
-                createSaleTransfer(loanID2, "2020-03-03");
-                updateBusinessDateAndExecuteCOBJob("2020-03-04");
-                createSaleTransfer(loanID2, "2020-03-05");
-            });
-            assertTrue(exception6.getMessage().contains("This loan cannot be sold, because it is owned by an external asset owner"));
+            // Owner-to-owner transfer: selling a loan that is already owned by an external asset owner should
+            // succeed at API time (a new PENDING is created; the actual ownership switch happens in COB)
+            Integer loanIDForOwnerTransfer = createLoanForClient(clientID);
+            createSaleTransfer(loanIDForOwnerTransfer, "2020-03-03");
+            updateBusinessDateAndExecuteCOBJob("2020-03-04");
+            PostInitiateTransferResponse ownerToOwnerSaleResponse = createSaleTransfer(loanIDForOwnerTransfer, "2020-03-05");
+            assertNotNull(ownerToOwnerSaleResponse.getResourceId());
             String externalId = UUID.randomUUID().toString();
             String transferExternalGroupId = UUID.randomUUID().toString();
             CallFailedRuntimeException exception7 = assertThrows(CallFailedRuntimeException.class, () -> {
@@ -963,7 +963,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
             ExternalEventHelper.deleteAllExternalEvents(REQUEST_SPEC, new ResponseSpecBuilder().expectStatusCode(Matchers.is(204)).build());
             ExternalEventHelper.changeEventState(REQUEST_SPEC, RESPONSE_SPEC, "LoanOwnershipTransferBusinessEvent", true);
 
-            final var officeId = OFFICE_HELPER.createOffice("1 January 2020");
+            final Integer officeId = OFFICE_HELPER.createOffice(LocalDate.of(2020, 1, 1)).getResourceId().intValue();
             final var clientID = ClientHelper.createClient(REQUEST_SPEC, RESPONSE_SPEC, "1 January 2020", officeId.toString());
             final var loanID = createLoanForClient(clientID);
             addPenaltyForLoan(loanID, "10");
@@ -1218,7 +1218,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
             ExternalEventHelper.deleteAllExternalEvents(REQUEST_SPEC, new ResponseSpecBuilder().expectStatusCode(Matchers.is(204)).build());
             ExternalEventHelper.changeEventState(REQUEST_SPEC, RESPONSE_SPEC, "LoanOwnershipTransferBusinessEvent", true);
 
-            final Integer officeId = OFFICE_HELPER.createOffice("1 January 2020");
+            final Integer officeId = OFFICE_HELPER.createOffice(LocalDate.of(2020, 1, 1)).getResourceId().intValue();
             final Integer clientID = ClientHelper.createClient(REQUEST_SPEC, RESPONSE_SPEC, "1 January 2020", officeId.toString());
             final Integer loanID = createLoanForClient(clientID);
 
@@ -1439,7 +1439,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
     }
 
     private void updateBusinessDateAndExecuteCOBJob(String date) {
-        BusinessDateHelper.updateBusinessDate(REQUEST_SPEC, RESPONSE_SPEC, BUSINESS_DATE, LocalDate.parse(date));
+        BusinessDateHelper.updateBusinessDate(BUSINESS_DATE, LocalDate.parse(date));
         SCHEDULER_JOB_HELPER.executeAndAwaitJob("Loan COB");
     }
 
@@ -1485,7 +1485,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
     private void setInitialBusinessDate(String date) {
         globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                 new PutGlobalConfigurationsRequest().enabled(true));
-        BusinessDateHelper.updateBusinessDate(REQUEST_SPEC, RESPONSE_SPEC, BUSINESS_DATE, LocalDate.parse(date));
+        BusinessDateHelper.updateBusinessDate(BUSINESS_DATE, LocalDate.parse(date));
     }
 
     private void cleanUpAndRestoreBusinessDate() {
@@ -1493,7 +1493,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
         REQUEST_SPEC.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         REQUEST_SPEC.header("Fineract-Platform-TenantId", "default");
         RESPONSE_SPEC = new ResponseSpecBuilder().expectStatusCode(200).build();
-        BusinessDateHelper.updateBusinessDate(REQUEST_SPEC, RESPONSE_SPEC, BUSINESS_DATE, TODAYS_DATE);
+        BusinessDateHelper.updateBusinessDate(BUSINESS_DATE, TODAYS_DATE);
         globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                 new PutGlobalConfigurationsRequest().enabled(false));
         globalConfigurationHelper.manageConfigurations(GlobalConfigurationConstants.ENABLE_AUTO_GENERATED_EXTERNAL_ID, false);
@@ -1672,7 +1672,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
         assertNull(result.getJournalEntryData());
     }
 
-    @RequiredArgsConstructor()
+    @RequiredArgsConstructor
     public static class ExpectedExternalTransferData {
 
         private final ExternalTransferData.StatusEnum status;
@@ -1715,7 +1715,7 @@ public class InitiateExternalAssetOwnerTransferTest extends BaseLoanIntegrationT
         }
     }
 
-    @RequiredArgsConstructor()
+    @RequiredArgsConstructor
     public static class ExpectedJournalEntryData {
 
         private final Long glAccountId;

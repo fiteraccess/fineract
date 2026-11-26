@@ -64,6 +64,8 @@ public class LoanChargeBackStepDef extends AbstractStepDef {
 
     @Autowired
     EventStore eventStore;
+    @Autowired
+    private LoanRequestFactory loanRequestFactory;
 
     @When("Admin makes {string} chargeback with {double} EUR transaction amount")
     public void makeLoanChargeback(String repaymentType, double transactionAmount) throws IOException {
@@ -81,7 +83,8 @@ public class LoanChargeBackStepDef extends AbstractStepDef {
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
 
-        GetLoansLoanIdResponse loanDetails = ok(() -> fineractClient.loans().retrieveLoan(loanId, Map.of("associations", "transactions")));
+        GetLoansLoanIdResponse loanDetails = ok(
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "transactions")));
         List<GetLoansLoanIdTransactions> transactions = loanDetails.getTransactions();
 
         List<Long> transactionIdList = new ArrayList<>();
@@ -103,7 +106,8 @@ public class LoanChargeBackStepDef extends AbstractStepDef {
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
 
-        GetLoansLoanIdResponse loanDetails = ok(() -> fineractClient.loans().retrieveLoan(loanId, Map.of("associations", "transactions")));
+        GetLoansLoanIdResponse loanDetails = ok(
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "transactions")));
         List<GetLoansLoanIdTransactions> transactions = loanDetails.getTransactions();
 
         List<Long> transactionIdList = new ArrayList<>();
@@ -124,7 +128,8 @@ public class LoanChargeBackStepDef extends AbstractStepDef {
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
 
-        GetLoansLoanIdResponse loanDetails = ok(() -> fineractClient.loans().retrieveLoan(loanId, Map.of("associations", "transactions")));
+        GetLoansLoanIdResponse loanDetails = ok(
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "transactions")));
         List<GetLoansLoanIdTransactions> transactions = loanDetails.getTransactions();
 
         List<Long> transactionIdList = new ArrayList<>();
@@ -145,7 +150,7 @@ public class LoanChargeBackStepDef extends AbstractStepDef {
         DefaultPaymentType paymentType = DefaultPaymentType.valueOf(repaymentType);
         Long paymentTypeValue = paymentTypeResolver.resolve(paymentType);
 
-        PostLoansLoanIdTransactionsTransactionIdRequest chargebackRequest = LoanRequestFactory.defaultChargebackRequest()
+        PostLoansLoanIdTransactionsTransactionIdRequest chargebackRequest = loanRequestFactory.defaultChargebackRequest()
                 .paymentTypeId(paymentTypeValue).transactionAmount(transactionAmount);
 
         PostLoansLoanIdTransactionsResponse chargebackResponse = ok(() -> fineractClient.loanTransactions().adjustLoanTransaction(loanId,
@@ -170,7 +175,7 @@ public class LoanChargeBackStepDef extends AbstractStepDef {
 
         // retrieve transaction details
         GetLoansLoanIdTransactionsTransactionIdResponse transactionResponseBody = ok(
-                () -> fineractClient.loanTransactions().retrieveTransaction(loanId, transactionId, Map.of()));
+                () -> fineractClient.loanTransactions().retrieveOneLoanTransaction(loanId, transactionId, Map.of()));
 
         // Get transaction type from response
         GetLoansType transactionType = transactionResponseBody.getType();

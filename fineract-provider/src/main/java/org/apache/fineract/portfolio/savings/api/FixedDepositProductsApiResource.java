@@ -52,6 +52,7 @@ import org.apache.fineract.accounting.producttoaccountmapping.service.ProductToG
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
@@ -64,7 +65,7 @@ import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
 import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
 import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartData;
-import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadPlatformService;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadService;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
 import org.apache.fineract.portfolio.paymenttype.service.PaymentTypeReadService;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
@@ -104,8 +105,8 @@ public class FixedDepositProductsApiResource {
     private final AccountingDropdownReadPlatformService accountingDropdownReadPlatformService;
     private final ProductToGLAccountMappingReadPlatformService accountMappingReadPlatformService;
     private final ChargeReadPlatformService chargeReadPlatformService;
-    private final InterestRateChartReadPlatformService chartReadPlatformService;
-    private final InterestRateChartReadPlatformService interestRateChartReadPlatformService;
+    private final InterestRateChartReadService chartReadPlatformService;
+    private final InterestRateChartReadService interestRateChartReadPlatformService;
     private final DepositsDropdownReadPlatformService depositsDropdownReadPlatformService;
     private final DropdownReadPlatformService dropdownReadPlatformService;
     private final PaymentTypeReadService paymentTypeReadPlatformService;
@@ -114,7 +115,7 @@ public class FixedDepositProductsApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a Fixed Deposit Product", description = """
+    @Operation(summary = "Create a Fixed Deposit Product", operationId = "createFixedDepositProduct", description = """
             Creates a Fixed Deposit Product
 
             Mandatory Fields: name, shortName, description, currencyCode, digitsAfterDecimal,inMultiplesOf, interestCompoundingPeriodType, interestCalculationType, interestCalculationDaysInYearType, minDepositTerm, minDepositTermTypeId, accountingRule
@@ -123,6 +124,7 @@ public class FixedDepositProductsApiResource {
 
 
             Mandatory Fields for Cash based accounting (accountingRule = 2): savingsReferenceAccountId, savingsControlAccountId, interestOnSavingsAccountId, incomeFromFeeAccountId, transfersInSuspenseAccountId, incomeFromPenaltyAccountId""")
+    @AlternativeOperationId("create_11")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.PostFixedDepositProductsRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.PostFixedDepositProductsResponse.class)))
     public String create(@Parameter(hidden = true) final String apiRequestBodyAsJson) {
@@ -139,7 +141,8 @@ public class FixedDepositProductsApiResource {
     @Path("{productId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a Fixed Deposit Product", description = "Updates a Fixed Deposit Product")
+    @Operation(summary = "Update a Fixed Deposit Product", operationId = "updateFixedDepositProduct", description = "Updates a Fixed Deposit Product")
+    @AlternativeOperationId("update_17")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.PutFixedDepositProductsProductIdRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.PutFixedDepositProductsProductIdResponse.class)))
     public String update(@PathParam("productId") @Parameter(description = "productId") final Long productId,
@@ -155,9 +158,8 @@ public class FixedDepositProductsApiResource {
     }
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Fixed Deposit Products", description = """
+    @Operation(summary = "List Fixed Deposit Products", operationId = "retrieveAllFixedDepositProducts", description = """
             Lists Fixed Deposit Products
 
             Example Requests:
@@ -166,6 +168,7 @@ public class FixedDepositProductsApiResource {
 
 
             fixeddepositproducts?fields=name""")
+    @AlternativeOperationId("retrieveAll_30")
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.GetFixedDepositProductsResponse.class))))
     public String retrieveAll(@Context final UriInfo uriInfo) {
@@ -182,9 +185,8 @@ public class FixedDepositProductsApiResource {
 
     @GET
     @Path("{productId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a Fixed Deposit Product", description = """
+    @Operation(summary = "Retrieve a Fixed Deposit Product", operationId = "retrieveOneFixedDepositProduct", description = """
             Retrieves a Fixed Deposit Product
 
             Example Requests:
@@ -196,6 +198,7 @@ public class FixedDepositProductsApiResource {
 
 
             fixeddepositproducts/1?fields=name,description""")
+    @AlternativeOperationId("retrieveOne_20")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.GetFixedDepositProductsProductIdResponse.class)))
     public String retrieveOne(@PathParam("productId") @Parameter(description = "productId") final Long productId,
             @Context final UriInfo uriInfo) {
@@ -236,8 +239,9 @@ public class FixedDepositProductsApiResource {
 
     @GET
     @Path("template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Fixed Deposit Product Template", operationId = "retrieveTemplateFixedDepositProduct")
+    @AlternativeOperationId("retrieveTemplate_15")
     public String retrieveTemplate(@Context final UriInfo uriInfo) {
 
         this.context.authenticatedUser().validateHasReadPermission(DepositsApiConstants.FIXED_DEPOSIT_PRODUCT_RESOURCE_NAME);
@@ -336,9 +340,9 @@ public class FixedDepositProductsApiResource {
 
     @DELETE
     @Path("{productId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Delete a Fixed Deposit Product", description = "Deletes a Fixed Deposit Product")
+    @Operation(summary = "Delete a Fixed Deposit Product", operationId = "deleteFixedDepositProduct", description = "Deletes a Fixed Deposit Product")
+    @AlternativeOperationId("delete_15")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = FixedDepositProductsApiResourceSwagger.DeleteFixedDepositProductsProductIdResponse.class)))
     public String delete(@PathParam("productId") @Parameter(description = "productId") final Long productId) {
 

@@ -688,7 +688,7 @@ public class SavingsApplicationProcessWritePlatformServiceJpaRepositoryImpl impl
 
         return new CommandProcessingResultBuilder() //
                 .withSavingsId(account.getId()) //
-                .setRollbackTransaction(rollbackTransaction)//
+                .setRollbackTransaction(rollbackTransaction) //
                 .build();
     }
 

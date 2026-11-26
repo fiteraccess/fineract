@@ -20,6 +20,7 @@ package org.apache.fineract.portfolio.savings.data;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Collection;
@@ -472,7 +473,8 @@ public final class SavingsProductData implements Serializable {
 
     @JsonCreator
     private SavingsProductData(@JsonProperty("id") final Long id, @JsonProperty("name") final String name,
-            @JsonProperty("shortName") final String shortName, @JsonProperty("description") final String description,
+            @Schema(hidden = true) @JsonProperty("shortName") final String shortName,
+            @Schema(hidden = true) @JsonProperty("description") final String description,
             @JsonProperty("currency") final CurrencyData currency,
             @JsonProperty("nominalAnnualInterestRate") final BigDecimal nominalAnnualInterestRate,
             @JsonProperty("interestCompoundingPeriodType") final EnumOptionData interestCompoundingPeriodType,
@@ -484,37 +486,39 @@ public final class SavingsProductData implements Serializable {
             @JsonProperty("lockinPeriodFrequencyType") final EnumOptionData lockinPeriodFrequencyType,
             @JsonProperty("withdrawalFeeForTransfers") final boolean withdrawalFeeForTransfers,
             @JsonProperty("accountingRule") final EnumOptionData accountingType,
-            @JsonProperty("accountingMappings") final Map<String, Object> accountingMappings,
-            @JsonProperty("paymentChannelToFundSourceMappings") final Collection<PaymentTypeToGLAccountMapper> paymentChannelToFundSourceMappings,
-            @JsonProperty("currencyOptions") final Collection<CurrencyData> currencyOptions,
-            @JsonProperty("interestCompoundingPeriodTypeOptions") final Collection<EnumOptionData> interestCompoundingPeriodTypeOptions,
-            @JsonProperty("interestPostingPeriodTypeOptions") final Collection<EnumOptionData> interestPostingPeriodTypeOptions,
-            @JsonProperty("interestCalculationTypeOptions") final Collection<EnumOptionData> interestCalculationTypeOptions,
-            @JsonProperty("interestCalculationDaysInYearTypeOptions") final Collection<EnumOptionData> interestCalculationDaysInYearTypeOptions,
-            @JsonProperty("lockinPeriodFrequencyTypeOptions") final Collection<EnumOptionData> lockinPeriodFrequencyTypeOptions,
-            @JsonProperty("withdrawalFeeTypeOptions") final Collection<EnumOptionData> withdrawalFeeTypeOptions,
-            @JsonProperty("paymentTypeOptions") final Collection<PaymentTypeData> paymentTypeOptions,
-            @JsonProperty("accountingRuleOptions") final Collection<EnumOptionData> accountingRuleOptions,
-            @JsonProperty("accountingMappingOptions") final Map<String, List<GLAccountData>> accountingMappingOptions,
-            @JsonProperty("charges") final Collection<ChargeData> charges,
-            @JsonProperty("chargeOptions") final Collection<ChargeData> chargeOptions,
-            @JsonProperty("penaltyOptions") final Collection<ChargeData> penaltyOptions,
-            @JsonProperty("feeToIncomeAccountMappings") final Collection<ChargeToGLAccountMapper> feeToIncomeAccountMappings,
-            @JsonProperty("penaltyToIncomeAccountMappings") final Collection<ChargeToGLAccountMapper> penaltyToIncomeAccountMappings,
+            @Schema(hidden = true) @JsonProperty("accountingMappings") final Map<String, Object> accountingMappings,
+            @Schema(hidden = true) @JsonProperty("paymentChannelToFundSourceMappings") final Collection<PaymentTypeToGLAccountMapper> paymentChannelToFundSourceMappings,
+            @Schema(hidden = true) @JsonProperty("currencyOptions") final Collection<CurrencyData> currencyOptions,
+            @Schema(hidden = true) @JsonProperty("interestCompoundingPeriodTypeOptions") final Collection<EnumOptionData> interestCompoundingPeriodTypeOptions,
+            @Schema(hidden = true) @JsonProperty("interestPostingPeriodTypeOptions") final Collection<EnumOptionData> interestPostingPeriodTypeOptions,
+            @Schema(hidden = true) @JsonProperty("interestCalculationTypeOptions") final Collection<EnumOptionData> interestCalculationTypeOptions,
+            @Schema(hidden = true) @JsonProperty("interestCalculationDaysInYearTypeOptions") final Collection<EnumOptionData> interestCalculationDaysInYearTypeOptions,
+            @Schema(hidden = true) @JsonProperty("lockinPeriodFrequencyTypeOptions") final Collection<EnumOptionData> lockinPeriodFrequencyTypeOptions,
+            @Schema(hidden = true) @JsonProperty("withdrawalFeeTypeOptions") final Collection<EnumOptionData> withdrawalFeeTypeOptions,
+            @Schema(hidden = true) @JsonProperty("paymentTypeOptions") final Collection<PaymentTypeData> paymentTypeOptions,
+            @Schema(hidden = true) @JsonProperty("accountingRuleOptions") final Collection<EnumOptionData> accountingRuleOptions,
+            @Schema(hidden = true) @JsonProperty("accountingMappingOptions") final Map<String, List<GLAccountData>> accountingMappingOptions,
+            @Schema(hidden = true) @JsonProperty("charges") final Collection<ChargeData> charges,
+            @Schema(hidden = true) @JsonProperty("chargeOptions") final Collection<ChargeData> chargeOptions,
+            @Schema(hidden = true) @JsonProperty("penaltyOptions") final Collection<ChargeData> penaltyOptions,
+            @Schema(hidden = true) @JsonProperty("feeToIncomeAccountMappings") final Collection<ChargeToGLAccountMapper> feeToIncomeAccountMappings,
+            @Schema(hidden = true) @JsonProperty("penaltyToIncomeAccountMappings") final Collection<ChargeToGLAccountMapper> penaltyToIncomeAccountMappings,
             @JsonProperty("allowOverdraft") final boolean allowOverdraft, @JsonProperty("overdraftLimit") final BigDecimal overdraftLimit,
             @JsonProperty("minRequiredBalance") final BigDecimal minRequiredBalance,
-            @JsonProperty("enforceMinRequiredBalance") final boolean enforceMinRequiredBalance,
+            @Schema(hidden = true) @JsonProperty("enforceMinRequiredBalance") final boolean enforceMinRequiredBalance,
             @JsonProperty("maxAllowedLienLimit") final BigDecimal maxAllowedLienLimit,
-            @JsonProperty("lienAllowed") final boolean lienAllowed,
-            @JsonProperty("minBalanceForInterestCalculation") final BigDecimal minBalanceForInterestCalculation,
-            @JsonProperty("nominalAnnualInterestRateOverdraft") final BigDecimal nominalAnnualInterestRateOverdraft,
-            @JsonProperty("minOverdraftForInterestCalculation") final BigDecimal minOverdraftForInterestCalculation,
-            @JsonProperty("withHoldTax") final boolean withHoldTax, @JsonProperty("taxGroup") final TaxGroupData taxGroup,
-            @JsonProperty("taxGroupOptions") final Collection<TaxGroupData> taxGroupOptions,
-            @JsonProperty("isDormancyTrackingActive") final Boolean isDormancyTrackingActive,
-            @JsonProperty("daysToInactive") final Long daysToInactive, @JsonProperty("daysToDormancy") final Long daysToDormancy,
-            @JsonProperty("daysToEscheat") final Long daysToEscheat,
-            @JsonProperty("accountMappingForPayment") final String accountMappingForPayment) {
+            @Schema(hidden = true) @JsonProperty("lienAllowed") final boolean lienAllowed,
+            @Schema(hidden = true) @JsonProperty("minBalanceForInterestCalculation") final BigDecimal minBalanceForInterestCalculation,
+            @Schema(hidden = true) @JsonProperty("nominalAnnualInterestRateOverdraft") final BigDecimal nominalAnnualInterestRateOverdraft,
+            @Schema(hidden = true) @JsonProperty("minOverdraftForInterestCalculation") final BigDecimal minOverdraftForInterestCalculation,
+            @Schema(hidden = true) @JsonProperty("withHoldTax") final boolean withHoldTax,
+            @JsonProperty("taxGroup") final TaxGroupData taxGroup,
+            @Schema(hidden = true) @JsonProperty("taxGroupOptions") final Collection<TaxGroupData> taxGroupOptions,
+            @Schema(hidden = true) @JsonProperty("isDormancyTrackingActive") final Boolean isDormancyTrackingActive,
+            @Schema(hidden = true) @JsonProperty("daysToInactive") final Long daysToInactive,
+            @Schema(hidden = true) @JsonProperty("daysToDormancy") final Long daysToDormancy,
+            @Schema(hidden = true) @JsonProperty("daysToEscheat") final Long daysToEscheat,
+            @Schema(hidden = true) @JsonProperty("accountMappingForPayment") final String accountMappingForPayment) {
         this.id = id;
         this.name = name;
         this.shortName = shortName;

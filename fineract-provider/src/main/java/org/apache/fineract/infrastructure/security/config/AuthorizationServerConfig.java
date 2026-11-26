@@ -42,6 +42,7 @@ import org.apache.fineract.infrastructure.security.filter.BusinessDateFilter;
 import org.apache.fineract.infrastructure.security.filter.TenantAwareAuthenticationFilter;
 import org.apache.fineract.infrastructure.security.filter.TwoFactorAuthenticationFilter;
 import org.apache.fineract.infrastructure.security.service.AuthTenantDetailsService;
+import org.apache.fineract.infrastructure.security.service.TemporaryPasswordAwareAuthenticationProvider;
 import org.apache.fineract.infrastructure.security.service.TenantAwareJpaPlatformUserDetailsService;
 import org.apache.fineract.infrastructure.security.service.TwoFactorService;
 import org.apache.fineract.useradministration.domain.AppUser;
@@ -56,6 +57,7 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -80,9 +82,6 @@ import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
@@ -146,8 +145,8 @@ public class AuthorizationServerConfig {
                 // TODO: Make it configurable
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
-                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")))
-                .apply(authorizationServerConfigurer);
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));
+        http.with(authorizationServerConfigurer, Customizer.withDefaults());
 
         if (fineractProperties.getSecurity().getCors().isEnabled()) {
             http.cors(Customizer.withDefaults());
@@ -166,7 +165,8 @@ public class AuthorizationServerConfig {
                     if (fineractProperties.getSecurity().getTwoFactor().isEnabled()) {
                         auth.anyRequest().hasAuthority("TWOFACTOR_AUTHENTICATED");
                     }
-                }).formLogin(form -> form.loginPage("/login").authenticationDetailsSource(tenantAuthDetailsSource()).permitAll())
+                }).authenticationProvider(customAuthenticationProvider())
+                .formLogin(form -> form.loginPage("/login").authenticationDetailsSource(tenantAuthDetailsSource()).permitAll())
                 .oauth2ResourceServer(
                         resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))
                 .addFilterAfter(tenantAwareAuthenticationFilter(), SecurityContextHolderFilter.class)//
@@ -196,21 +196,6 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        FineractProperties.CorsProperties corsConfiguration = fineractProperties.getSecurity().getCors();
-        config.setAllowedOriginPatterns(corsConfiguration.getAllowedOriginPatterns());
-        config.setAllowedMethods(corsConfiguration.getAllowedMethods());
-        config.setAllowedHeaders(corsConfiguration.getAllowedHeaders());
-        config.setExposedHeaders(corsConfiguration.getExposedHeaders());
-        config.setAllowCredentials(corsConfiguration.isAllowCredentials()); // if you use cookies / Authorization header
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
-    }
-
-    @Bean
     public OncePerRequestFilter tenantAwareAuthenticationFilter() {
         return new TenantAwareAuthenticationFilter(resolver(), tenantDetailsService);
     }
@@ -228,6 +213,13 @@ public class AuthorizationServerConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    @Bean
+    public DaoAuthenticationProvider customAuthenticationProvider() {
+        DaoAuthenticationProvider authProvider = new TemporaryPasswordAwareAuthenticationProvider(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
     }
 
     @Bean

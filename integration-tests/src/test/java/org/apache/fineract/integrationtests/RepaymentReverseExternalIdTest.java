@@ -91,7 +91,7 @@ public class RepaymentReverseExternalIdTest extends BaseLoanIntegrationTest {
             final LocalDate todaysDate = Utils.getLocalDateOfTenant();
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, todaysDate);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, todaysDate);
 
             // Create a client and a loan with externalId
             final Integer clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId().intValue();
@@ -152,7 +152,7 @@ public class RepaymentReverseExternalIdTest extends BaseLoanIntegrationTest {
         final Integer fundId = createFund(requestSpec, responseSpec);
         Assertions.assertNotNull(fundId);
 
-        final Integer delinquencyBucketId = DelinquencyBucketsHelper.createDelinquencyBucket(requestSpec, responseSpec);
+        final Long delinquencyBucketId = DelinquencyBucketsHelper.createDefaultBucket();
         Assertions.assertNotNull(delinquencyBucketId);
 
         return new PostLoanProductsRequest()//

@@ -55,6 +55,7 @@ import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformS
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
 import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookPopulatorService;
 import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiParameterHelper;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.api.DateParam;
@@ -87,7 +88,7 @@ import org.apache.fineract.portfolio.group.data.GroupGeneralData;
 import org.apache.fineract.portfolio.group.data.StaffCenterData;
 import org.apache.fineract.portfolio.group.service.CenterReadPlatformService;
 import org.apache.fineract.portfolio.meeting.data.MeetingData;
-import org.apache.fineract.portfolio.meeting.service.MeetingReadPlatformService;
+import org.apache.fineract.portfolio.meeting.service.MeetingReadService;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.springframework.stereotype.Component;
@@ -109,7 +110,7 @@ public class CentersApiResource {
     private final FromJsonHelper fromJsonHelper;
     private final AccountDetailsReadPlatformService accountDetailsReadPlatformService;
     private final CalendarReadPlatformService calendarReadPlatformService;
-    private final MeetingReadPlatformService meetingReadPlatformService;
+    private final MeetingReadService meetingReadPlatformService;
     private final EntityDatatableChecksReadService entityDatatableChecksReadService;
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
@@ -117,9 +118,8 @@ public class CentersApiResource {
 
     @GET
     @Path("template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a Center Template", description = """
+    @Operation(summary = "Retrieve a Center Template", operationId = "retrieveTemplateCenter", description = """
             Retrieves a Center Template
 
             Example Requests:
@@ -131,6 +131,7 @@ public class CentersApiResource {
 
 
             centers/template?officeId=2""")
+    @AlternativeOperationId("retrieveTemplate_6")
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.GetCentersTemplateResponse.class)))
     public String retrieveTemplate(@Context final UriInfo uriInfo,
@@ -157,9 +158,8 @@ public class CentersApiResource {
     }
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Centers", description = """
+    @Operation(summary = "List Centers", operationId = "retrieveAllCenters", description = """
             The default implementation supports pagination and sorting with the default pagination size set to 200 records. The parameter limit with description -1 will return all entries.
 
             Example Requests:
@@ -179,6 +179,7 @@ public class CentersApiResource {
 
 
             centers?orderBy=name&sortOrder=DESC""")
+    @AlternativeOperationId("retrieveAll_23")
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.GetCentersResponse.class)))
     public String retrieveAll(@Context final UriInfo uriInfo,
@@ -224,9 +225,8 @@ public class CentersApiResource {
 
     @GET
     @Path("{centerId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a Center", description = """
+    @Operation(summary = "Retrieve a Center", operationId = "retrieveOneCenter", description = """
             Retrieves a Center
 
             Example Requests:
@@ -238,6 +238,7 @@ public class CentersApiResource {
 
 
             centers/1?associations=groupMembers""")
+    @AlternativeOperationId("retrieveOne_14")
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.GetCentersCenterIdResponse.class)))
     public String retrieveOne(@Context final UriInfo uriInfo,
@@ -290,12 +291,13 @@ public class CentersApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a Center", description = """
+    @Operation(summary = "Create a Center", operationId = "createCenter", description = """
             Creates a Center
 
             Mandatory Fields: name, officeId, active, activationDate (if active=true)
 
             Optional Fields: externalId, staffId, groupMembers""")
+    @AlternativeOperationId("create_7")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.PostCentersRequest.class)))
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.PostCentersResponse.class)))
@@ -314,7 +316,8 @@ public class CentersApiResource {
     @Path("{centerId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a Center", description = "Updates a Center")
+    @Operation(summary = "Update a Center", operationId = "updateCenter", description = "Updates a Center")
+    @AlternativeOperationId("update_12")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.PutCentersCenterIdRequest.class)))
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.PutCentersCenterIdResponse.class)))
@@ -331,9 +334,9 @@ public class CentersApiResource {
 
     @DELETE
     @Path("{centerId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Delete a Center", description = "A Center can be deleted if it is in pending state and has no association - groups, loans or savings")
+    @Operation(summary = "Delete a Center", operationId = "deleteCenter", description = "A Center can be deleted if it is in pending state and has no association - groups, loans or savings")
+    @AlternativeOperationId("delete_10")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.DeleteCentersCenterIdResponse.class)))
     public String delete(@PathParam("centerId") @Parameter(description = "centerId") final Long centerId) {
 
@@ -348,7 +351,7 @@ public class CentersApiResource {
     @Path("{centerId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Activate a Center | Generate Collection Sheet | Save Collection Sheet | Close a Center | Associate Groups | Disassociate Groups", description = """
+    @Operation(summary = "Activate a Center | Generate Collection Sheet | Save Collection Sheet | Close a Center | Associate Groups | Disassociate Groups", operationId = "handleCommandsCenter", description = """
             Activate a Center:
 
             Centers can be created in a Pending state. This API exists to enable center activation. If the center happens to be already active, this API will result in an error.
@@ -374,6 +377,7 @@ public class CentersApiResource {
             This Api allows the loan officer to perform bulk repayments of JLG loans for a center on a given meeting date.
 
             Showing Request/Response for Close a Center""")
+    @AlternativeOperationId("activate_2")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.PostCentersCenterIdRequest.class)))
 
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.PostCentersCenterIdResponse.class)))
@@ -424,9 +428,8 @@ public class CentersApiResource {
 
     @GET
     @Path("{centerId}/accounts")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve Center accounts overview", description = """
+    @Operation(summary = "Retrieve Center accounts overview", operationId = "retrieveGroupAccountsCenter", description = """
             An example of how a savings summary for a Center can be provided. This is requested in a specific use case of the reference application.
 
             It is quite reasonable to add resources like this to simplify User Interface development.
@@ -438,6 +441,7 @@ public class CentersApiResource {
 
 
             centers/9/accounts""")
+    @AlternativeOperationId("retrieveGroupAccount")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CentersApiResourceSwagger.GetCentersCenterIdAccountsResponse.class)))
     public String retrieveGroupAccount(@PathParam("centerId") @Parameter(description = "centerId") final Long centerId,
             @Context final UriInfo uriInfo) {
@@ -456,6 +460,8 @@ public class CentersApiResource {
     @GET
     @Path("downloadtemplate")
     @Produces("application/vnd.ms-excel")
+    @Operation(summary = "Download Centers Bulk Template", operationId = "getBulkTemplateCenter")
+    @AlternativeOperationId("getCentersTemplate")
     public Response getCentersTemplate(@QueryParam("officeId") final Long officeId, @QueryParam("staffId") final Long staffId,
             @QueryParam("dateFormat") final String dateFormat) {
         return bulkImportWorkbookPopulatorService.getTemplate(GlobalEntityType.CENTERS.toString(), officeId, staffId, dateFormat);
@@ -464,6 +470,8 @@ public class CentersApiResource {
     @POST
     @Path("uploadtemplate")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Operation(summary = "Upload Centers Bulk Template", operationId = "postBulkTemplateCenter")
+    @AlternativeOperationId("postCentersTemplate")
     @RequestBody(description = "Upload centers template", content = {
             @Content(mediaType = MediaType.MULTIPART_FORM_DATA, schema = @Schema(implementation = UploadRequest.class)) })
     public String postCentersTemplate(@FormDataParam("file") InputStream uploadedInputStream,

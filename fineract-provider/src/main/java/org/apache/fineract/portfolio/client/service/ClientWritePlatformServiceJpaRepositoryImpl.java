@@ -364,10 +364,10 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
                     .withClientId(newClient.getId()) //
                     .withGroupId(groupId) //
                     .withEntityId(newClient.getId()) //
-                    .withSavingsId(result.getSavingsId())//
+                    .withSavingsId(result.getSavingsId()) //
                     .with(changes) //
-                    .setRollbackTransaction(rollbackTransaction)//
-                    .setRollbackTransaction(result.isRollbackTransaction())//
+                    .setRollbackTransaction(rollbackTransaction) //
+                    .setRollbackTransaction(result.isRollbackTransaction()) //
                     .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             handleDataIntegrityIssues(command, dve.getMostSpecificCause(), dve);
@@ -585,7 +585,6 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
             }
 
             if (changes.containsKey(ClientApiConstants.genderIdParamName)) {
-
                 final Long newValue = command.longValueOfParameterNamed(ClientApiConstants.genderIdParamName);
                 CodeValue gender = null;
                 if (newValue != null) {
@@ -603,15 +602,6 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
                     this.savingsProductConfigService.getSavingsProduct(savingsProductId);
                 }
                 clientForUpdate.updateSavingsProduct(savingsProductId);
-            }
-
-            if (changes.containsKey(ClientApiConstants.genderIdParamName)) {
-                final Long newValue = command.longValueOfParameterNamed(ClientApiConstants.genderIdParamName);
-                CodeValue newCodeVal = null;
-                if (newValue != null) {
-                    newCodeVal = this.codeValueRepository.findOneByCodeNameAndIdWithNotFoundDetection(ClientApiConstants.GENDER, newValue);
-                }
-                clientForUpdate.updateGender(newCodeVal);
             }
 
             if (changes.containsKey(ClientApiConstants.clientTypeIdParamName)) {
@@ -749,8 +739,8 @@ public class ClientWritePlatformServiceJpaRepositoryImpl implements ClientWriteP
                     .withEntityExternalId(client.getExternalId()) //
                     .withClientId(clientId) //
                     .withEntityId(clientId) //
-                    .withSavingsId(result.getSavingsId())//
-                    .setRollbackTransaction(result.isRollbackTransaction())//
+                    .withSavingsId(result.getSavingsId()) //
+                    .setRollbackTransaction(result.isRollbackTransaction()) //
                     .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             handleDataIntegrityIssues(command, dve.getMostSpecificCause(), dve);

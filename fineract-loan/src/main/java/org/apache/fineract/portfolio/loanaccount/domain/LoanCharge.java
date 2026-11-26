@@ -108,6 +108,9 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @Column(name = "amount_outstanding_derived", scale = 6, precision = 19, nullable = false)
     private BigDecimal amountOutstanding;
 
+    @Column(name = "tax_amount", scale = 6, precision = 19)
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
     @Column(name = "is_penalty", nullable = false)
     private boolean penaltyCharge = false;
 
@@ -143,10 +146,25 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     @OneToMany(mappedBy = "loanCharge", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private Set<LoanChargePaidBy> loanChargePaidBySet = new HashSet<>();
 
+    @OneToMany(mappedBy = "loanCharge", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<LoanChargeTaxDetails> taxDetails = new ArrayList<>();
+
     public void markAsFullyPaid() {
         this.amountPaid = this.amount;
         this.amountOutstanding = BigDecimal.ZERO;
         this.paid = true;
+    }
+
+    public void reconcileFullyPaid() {
+        BigDecimal waived = this.amountWaived != null ? this.amountWaived : BigDecimal.ZERO;
+        BigDecimal writtenOff = this.amountWrittenOff != null ? this.amountWrittenOff : BigDecimal.ZERO;
+        this.amountPaid = this.amount.subtract(waived).subtract(writtenOff);
+        this.amountOutstanding = BigDecimal.ZERO;
+        if (waived.compareTo(BigDecimal.ZERO) > 0) {
+            this.waived = true;
+        } else {
+            this.paid = true;
+        }
     }
 
     public boolean isFullyPaid() {
@@ -398,6 +416,10 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
     public Money getAmountWrittenOff(final MonetaryCurrency currency) {
         return Money.of(currency, this.amountWrittenOff);
+    }
+
+    public Money getTaxAmount(final MonetaryCurrency currency) {
+        return Money.of(currency, getTaxAmount());
     }
 
     /**

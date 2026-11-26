@@ -35,9 +35,9 @@ public class DataEnricherProcessor {
     }
 
     public <T> T enrich(T source) {
-        for (DataEnricher enhancer : enhancers) {
+        for (DataEnricher<?> enhancer : enhancers) {
             if (enhancer.isDataTypeSupported(source.getClass())) {
-                enhancer.enrich(source);
+                enhancer.enrichData(source);
             }
         }
         return source;

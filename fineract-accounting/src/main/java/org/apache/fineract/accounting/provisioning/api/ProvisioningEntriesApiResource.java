@@ -44,6 +44,7 @@ import org.apache.fineract.accounting.provisioning.service.ProvisioningEntriesRe
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
@@ -74,7 +75,7 @@ public class ProvisioningEntriesApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create new Provisioning Entries", description = """
+    @Operation(summary = "Create new Provisioning Entries", operationId = "createProvisioningEntries", description = """
             Creates a new Provisioning Entries
 
             Mandatory Fields
@@ -96,7 +97,7 @@ public class ProvisioningEntriesApiResource {
     @Path("{entryId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Recreates Provisioning Entry", description = "Recreates Provisioning Entry | createjournalentry.")
+    @Operation(summary = "Recreates Provisioning Entry", operationId = "modifyProvisioningEntry", description = "Recreates Provisioning Entry | createjournalentry.")
     @RequestBody(content = @Content(schema = @Schema(implementation = ProvisioningEntriesApiResourceSwagger.PutProvisioningEntriesRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = ProvisioningEntriesApiResourceSwagger.PutProvisioningEntriesResponse.class)))
     public CommandProcessingResult modifyProvisioningEntry(@PathParam("entryId") @Parameter(description = "entryId") final Long entryId,
@@ -108,9 +109,9 @@ public class ProvisioningEntriesApiResource {
 
     @GET
     @Path("{entryId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieves a Provisioning Entry", description = "Returns the details of a generated Provisioning Entry.")
+    @Operation(summary = "Retrieves a Provisioning Entry Metadata", operationId = "retrieveOneProvisioningEntry", description = "Returns the metadata of a generated Provisioning Entry.")
+    @AlternativeOperationId("retrieveProvisioningEntry")
     public ProvisioningEntryData retrieveProvisioningEntry(@PathParam("entryId") @Parameter(description = "entryId") final Long entryId) {
         platformSecurityContext.authenticatedUser();
         return provisioningEntriesReadPlatformService.retrieveProvisioningEntryData(entryId);
@@ -118,8 +119,9 @@ public class ProvisioningEntriesApiResource {
 
     @GET
     @Path("entries")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Provisioning Entries Loan Products Given a Query", operationId = "retrieveProvisioningEntriesLoanProducts")
+    @AlternativeOperationId("retrieveProviioningEntries")
     public Page<LoanProductProvisioningEntryData> retrieveProviioningEntries(@QueryParam("entryId") final Long entryId,
             @QueryParam("offset") final Integer offset, @QueryParam("limit") final Integer limit,
             @QueryParam("officeId") final Long officeId, @QueryParam("productId") final Long productId,
@@ -132,9 +134,8 @@ public class ProvisioningEntriesApiResource {
     }
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List all Provisioning Entries")
+    @Operation(summary = "List all Provisioning Entries Metadata", operationId = "retrieveAllProvisioningEntries")
     public Page<ProvisioningEntryData> retrieveAllProvisioningEntries(
             @QueryParam("offset") @Parameter(description = "offset") final Integer offset,
             @QueryParam("limit") @Parameter(description = "limit") final Integer limit) {

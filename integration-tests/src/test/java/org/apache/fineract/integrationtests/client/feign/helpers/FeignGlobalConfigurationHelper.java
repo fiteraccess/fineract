@@ -44,8 +44,17 @@ public class FeignGlobalConfigurationHelper {
 
     public void updateConfigurationByName(String configName, boolean enabled) {
         Long configId = getConfigurationIdByName(configName);
-        ok(() -> fineractClient.globalConfiguration().updateConfiguration1(configId,
+        ok(() -> fineractClient.globalConfiguration().updateGlobalConfiguration(configId,
                 new PutGlobalConfigurationsRequest().enabled(enabled)));
+    }
+
+    public void manageConfigurations(String configName, boolean enabled) {
+        updateConfigurationByName(configName, enabled);
+    }
+
+    public void updateGlobalConfiguration(String configName, PutGlobalConfigurationsRequest request) {
+        Long configId = getConfigurationIdByName(configName);
+        ok(() -> fineractClient.globalConfiguration().updateGlobalConfiguration(configId, request));
     }
 
     public Long getConfigurationIdByName(String configName) {

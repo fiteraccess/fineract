@@ -69,7 +69,10 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
             final Role entity = Role.fromJson(command);
             this.roleRepository.saveAndFlush(entity);
 
-            return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withEntityId(entity.getId()).build();
+            return new CommandProcessingResultBuilder() //
+                    .withCommandId(command.commandId()) //
+                    .withEntityId(entity.getId()) //
+                    .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             handleDataIntegrityIssues(command, dve.getMostSpecificCause(), dve);
             return new CommandProcessingResultBuilder() //
@@ -207,7 +210,9 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
             }
 
             this.roleRepository.delete(role);
-            return new CommandProcessingResultBuilder().withEntityId(roleId).build();
+            return new CommandProcessingResultBuilder() //
+                    .withEntityId(roleId) //
+                    .build();
         } catch (final JpaSystemException | DataIntegrityViolationException e) {
             throw ErrorHandler.getMappable(e, "error.msg.unknown.data.integrity.issue",
                     "Unknown data integrity issue with resource: " + e.getMostSpecificCause());
@@ -241,7 +246,9 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
              */
             role.disableRole();
             this.roleRepository.saveAndFlush(role);
-            return new CommandProcessingResultBuilder().withEntityId(roleId).build();
+            return new CommandProcessingResultBuilder() //
+                    .withEntityId(roleId) //
+                    .build();
 
         } catch (final JpaSystemException | DataIntegrityViolationException e) {
             throw ErrorHandler.getMappable(e, "error.msg.unknown.data.integrity.issue",
@@ -265,7 +272,9 @@ public class RoleWritePlatformServiceJpaRepositoryImpl implements RoleWritePlatf
 
             role.enableRole();
             this.roleRepository.saveAndFlush(role);
-            return new CommandProcessingResultBuilder().withEntityId(roleId).build();
+            return new CommandProcessingResultBuilder() //
+                    .withEntityId(roleId) //
+                    .build();
 
         } catch (final JpaSystemException | DataIntegrityViolationException e) {
             throw ErrorHandler.getMappable(e, "error.msg.unknown.data.integrity.issue",

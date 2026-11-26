@@ -20,6 +20,7 @@ package org.apache.fineract.infrastructure.core.exception;
 
 import static org.springframework.core.ResolvableType.forClassWithGenerics;
 
+import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import jakarta.persistence.PersistenceException;
 import jakarta.persistence.RollbackException;
@@ -74,19 +75,14 @@ public final class ErrorHandler {
 
         ROLLBACK("40"), // Transaction rollback
         DEADLOCK("60"), // Oracle: deadlock
-        HY00("HY", "Lock wait timeout exceeded"), // MySql deadlock HY00
-        ;
+        HY00("HY", "Lock wait timeout exceeded", "Record has changed since last read");
 
         private final String code;
-        private final String msg;
+        private final ImmutableList<String> messages;
 
-        PessimisticLockingFailureCode(String code, String msg) {
+        PessimisticLockingFailureCode(String code, String... messages) {
             this.code = code;
-            this.msg = msg;
-        }
-
-        PessimisticLockingFailureCode(String code) {
-            this(code, null);
+            this.messages = ImmutableList.copyOf(messages);
         }
 
         private static Throwable match(Throwable t) {
@@ -94,21 +90,14 @@ public final class ErrorHandler {
             return rootCause instanceof SQLException sqle && Arrays.stream(values()).anyMatch(e -> e.matches(sqle)) ? rootCause : null;
         }
 
-        private boolean matches(SQLException ex) {
-            return code.equals(getSqlClassCode(ex)) && (msg == null || ex.getMessage().contains(msg));
+        private boolean matches(SQLException e) {
+            String sqlState = e.getSQLState();
+            String message = e.getMessage();
+
+            return sqlState != null && sqlState.startsWith(code)
+                    && (messages.isEmpty() || (message != null && messages.stream().anyMatch(message::contains)));
         }
 
-        @Nullable
-        private static String getSqlClassCode(SQLException ex) {
-            String sqlState = ex.getSQLState();
-            if (sqlState == null) {
-                SQLException nestedEx = ex.getNextException();
-                if (nestedEx != null) {
-                    sqlState = nestedEx.getSQLState();
-                }
-            }
-            return sqlState != null && sqlState.length() > 2 ? sqlState.substring(0, 2) : sqlState;
-        }
     }
 
     @Autowired

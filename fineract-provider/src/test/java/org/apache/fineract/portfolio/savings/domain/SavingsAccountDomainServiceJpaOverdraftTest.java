@@ -59,6 +59,7 @@ import org.apache.fineract.portfolio.savings.data.CacheableSavingsProductConfig;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountPostInterestService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -101,6 +102,8 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
     private SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private SavingsAccountPostInterestService savingsAccountPostInterestService;
 
     private SavingsAccountDomainServiceJpa service;
 
@@ -112,7 +115,7 @@ class SavingsAccountDomainServiceJpaOverdraftTest {
         service = new SavingsAccountDomainServiceJpa(savingsAccountRepository, savingsAccountTransactionRepository,
                 journalEntryWritePlatformService, configurationDomainService, context, depositAccountOnHoldTransactionRepository,
                 businessEventNotifierService, balanceValidationService, entityManager, cacheableSavingsProductConfigService,
-                savingsDailyBalanceSyncRepository, noteRepository, new FineractProperties());
+                savingsDailyBalanceSyncRepository, noteRepository, new FineractProperties(), savingsAccountPostInterestService);
     }
 
     @AfterEach

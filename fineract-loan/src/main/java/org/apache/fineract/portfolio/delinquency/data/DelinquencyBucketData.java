@@ -25,6 +25,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.apache.fineract.portfolio.delinquency.domain.DelinquencyBucketType;
 
 @ToString
 @AllArgsConstructor
@@ -36,5 +37,6 @@ public class DelinquencyBucketData implements Serializable {
     private Long id;
     private String name;
     private List<DelinquencyRangeData> ranges;
-
+    private DelinquencyBucketType bucketType;
+    private DelinquencyMinimumPaymentPeriodAndRuleData minimumPaymentPeriodAndRule;
 }

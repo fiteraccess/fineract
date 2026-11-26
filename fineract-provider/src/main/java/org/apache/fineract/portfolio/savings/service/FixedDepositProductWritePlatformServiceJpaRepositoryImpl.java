@@ -109,8 +109,6 @@ public class FixedDepositProductWritePlatformServiceJpaRepositoryImpl implements
 
             final FixedDepositProduct product = this.fixedDepositProductRepository.findById(productId)
                     .orElseThrow(() -> new FixedDepositProductNotFoundException(productId));
-            product.setHelpers(this.chartAssembler);
-
             final Map<String, Object> changes = product.update(command);
 
             if (changes.containsKey(chargesParamName)) {
@@ -148,7 +146,8 @@ public class FixedDepositProductWritePlatformServiceJpaRepositoryImpl implements
 
             return new CommandProcessingResultBuilder() //
                     .withEntityId(product.getId()) //
-                    .with(changes).build();
+                    .with(changes) //
+                    .build();
         } catch (final DataAccessException e) {
             handleDataIntegrityIssues(command, e.getMostSpecificCause(), e);
             return CommandProcessingResult.empty();

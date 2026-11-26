@@ -44,6 +44,7 @@ import org.apache.fineract.client.models.PostLoansLoanIdChargesResponse;
 import org.apache.fineract.client.models.PostLoansResponse;
 import org.apache.fineract.client.models.PutChargeTransactionChangesRequest;
 import org.apache.fineract.client.models.PutChargeTransactionChangesResponse;
+import org.apache.fineract.test.data.ChargeProductResolver;
 import org.apache.fineract.test.data.ChargeProductType;
 import org.apache.fineract.test.data.ErrorMessageType;
 import org.apache.fineract.test.factory.LoanChargeRequestFactory;
@@ -73,6 +74,8 @@ public class LoanChargeStepDef extends AbstractStepDef {
     private EventCheckHelper eventCheckHelper;
     @Autowired
     private EventStore eventStore;
+    @Autowired
+    private ChargeProductResolver chargeProductResolver;
 
     @When("Admin adds {string} due date charge with {string} due date and {double} EUR transaction amount")
     public void addChargeDueDate(String chargeType, String transactionDate, double transactionAmount) throws IOException {
@@ -80,10 +83,10 @@ public class LoanChargeStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         ChargeProductType chargeProductType = ChargeProductType.valueOf(chargeType);
-        Long chargeTypeId = chargeProductType.getValue();
-        if (chargeTypeId.equals(ChargeProductType.LOAN_DISBURSEMENT_PERCENTAGE_FEE.getValue())
-                || chargeTypeId.equals(ChargeProductType.LOAN_TRANCHE_DISBURSEMENT_PERCENTAGE_FEE.getValue())
-                || chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.getValue())) {
+        Long chargeTypeId = chargeProductResolver.resolve(chargeProductType);
+        if (chargeType.equals(ChargeProductType.LOAN_DISBURSEMENT_PERCENTAGE_FEE.name())
+                || chargeType.equals(ChargeProductType.LOAN_TRANCHE_DISBURSEMENT_PERCENTAGE_FEE.name())
+                || chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.name())) {
             throw new IllegalStateException(String.format("The requested %s charge is NOT due date type, cannot be used here", chargeType));
         }
 
@@ -91,7 +94,7 @@ public class LoanChargeStepDef extends AbstractStepDef {
                 .dueDate(transactionDate).amount(transactionAmount);
 
         PostLoansLoanIdChargesResponse loanChargeResponse = ok(
-                () -> fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
+                () -> fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
         testContext().set(TestContextKey.ADD_DUE_DATE_CHARGE_RESPONSE, loanChargeResponse);
         testContext().set(TestContextKey.ADD_NSF_FEE_RESPONSE, loanChargeResponse);
 
@@ -104,11 +107,11 @@ public class LoanChargeStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         ChargeProductType chargeProductType = ChargeProductType.valueOf(chargeType);
-        Long chargeTypeId = chargeProductType.getValue();
-        if (!chargeTypeId.equals(ChargeProductType.LOAN_DISBURSEMENT_PERCENTAGE_FEE.getValue())
-                && !chargeTypeId.equals(ChargeProductType.LOAN_TRANCHE_DISBURSEMENT_PERCENTAGE_FEE.getValue())
-                && !chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT.getValue())
-                && !chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.getValue())) {
+        Long chargeTypeId = chargeProductResolver.resolve(chargeProductType);
+        if (!chargeType.equals(ChargeProductType.LOAN_DISBURSEMENT_PERCENTAGE_FEE.name())
+                && !chargeType.equals(ChargeProductType.LOAN_TRANCHE_DISBURSEMENT_PERCENTAGE_FEE.name())
+                && !chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT.name())
+                && !chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.name())) {
             throw new IllegalStateException(String.format("The requested %s charge is due date type, cannot be used here", chargeType));
         }
 
@@ -116,7 +119,7 @@ public class LoanChargeStepDef extends AbstractStepDef {
                 .amount(transactionPercentageAmount);
 
         PostLoansLoanIdChargesResponse loanChargeResponse = ok(
-                () -> fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
+                () -> fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
         testContext().set(TestContextKey.ADD_DUE_DATE_CHARGE_RESPONSE, loanChargeResponse);
     }
 
@@ -127,11 +130,11 @@ public class LoanChargeStepDef extends AbstractStepDef {
         final long loanId = loanResponse.getLoanId();
 
         final ChargeProductType chargeProductType = ChargeProductType.valueOf(chargeType);
-        final Long chargeTypeId = chargeProductType.getValue();
-        if (!chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_FLAT.getValue())
-                && !chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT.getValue())
-                && !chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_INTEREST.getValue())
-                && !chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.getValue())) {
+        final Long chargeTypeId = chargeProductResolver.resolve(chargeProductType);
+        if (!chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_FLAT.name())
+                && !chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT.name())
+                && !chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_INTEREST.name())
+                && !chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.name())) {
             throw new IllegalStateException(
                     String.format("The requested %s charge is not installment fee type, cannot be used here", chargeType));
         }
@@ -140,7 +143,7 @@ public class LoanChargeStepDef extends AbstractStepDef {
                 .chargeId(chargeTypeId).amount(amount);
 
         final PostLoansLoanIdChargesResponse loanChargeResponse = ok(
-                () -> fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
+                () -> fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
         testContext().set(TestContextKey.ADD_INSTALLMENT_FEE_CHARGE_RESPONSE, loanChargeResponse);
     }
 
@@ -151,20 +154,21 @@ public class LoanChargeStepDef extends AbstractStepDef {
 
         final long loanId = loanResponse.getLoanId();
         final ChargeProductType chargeProductType = ChargeProductType.valueOf(chargeType);
-        final Long chargeTypeId = chargeProductType.getValue();
+        final Long chargeTypeId = chargeProductResolver.resolve(chargeProductType);
 
         final PostLoansLoanIdChargesRequest loanIdChargesRequest = LoanChargeRequestFactory.defaultLoanChargeRequest()
                 .chargeId(chargeTypeId).amount(amount);
 
         try {
-            fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of());
+            fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of());
             throw new AssertionError("Expected FeignException but request succeeded");
         } catch (FeignException e) {
             final ErrorResponse errorDetails = ErrorResponse.fromFeignException(e);
             assertThat(errorDetails.getHttpStatusCode()).isEqualTo(400);
-            String expectedMessage = chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_INTEREST.getValue())
-                    ? ErrorMessageHelper.addInstallmentFeeInterestPercentageChargeFailure()
-                    : ErrorMessageHelper.addInstallmentFeePrincipalPercentageChargeFailure();
+            String expectedMessage = chargeTypeId
+                    .equals(chargeProductResolver.resolve(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_INTEREST))
+                            ? ErrorMessageHelper.addInstallmentFeeInterestPercentageChargeFailure()
+                            : ErrorMessageHelper.addInstallmentFeePrincipalPercentageChargeFailure();
             assertThat(errorDetails.getSingleError().getDeveloperMessage()).contains(expectedMessage);
         }
     }
@@ -175,13 +179,13 @@ public class LoanChargeStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         ChargeProductType chargeProductType = ChargeProductType.valueOf(chargeType);
-        Long chargeTypeId = chargeProductType.getValue();
+        Long chargeTypeId = chargeProductResolver.resolve(chargeProductType);
 
         PostLoansLoanIdChargesRequest loanIdChargesRequest = LoanChargeRequestFactory.defaultLoanChargeRequest().chargeId(chargeTypeId)
                 .dueDate(transactionDate).amount(transactionAmount);
 
         try {
-            fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of());
+            fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of());
             throw new AssertionError("Expected FeignException but request succeeded");
         } catch (FeignException e) {
             ErrorResponse errorDetails = ErrorResponse.fromFeignException(e);
@@ -197,11 +201,11 @@ public class LoanChargeStepDef extends AbstractStepDef {
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
         PostLoansLoanIdChargesRequest loanIdChargesRequest = LoanChargeRequestFactory.defaultLoanChargeRequest()
-                .chargeId(ChargeProductType.LOAN_PERCENTAGE_PROCESSING_FEE.value).amount(chargeAmount).dueDate(date)
-                .dateFormat(DEFAULT_DATE_FORMAT).locale(locale);
+                .chargeId(chargeProductResolver.resolve(ChargeProductType.LOAN_PERCENTAGE_PROCESSING_FEE)).amount(chargeAmount)
+                .dueDate(date).dateFormat(DEFAULT_DATE_FORMAT).locale(locale);
 
         PostLoansLoanIdChargesResponse loanChargeResponse = ok(
-                () -> fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
+                () -> fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
         testContext().set(TestContextKey.ADD_PROCESSING_FEE_RESPONSE, loanChargeResponse);
         eventCheckHelper.loanBalanceChangedEventCheck(loanId);
     }
@@ -212,11 +216,11 @@ public class LoanChargeStepDef extends AbstractStepDef {
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
         PostLoansLoanIdChargesRequest loanIdChargesRequest = LoanChargeRequestFactory.defaultLoanChargeRequest()
-                .chargeId(ChargeProductType.LOAN_PERCENTAGE_PROCESSING_FEE.value).amount(chargeAmount).dueDate(date)
-                .dateFormat(DEFAULT_DATE_FORMAT).locale(locale);
+                .chargeId(chargeProductResolver.resolve(ChargeProductType.LOAN_PERCENTAGE_PROCESSING_FEE)).amount(chargeAmount)
+                .dueDate(date).dateFormat(DEFAULT_DATE_FORMAT).locale(locale);
 
         PostLoansLoanIdChargesResponse loanChargeResponse = ok(
-                () -> fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
+                () -> fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
         testContext().set(TestContextKey.ADD_PROCESSING_FEE_RESPONSE, loanChargeResponse);
     }
 
@@ -226,11 +230,11 @@ public class LoanChargeStepDef extends AbstractStepDef {
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
         PostLoansLoanIdChargesRequest loanIdChargesRequest = LoanChargeRequestFactory.defaultLoanChargeRequest()
-                .chargeId(ChargeProductType.LOAN_NSF_FEE.value).amount(DEFAULT_CHARGE_FEE_FLAT).dueDate(date)
+                .chargeId(chargeProductResolver.resolve(ChargeProductType.LOAN_NSF_FEE)).amount(DEFAULT_CHARGE_FEE_FLAT).dueDate(date)
                 .dateFormat(DEFAULT_DATE_FORMAT);
 
         PostLoansLoanIdChargesResponse loanChargeResponse = ok(
-                () -> fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
+                () -> fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of()));
         testContext().set(TestContextKey.ADD_NSF_FEE_RESPONSE, loanChargeResponse);
         eventCheckHelper.loanBalanceChangedEventCheck(loanId);
     }
@@ -245,8 +249,8 @@ public class LoanChargeStepDef extends AbstractStepDef {
 
         PostLoansLoanIdChargesChargeIdRequest waiveRequest = new PostLoansLoanIdChargesChargeIdRequest();
 
-        PostLoansLoanIdChargesChargeIdResponse waiveResponse = ok(() -> fineractClient.loanCharges().executeLoanCharge2(loanId, chargeId,
-                waiveRequest, Map.<String, Object>of("command", "waive")));
+        PostLoansLoanIdChargesChargeIdResponse waiveResponse = ok(() -> fineractClient.loanCharges()
+                .executeLoanChargeOnExistingCharge(loanId, chargeId, waiveRequest, Map.<String, Object>of("command", "waive")));
         testContext().set(TestContextKey.WAIVE_CHARGE_RESPONSE, waiveResponse);
     }
 
@@ -260,8 +264,8 @@ public class LoanChargeStepDef extends AbstractStepDef {
 
         PostLoansLoanIdChargesChargeIdRequest waiveRequest = new PostLoansLoanIdChargesChargeIdRequest();
 
-        PostLoansLoanIdChargesChargeIdResponse waiveResponse = ok(() -> fineractClient.loanCharges().executeLoanCharge2(loanId, chargeId,
-                waiveRequest, Map.<String, Object>of("command", "waive")));
+        PostLoansLoanIdChargesChargeIdResponse waiveResponse = ok(() -> fineractClient.loanCharges()
+                .executeLoanChargeOnExistingCharge(loanId, chargeId, waiveRequest, Map.<String, Object>of("command", "waive")));
         testContext().set(TestContextKey.WAIVE_CHARGE_RESPONSE, waiveResponse);
     }
 
@@ -271,7 +275,7 @@ public class LoanChargeStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         GetLoansLoanIdResponse loanDetails = ok(
-                () -> fineractClient.loans().retrieveLoan(loanId, Map.<String, Object>of("associations", "transactions")));
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.<String, Object>of("associations", "transactions")));
         List<GetLoansLoanIdTransactions> transactions = loanDetails.getTransactions();
 
         final Long transactionId = transactions.stream().filter(t -> "loanTransactionType.waiveCharges".equals(t.getType().getCode()))
@@ -279,7 +283,7 @@ public class LoanChargeStepDef extends AbstractStepDef {
 
         PutChargeTransactionChangesRequest undoWaiveRequest = new PutChargeTransactionChangesRequest();
         PutChargeTransactionChangesResponse undoWaiveResponse = ok(
-                () -> fineractClient.loanTransactions().undoWaiveCharge(loanId, transactionId, undoWaiveRequest));
+                () -> fineractClient.loanTransactions().undoWaiveChargeLoanTransaction(loanId, transactionId, undoWaiveRequest));
         testContext().set(TestContextKey.UNDO_WAIVE_RESPONSE, undoWaiveResponse);
     }
 
@@ -295,14 +299,14 @@ public class LoanChargeStepDef extends AbstractStepDef {
     public void checkLoanChargeAmount(float chargeAmount) throws IOException {
         PostLoansLoanIdChargesResponse response = testContext().get(TestContextKey.ADD_PROCESSING_FEE_RESPONSE);
         GetLoansLoanIdChargesChargeIdResponse loanChargeAmount = ok(
-                () -> fineractClient.loanCharges().retrieveLoanCharge(response.getLoanId(), Long.valueOf(response.getResourceId())));
+                () -> fineractClient.loanCharges().retrieveOneLoanCharge(response.getLoanId(), Long.valueOf(response.getResourceId())));
         assertThat(loanChargeAmount.getAmount()).as("Charge amount is wrong").isEqualByComparingTo(Double.valueOf(chargeAmount));
     }
 
     private void addChargeEventCheck(PostLoansLoanIdChargesResponse loanChargeResponse) throws IOException {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_FORMAT_EVENTS);
-        GetLoansLoanIdChargesChargeIdResponse chargeDetails = ok(
-                () -> fineractClient.loanCharges().retrieveLoanCharge(loanChargeResponse.getLoanId(), loanChargeResponse.getResourceId()));
+        GetLoansLoanIdChargesChargeIdResponse chargeDetails = ok(() -> fineractClient.loanCharges()
+                .retrieveOneLoanCharge(loanChargeResponse.getLoanId(), loanChargeResponse.getResourceId()));
         GetLoansLoanIdChargesChargeIdResponse body = chargeDetails;
 
         eventAssertion.assertEvent(LoanAddChargeEvent.class, loanChargeResponse.getResourceId()).extractingData(LoanChargeDataV1::getName)
@@ -326,10 +330,10 @@ public class LoanChargeStepDef extends AbstractStepDef {
         String errorMessageExpected = String.format(errorMessageExpectedRaw, loanId);
 
         ChargeProductType chargeProductType = ChargeProductType.valueOf(chargeType);
-        Long chargeTypeId = chargeProductType.getValue();
-        if (chargeTypeId.equals(ChargeProductType.LOAN_DISBURSEMENT_PERCENTAGE_FEE.getValue())
-                || chargeTypeId.equals(ChargeProductType.LOAN_TRANCHE_DISBURSEMENT_PERCENTAGE_FEE.getValue())
-                || chargeTypeId.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.getValue())) {
+        Long chargeTypeId = chargeProductResolver.resolve(chargeProductType);
+        if (chargeType.equals(ChargeProductType.LOAN_DISBURSEMENT_PERCENTAGE_FEE.name())
+                || chargeType.equals(ChargeProductType.LOAN_TRANCHE_DISBURSEMENT_PERCENTAGE_FEE.name())
+                || chargeType.equals(ChargeProductType.LOAN_INSTALLMENT_FEE_PERCENTAGE_AMOUNT_PLUS_INTEREST.name())) {
             throw new IllegalStateException(String.format("The requested %s charge is NOT due date type, cannot be used here", chargeType));
         }
 
@@ -337,7 +341,7 @@ public class LoanChargeStepDef extends AbstractStepDef {
                 .dueDate(transactionDate).amount(transactionAmount);
 
         try {
-            fineractClient.loanCharges().executeLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of());
+            fineractClient.loanCharges().createOrPayLoanCharge(loanId, loanIdChargesRequest, Map.<String, Object>of());
             throw new AssertionError("Expected FeignException but request succeeded");
         } catch (FeignException e) {
             ErrorResponse errorResponse = ErrorResponse.fromFeignException(e);

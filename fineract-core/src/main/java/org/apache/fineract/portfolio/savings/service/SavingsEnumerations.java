@@ -233,6 +233,15 @@ public final class SavingsEnumerations {
         return optionData;
     }
 
+    public static EnumOptionData status(final SavingsAccountStatusEnumData status) {
+
+        Long id = status.getId();
+        String code = status.getCode();
+        String value = status.getValue();
+
+        return new EnumOptionData(id, code, value);
+    }
+
     public static SavingsAccountStatusEnumData status(final Integer statusEnum) {
         return status(SavingsAccountStatusType.fromInt(statusEnum));
     }
@@ -408,6 +417,22 @@ public final class SavingsEnumerations {
                 optionData = new EnumOptionData(SavingsPostingInterestPeriodType.ANNUAL.getValue().longValue(),
                         codePrefix + SavingsPostingInterestPeriodType.ANNUAL.getCode(), "Annually");
             break;
+            case ANNIVERSARY_MONTHLY:
+                optionData = new EnumOptionData(SavingsPostingInterestPeriodType.ANNIVERSARY_MONTHLY.getValue().longValue(),
+                        codePrefix + SavingsPostingInterestPeriodType.ANNIVERSARY_MONTHLY.getCode(), "Anniversary Monthly");
+            break;
+            case ANNIVERSARY_QUARTERLY:
+                optionData = new EnumOptionData(SavingsPostingInterestPeriodType.ANNIVERSARY_QUARTERLY.getValue().longValue(),
+                        codePrefix + SavingsPostingInterestPeriodType.ANNIVERSARY_QUARTERLY.getCode(), "Anniversary Quarterly");
+            break;
+            case ANNIVERSARY_BIANNUAL:
+                optionData = new EnumOptionData(SavingsPostingInterestPeriodType.ANNIVERSARY_BIANNUAL.getValue().longValue(),
+                        codePrefix + SavingsPostingInterestPeriodType.ANNIVERSARY_BIANNUAL.getCode(), "Anniversary BiAnnual");
+            break;
+            case ANNIVERSARY_ANNUAL:
+                optionData = new EnumOptionData(SavingsPostingInterestPeriodType.ANNIVERSARY_ANNUAL.getValue().longValue(),
+                        codePrefix + SavingsPostingInterestPeriodType.ANNIVERSARY_ANNUAL.getCode(), "Anniversary Annually");
+            break;
         }
 
         return optionData;
@@ -572,7 +597,7 @@ public final class SavingsEnumerations {
     public static List<EnumOptionData> preClosurePenaltyInterestOnType(final PreClosurePenalInterestOnType[] types) {
         final List<EnumOptionData> optionDatas = new ArrayList<>();
         for (final PreClosurePenalInterestOnType type : types) {
-            if (!type.isInvalid()) {
+            if (type != PreClosurePenalInterestOnType.INVALID) {
                 optionDatas.add(preClosurePenaltyInterestOnType(type));
             }
         }
@@ -606,7 +631,7 @@ public final class SavingsEnumerations {
     public static List<EnumOptionData> recurringDepositType(final RecurringDepositType[] types) {
         final List<EnumOptionData> optionDatas = new ArrayList<>();
         for (final RecurringDepositType type : types) {
-            if (!type.isInvalid()) {
+            if (type != RecurringDepositType.INVALID) {
                 optionDatas.add(recurringDepositType(type));
             }
         }
@@ -647,7 +672,7 @@ public final class SavingsEnumerations {
     public static List<EnumOptionData> recurringDepositFrequencyType(final SavingsPeriodFrequencyType[] types) {
         final List<EnumOptionData> optionDatas = new ArrayList<>();
         for (final SavingsPeriodFrequencyType type : types) {
-            if (!type.isInvalid()) {
+            if (type != SavingsPeriodFrequencyType.INVALID) {
                 optionDatas.add(recurringDepositFrequencyType(type));
             }
         }
@@ -749,7 +774,7 @@ public final class SavingsEnumerations {
     public static List<EnumOptionData> depositType(final DepositAccountType[] types) {
         final List<EnumOptionData> optionDatas = new ArrayList<>();
         for (final DepositAccountType type : types) {
-            if (!type.isInvalid()) {
+            if (type != DepositAccountType.INVALID) {
                 optionDatas.add(depositType(type));
             }
         }
@@ -790,7 +815,7 @@ public final class SavingsEnumerations {
     public static List<EnumOptionData> depositPeriodFrequency(final SavingsPeriodFrequencyType[] types) {
         final List<EnumOptionData> optionDatas = new ArrayList<>();
         for (final SavingsPeriodFrequencyType type : types) {
-            if (!type.isInvalid()) {
+            if (type != SavingsPeriodFrequencyType.INVALID) {
                 optionDatas.add(recurringDepositFrequencyType(type));
             }
         }
@@ -830,7 +855,7 @@ public final class SavingsEnumerations {
     public static List<EnumOptionData> depositAccountOnClosureType(final DepositAccountOnClosureType[] types) {
         final List<EnumOptionData> optionDatas = new ArrayList<>();
         for (final DepositAccountOnClosureType type : types) {
-            if (!type.isInvalid()) {
+            if (type != DepositAccountOnClosureType.INVALID) {
                 optionDatas.add(depositAccountOnClosureType(type));
             }
         }

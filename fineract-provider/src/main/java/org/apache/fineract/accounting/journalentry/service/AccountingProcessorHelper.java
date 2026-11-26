@@ -43,6 +43,7 @@ import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialA
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.journalentry.data.ChargePaymentDTO;
+import org.apache.fineract.accounting.journalentry.data.ChargeTaxPaymentDTO;
 import org.apache.fineract.accounting.journalentry.data.ClientChargePaymentDTO;
 import org.apache.fineract.accounting.journalentry.data.ClientTransactionDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanDTO;
@@ -74,9 +75,11 @@ import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.data.AccountingBridgeLoanTransactionDTO;
+import org.apache.fineract.portfolio.loanaccount.data.ChargeTaxDetailDTO;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargeData;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargePaidByDTO;
 import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionEnumData;
+import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeChargePaymentDTO;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
@@ -96,6 +99,7 @@ public class AccountingProcessorHelper {
     public static final String CLIENT_TRANSACTION_IDENTIFIER = "C";
     public static final String PROVISIONING_TRANSACTION_IDENTIFIER = "P";
     public static final String SHARE_TRANSACTION_IDENTIFIER = "SH";
+    public static final String WORKING_CAPITAL_LOAN_TRANSACTION_IDENTIFIER = "WC";
 
     private final JournalEntryRepository glJournalEntryRepository;
     private final ProductToGLAccountMappingRepository accountMappingRepository;
@@ -178,6 +182,7 @@ public class AccountingProcessorHelper {
 
             final List<ChargePaymentDTO> feePaymentDetails = new ArrayList<>();
             final List<ChargePaymentDTO> penaltyPaymentDetails = new ArrayList<>();
+            final List<ChargeTaxPaymentDTO> chargeTaxPayments = new ArrayList<>();
             // extract charge payment details (if exists)
             if (loanTxnDto.getLoanChargesPaid() != null) {
                 List<LoanChargePaidByDTO> loanChargesPaidData = loanTxnDto.getLoanChargesPaid();
@@ -191,6 +196,10 @@ public class AccountingProcessorHelper {
                         penaltyPaymentDetails.add(chargePaymentDTO);
                     } else {
                         feePaymentDetails.add(chargePaymentDTO);
+                    }
+                    for (ChargeTaxDetailDTO taxDetail : loanChargePaid.getTaxDetails()) {
+                        chargeTaxPayments.add(
+                                new ChargeTaxPaymentDTO(loanChargeId, taxDetail.getCreditAccountId(), taxDetail.getAmount(), isPenalty));
                     }
                 }
             }
@@ -211,6 +220,7 @@ public class AccountingProcessorHelper {
                     feePaid, penaltyPaid);
 
             transaction.setLoanToLoanTransfer(loanTxnDto.isLoanToLoanTransfer());
+            transaction.setChargeTaxPayments(chargeTaxPayments);
             newLoanTransactions.add(transaction);
         }
 
@@ -643,6 +653,16 @@ public class AccountingProcessorHelper {
     @Cacheable(value = "glClosuresByOfficeId", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat(#officeId)", unless = "#result == null")
     public GLClosure getLatestClosureByBranch(final long officeId) {
         return this.closureRepository.getLatestGLClosureByBranch(officeId);
+    }
+
+    public void checkForBranchClosures(final GLClosure latestGLClosure, final LocalDate transactionDate) {
+        // check if an accounting closure has happened for this branch after the transaction Date
+        if (latestGLClosure != null) {
+            if (!DateUtils.isBefore(latestGLClosure.getClosingDate(), transactionDate)) {
+                throw new JournalEntryInvalidException(GlJournalEntryInvalidReason.ACCOUNTING_CLOSED, latestGLClosure.getClosingDate(),
+                        null, null);
+            }
+        }
     }
 
     private void createJournalEntriesForLoan(final Office office, final String currencyCode, final int accountTypeToDebitId,
@@ -1184,6 +1204,20 @@ public class AccountingProcessorHelper {
         createCreditJournalEntryForLoan(office, currencyCode, account, loanId, transactionId, transactionDate, amount);
     }
 
+    public void createCreditJournalEntryForLoanByGLAccountId(final Office office, final String currencyCode, final Long loanId,
+            final String transactionId, final LocalDate transactionDate, final BigDecimal amount, final Long glAccountId) {
+        final GLAccount account = glAccountRepository.findById(glAccountId)
+                .orElseThrow(() -> new IllegalStateException("GL account not found for tax liability entry: " + glAccountId));
+        createCreditJournalEntryForLoan(office, currencyCode, account, loanId, transactionId, transactionDate, amount);
+    }
+
+    public void createDebitJournalEntryForLoanByGLAccountId(final Office office, final String currencyCode, final Long loanId,
+            final String transactionId, final LocalDate transactionDate, final BigDecimal amount, final Long glAccountId) {
+        final GLAccount account = glAccountRepository.findById(glAccountId)
+                .orElseThrow(() -> new IllegalStateException("GL account not found for tax liability debit entry: " + glAccountId));
+        createDebitJournalEntryForLoan(office, currencyCode, account, loanId, transactionId, transactionDate, amount);
+    }
+
     private void createCreditJournalEntryForClientPayments(final Office office, final String currencyCode, final GLAccount account,
             final Long clientId, final Long transactionId, final LocalDate transactionDate, final BigDecimal amount) {
         final boolean manualEntry = false;
@@ -1265,6 +1299,47 @@ public class AccountingProcessorHelper {
                 transactionDate, JournalEntryType.DEBIT, amount, null, PortfolioProductType.LOAN.getValue(), loanId, null,
                 loanTransactionId, null, null, null);
         persistJournalEntry(journalEntry);
+    }
+
+    public void createCreditJournalEntryForWorkingCapitalLoan(final Office office, final String currencyCode, final GLAccount account,
+            final Long workingCapitalLoanId, final Long workingCapitalLoanTransactionId, final LocalDate transactionDate,
+            final BigDecimal amount, final PaymentDetail paymentDetail) {
+        final String modifiedTransactionId = WORKING_CAPITAL_LOAN_TRANSACTION_IDENTIFIER + workingCapitalLoanTransactionId;
+        final JournalEntry journalEntry = JournalEntry.createNew(office, paymentDetail, account, currencyCode, modifiedTransactionId, false,
+                transactionDate, JournalEntryType.CREDIT, amount, null, PortfolioProductType.WORKING_CAPITAL_LOAN.getValue(),
+                workingCapitalLoanId, null, null, null, null, null);
+        persistJournalEntry(journalEntry);
+    }
+
+    public void createDebitJournalEntryForWorkingCapitalLoan(final Office office, final String currencyCode, final GLAccount account,
+            final Long workingCapitalLoanId, final Long workingCapitalLoanTransactionId, final LocalDate transactionDate,
+            final BigDecimal amount, final PaymentDetail paymentDetail) {
+        final String modifiedTransactionId = WORKING_CAPITAL_LOAN_TRANSACTION_IDENTIFIER + workingCapitalLoanTransactionId;
+        final JournalEntry journalEntry = JournalEntry.createNew(office, paymentDetail, account, currencyCode, modifiedTransactionId, false,
+                transactionDate, JournalEntryType.DEBIT, amount, null, PortfolioProductType.WORKING_CAPITAL_LOAN.getValue(),
+                workingCapitalLoanId, null, null, null, null, null);
+        persistJournalEntry(journalEntry);
+    }
+
+    public GLAccount getLinkedGLAccountForWorkingCapitalLoanProduct(final Long workingCapitalLoanProductId, final int accountMappingTypeId,
+            final Long paymentTypeId) {
+        ProductToGLAccountMapping accountMapping = this.accountMappingRepository.findCoreProductToFinAccountMapping(
+                workingCapitalLoanProductId, PortfolioProductType.WORKING_CAPITAL_LOAN.getValue(), accountMappingTypeId);
+
+        if (accountMappingTypeId == CashAccountsForLoan.FUND_SOURCE.getValue() && paymentTypeId != null) {
+            final ProductToGLAccountMapping paymentChannelSpecificAccountMapping = this.accountMappingRepository
+                    .findByProductIdAndProductTypeAndFinancialAccountTypeAndPaymentTypeId(workingCapitalLoanProductId,
+                            PortfolioProductType.WORKING_CAPITAL_LOAN.getValue(), accountMappingTypeId, paymentTypeId);
+            if (paymentChannelSpecificAccountMapping != null) {
+                accountMapping = paymentChannelSpecificAccountMapping;
+            }
+        }
+
+        if (accountMapping == null) {
+            throw new ProductToGLAccountMappingNotFoundException(PortfolioProductType.WORKING_CAPITAL_LOAN, workingCapitalLoanProductId,
+                    CashAccountsForLoan.fromInt(accountMappingTypeId).toString());
+        }
+        return accountMapping.getGlAccount();
     }
 
     private void createDebitJournalEntryForSavings(final Office office, final String currencyCode, final GLAccount account,
