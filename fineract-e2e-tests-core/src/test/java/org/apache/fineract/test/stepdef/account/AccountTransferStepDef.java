@@ -27,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.client.feign.FineractFeignClient;
 import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.AccountTransferRequest;
+import org.apache.fineract.client.models.PostAccountTransfersOperationRequest;
 import org.apache.fineract.client.models.PostAccountTransfersResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostLoansResponse;
@@ -71,14 +72,15 @@ public class AccountTransferStepDef extends AbstractStepDef {
     @When("Undo the last account transfer")
     public void undoAccountTransfer() {
         PostAccountTransfersResponse response = testContext().get("accountTransferResponse");
-        ok(() -> fineractClient.accountTransfers().accountTransferOperation(response.getResourceId(), "undo"));
+        ok(() -> fineractClient.accountTransfers().accountTransferOperation(response.getSubResourceId(), "undo",
+                new PostAccountTransfersOperationRequest()));
     }
 
     @When("Undo the last account transfer it fails with error: it is already reverted")
     public void undoAccountTransferFail() {
         PostAccountTransfersResponse response = testContext().get("accountTransferResponse");
-        CallFailedRuntimeException exception = fail(
-                () -> fineractClient.accountTransfers().accountTransferOperation(response.getResourceId(), "undo"));
+        CallFailedRuntimeException exception = fail(() -> fineractClient.accountTransfers()
+                .accountTransferOperation(response.getSubResourceId(), "undo", new PostAccountTransfersOperationRequest()));
         assertThat(exception.getStatus()).as(ErrorMessageHelper.dateFailureErrorCodeMsg()).isEqualTo(403);
         assertThat(exception.getMessage()).contains("error.msg.account.transfer.already.reversed");
     }

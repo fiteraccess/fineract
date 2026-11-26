@@ -163,28 +163,31 @@ public class AccountTransfersApiResource {
     }
 
     // One resource method serves both commands: JAX-RS cannot tell two POST methods on the same path template apart.
+    // The path id is the transfer transaction id that the list and retrieve endpoints return, for both commands.
     // "reverse" is the Access flow (posts counter-entries on both savings legs, optional body with isBulk/includeFees);
-    // "undo" is the upstream flow (marks the transfer transactions reversed, no body).
+    // "undo" is the upstream flow (marks that one transfer's transactions reversed, body ignored).
     @POST
     @Path("{accountTransferId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Operation on active account transfer", operationId = "accountTransferOperation", description = "In case of command=`undo`: Ability to undo a transfer of monetary funds from one account to another.\n\n"
             + "In case of command=`reverse`: Reverses both savings legs of a completed savings-to-savings transfer, including each leg's linked reference transactions, and flags the transfer reversed. Body may carry isBulk/includeFees to control the per-leg sibling sweep.")
+    @RequestBody(required = false, content = @Content(schema = @Schema(implementation = AccountTransfersApiResourceSwagger.PostAccountTransfersOperationRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public Object accountTransferOperation(
             @PathParam("accountTransferId") @Parameter(description = "accountTransferId") final Long accountTransferId,
             @QueryParam("command") @Parameter(description = "command") final String commandParam,
             @Parameter(hidden = true) final String apiRequestBodyAsJson) {
 
-        if ("reverse".equalsIgnoreCase(commandParam)) {
+        final String command = StringUtils.trimToEmpty(commandParam);
+        if ("reverse".equalsIgnoreCase(command)) {
             final String json = StringUtils.isBlank(apiRequestBodyAsJson) ? "{}" : apiRequestBodyAsJson;
             final CommandWrapper commandRequest = new CommandWrapperBuilder().withJson(json).reverseAccountTransfer(accountTransferId)
                     .build();
             final CommandProcessingResult result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
             return this.toApiJsonSerializer.serialize(result);
         }
-        if ("undo".equals(commandParam)) {
+        if ("undo".equalsIgnoreCase(command)) {
             final CommandWrapper commandRequest = new CommandWrapperBuilder().undoAccountTransfer(accountTransferId).build();
             return commandsSourceWritePlatformService.logCommandSource(commandRequest);
         }

@@ -172,6 +172,17 @@ final class AccountTransfersApiResourceSwagger {
         public String transferDescription;
     }
 
+    @Schema(description = "Optional body for command=reverse; ignored for command=undo")
+    public static final class PostAccountTransfersOperationRequest {
+
+        private PostAccountTransfersOperationRequest() {}
+
+        @Schema(example = "true", description = "Sweep the reference transactions linked to each leg")
+        public Boolean isBulk;
+        @Schema(example = "false", description = "Also reverse fee legs")
+        public Boolean includeFees;
+    }
+
     @Schema(description = "PostAccountTransfersResponse")
     public static final class PostAccountTransfersResponse {
 
@@ -179,8 +190,10 @@ final class AccountTransfersApiResourceSwagger {
 
         @Schema(example = "1")
         public Long savingsId;
-        @Schema(example = "1")
+        @Schema(example = "1", description = "Transfer details id")
         public Long resourceId;
+        @Schema(example = "1", description = "Transfer transaction id: the id the list and retrieve endpoints return and the one to pass to command=reverse or command=undo")
+        public Long subResourceId;
         public PostAccountTransfersChanges changes;
 
         static final class PostAccountTransfersChanges {

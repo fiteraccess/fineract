@@ -317,12 +317,25 @@ public class SavingsAccountTransactionsApiResource {
         return transaction(null, savingsExternalId, commandParam, apiRequestBodyAsJson);
     }
 
+    // Commands are matched without regard to case, as they were before upstream moved dispatch to a switch.
+    static String canonicalCommand(final String commandParam, final String... knownCommands) {
+        final String trimmed = StringUtils.trimToEmpty(commandParam);
+        for (final String known : knownCommands) {
+            if (known.equalsIgnoreCase(trimmed)) {
+                return known;
+            }
+        }
+        return trimmed;
+    }
+
     private String transaction(final Long savingsId, final String savingsExternalIdStr, final String commandParam,
             final String apiRequestBodyAsJson) {
         final Long resolvedSavingsId = getResolvedSavingsId(savingsId, ExternalIdFactory.produce(savingsExternalIdStr));
         final CommandWrapperBuilder builder = new CommandWrapperBuilder().withJson(apiRequestBodyAsJson);
 
-        final CommandWrapper commandRequest = switch (StringUtils.trimToEmpty(commandParam)) {
+        final CommandWrapper commandRequest = switch (canonicalCommand(commandParam, "deposit", "gsimDeposit", "withdrawal",
+                "force-withdrawal", "postInterestAsOn", SavingsApiConstants.COMMAND_HOLD_AMOUNT, "replayInterestPosting",
+                "replayChargePosting", "replayDormancyStatus", "replayCreditRestriction", "replayInterestForfeiture")) {
             case "deposit" -> builder.savingsAccountDeposit(resolvedSavingsId).build();
             case "gsimDeposit" -> builder.gsimSavingsAccountDeposit(resolvedSavingsId).build();
             case "withdrawal" -> builder.savingsAccountWithdrawal(resolvedSavingsId).build();
@@ -386,7 +399,9 @@ public class SavingsAccountTransactionsApiResource {
 
         final CommandWrapperBuilder builder = new CommandWrapperBuilder().withJson(jsonApiRequest);
 
-        final CommandWrapper commandRequest = switch (StringUtils.trimToEmpty(commandParam)) {
+        final CommandWrapper commandRequest = switch (canonicalCommand(commandParam, SavingsApiConstants.COMMAND_UNDO_TRANSACTION,
+                SavingsApiConstants.COMMAND_REVERSE_TRANSACTION, SavingsApiConstants.COMMAND_ADJUST_TRANSACTION,
+                SavingsApiConstants.COMMAND_RELEASE_AMOUNT)) {
             case SavingsApiConstants.COMMAND_UNDO_TRANSACTION ->
                 builder.undoSavingsAccountTransaction(resolvedSavingsId, resolvedTransactionId).build();
             case SavingsApiConstants.COMMAND_REVERSE_TRANSACTION ->
