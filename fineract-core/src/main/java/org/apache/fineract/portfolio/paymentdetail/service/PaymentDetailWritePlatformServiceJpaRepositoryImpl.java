@@ -33,7 +33,8 @@ public class PaymentDetailWritePlatformServiceJpaRepositoryImpl implements Payme
 
     private final PaymentDetailRepository paymentDetailRepository;
     // private final CodeValueRepositoryWrapper codeValueRepositoryWrapper;
-    private final PaymentTypeRepositoryWrapper paymentTyperepositoryWrapper;
+    // Access: lookup goes through the cached wrapper (paymentTypesById), as it did before upstream removed the wrapper.
+    private final PaymentTypeRepositoryWrapper paymentTypeRepositoryWrapper;
 
     @Override
     public PaymentDetail createPaymentDetail(final JsonCommand command, final Map<String, Object> changes) {
@@ -42,7 +43,7 @@ public class PaymentDetailWritePlatformServiceJpaRepositoryImpl implements Payme
             return null;
         }
 
-        final PaymentType paymentType = this.paymentTyperepositoryWrapper.findOneWithNotFoundDetection(paymentTypeId);
+        final PaymentType paymentType = this.paymentTypeRepositoryWrapper.findOneWithNotFoundDetection(paymentTypeId);
         final PaymentDetail paymentDetail = PaymentDetail.generatePaymentDetail(paymentType, command, changes);
         return paymentDetail;
 

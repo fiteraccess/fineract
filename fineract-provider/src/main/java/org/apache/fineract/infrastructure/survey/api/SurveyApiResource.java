@@ -40,6 +40,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.infrastructure.dataqueries.data.GenericResultsetData;
@@ -68,9 +69,9 @@ public class SurveyApiResource {
     private final GenericDataService genericDataService;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve surveys", description = "Retrieve surveys. This allows to retrieve the list of survey tables registered .")
+    @Operation(summary = "Retrieve surveys", operationId = "retrieveAllSurveys", description = "Retrieve surveys. This allows to retrieve the list of survey tables registered .")
+    @AlternativeOperationId("retrieveSurveys")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SurveyApiResourceSwagger.GetSurveyResponse.class))))
     public String retrieveSurveys() {
 
@@ -82,9 +83,9 @@ public class SurveyApiResource {
 
     @GET
     @Path("{surveyName}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve survey", description = "Lists a registered survey table details and the Apache Fineract Core application table they are registered to.")
+    @Operation(summary = "Retrieve survey", operationId = "retrieveOneSurvey", description = "Lists a registered survey table details and the Apache Fineract Core application table they are registered to.")
+    @AlternativeOperationId("retrieveSurvey")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SurveyApiResourceSwagger.GetSurveyResponse.class)))
     public String retrieveSurvey(@PathParam("surveyName") @Parameter(description = "surveyName") final String surveyName) {
 
@@ -100,8 +101,9 @@ public class SurveyApiResource {
     @Path("{surveyName}/{apptableId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create an entry in the survey table", description = "Insert and entry in a survey table (full fill the survey)."
+    @Operation(summary = "Create an entry in the survey table", operationId = "createSurveyEntry", description = "Insert and entry in a survey table (full fill the survey)."
             + "\n" + "\n" + "Refer Link for sample Body:  [ https://fineract.apache.org/docs/legacy/#survey_create ] ")
+    @AlternativeOperationId("createDatatableEntry_1")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SurveyApiResourceSwagger.PostSurveySurveyNameApptableIdRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SurveyApiResourceSwagger.PostSurveySurveyNameApptableIdResponse.class)))
     public String createDatatableEntry(@PathParam("surveyName") @Parameter(description = "surveyName") final String datatable,
@@ -120,20 +122,18 @@ public class SurveyApiResource {
     /** FIXME Vishwas what does this API really do? ***/
     @GET
     @Path("{surveyName}/{clientId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public String getClientSurveyOverview(@PathParam("surveyName") final String surveyName, @PathParam("clientId") final Long clientId) {
 
         this.context.authenticatedUser().validateHasReadPermission(SurveyApiConstants.SURVEY_RESOURCE_NAME);
 
-        List<ClientScoresOverview> scores = this.readSurveyService.retrieveClientSurveyScoreOverview(clientId);
+        List<ClientScoresOverview> scores = this.readSurveyService.retrieveClientSurveyScoreOverview(surveyName, clientId);
 
         return this.toApiJsonClientScoreOverviewSerializer.serialize(scores);
     }
 
     @GET
     @Path("{surveyName}/{clientId}/{entryId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public String getSurveyEntry(@PathParam("surveyName") final String surveyName, @PathParam("clientId") final Long clientId,
             @PathParam("entryId") final Long entryId) {
@@ -164,7 +164,6 @@ public class SurveyApiResource {
 
     @DELETE
     @Path("{surveyName}/{clientId}/{fulfilledId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public String deleteDatatableEntries(@PathParam("surveyName") final String surveyName, @PathParam("clientId") final Long clientId,
             @PathParam("fulfilledId") final Long fulfilledId) {

@@ -27,17 +27,14 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
+import com.google.gson.reflect.TypeToken;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatterBuilder;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.fineract.client.util.CallFailedRuntimeException;
 import org.apache.fineract.infrastructure.creditbureau.data.CreditBureauReportData;
 import org.apache.fineract.integrationtests.common.CreditBureauConfigurationHelper;
 import org.apache.fineract.integrationtests.common.CreditBureauIntegrationHelper;
@@ -52,10 +49,11 @@ import org.slf4j.LoggerFactory;
 public class CreditBureauTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(CreditBureauTest.class);
-    private ResponseSpecification responseSpec;
-    private RequestSpecification requestSpec;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String LOCAL_EXTERNAL_HOST = "localhost";
+    private static final String DOCKER_EXTERNAL_HOST = "host.docker.internal";
+    private static String creditBureauHost = ConfigProperties.ExternalServices.HOST;
 
     @RegisterExtension
     static WireMockExtension wm = WireMockExtension.newInstance().options(wireMockConfig().port(3558)).build();
@@ -63,53 +61,66 @@ public class CreditBureauTest {
     @BeforeEach
     public void setup() {
         Utils.initializeRESTAssured();
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        configureCreditBureauService();
+        configureCreditBureauService(creditBureauHost);
     }
 
-    private void configureCreditBureauService() {
-        Object organisations = CreditBureauConfigurationHelper.getOrganizationCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec);
+    private void configureCreditBureauService(String creditBureauHost) {
+        String creditBureauUrl = "http://" + creditBureauHost + ":3558";
+        String organisations = CreditBureauConfigurationHelper.getOrganisationCreditBureauConfiguration();
 
-        if (new Gson().fromJson(String.valueOf(organisations), List.class).isEmpty()) {
-            CreditBureauConfigurationHelper.addOrganisationCreditBureau(this.requestSpec, this.responseSpec, "1", "SAMPLE_ALIAS", true);
+        if (new Gson().fromJson(organisations, List.class).isEmpty()) {
+            CreditBureauConfigurationHelper.addOrganisationCreditBureau(1L, "SAMPLE_ALIAS", true);
         } else {
-            CreditBureauConfigurationHelper.updateOrganisationCreditBureau(this.requestSpec, this.responseSpec, "1", true);
+            CreditBureauConfigurationHelper.updateOrganisationCreditBureau("1", true);
         }
-        List<Map<String, Object>> configurations = CreditBureauConfigurationHelper.getCreditBureauConfiguration(requestSpec, responseSpec,
-                "1");
+        String configJson = CreditBureauConfigurationHelper.getCreditBureauConfiguration(1L);
+        List<Map<String, Object>> configurations = new Gson().fromJson(configJson, new TypeToken<List<Map<String, Object>>>() {}.getType());
         Assertions.assertNotNull(configurations);
-        Map<String, Integer> currentConfiguration = configurations.stream().collect(Collectors
-                .toMap(k -> String.valueOf(k.get("configurationKey")).toUpperCase(), v -> (int) v.get("creditBureauConfigurationId")));
-        final Object usernameConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("USERNAME").intValue(), "USERNAME", "testUser");
-        Assertions.assertNotNull(usernameConfigurationId);
-        final Object passwordConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("PASSWORD").intValue(), "PASSWORD", "testPassword");
-        Assertions.assertNotNull(passwordConfigurationId);
-        final Object creditReportUrlConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("CREDITREPORTURL").intValue(), "CREDITREPORTURL",
-                "http://localhost:3558/report/");
-        Assertions.assertNotNull(creditReportUrlConfigurationId);
-        final Object searchUrlConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("SEARCHURL").intValue(), "SEARCHURL", "http://localhost:3558/search/");
-        Assertions.assertNotNull(searchUrlConfigurationId);
-        final Object tokenUrlConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("TOKENURL").intValue(), "TOKENURL", "http://localhost:3558/token/");
-        Assertions.assertNotNull(tokenUrlConfigurationId);
-        final Object subscriptionIdConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("SUBSCRIPTIONID").intValue(), "SUBSCRIPTIONID", "subscriptionID123");
-        Assertions.assertNotNull(subscriptionIdConfigurationId);
-        final Object subscriptionKeyConfigurationId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("SUBSCRIPTIONKEY").intValue(), "SUBSCRIPTIONKEY", "subscriptionKey456");
-        Assertions.assertNotNull(subscriptionKeyConfigurationId);
-        final Object addCreditReportUrlId = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(this.requestSpec,
-                this.responseSpec, currentConfiguration.get("ADDCREDITREPORTURL").intValue(), "addCreditReporturl",
-                "http://localhost:3558/upload/");
-        Assertions.assertNotNull(addCreditReportUrlId);
+        Map<String, Long> currentConfiguration = configurations.stream()
+                .collect(Collectors.toMap(k -> String.valueOf(k.get("configurationKey")).toUpperCase(),
+                        v -> ((Number) v.get("creditBureauConfigurationId")).longValue()));
+        final String usernameResponse = CreditBureauConfigurationHelper
+                .updateCreditBureauConfiguration(currentConfiguration.get("USERNAME"), "USERNAME", "testUser");
+        Assertions.assertNotNull(usernameResponse);
+        final String passwordResponse = CreditBureauConfigurationHelper
+                .updateCreditBureauConfiguration(currentConfiguration.get("PASSWORD"), "PASSWORD", "testPassword");
+        Assertions.assertNotNull(passwordResponse);
+        final String creditReportUrlResponse = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(
+                currentConfiguration.get("CREDITREPORTURL"), "CREDITREPORTURL", creditBureauUrl + "/report/");
+        Assertions.assertNotNull(creditReportUrlResponse);
+        final String searchUrlResponse = CreditBureauConfigurationHelper
+                .updateCreditBureauConfiguration(currentConfiguration.get("SEARCHURL"), "SEARCHURL", creditBureauUrl + "/search/");
+        Assertions.assertNotNull(searchUrlResponse);
+        final String tokenUrlResponse = CreditBureauConfigurationHelper
+                .updateCreditBureauConfiguration(currentConfiguration.get("TOKENURL"), "TOKENURL", creditBureauUrl + "/token/");
+        Assertions.assertNotNull(tokenUrlResponse);
+        final String subscriptionIdResponse = CreditBureauConfigurationHelper
+                .updateCreditBureauConfiguration(currentConfiguration.get("SUBSCRIPTIONID"), "SUBSCRIPTIONID", "subscriptionID123");
+        Assertions.assertNotNull(subscriptionIdResponse);
+        final String subscriptionKeyResponse = CreditBureauConfigurationHelper
+                .updateCreditBureauConfiguration(currentConfiguration.get("SUBSCRIPTIONKEY"), "SUBSCRIPTIONKEY", "subscriptionKey456");
+        Assertions.assertNotNull(subscriptionKeyResponse);
+        final String addCreditReportUrlResponse = CreditBureauConfigurationHelper.updateCreditBureauConfiguration(
+                currentConfiguration.get("ADDCREDITREPORTURL"), "addCreditReporturl", creditBureauUrl + "/upload/");
+        Assertions.assertNotNull(addCreditReportUrlResponse);
+    }
 
+    private String getCreditReport(String creditBureauId, String nrc) {
+        try {
+            return CreditBureauIntegrationHelper.getCreditReport(creditBureauId, nrc);
+        } catch (CallFailedRuntimeException e) {
+            if (!LOCAL_EXTERNAL_HOST.equals(creditBureauHost) || !isConnectionFailure(e)) {
+                throw e;
+            }
+
+            creditBureauHost = DOCKER_EXTERNAL_HOST;
+            configureCreditBureauService(creditBureauHost);
+            return CreditBureauIntegrationHelper.getCreditReport(creditBureauId, nrc);
+        }
+    }
+
+    private boolean isConnectionFailure(CallFailedRuntimeException e) {
+        return e.getMessage() != null && e.getMessage().contains("HTTP Response Code: 0");
     }
 
     @Test
@@ -130,11 +141,11 @@ public class CreditBureauTest {
                         + "\"Gender\":\"male\"," + "\"Address\":\"Test Address\"" + "}," + "\"CreditScore\": {\"Score\":  \"500\"},"
                         + "\"ActiveLoans\": [\"Loan1\", \"Loan2\"]," + "\"WriteOffLoans\": [\"Loan3\", \"Loan4\"]" + "}}", 200)));
 
-        Object serviceResult = CreditBureauIntegrationHelper.getCreditReport(this.requestSpec, this.responseSpec, "1", "NRC213");
+        String serviceResult = getCreditReport("1", "NRC213");
         Assertions.assertNotNull(serviceResult);
         Gson gson = new Gson();
         CreditBureauReportData responseData = gson.fromJson(
-                gson.toJson(JsonParser.parseString(String.valueOf(serviceResult)).getAsJsonObject().get("creditBureauReportData")),
+                gson.toJson(JsonParser.parseString(serviceResult).getAsJsonObject().get("creditBureauReportData")),
                 CreditBureauReportData.class);
         Assertions.assertEquals("\"Test Name\"", responseData.getName());
         Assertions.assertEquals("{\"Score\":\"500\"}", responseData.getCreditScore());
@@ -168,11 +179,11 @@ public class CreditBureauTest {
                         + "\"Name\":\"Test Name\"," + "\"Gender\":\"male\"," + "\"Address\":\"Test Address\"" + "},"
                         + "\"CreditScore\": {\"Score\":  \"500\"}," + "\"ActiveLoans\": []," + "\"WriteOffLoans\": []" + "}}", 200)));
 
-        Object serviceResult = CreditBureauIntegrationHelper.getCreditReport(this.requestSpec, this.responseSpec, "1", "NRC213");
+        String serviceResult = getCreditReport("1", "NRC213");
         Assertions.assertNotNull(serviceResult);
         Gson gson = new Gson();
         CreditBureauReportData responseData = gson.fromJson(
-                gson.toJson(JsonParser.parseString(String.valueOf(serviceResult)).getAsJsonObject().get("creditBureauReportData")),
+                gson.toJson(JsonParser.parseString(serviceResult).getAsJsonObject().get("creditBureauReportData")),
                 CreditBureauReportData.class);
         Assertions.assertEquals("\"Test Name\"", responseData.getName());
         Assertions.assertEquals("{\"Score\":\"500\"}", responseData.getCreditScore());

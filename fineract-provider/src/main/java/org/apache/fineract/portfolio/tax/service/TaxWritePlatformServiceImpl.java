@@ -68,7 +68,8 @@ public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
         this.taxComponentRepository.saveAndFlush(taxComponent);
         return new CommandProcessingResultBuilder() //
                 .withEntityId(id) //
-                .with(changes).build();
+                .with(changes) //
+                .build();
     }
 
     @Override
@@ -97,7 +98,8 @@ public class TaxWritePlatformServiceImpl implements TaxWritePlatformService {
         this.taxGroupRepository.saveAndFlush(taxGroup);
         return new CommandProcessingResultBuilder() //
                 .withEntityId(id) //
-                .with(changes).build();
+                .with(changes) //
+                .build();
     }
 
 }

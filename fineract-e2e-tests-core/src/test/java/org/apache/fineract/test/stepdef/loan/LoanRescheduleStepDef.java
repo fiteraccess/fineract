@@ -41,7 +41,12 @@ import org.apache.fineract.client.models.PostCreateRescheduleLoansResponse;
 import org.apache.fineract.client.models.PostLoansResponse;
 import org.apache.fineract.client.models.PostUpdateRescheduleLoansRequest;
 import org.apache.fineract.test.data.LoanRescheduleErrorMessage;
+import org.apache.fineract.test.data.codevalue.CodeNames;
+import org.apache.fineract.test.data.codevalue.CodeValueResolver;
+import org.apache.fineract.test.data.codevalue.DefaultCodeValue;
 import org.apache.fineract.test.helper.ErrorMessageHelper;
+import org.apache.fineract.test.messaging.event.EventCheckHelper;
+import org.apache.fineract.test.messaging.store.EventStore;
 import org.apache.fineract.test.stepdef.AbstractStepDef;
 import org.apache.fineract.test.support.TestContextKey;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,9 +61,16 @@ public class LoanRescheduleStepDef extends AbstractStepDef {
 
     @Autowired
     private FineractFeignClient fineractClient;
+    @Autowired
+    private EventStore eventStore;
+    @Autowired
+    private EventCheckHelper eventCheckHelper;
+    @Autowired
+    private CodeValueResolver codeValueResolver;
 
     @When("Admin creates and approves Loan reschedule with the following data:")
     public void createAndApproveLoanReschedule(DataTable table) throws IOException {
+        eventStore.reset();
         PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
         long loanId = loanResponse.getLoanId();
 
@@ -85,12 +97,12 @@ public class LoanRescheduleStepDef extends AbstractStepDef {
                 .graceOnInterest(graceOnInterest)//
                 .extraTerms(extraTerms)//
                 .newInterestRate(newInterestRate)//
-                .rescheduleReasonId(54L)//
+                .rescheduleReasonId(codeValueResolver.resolve(CodeNames.LOAN_RESCHEDULE_REASON.getValue(), DefaultCodeValue.TEST.getName()))//
                 .rescheduleReasonComment("")//
                 .dateFormat("dd MMMM yyyy")//
                 .locale("en");//
 
-        PostCreateRescheduleLoansResponse createResponse = ok(() -> fineractClient.rescheduleLoans().createLoanRescheduleRequest(request));
+        PostCreateRescheduleLoansResponse createResponse = ok(() -> fineractClient.rescheduleLoans().createRescheduleLoan(request));
 
         Long scheduleId = createResponse.getResourceId();
         PostUpdateRescheduleLoansRequest approveRequest = new PostUpdateRescheduleLoansRequest()//
@@ -98,8 +110,12 @@ public class LoanRescheduleStepDef extends AbstractStepDef {
                 .dateFormat("dd MMMM yyyy")//
                 .locale("en");//
 
-        ok(() -> fineractClient.rescheduleLoans().updateLoanRescheduleRequest(scheduleId, approveRequest,
+        ok(() -> fineractClient.rescheduleLoans().updateRescheduleLoan(scheduleId, approveRequest,
                 Map.<String, Object>of("command", "approve")));
+
+        if (newInterestRate != null) {
+            eventCheckHelper.loanBalanceChangedEventCheck(loanId);
+        }
     }
 
     @Then("Loan reschedule with the following data results a {int} error and {string} error message")
@@ -150,7 +166,7 @@ public class LoanRescheduleStepDef extends AbstractStepDef {
             throw new IllegalStateException("Parameter count in Error message does not met the criteria");
         }
 
-        CallFailedRuntimeException exception = fail(() -> fineractClient.rescheduleLoans().createLoanRescheduleRequest(request));
+        CallFailedRuntimeException exception = fail(() -> fineractClient.rescheduleLoans().createRescheduleLoan(request));
 
         assertThat(exception.getStatus()).as(ErrorMessageHelper.wrongErrorCode(exception.getStatus(), errorCodeExpected))
                 .isEqualTo(errorCodeExpected);
@@ -169,7 +185,7 @@ public class LoanRescheduleStepDef extends AbstractStepDef {
         String resourceId = String.valueOf(loanId);
 
         List<GetLoanRescheduleRequestResponse> loanRescheduleRequestResponses = ok(
-                () -> fineractClient.rescheduleLoans().retrieveAllRescheduleRequest("", loanId));
+                () -> fineractClient.rescheduleLoans().retrieveAllRescheduleLoans("", loanId));
         List<List<String>> data = table.asLists();
         List<String> header = table.row(0);
         checkLoanRescheduleTab(data, loanRescheduleRequestResponses, header, resourceId);

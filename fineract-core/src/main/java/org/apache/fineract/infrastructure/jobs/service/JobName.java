@@ -66,6 +66,8 @@ public enum JobName {
     GENERATE_MONTHLY_STATEMENTS("Generate Monthly Statements"), //
     EXPIRE_DORMANCY_GRACE_WINDOWS("Expire Dormancy Grace Windows"), //
     EOD_CLOSE_OF_BUSINESS("EOD Close Of Business"), //
+    WORKING_CAPITAL_LOAN_COB_JOB("Working Capital Loan COB"), //
+    RETAINED_EARNING("Retained Earning Job"), //
     ; //
 
     private final String name;

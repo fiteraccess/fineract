@@ -18,11 +18,8 @@
  */
 package org.apache.fineract.infrastructure.jobs.filter;
 
-import static org.apache.fineract.batch.command.CommandStrategyUtils.isRelativeUrlVersioned;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -33,22 +30,22 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.batch.domain.BatchRequest;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.http.BodyCachingHttpServletRequestWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.GLIMAccountInfoRepository;
-import org.apache.fineract.portfolio.loanaccount.domain.GroupLoanIndividualMonitoringAccount;
-import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanRescheduleRequestRepository;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
 @Component
-public class ProgressiveLoanModelCheckerHelper implements InitializingBean {
+public class ProgressiveLoanModelCheckerHelper extends COBFilterApiMatcher implements InitializingBean {
 
     private final GLIMAccountInfoRepository glimAccountInfoRepository;
     private final LoanRepository loanRepository;
@@ -91,51 +88,10 @@ public class ProgressiveLoanModelCheckerHelper implements InitializingBean {
         return LOAN_PATH_PATTERN.matcher(pathInfo).matches() && pathInfo.contains("/v1/rescheduleloans/");
     }
 
-    public boolean isOnApiList(BodyCachingHttpServletRequestWrapper request) throws IOException {
-        String pathInfo = request.getPathInfo();
-        String method = request.getMethod();
-        if (StringUtils.isBlank(pathInfo)) {
-            return false;
-        }
-        if (isBatchApi(pathInfo)) {
-            return isBatchApiMatching(request);
-        } else {
-            return isApiMatching(method, pathInfo);
-        }
-    }
-
-    private boolean isBatchApiMatching(BodyCachingHttpServletRequestWrapper request) throws IOException {
-        for (BatchRequest batchRequest : getBatchRequests(request)) {
-            String method = batchRequest.getMethod();
-            String pathInfo = batchRequest.getRelativeUrl();
-            if (isApiMatching(method, pathInfo)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private List<BatchRequest> getBatchRequests(BodyCachingHttpServletRequestWrapper request) throws IOException {
-        List<BatchRequest> batchRequests = objectMapper.readValue(request.getInputStream(), new TypeReference<>() {});
-        // since we read body, we have to reset so the upcoming readings are successful
-        request.resetStream();
-        for (BatchRequest batchRequest : batchRequests) {
-            String pathInfo = "/" + batchRequest.getRelativeUrl();
-            if (!isRelativeUrlVersioned(batchRequest.getRelativeUrl())) {
-                pathInfo = "/v1/" + batchRequest.getRelativeUrl();
-            }
-            batchRequest.setRelativeUrl(pathInfo);
-        }
-        return batchRequests;
-    }
-
-    private boolean isApiMatching(String method, String pathInfo) {
+    @Override
+    protected boolean isApiMatching(String method, String pathInfo) {
         return HTTP_METHODS.contains(HttpMethod.valueOf(method)) && !IGNORE_LOAN_PATH_PATTERN.matcher(pathInfo).find()
                 && URL_FUNCTION.test(pathInfo);
-    }
-
-    private boolean isBatchApi(String pathInfo) {
-        return pathInfo.startsWith("/v1/batches");
     }
 
     private boolean isGlim(String pathInfo) {
@@ -143,15 +99,11 @@ public class ProgressiveLoanModelCheckerHelper implements InitializingBean {
     }
 
     private List<Long> getGlimChildLoanIds(Long loanIdFromRequest) {
-        GroupLoanIndividualMonitoringAccount glimAccount = glimAccountInfoRepository.findOneByIsAcceptingChildAndApplicationId(true,
-                BigDecimal.valueOf(loanIdFromRequest));
-        if (glimAccount != null) {
-            return glimAccount.getChildLoan().stream().map(Loan::getId).toList();
-        } else {
-            return Collections.emptyList();
-        }
+        return glimAccountInfoRepository.findChildLoanIdsByIsAcceptingChildAndApplicationId(true, BigDecimal.valueOf(loanIdFromRequest));
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<Long> calculateRelevantLoanIds(BodyCachingHttpServletRequestWrapper request) throws IOException {
         String pathInfo = request.getPathInfo();
         if (isBatchApi(pathInfo)) {
@@ -212,6 +164,21 @@ public class ProgressiveLoanModelCheckerHelper implements InitializingBean {
     @Override
     public void afterPropertiesSet() throws Exception {
         objectMapper.configure(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS.mappedFeature(), true);
+    }
+
+    @Override
+    public boolean isBypassUser() {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public boolean isLoanBehind(List<Long> loanIds) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public void executeInlineCob(List<Long> loanIds) {
+        throw new NotImplementedException();
     }
 
 }

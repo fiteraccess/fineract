@@ -39,6 +39,7 @@ import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.event.business.domain.savings.transaction.SavingsAccountForceWithdrawalBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.savings.transaction.SavingsDepositBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.savings.transaction.SavingsWithdrawalBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
@@ -56,6 +57,7 @@ import org.apache.fineract.portfolio.savings.exception.DepositAccountTransaction
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountPostInterestService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +78,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
     private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
     private final NoteRepository noteRepository;
+    private final SavingsAccountPostInterestService savingsAccountPostInterestService;
 
     @Autowired
     public SavingsAccountDomainServiceJpa(final SavingsAccountRepositoryWrapper savingsAccountRepository,
@@ -86,8 +89,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final BusinessEventNotifierService businessEventNotifierService, final BalanceValidationService balanceValidationService,
             final EntityManager entityManager, CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
             SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository, NoteRepository noteRepository,
-            FineractProperties fineractProperties) {
+            FineractProperties fineractProperties, final SavingsAccountPostInterestService savingsAccountPostInterestService) {
         this.fineractProperties = fineractProperties;
+        this.savingsAccountPostInterestService = savingsAccountPostInterestService;
         this.savingsAccountRepository = savingsAccountRepository;
         this.savingsAccountTransactionRepository = savingsAccountTransactionRepository;
         this.journalEntryWritePlatformService = journalEntryWritePlatformService;
@@ -256,7 +260,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         // Optimized path for non-backdated, same-day transactions: bypass collection manipulation
         // Handles withdrawal fees inline. Falls back to legacy path only for
         // past-dated transactions (which need running balance recalculation and interest reversal handling)
-        if (!DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
+        // Upstream force withdrawals (FINERACT-2471) keep the legacy path, whose balance validation honours the force
+        // flag.
+        if (!transactionBooleanValues.isForceWithdrawal() && !DateUtils.isBefore(transactionDate, DateUtils.getBusinessLocalDate())) {
             return handleWithdrawalOptimized(account, fmt, transactionDate, transactionAmount, paymentDetail, transactionBooleanValues,
                     relaxingDaysConfigForPivotDate, switchId, aggregatorCode, aggregatorCommissionAmount, backdatedTxnsAllowedTill,
                     notifyBusinessEvent, primaryType);
@@ -296,8 +302,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final LocalDate today = DateUtils.getBusinessLocalDate();
 
         if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && repostsInterestLocally(account)) {
-            account.postInterest(mc, today, transactionBooleanValues.isInterestTransfer(), isSavingsInterestPostingAtCurrentPeriodEnd,
-                    financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
+            savingsAccountPostInterestService.postInterest(account, mc, today, transactionBooleanValues.isInterestTransfer(),
+                    isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill,
+                    postReversals);
         } else {
             account.calculateInterestUsing(mc, today, transactionBooleanValues.isInterestTransfer(),
                     isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill,
@@ -310,8 +317,8 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                     .findBySavingsAccountAndReversedFalseOrderByCreatedDateAsc(account);
         }
 
-        account.validateAccountBalanceDoesNotBecomeNegative(transactionAmount, transactionBooleanValues.isExceptionForBalanceCheck(),
-                depositAccountOnHoldTransactions, backdatedTxnsAllowedTill);
+        account.validateAccountBalanceConstraints(transactionAmount, transactionBooleanValues.isExceptionForBalanceCheck(),
+                depositAccountOnHoldTransactions, backdatedTxnsAllowedTill, transactionBooleanValues.isForceWithdrawal());
 
         saveTransactionToGenerateTransactionId(withdrawal);
         // Update transactions separately
@@ -322,7 +329,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                 backdatedTxnsAllowedTill);
 
         if (notifyBusinessEvent) {
-            businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+            if (transactionBooleanValues.isForceWithdrawal()) {
+                businessEventNotifierService.notifyPostBusinessEvent(new SavingsAccountForceWithdrawalBusinessEvent(withdrawal));
+            } else {
+                businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+            }
         }
         return withdrawal;
     }
@@ -517,9 +528,12 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         }
 
         if (notifyBusinessEvent) {
-            businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+            if (transactionBooleanValues.isForceWithdrawal()) {
+                businessEventNotifierService.notifyPostBusinessEvent(new SavingsAccountForceWithdrawalBusinessEvent(withdrawal));
+            } else {
+                businessEventNotifierService.notifyPostBusinessEvent(new SavingsWithdrawalBusinessEvent(withdrawal));
+            }
         }
-
         return withdrawal;
     }
 
@@ -596,8 +610,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
         final LocalDate today = DateUtils.getBusinessLocalDate();
         boolean postReversals = this.configurationDomainService.isReversalTransactionAllowed();
         if (account.isBeforeLastPostingPeriod(transactionDate, backdatedTxnsAllowedTill) && repostsInterestLocally(account)) {
-            account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
-                    postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
+            savingsAccountPostInterestService.postInterest(account, mc, today, isInterestTransfer,
+                    isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill,
+                    postReversals);
         } else {
             account.calculateInterestUsing(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
                     financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
@@ -1128,8 +1143,9 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
                     && account.isBeforeLastPostingPeriod(savingsAccountTransaction.getTransactionDate(), backdatedTxnsAllowedTill)
                     && repostsInterestLocally(account)) {
 
-                account.postInterest(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth,
-                        postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
+                savingsAccountPostInterestService.postInterest(account, mc, today, isInterestTransfer,
+                        isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth, postInterestOnDate,
+                        backdatedTxnsAllowedTill, postReversals);
             } else {
                 account.calculateInterestUsing(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
                         financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
@@ -1137,7 +1153,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             account.validatePivotDateTransaction(savingsAccountTransaction.getTransactionDate(), backdatedTxnsAllowedTill,
                     relaxingDaysConfigForPivotDate, "savingsaccount");
             if (reversalCanLowerBalance(savingsAccountTransaction)) {
-                account.validateAccountBalanceDoesNotBecomeNegativeMinimal(savingsAccountTransaction.getAmount(), false);
+                account.validateAccountBalanceConstraintsMinimal(savingsAccountTransaction.getAmount(), false);
             }
             account.activateAccountBasedOnBalance();
         }

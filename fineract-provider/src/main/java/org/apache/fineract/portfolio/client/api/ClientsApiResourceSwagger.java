@@ -323,6 +323,8 @@ final class ClientsApiResourceSwagger {
         public Boolean active;
         @Schema(example = "04 March 2009")
         public String activationDate;
+        @Schema(example = "04 March 2009")
+        public String submittedOnDate;
         @Schema(example = "+353851239876")
         public String mobileNo;
         @Schema(example = "test@test.com")
@@ -361,6 +363,10 @@ final class ClientsApiResourceSwagger {
         public String externalId;
         @Schema(example = "123-456")
         public String resourceExternalId;
+        @Schema(example = "Client_FirstName")
+        public String firstname;
+        @Schema(example = "Client_LastName")
+        public String lastname;
     }
 
     @Schema(description = "PutClientsClientIdResponse")
@@ -411,6 +417,22 @@ final class ClientsApiResourceSwagger {
         public String dateFormat;
         @Schema(example = "en")
         public String locale;
+        @Schema(example = "03 August 2021")
+        public String closureDate;
+        @Schema(example = "1")
+        public Long closureReasonId;
+        @Schema(example = "03 August 2021")
+        public String reactivationDate;
+        @Schema(example = "03 August 2021")
+        public String rejectionDate;
+        @Schema(example = "1")
+        public Long rejectionReasonId;
+        @Schema(example = "03 August 2021")
+        public String withdrawalDate;
+        @Schema(example = "1")
+        public Long withdrawalReasonId;
+        @Schema(example = "03 August 2021")
+        public String reopenedDate;
     }
 
     @Schema(description = "PostClientsClientIdResponse")
@@ -629,7 +651,74 @@ final class ClientsApiResourceSwagger {
             public GetClientsSavingsAccountsDepositType depositType;
         }
 
+        static final class GetClientsWorkingCapitalLoanAccounts {
+
+            private GetClientsWorkingCapitalLoanAccounts() {}
+
+            static final class GetClientsWorkingCapitalLoanAccountsStatus {
+
+                private GetClientsWorkingCapitalLoanAccountsStatus() {}
+
+                @Schema(example = "100")
+                public Long id;
+                @Schema(example = "loanStatusType.submitted.and.pending.approval")
+                public String code;
+                @Schema(example = "Submitted and pending approval")
+                public String value;
+            }
+
+            static final class GetClientsWorkingCapitalLoanAccountsCurrency {
+
+                private GetClientsWorkingCapitalLoanAccountsCurrency() {}
+
+                @Schema(example = "USD")
+                public String code;
+                @Schema(example = "US Dollar")
+                public String name;
+                @Schema(example = "2")
+                public Integer decimalPlaces;
+                @Schema(example = "$")
+                public String displaySymbol;
+                @Schema(example = "currency.USD")
+                public String nameCode;
+                @Schema(example = "US Dollar ($)")
+                public String displayLabel;
+            }
+
+            @Schema(example = "1")
+            public Long id;
+            @Schema(example = "WCL-1")
+            public String accountNo;
+            @Schema(description = "Parent account number, null for working capital loans")
+            public String parentAccountNumber;
+            @Schema(example = "ext-wcl-001")
+            public String externalId;
+            @Schema(example = "1")
+            public Long productId;
+            @Schema(example = "Working Capital Product 1")
+            public String productName;
+            @Schema(example = "WCP1")
+            public String shortProductName;
+            public GetClientsWorkingCapitalLoanAccountsStatus status;
+            public GetClientsWorkingCapitalLoanAccountsCurrency currency;
+            @Schema(description = "Loan type, null for working capital loans")
+            public Object loanType;
+            @Schema(description = "Loan cycle, null for working capital loans")
+            public Integer loanCycle;
+            @Schema(description = "Timeline (submittedOnDate, approvedOnDate, etc.)")
+            public Object timeline;
+            @Schema(example = "false")
+            public Boolean inArrears;
+            @Schema(example = "10000.00")
+            public java.math.BigDecimal originalLoan;
+            @Schema(example = "10000.00")
+            public java.math.BigDecimal loanBalance;
+            @Schema(example = "0")
+            public java.math.BigDecimal amountPaid;
+        }
+
         public Set<GetClientsLoanAccounts> loanAccounts;
         public Set<GetClientsSavingsAccounts> savingsAccounts;
+        public Set<GetClientsWorkingCapitalLoanAccounts> workingCapitalLoanAccounts;
     }
 }

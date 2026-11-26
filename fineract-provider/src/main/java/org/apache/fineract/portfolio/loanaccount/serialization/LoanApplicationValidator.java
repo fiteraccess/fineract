@@ -176,7 +176,7 @@ public final class LoanApplicationValidator {
             LoanProductConstants.ENABLE_INSTALLMENT_LEVEL_DELINQUENCY, LoanProductConstants.ENABLE_DOWN_PAYMENT,
             LoanProductConstants.ENABLE_AUTO_REPAYMENT_DOWN_PAYMENT, LoanProductConstants.DISBURSED_AMOUNT_PERCENTAGE_DOWN_PAYMENT,
             LoanApiConstants.INTEREST_RECOGNITION_ON_DISBURSEMENT_DATE, LoanApiConstants.daysInYearCustomStrategyParameterName,
-            LoanApiConstants.ALLOW_FULL_TERM_FOR_TRANCHE, LoanApiConstants.ORIGINATORS_PARAM));
+            LoanApiConstants.ALLOW_FULL_TERM_FOR_TRANCHE, LoanApiConstants.ORIGINATORS_PARAM, LoanApiConstants.REPAYMENT_START_DATE_TYPE));
     public static final String LOANAPPLICATION_UNDO = "loanapplication.undo";
 
     private final FromJsonHelper fromApiJsonHelper;
@@ -791,6 +791,12 @@ public final class LoanApplicationValidator {
                 }
             }
 
+            if (this.fromApiJsonHelper.parameterExists(LoanApiConstants.REPAYMENT_START_DATE_TYPE, element)) {
+                final Integer repaymentStartDateType = this.fromApiJsonHelper
+                        .extractIntegerNamed(LoanApiConstants.REPAYMENT_START_DATE_TYPE, element, Locale.getDefault());
+                baseDataValidator.reset().parameter(LoanApiConstants.REPAYMENT_START_DATE_TYPE).value(repaymentStartDateType).notNull()
+                        .isOneOfTheseValues(1, 2);
+            }
         });
 
         validateSubmittedOnDate(element, null, null, loanProduct);
@@ -1268,12 +1274,12 @@ public final class LoanApplicationValidator {
             if (!StringUtils.isBlank(loanTypeStr)) {
                 final AccountType loanType = AccountType.fromName(loanTypeStr);
 
-                if (loanType.isInvalid()) {
+                if (loanType == AccountType.INVALID) {
                     baseDataValidator.reset().parameter(LoanApiConstants.loanTypeParameterName).value(loanType.getValue())
                             .isOneOfEnumValues(AccountType.class);
                 }
 
-                if (!loanType.isInvalid() && loanType.isIndividualAccount()) {
+                if (loanType == AccountType.INVALID && loanType.isIndividualAccount()) {
                     // collateral
                     final String collateralParameterName = LoanApiConstants.collateralParameterName;
                     if (element.isJsonObject() && this.fromApiJsonHelper.parameterExists(collateralParameterName, element)) {
@@ -1504,6 +1510,14 @@ public final class LoanApplicationValidator {
                     throw new UnsupportedParameterException(unsupportedParameterList);
                 }
             }
+
+            Integer repaymentStartDateType = loan.getRepaymentStartDateType().getValue();
+            if (this.fromApiJsonHelper.parameterExists(LoanApiConstants.REPAYMENT_START_DATE_TYPE, element)) {
+                repaymentStartDateType = this.fromApiJsonHelper.extractIntegerNamed(LoanApiConstants.REPAYMENT_START_DATE_TYPE, element,
+                        Locale.getDefault());
+            }
+            baseDataValidator.reset().parameter(LoanApiConstants.REPAYMENT_START_DATE_TYPE).value(repaymentStartDateType).notNull()
+                    .isOneOfTheseValues(1, 2);
         });
     }
 

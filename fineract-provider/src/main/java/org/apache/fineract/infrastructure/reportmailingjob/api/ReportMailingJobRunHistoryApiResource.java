@@ -24,7 +24,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -33,6 +32,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
@@ -58,10 +58,10 @@ public class ReportMailingJobRunHistoryApiResource {
     private final SqlValidator sqlValidator;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Report Mailing Job History", description = "The list capability of report mailing job history can support pagination and sorting.\n"
+    @Operation(summary = "List Report Mailing Job History", operationId = "retrieveAllReportMailingJobRunHistory", description = "The list capability of report mailing job history can support pagination and sorting.\n"
             + "\n" + "Example Requests:\n" + "\n" + "reportmailingjobrunhistory/1")
+    @AlternativeOperationId("retrieveAllByReportMailingJobId")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = ReportMailingJobRunHistoryData.class)))
     public String retrieveAllByReportMailingJobId(@Context final UriInfo uriInfo,
             @QueryParam("reportMailingJobId") @Parameter(description = "reportMailingJobId") final Long reportMailingJobId,

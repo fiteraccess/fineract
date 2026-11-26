@@ -35,13 +35,13 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.domain.AbstractAuditableWithUTCDateTimeCustom;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.data.InterestRecalculationAdditionalDetailData;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModelPeriod;
 import org.apache.fineract.portfolio.loanproduct.domain.AllocationType;
 import org.apache.fineract.portfolio.repaymentwithpostdatedchecks.domain.PostDatedChecks;
@@ -283,7 +283,7 @@ public class LoanRepaymentScheduleInstallment extends AbstractAuditableWithUTCDa
             final Integer installmentNumber, final LocalDate fromDate, final LocalDate dueDate, final BigDecimal principal,
             final BigDecimal interest) {
         return new LoanRepaymentScheduleInstallment(loan, installmentNumber, fromDate, dueDate, principal, interest, null, null, null, null,
-                null, null, false, false, false);
+                null, null, false, false, true);
     }
 
     public static LoanRepaymentScheduleInstallment getLastNonDownPaymentInstallment(List<LoanRepaymentScheduleInstallment> installments) {
@@ -1139,7 +1139,7 @@ public class LoanRepaymentScheduleInstallment extends AbstractAuditableWithUTCDa
     public void copyFrom(final LoanScheduleModelPeriod period) {
         // Reset fields and relations
         resetBalances();
-        updateLoanCompoundingDetails(period.getLoanCompoundingDetails());
+        updateLoanCompoundingDetails(InterestRecalculationAdditionalDetailData.toEntities(period.getLoanCompoundingDetails()));
         getInstallmentCharges().clear();
         getPostDatedChecks().clear();
         // Update fields
@@ -1254,7 +1254,7 @@ public class LoanRepaymentScheduleInstallment extends AbstractAuditableWithUTCDa
                 getPostDatedChecks().stream().filter(pdc -> MathUtil.isEqualTo(pdc.getCheckNo(), npdc.getCheckNo()) //
                         && MathUtil.isEqualTo(pdc.getAccountNo(), npdc.getAccountNo()) //
                         && MathUtil.isEqualTo(pdc.getAmount(), npdc.getAmount()) //
-                        && StringUtils.equals(pdc.getBankName(), npdc.getBankName()) //
+                        && Objects.equals(pdc.getBankName(), npdc.getBankName()) //
                         && MathUtil.isEqualTo(pdc.getStatus(), npdc.getStatus()) //
                         && DateUtils.isEqual(pdc.getRepaymentDate(), npdc.getRepaymentDate())) //
                         .findAny().ifPresentOrElse(retainedPostDatedChecks::add, () -> retainedPostDatedChecks.add(npdc));

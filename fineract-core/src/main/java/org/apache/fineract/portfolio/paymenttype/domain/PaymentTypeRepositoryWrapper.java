@@ -25,8 +25,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-// TODO: get rid of this, unnecessarily hides real repository; don't use this outside of payment domain!
-@Deprecated(forRemoval = true)
+// Access: kept (upstream removed it) because it carries the paymentTypesById cache used on the payment-detail hot path.
+
 public class PaymentTypeRepositoryWrapper {
 
     private final PaymentTypeRepository repository;

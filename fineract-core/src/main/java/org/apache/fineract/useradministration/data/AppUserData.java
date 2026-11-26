@@ -55,10 +55,8 @@ public final class AppUserData {
     @SuppressWarnings("unused")
     private final Collection<OfficeData> allowedOffices;
     private final Collection<RoleData> availableRoles;
-    private final Collection<RoleData> selfServiceRoles;
     private final Collection<RoleData> selectedRoles;
     private final StaffData staff;
-    private final Boolean isSelfServiceUser;
 
     @Setter
     @SuppressWarnings("unused")
@@ -86,26 +84,22 @@ public final class AppUserData {
         this.rowIndex = rowIndex;
         this.allowedOffices = null;
         this.availableRoles = null;
-        this.selfServiceRoles = null;
         this.selectedRoles = null;
         this.staff = null;
-        this.isSelfServiceUser = null;
         this.clients = null;
     }
 
     public static AppUserData template(final AppUserData user, final Collection<OfficeData> officesForDropdown) {
         return new AppUserData(user.id, user.username, user.email, user.officeId, user.officeName, user.firstname, user.lastname,
-                user.availableRoles, user.selfServiceRoles, user.selectedRoles, officesForDropdown, user.staff, user.passwordNeverExpires,
-                user.isSelfServiceUser);
+                user.availableRoles, user.selectedRoles, officesForDropdown, user.staff, user.passwordNeverExpires);
     }
 
-    public static AppUserData template(final Collection<OfficeData> offices, final Collection<RoleData> availableRoles,
-            final Collection<RoleData> selfServiceRoles) {
-        return new AppUserData(null, null, null, null, null, null, null, availableRoles, selfServiceRoles, null, offices, null, null, null);
+    public static AppUserData template(final Collection<OfficeData> offices, final Collection<RoleData> availableRoles) {
+        return new AppUserData(null, null, null, null, null, null, null, availableRoles, null, offices, null, null);
     }
 
     public static AppUserData dropdown(final Long id, final String username) {
-        return new AppUserData(id, username, null, null, null, null, null, null, null, null, null, null, null, null);
+        return new AppUserData(id, username, null, null, null, null, null, null, null, null, null, null);
     }
 
     @JsonCreator
@@ -113,19 +107,16 @@ public final class AppUserData {
             @JsonProperty("email") final String email, @JsonProperty("officeId") final Long officeId,
             @JsonProperty("officeName") final String officeName, @JsonProperty("firstname") final String firstname,
             @JsonProperty("lastname") final String lastname, @JsonProperty("availableRoles") final Collection<RoleData> availableRoles,
-            @JsonProperty("selfServiceRoles") final Collection<RoleData> selfServiceRoles,
             @JsonProperty("selectedRoles") final Collection<RoleData> selectedRoles, @JsonProperty("staff") final StaffData staff,
-            @JsonProperty("passwordNeverExpires") final Boolean passwordNeverExpire,
-            @JsonProperty("isSelfServiceUser") final Boolean isSelfServiceUser) {
-        return new AppUserData(id, username, email, officeId, officeName, firstname, lastname, availableRoles, selfServiceRoles,
-                selectedRoles, null, staff, passwordNeverExpire, isSelfServiceUser);
+            @JsonProperty("passwordNeverExpires") final Boolean passwordNeverExpire) {
+        return new AppUserData(id, username, email, officeId, officeName, firstname, lastname, availableRoles, selectedRoles, null, staff,
+                passwordNeverExpire);
     }
 
     private AppUserData(final Long id, final String username, final String email, final Long officeId, final String officeName,
             final String firstname, final String lastname, final Collection<RoleData> availableRoles,
-            final Collection<RoleData> selfServiceRoles, final Collection<RoleData> selectedRoles,
-            final Collection<OfficeData> allowedOffices, final StaffData staff, final Boolean passwordNeverExpire,
-            final Boolean isSelfServiceUser) {
+            final Collection<RoleData> selectedRoles, final Collection<OfficeData> allowedOffices, final StaffData staff,
+            final Boolean passwordNeverExpire) {
         this.id = id;
         this.username = username;
         this.officeId = officeId;
@@ -135,11 +126,9 @@ public final class AppUserData {
         this.email = email;
         this.allowedOffices = allowedOffices;
         this.availableRoles = availableRoles;
-        this.selfServiceRoles = selfServiceRoles;
         this.selectedRoles = selectedRoles;
         this.staff = staff;
         this.passwordNeverExpires = passwordNeverExpire;
-        this.isSelfServiceUser = isSelfServiceUser;
     }
 
     public boolean hasIdentifyOf(final Long createdById) {
@@ -165,10 +154,6 @@ public final class AppUserData {
     @Override
     public int hashCode() {
         return id != null ? id.hashCode() : 0;
-    }
-
-    public boolean isSelfServiceUser() {
-        return this.isSelfServiceUser != null && this.isSelfServiceUser;
     }
 
 }

@@ -18,6 +18,13 @@
  */
 package org.apache.fineract.portfolio.savings.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -38,6 +45,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
@@ -76,8 +84,9 @@ public class FixedDepositAccountTransactionsApiResource {
 
     @GET
     @Path("template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Fixed Deposit Account Transaction Template", operationId = "retrieveTemplateFixedDepositAccountTransaction")
+    @AlternativeOperationId("retrieveTemplate_14")
     public String retrieveTemplate(@PathParam("fixedDepositAccountId") final Long fixedDepositAccountId,
             // @QueryParam("command") final String commandParam,
             @Context final UriInfo uriInfo) {
@@ -96,9 +105,24 @@ public class FixedDepositAccountTransactionsApiResource {
     }
 
     @GET
-    @Path("{transactionId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "List fixed deposit account transactions", operationId = "retrieveAllFixedDepositAccountTransactions")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = FixedDepositAccountTransactionsApiResourceSwagger.GetFixedDepositAccountsAccountIdTransactionsResponse.class)))) })
+    public String retrieveAll(@PathParam("fixedDepositAccountId") final Long fixedDepositAccountId, @Context final UriInfo uriInfo) {
+        this.context.authenticatedUser().validateHasReadPermission(DepositsApiConstants.FIXED_DEPOSIT_ACCOUNT_RESOURCE_NAME);
+        final Collection<SavingsAccountTransactionData> transactions = this.savingsAccountReadPlatformService
+                .retrieveAllTransactions(fixedDepositAccountId, DepositAccountType.FIXED_DEPOSIT);
+        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+        return this.toApiJsonSerializer.serialize(settings, transactions, FIXED_DEPOSIT_TRANSACTION_RESPONSE_DATA_PARAMETERS);
+    }
+
+    @GET
+    @Path("{transactionId}")
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve a fixed deposit account transaction", operationId = "retrieveOneFixedDepositAccountTransaction")
+    @AlternativeOperationId("retrieveOne_18")
     public String retrieveOne(@PathParam("fixedDepositAccountId") final Long fixedDepositAccountId,
             @PathParam("transactionId") final Long transactionId, @Context final UriInfo uriInfo) {
 
@@ -144,6 +168,13 @@ public class FixedDepositAccountTransactionsApiResource {
     @Path("{transactionId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Adjust Transaction | Undo transaction", operationId = "handleCommandsFixedDepositAccountTransaction", description = "Adjust Transaction:\n\nThis command modifies the given transaction.\n\n"
+            + "Undo transaction:\n\nThis command reverses the given transaction.\n\n" + "Showing request/response for 'Adjust Transaction'")
+    @AlternativeOperationId("adjustTransaction")
+    @RequestBody(required = true, content = @Content(schema = @Schema(implementation = FixedDepositAccountTransactionsApiResourceSwagger.PostFixedDepositAccountsFixedDepositAccountIdTransactionsRequest.class)))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = FixedDepositAccountTransactionsApiResourceSwagger.PostFixedDepositAccountsFixedDepositAccountIdTransactionsTransactionIdResponse.class))),
+            @ApiResponse(responseCode = "default", description = "error occurred") })
     public String adjustTransaction(@PathParam("fixedDepositAccountId") final Long fixedDepositAccountId,
             @PathParam("transactionId") final Long transactionId, @QueryParam("command") final String commandParam,
             final String apiRequestBodyAsJson) {
@@ -157,10 +188,11 @@ public class FixedDepositAccountTransactionsApiResource {
 
         CommandProcessingResult result = null;
         if (is(commandParam, DepositsApiConstants.COMMAND_UNDO_TRANSACTION)) {
-            final CommandWrapper commandRequest = builder.undoSavingsAccountTransaction(fixedDepositAccountId, transactionId).build();
+            final CommandWrapper commandRequest = builder.undoFixedDepositAccountTransaction(fixedDepositAccountId, transactionId).build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         } else if (is(commandParam, DepositsApiConstants.COMMAND_ADJUST_TRANSACTION)) {
-            final CommandWrapper commandRequest = builder.adjustSavingsAccountTransaction(fixedDepositAccountId, transactionId).build();
+            final CommandWrapper commandRequest = builder.adjustFixedDepositAccountTransaction(fixedDepositAccountId, transactionId)
+                    .build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         }
 

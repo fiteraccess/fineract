@@ -18,8 +18,8 @@
  */
 package org.apache.fineract.organisation.teller.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -27,6 +27,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import java.util.Collection;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.organisation.teller.data.TellerJournalData;
 import org.apache.fineract.organisation.teller.service.TellerManagementReadPlatformService;
 import org.apache.fineract.organisation.teller.util.DateRange;
@@ -41,8 +42,9 @@ public class TellerJournalApiResource {
     private final TellerManagementReadPlatformService readPlatformService;
 
     @GET
-    @Consumes({ MediaType.TEXT_HTML, MediaType.APPLICATION_JSON })
     @Produces(MediaType.APPLICATION_JSON)
+    @Operation(summary = "List Cashier Journals", operationId = "retrieveAllCashierJournals")
+    @AlternativeOperationId("getJournalData_1")
     public Collection<TellerJournalData> getJournalData(@QueryParam("officeId") final Long officeId,
             @QueryParam("tellerId") final Long tellerId, @QueryParam("cashierId") final Long cashierId,
             @QueryParam("dateRange") final String dateRange) {

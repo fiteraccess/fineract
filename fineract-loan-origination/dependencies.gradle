@@ -30,6 +30,7 @@ dependencies {
             project(path: ':fineract-avro-schemas')
             )
     implementation(project(path: ':fineract-loan'))
+    implementation(project(path: ':fineract-working-capital-loan'))
 
     implementation(
             'org.springframework.boot:spring-boot-starter-web',
@@ -44,7 +45,6 @@ dependencies {
 
             'com.jayway.jsonpath:json-path',
 
-            'com.github.spotbugs:spotbugs-annotations',
             'io.swagger.core.v3:swagger-annotations-jakarta',
 
             'com.squareup.retrofit2:converter-gson',
@@ -55,6 +55,7 @@ dependencies {
             'io.github.resilience4j:resilience4j-spring-boot3',
             'org.apache.httpcomponents:httpcore',
             )
+    compileOnly 'com.github.spotbugs:spotbugs-annotations'
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor 'org.mapstruct:mapstruct-processor'

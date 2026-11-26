@@ -44,6 +44,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnProperty("fineract.security.2fa.enabled")
@@ -98,7 +99,7 @@ public class TwoFactorServiceImpl implements TwoFactorService {
             }
             final OTPRequest request = generateNewToken(smsDelivery, extendedAccessToken);
             final String smsText = configurationService.getFormattedSmsTextFor(user, request);
-            SmsMessage smsMessage = SmsMessage.pendingSms(null, null, null, user.getStaff(), smsText, user.getStaff().mobileNo(), null,
+            SmsMessage smsMessage = SmsMessage.pendingSms(null, null, null, user.getStaff(), smsText, user.getStaff().getMobileNo(), null,
                     false);
             this.smsMessageRepository.save(smsMessage);
             smsMessageScheduledJobService.sendTriggeredMessage(Collections.singleton(smsMessage), configurationService.getSMSProviderId());
@@ -173,6 +174,7 @@ public class TwoFactorServiceImpl implements TwoFactorService {
 
     @Override
     @Cacheable(value = "userTFAccessToken", key = "#user.username + ':' + #token + ':tok'")
+    @Transactional(readOnly = true)
     public TFAccessToken fetchAccessTokenForUser(final AppUser user, final String token) {
         return tfAccessTokenRepository.findByUserAndToken(user, token);
     }
@@ -189,7 +191,7 @@ public class TwoFactorServiceImpl implements TwoFactorService {
         if (user.getStaff() == null) {
             return null;
         }
-        String mobileNo = user.getStaff().mobileNo();
+        String mobileNo = user.getStaff().getMobileNo();
         if (StringUtils.isBlank(mobileNo)) {
             return null;
         }

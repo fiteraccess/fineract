@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.mix.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -26,6 +27,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import java.sql.Date;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.mix.service.MixReportXBRLBuilder;
 import org.apache.fineract.mix.service.MixReportXBRLResultService;
 import org.springframework.stereotype.Component;
@@ -42,6 +44,8 @@ public class MixReportApiResource {
 
     @GET
     @Produces({ MediaType.APPLICATION_XML })
+    @Operation(summary = "Retrieve Mix XBRL report", operationId = "retrieveMixReport")
+    @AlternativeOperationId("retrieveXBRLReport")
     public String retrieveXBRLReport(@QueryParam("startDate") final Date startDate, @QueryParam("endDate") final Date endDate,
             @QueryParam("currency") final String currency) {
 

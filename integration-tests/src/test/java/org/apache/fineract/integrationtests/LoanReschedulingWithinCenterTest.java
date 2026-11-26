@@ -31,6 +31,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -85,7 +86,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
     @Test
     public void testCenterReschedulingLoansWithInterestRecalculationEnabled() {
 
-        Integer officeId = new OfficeHelper(requestSpec, responseSpec).createOffice("01 July 2007");
+        Integer officeId = new OfficeHelper().createOffice(LocalDate.of(2007, 7, 1)).getResourceId().intValue();
         String name = "TestFullCreation" + new Timestamp(new java.util.Date().getTime());
         String externalId = UUID.randomUUID().toString();
         int staffId = StaffHelper.createStaff(requestSpec, responseSpec);
@@ -99,7 +100,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
         Assertions.assertTrue(center.getStaffId() == staffId);
         Assertions.assertTrue(center.isActive() == true);
 
-        Integer calendarId = createCalendarMeeting(centerId);
+        Long calendarId = createCalendarMeeting(centerId);
 
         Integer clientId = createClient(officeId);
 
@@ -157,7 +158,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
         String oldMeetingDate = dateFormat.format(todaysdate.getTime());
         todaysdate.add(Calendar.DAY_OF_MONTH, 1);
         final String centerMeetingNewStartDate = dateFormat.format(todaysdate.getTime());
-        CalendarHelper.updateMeetingCalendarForCenter(this.requestSpec, this.responseSpec, centerId, calendarId.toString(), oldMeetingDate,
+        CalendarHelper.updateMeetingCalendarForCenter(centerId.longValue(), calendarId.toString(), oldMeetingDate,
                 centerMeetingNewStartDate);
 
         ArrayList loanRepaymnetSchedule = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, generalResponseSpec, loanId);
@@ -195,7 +196,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
         return clientId;
     }
 
-    private Integer createCalendarMeeting(Integer centerId) {
+    private Long createCalendarMeeting(Integer centerId) {
         DateFormat dateFormat = new SimpleDateFormat("dd MMMM yyyy", Locale.US);
         dateFormat.setTimeZone(Utils.getTimeZoneOfTenant());
         Calendar today = Calendar.getInstance(Utils.getTimeZoneOfTenant());
@@ -208,8 +209,8 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
             repeatsOnDay = 7;
         }
 
-        Integer calendarId = CalendarHelper.createMeetingForGroup(this.requestSpec, this.responseSpec, centerId, startDate, frequency,
-                interval, repeatsOnDay.toString());
+        Long calendarId = CalendarHelper
+                .createMeetingForGroup(centerId.longValue(), startDate, frequency, interval, repeatsOnDay.toString()).getResourceId();
         LOG.info("calendarId {}", calendarId);
         return calendarId;
     }
@@ -218,7 +219,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
     @Test
     public void testCenterReschedulingMultiTrancheLoansWithInterestRecalculationEnabled() {
 
-        Integer officeId = new OfficeHelper(requestSpec, responseSpec).createOffice("01 July 2007");
+        Integer officeId = new OfficeHelper().createOffice(LocalDate.of(2007, 7, 1)).getResourceId().intValue();
         String name = "TestFullCreation" + new Timestamp(new java.util.Date().getTime());
         String externalId = UUID.randomUUID().toString();
         int staffId = StaffHelper.createStaff(requestSpec, responseSpec);
@@ -232,7 +233,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
         Assertions.assertTrue(center.getStaffId() == staffId);
         Assertions.assertTrue(center.isActive() == true);
 
-        Integer calendarId = createCalendarMeeting(centerId);
+        Long calendarId = createCalendarMeeting(centerId);
 
         Integer clientId = createClient(officeId);
 
@@ -307,7 +308,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
         String oldMeetingDate = dateFormat.format(todaysdate.getTime());
         todaysdate.add(Calendar.DAY_OF_MONTH, 1);
         final String centerMeetingNewStartDate = dateFormat.format(todaysdate.getTime());
-        CalendarHelper.updateMeetingCalendarForCenter(this.requestSpec, this.responseSpec, centerId, calendarId.toString(), oldMeetingDate,
+        CalendarHelper.updateMeetingCalendarForCenter(centerId.longValue(), calendarId.toString(), oldMeetingDate,
                 centerMeetingNewStartDate);
 
         ArrayList loanRepaymnetSchedule = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, generalResponseSpec, loanID);
@@ -377,7 +378,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
     }
 
     @SuppressWarnings("rawtypes")
-    private Integer applyForLoanApplicationForInterestRecalculation(final Integer clientID, Integer groupId, Integer calendarId,
+    private Integer applyForLoanApplicationForInterestRecalculation(final Integer clientID, Integer groupId, Long calendarId,
             final Integer loanProductID, final String disbursementDate, final String restStartDate, final String repaymentStrategy,
             final List<HashMap> charges, List<HashMap> tranches, List<HashMap> collaterals) {
         final String graceOnInterestPayment = null;
@@ -389,7 +390,7 @@ public class LoanReschedulingWithinCenterTest extends BaseLoanIntegrationTest {
     }
 
     @SuppressWarnings({ "rawtypes", "unused" })
-    private Integer applyForLoanApplicationForInterestRecalculation(final Integer clientID, Integer groupId, Integer calendarId,
+    private Integer applyForLoanApplicationForInterestRecalculation(final Integer clientID, Integer groupId, Long calendarId,
             final Integer loanProductID, final String disbursementDate, final String restStartDate, final String compoundingStartDate,
             final String repaymentStrategy, final List<HashMap> charges, final String graceOnInterestPayment,
             final String graceOnPrincipalPayment, List<HashMap> tranches, List<HashMap> collaterals) {

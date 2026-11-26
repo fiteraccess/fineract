@@ -19,7 +19,6 @@
 package org.apache.fineract.portfolio.loanaccount.api;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -27,6 +26,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +70,6 @@ public class InternalLoanInformationApiResource implements InitializingBean {
 
     @GET
     @Path("{loanId}/audit")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
     public AuditData getLoanAuditFields(@Context final UriInfo uriInfo, @PathParam("loanId") Long loanId) {
@@ -87,7 +86,6 @@ public class InternalLoanInformationApiResource implements InitializingBean {
 
     @GET
     @Path("{loanId}/transaction/{transactionId}/audit")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
     public AuditData getLoanTransactionAuditFields(@Context final UriInfo uriInfo, @PathParam("loanId") Long loanId,
@@ -105,7 +103,6 @@ public class InternalLoanInformationApiResource implements InitializingBean {
 
     @GET
     @Path("status/{statusId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
     public List<Long> getLoansByStatus(@Context final UriInfo uriInfo, @PathParam("statusId") Integer statusId) {
@@ -120,7 +117,6 @@ public class InternalLoanInformationApiResource implements InitializingBean {
 
     @GET
     @Path("{loanId}/advanced-payment-allocation-rules")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
     public List<AdvancedPaymentData> getAdvancedPaymentAllocationRulesOfLoan(@Context final UriInfo uriInfo,
@@ -133,6 +129,20 @@ public class InternalLoanInformationApiResource implements InitializingBean {
 
         final Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
         return advancedPaymentDataMapper.mapLoanPaymentAllocationRule(loan.getPaymentAllocationRules());
+    }
+
+    @GET
+    @Path("maxTransactionDateOfActiveLoan")
+    @Produces({ MediaType.APPLICATION_JSON })
+    @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
+    public LocalDate getMaxTransactionDateOfActiveLoans() {
+        log.warn("------------------------------------------------------------");
+        log.warn("                                                            ");
+        log.warn("Fetching max transaction date of active loans");
+        log.warn("                                                            ");
+        log.warn("------------------------------------------------------------");
+
+        return loanRepositoryWrapper.findMaxTransactionDateOfActiveLoans();
     }
 
     private record AuditData(Long createdBy, OffsetDateTime createdDate, Long lastModifiedBy, OffsetDateTime lastModifiedDate) {

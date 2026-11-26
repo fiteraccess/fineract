@@ -39,6 +39,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.security.service.PlatformUserRightsContext;
@@ -63,6 +64,8 @@ public class ExternalAssetOwnerLoanProductAttributesApiResource {
     @Path("/{loanProductId}/attributes")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Create External Asset Owner Loan Product Attribute", operationId = "createExternalAssetOwnerLoanProductAttribute")
+    @AlternativeOperationId("postExternalAssetOwnerLoanProductAttribute")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = ExternalAssetOwnerLoanProductAttributesApiResourceSwagger.PostExternalAssetOwnerLoanProductAttributeRequest.class)))
     public CommandProcessingResult postExternalAssetOwnerLoanProductAttribute(
             @PathParam("loanProductId") @Parameter(description = "loanProductId") final Long loanProductId,
@@ -76,12 +79,12 @@ public class ExternalAssetOwnerLoanProductAttributesApiResource {
 
     @GET
     @Path("/{loanProductId}/attributes")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(tags = {
-            "External Asset Owner Loan Product Attributes" }, summary = "Retrieve All Loan Product Attributes", description = "Retrieves all Loan Product Attributes with a given loanProductId", parameters = {
+            "External Asset Owner Loan Product Attributes" }, summary = "Retrieve All Loan Product Attributes", operationId = "retrieveAllExternalAssetOwnerLoanProductAttributes", description = "Retrieves all Loan Product Attributes with a given loanProductId", parameters = {
                     @Parameter(name = "loanProductId", description = "loanProductId"),
                     @Parameter(name = "attributeKey", description = "attributeKey") })
+    @AlternativeOperationId("getExternalAssetOwnerLoanProductAttributes")
     public Page<ExternalTransferLoanProductAttributesData> getExternalAssetOwnerLoanProductAttributes(@Context final UriInfo uriInfo,
             @PathParam("loanProductId") @Parameter(description = "loanProductId") final Long loanProductId,
             @QueryParam("attributeKey") @Parameter(description = "attributeKey") final String attributeKey) {
@@ -97,9 +100,10 @@ public class ExternalAssetOwnerLoanProductAttributesApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = ExternalAssetOwnerLoanProductAttributesApiResourceSwagger.PutExternalAssetOwnerLoanProductAttributeRequest.class)))
     @Operation(tags = {
-            "External Asset Owner Loan Product Attributes" }, summary = "Update a Loan Product Attribute", description = "Updates a loan product attribute with a given loan product id and attribute id", parameters = {
+            "External Asset Owner Loan Product Attributes" }, summary = "Update a Loan Product Attribute", operationId = "updateExternalAssetOwnerLoanProductAttribute", description = "Updates a loan product attribute with a given loan product id and attribute id", parameters = {
                     @Parameter(name = "loanProductId", description = "loanProductId"),
                     @Parameter(name = "attributeId", description = "attributeId") })
+    @AlternativeOperationId("updateLoanProductAttribute")
     public CommandProcessingResult updateLoanProductAttribute(
             @PathParam("loanProductId") @Parameter(description = "loanProductId") final Long loanProductId,
             @PathParam("id") @Parameter(description = "attributeId") final Long attributeId,

@@ -54,6 +54,7 @@ import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformS
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
 import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookPopulatorService;
 import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.api.DateParam;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
@@ -97,14 +98,16 @@ public class JournalEntriesApiResource {
     private final SqlValidator sqlValidator;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Journal Entries", description = "The list capability of journal entries can support pagination and sorting.\n\n"
-            + "Example Requests:\n" + "\n" + "journalentries\n" + "\n" + "journalentries?transactionId=PB37X8Y21EQUY4S\n" + "\n"
-            + "journalentries?officeId=1&manualEntriesOnly=true&fromDate=1 July 2013&toDate=15 July 2013&dateFormat=dd MMMM yyyy&locale=en\n"
-            + "\n" + "journalentries?fields=officeName,glAccountName,transactionDate\n" + "\n" + "journalentries?offset=10&limit=50\n"
-            + "\n" + "journalentries?orderBy=transactionId&sortOrder=DESC\n" + "\n" + "journalentries?runningBalance=true\n" + "\n"
-            + "journalentries?transactionDetails=true\n" + "\n" + "journalentries?loanId=12\n" + "\n" + "journalentries?savingsId=24")
+    @Operation(summary = "List Journal Entries", operationId = "retrieveAllJournalEntries", tags = {
+            "Journal Entries" }, description = "The list capability of journal entries can support pagination and sorting.\n\n"
+                    + "Example Requests:\n" + "\n" + "journalentries\n" + "\n" + "journalentries?transactionId=PB37X8Y21EQUY4S\n" + "\n"
+                    + "journalentries?officeId=1&manualEntriesOnly=true&fromDate=1 July 2013&toDate=15 July 2013&dateFormat=dd MMMM yyyy&locale=en\n"
+                    + "\n" + "journalentries?fields=officeName,glAccountName,transactionDate\n" + "\n"
+                    + "journalentries?offset=10&limit=50\n" + "\n" + "journalentries?orderBy=transactionId&sortOrder=DESC\n" + "\n"
+                    + "journalentries?runningBalance=true\n" + "\n" + "journalentries?transactionDetails=true\n" + "\n"
+                    + "journalentries?loanId=12\n" + "\n" + "journalentries?savingsId=24")
+    @AlternativeOperationId("retrieveAll_1")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = JournalEntriesApiResourceSwagger.GetJournalEntriesTransactionIdResponse.class)))
     public String retrieveAll(@Context final UriInfo uriInfo,
             @QueryParam("officeId") @Parameter(description = "officeId") final Long officeId,
@@ -165,11 +168,10 @@ public class JournalEntriesApiResource {
 
     @GET
     @Path("{journalEntryId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a single Entry", description = "Example Requests:\n" + "\n" + "journalentries/1\n" + "\n" + "\n" + "\n"
-            + "journalentries/1?fields=officeName,glAccountId,entryType,amount\n" + "\n" + "journalentries/1?runningBalance=true\n" + "\n"
-            + "journalentries/1?transactionDetails=true")
+    @Operation(summary = "Retrieve a single Entry", tags = { "Journal Entries" }, description = "Example Requests:\n" + "\n"
+            + "journalentries/1\n" + "\n" + "\n" + "\n" + "journalentries/1?fields=officeName,glAccountId,entryType,amount\n" + "\n"
+            + "journalentries/1?runningBalance=true\n" + "\n" + "journalentries/1?transactionDetails=true")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = JournalEntriesApiResourceSwagger.JournalEntryTransactionItem.class)))
     public String retrieveJournalEntryById(
             @PathParam("journalEntryId") @Parameter(description = "journalEntryId") final Long journalEntryId,
@@ -190,11 +192,12 @@ public class JournalEntriesApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create \"Balanced\" Journal Entries", description = "Note: A Balanced (simple) Journal entry would have atleast one \"Debit\" and one \"Credit\" entry whose amounts are equal \n"
-            + "Compound Journal entries may have \"n\" debits and \"m\" credits where both \"m\" and \"n\" are greater than 0 and the net sum or all debits and credits are equal \n\n"
-            + "\n" + "Mandatory Fields\n" + "officeId, transactionDate\n\n" + "\ncredits- glAccountId, amount, comments\n\n "
-            + "\ndebits-  glAccountId, amount, comments\n\n " + "\n" + "Optional Fields\n"
-            + "paymentTypeId, accountNumber, checkNumber, routingCode, receiptNumber, bankNumber")
+    @Operation(summary = "Create \"Balanced\" Journal Entries", tags = {
+            "Journal Entries" }, description = "Note: A Balanced (simple) Journal entry would have atleast one \"Debit\" and one \"Credit\" entry whose amounts are equal \n"
+                    + "Compound Journal entries may have \"n\" debits and \"m\" credits where both \"m\" and \"n\" are greater than 0 and the net sum or all debits and credits are equal \n\n"
+                    + "\n" + "Mandatory Fields\n" + "officeId, transactionDate\n\n" + "\ncredits- glAccountId, amount, comments\n\n "
+                    + "\ndebits-  glAccountId, amount, comments\n\n " + "\n" + "Optional Fields\n"
+                    + "paymentTypeId, accountNumber, checkNumber, routingCode, receiptNumber, bankNumber")
     @RequestBody(content = @Content(schema = @Schema(implementation = JournalEntryCommand.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = JournalEntriesApiResourceSwagger.PostJournalEntriesResponse.class)))
     public String createGLJournalEntry(@Parameter(hidden = true) final String jsonRequestBody,
@@ -220,8 +223,9 @@ public class JournalEntriesApiResource {
     @Path("{transactionId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update Running balances for Journal Entries", description = "This API calculates the running balances for office. If office ID not provided this API calculates running balances for all offices. \n"
-            + "Mandatory Fields\n" + "officeId")
+    @Operation(summary = "Update Running balances for Journal Entries", tags = {
+            "Journal Entries" }, description = "This API calculates the running balances for office. If office ID not provided this API calculates running balances for all offices. \n"
+                    + "Mandatory Fields\n" + "officeId")
     @RequestBody(content = @Content(schema = @Schema(implementation = JournalEntriesApiResourceSwagger.PostJournalEntriesTransactionIdRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = JournalEntriesApiResourceSwagger.PostJournalEntriesTransactionIdResponse.class)))
     public String createReversalJournalEntry(@Parameter(hidden = true) final String jsonRequestBody,
@@ -241,8 +245,9 @@ public class JournalEntriesApiResource {
 
     @GET
     @Path("provisioning")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Journal Entries for Provisioning", description = "Returns journal entries related to provisioning entries based on entry ID.", tags = {
+            "Journal Entries" })
     public String retrieveJournalEntries(@QueryParam("offset") final Integer offset, @QueryParam("limit") final Integer limit,
             @QueryParam("entryId") final Long entryId, @Context final UriInfo uriInfo) {
         this.context.authenticatedUser();
@@ -256,8 +261,9 @@ public class JournalEntriesApiResource {
 
     @GET
     @Path("openingbalance")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve Opening Balance", description = "Returns the opening balance for a specific office and currency.", tags = {
+            "Journal Entries" })
     public String retrieveOpeningBalance(@Context final UriInfo uriInfo, @QueryParam("officeId") final Long officeId,
             @QueryParam("currencyCode") final String currencyCode) {
 
@@ -275,6 +281,8 @@ public class JournalEntriesApiResource {
     @GET
     @Path("downloadtemplate")
     @Produces("application/vnd.ms-excel")
+    @Operation(summary = "Download journal entries template", description = "Returns an Excel template for bulk importing journal entries.", tags = {
+            "Journal Entries" })
     public Response getJournalEntriesTemplate(@QueryParam("officeId") final Long officeId,
             @QueryParam("dateFormat") final String dateFormat) {
         return bulkImportWorkbookPopulatorService.getTemplate(GlobalEntityType.GL_JOURNAL_ENTRIES.toString(), officeId, null, dateFormat);
@@ -285,6 +293,8 @@ public class JournalEntriesApiResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @RequestBody(description = "Upload journal entries template", content = {
             @Content(mediaType = MediaType.MULTIPART_FORM_DATA, schema = @Schema(implementation = UploadRequest.class)) })
+    @Operation(summary = "Upload journal entries template", description = "Uploads a filled Excel template to create multiple journal entries in bulk.", tags = {
+            "Journal Entries" })
     public String postJournalEntriesTemplate(@FormDataParam("file") InputStream uploadedInputStream,
             @FormDataParam("file") FormDataContentDisposition fileDetail, @FormDataParam("locale") final String locale,
             @FormDataParam("dateFormat") final String dateFormat) {

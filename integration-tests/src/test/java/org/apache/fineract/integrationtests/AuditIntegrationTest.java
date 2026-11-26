@@ -80,6 +80,21 @@ public class AuditIntegrationTest {
         assertNotNull(auditSearchTemplate);
         assertEquals(4, auditSearchTemplate.size()); // appUsers, actionNames, entityNames, processingResults
         assertTrue(((List) auditSearchTemplate.get("actionNames")).size() > 0);
+
+        // verify all command processing status enum values are present and use enum_value (not enum_message_property)
+        List<LinkedHashMap> statuses = (List<LinkedHashMap>) auditSearchTemplate.get("statuses");
+        assertNotNull(statuses);
+        assertEquals(6, statuses.size());
+
+        List<String> statusValues = statuses.stream().map(r -> (String) r.get("processingResult"))
+                .collect(java.util.stream.Collectors.toList());
+
+        assertTrue(statusValues.contains("Invalid"));
+        assertTrue(statusValues.contains("Processed"));
+        assertTrue(statusValues.contains("Awaiting Approval"));
+        assertTrue(statusValues.contains("Rejected"));
+        assertTrue(statusValues.contains("Under Processing"));
+        assertTrue(statusValues.contains("Error"));
     }
 
     /**
@@ -120,8 +135,8 @@ public class AuditIntegrationTest {
         }
 
         // When Office is created
-        OfficeHelper officeHelper = new OfficeHelper(requestSpec, responseSpec);
-        int officeId = officeHelper.createOffice("22 June 2020");
+        OfficeHelper officeHelper = new OfficeHelper();
+        int officeId = officeHelper.createOffice(java.time.LocalDate.of(2020, 6, 22)).getResourceId().intValue();
         auditsRecieved = auditHelper.getAuditDetails(officeId, "CREATE", "OFFICE");
         auditHelper.verifyOneAuditOnly(auditsRecieved, officeId, "CREATE", "OFFICE");
     }
@@ -164,7 +179,7 @@ public class AuditIntegrationTest {
     @Test
     public void executeSchedulerJobShouldCreateAuditEntry() {
         // given
-        int jobId = schedulerJobHelper.getSchedulerJobIdByShortName("SA_AANF");
+        int jobId = schedulerJobHelper.getSchedulerJobIdByShortName("SA_AANF").intValue();
         List<HashMap<String, Object>> auditsRecievedInitial = auditHelper.getAuditDetails(jobId, "EXECUTEJOB", "SCHEDULER");
 
         // when

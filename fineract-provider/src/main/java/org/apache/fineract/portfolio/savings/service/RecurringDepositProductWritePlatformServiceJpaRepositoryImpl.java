@@ -109,8 +109,6 @@ public class RecurringDepositProductWritePlatformServiceJpaRepositoryImpl implem
 
             final RecurringDepositProduct product = this.recurringDepositProductRepository.findById(productId)
                     .orElseThrow(() -> new RecurringDepositProductNotFoundException(productId));
-            product.setHelpers(this.chartAssembler);
-
             final Map<String, Object> changes = product.update(command);
 
             if (changes.containsKey(chargesParamName)) {
@@ -148,7 +146,8 @@ public class RecurringDepositProductWritePlatformServiceJpaRepositoryImpl implem
 
             return new CommandProcessingResultBuilder() //
                     .withEntityId(product.getId()) //
-                    .with(changes).build();
+                    .with(changes) //
+                    .build();
         } catch (final DataAccessException e) {
             handleDataIntegrityIssues(command, e.getMostSpecificCause(), e);
             return CommandProcessingResult.empty();

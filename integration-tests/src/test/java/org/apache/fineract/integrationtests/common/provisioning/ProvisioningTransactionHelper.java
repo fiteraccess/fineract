@@ -22,6 +22,10 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.ArrayList;
 import java.util.Map;
+import org.apache.fineract.client.models.PageProvisioningEntryData;
+import org.apache.fineract.client.util.Calls;
+import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 
 public class ProvisioningTransactionHelper {
@@ -50,6 +54,21 @@ public class ProvisioningTransactionHelper {
     @Deprecated(forRemoval = true)
     public ArrayList retrieveAllProvisioningCategories() {
         return Utils.performServerGet(requestSpec, responseSpec, PROVISIONING_CATEGORY_URL, "");
+    }
+
+    public Integer createProvisioningCategory(final String provisioningCategoryJson) {
+        return Utils.performServerPost(this.requestSpec, this.responseSpec, PROVISIONING_CATEGORY_URL, provisioningCategoryJson,
+                "resourceId");
+    }
+
+    public Integer deleteProvisioningCategory(final Integer categoryId) {
+        final String url = "/fineract-provider/api/v1/provisioningcategory/" + categoryId + "?" + Utils.TENANT_IDENTIFIER;
+        return Utils.performServerDelete(this.requestSpec, this.responseSpec, url, "resourceId");
+    }
+
+    public Object deleteProvisioningCategoryExpectingError(final ResponseSpecification errorResponseSpec, final Integer categoryId) {
+        final String url = "/fineract-provider/api/v1/provisioningcategory/" + categoryId + "?" + Utils.TENANT_IDENTIFIER;
+        return Utils.performServerDelete(this.requestSpec, errorResponseSpec, url, CommonConstants.RESPONSE_ERROR);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -124,14 +143,8 @@ public class ProvisioningTransactionHelper {
         return Utils.performServerGet(requestSpec, responseSpec, url, "");
     }
 
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public Map retrieveAllProvisioningEntries() {
-        String url = "/fineract-provider/api/v1/provisioningentries?dateFormat=dd MMMM yyyy" + "&" + "locale=en" + "&"
-                + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+    public PageProvisioningEntryData retrieveAllProvisioningEntries() {
+        return Calls.ok(FineractClientHelper.getFineractClient().provisioningEntries.retrieveAllProvisioningEntries(null, null));
     }
 
 }

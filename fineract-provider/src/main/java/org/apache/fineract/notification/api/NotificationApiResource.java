@@ -34,6 +34,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
@@ -47,7 +48,7 @@ import org.springframework.stereotype.Component;
 
 @Path("/v1/notifications")
 @Component
-@Tag(name = "Notification", description = "")
+@Tag(name = "Notification", description = "Notification API resources")
 @RequiredArgsConstructor
 public class NotificationApiResource {
 
@@ -58,9 +59,9 @@ public class NotificationApiResource {
     private final SqlValidator sqlValidator;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation
+    @Operation(summary = "Retrieve all Notifications", description = "Returns a paginated list of notifications for the authenticated user, with optional filtering by read status.", tags = {
+            "Notification" })
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = NotificationApiResourceSwagger.GetNotificationsResponse.class)))
     public String getAllNotifications(@Context final UriInfo uriInfo,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
@@ -87,6 +88,9 @@ public class NotificationApiResource {
     @PUT
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Update Notification Read Status", operationId = "updateNotificationReadStatus", description = "Updates the read status of all notifications for the authenticated user.", tags = {
+            "Notification" })
+    @AlternativeOperationId("update_5")
     public void update() {
         this.context.authenticatedUser();
         this.notificationReadPlatformService.updateNotificationReadStatus();

@@ -189,7 +189,9 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
                     .withOfficeId(loan.getOfficeId()) //
                     .withClientId(loan.getClientId()) //
                     .withGroupId(loan.getGroupId()) //
-                    .withLoanId(loan.getId()).withGlimId(loan.getGlimId()).build();
+                    .withLoanId(loan.getId()) //
+                    .withGlimId(loan.getGlimId()) //
+                    .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             handleDataIntegrityIssues(command, dve.getMostSpecificCause(), dve);
             return CommandProcessingResult.empty();
@@ -311,7 +313,8 @@ public class LoanApplicationWritePlatformServiceJpaRepositoryImpl implements Loa
                     .withClientId(loan.getClientId()) //
                     .withGroupId(loan.getGroupId()) //
                     .withLoanId(loan.getId()) //
-                    .with(changes).build();
+                    .with(changes) //
+                    .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             handleDataIntegrityIssues(command, dve.getMostSpecificCause(), dve);
             return CommandProcessingResult.empty();

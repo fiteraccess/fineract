@@ -130,6 +130,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    @Transactional(readOnly = true)
     public boolean isEhcacheEnabled() {
         return this.cacheTypeRepository.findById(1L).map(PlatformCache::isEhcacheEnabled).orElseThrow();
     }
@@ -447,6 +448,7 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    @Transactional(readOnly = true)
     public boolean isBusinessDateEnabled() {
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE).isEnabled();
     }
@@ -563,6 +565,16 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     }
 
     @Override
+    public boolean isForceWithdrawalOnSavingsAccountEnabled() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.FORCE_WITHDRAWAL_ON_SAVINGS_ACCOUNT).isEnabled();
+    }
+
+    @Override
+    public Long retrieveForceWithdrawalOnSavingsAccountLimit() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.FORCE_WITHDRAWAL_ON_SAVINGS_ACCOUNT_LIMIT).getValue();
+    }
+
+    @Override
     public Integer getPasswordReuseRestrictionCount() {
         final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
                 GlobalConfigurationConstants.PASSWORD_REUSE_CHECK_HISTORY_COUNT);
@@ -594,5 +606,68 @@ public class ConfigurationDomainServiceJpa implements ConfigurationDomainService
     @Override
     public boolean isSystemPaymentTypeFundSourceLockEnabled() {
         return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.LOCK_SYSTEM_PAYMENT_TYPE_FUND_SOURCES).isEnabled();
+    }
+
+    @Override
+    public boolean isMaxLoginRetriesEnabled() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.MAX_LOGIN_RETRY_ATTEMPTS).isEnabled();
+    }
+
+    @Override
+    public Integer retrieveMaxLoginRetries() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
+                GlobalConfigurationConstants.MAX_LOGIN_RETRY_ATTEMPTS);
+        return property.getValue() == null ? null : property.getValue().intValue();
+    }
+
+    @Override
+    public boolean isAllowCashAndNonCashAccrual() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.ALLOW_CASH_AND_NON_CASH_ACCRUAL).isEnabled();
+    }
+
+    @Override
+    public boolean isBlockTransactionsOnClosedOverpaidLoansEnabled() {
+        return getGlobalConfigurationPropertyData(GlobalConfigurationConstants.BLOCK_TRANSACTIONS_ON_CLOSED_OVERPAID_LOANS).isEnabled();
+    }
+
+    @Override
+    public String getIncomeExpenseGlAccounts() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
+                GlobalConfigurationConstants.INCOME_EXPENSE_GL_ACCOUNTS);
+        return property.getStringValue();
+    }
+
+    @Override
+    public String getRetainedEarningGlAccount() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
+                GlobalConfigurationConstants.RETAINED_EARNING_GL_ACCOUNT);
+        return property.getStringValue();
+    }
+
+    @Override
+    public Long getLastDayOfFinancialYear() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
+                GlobalConfigurationConstants.LAST_DAY_OF_FINANCIAL_YEAR);
+        return property.getValue();
+    }
+
+    @Override
+    public Long getLastMonthOfFinancialYear() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
+                GlobalConfigurationConstants.LAST_MONTH_OF_FINANCIAL_YEAR);
+        return property.getValue();
+    }
+
+    @Override
+    public String getRetainedEarningUsedByReportName() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(
+                GlobalConfigurationConstants.RETAINED_EARNING_USED_BY_REPORT_NAME);
+        return property.getStringValue();
+    }
+
+    @Override
+    public Long getOfficeId() {
+        final GlobalConfigurationPropertyData property = getGlobalConfigurationPropertyData(GlobalConfigurationConstants.OFFICE_ID);
+        return property.getValue();
     }
 }

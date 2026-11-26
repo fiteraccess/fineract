@@ -55,10 +55,11 @@ public class GlobalConfigurationHelper {
 
     public GlobalConfigurationPropertyData getGlobalConfigurationById(final Long configId) {
         log.info("------------------------ RETRIEVING GLOBAL CONFIGURATION BY ID -------------------------");
-        return Calls.ok(FineractClientHelper.getFineractClient().globalConfigurations.retrieveOne3(configId));
+        return Calls.ok(FineractClientHelper.getFineractClient().globalConfigurations.retrieveOneGlobalConfiguration(configId));
     }
 
-    // TODO: This is quite a bad pattern and adds a lot of time to individual test executions
+    // TODO: This is quite a bad pattern and adds a lot of time to individual test
+    // executions
     public void resetAllDefaultGlobalConfigurations() {
 
         GetGlobalConfigurationsResponse actualGlobalConfigurations = getAllGlobalConfigurations();
@@ -571,6 +572,13 @@ public class GlobalConfigurationHelper {
         enableImmediateChargeAccrualPostMaturity.put("trapDoor", false);
         defaults.add(enableImmediateChargeAccrualPostMaturity);
 
+        HashMap<String, Object> blockTransactionsOnClosedOverpaidLoans = new HashMap<>();
+        blockTransactionsOnClosedOverpaidLoans.put("name", GlobalConfigurationConstants.BLOCK_TRANSACTIONS_ON_CLOSED_OVERPAID_LOANS);
+        blockTransactionsOnClosedOverpaidLoans.put("value", 0L);
+        blockTransactionsOnClosedOverpaidLoans.put("enabled", false);
+        blockTransactionsOnClosedOverpaidLoans.put("trapDoor", false);
+        defaults.add(blockTransactionsOnClosedOverpaidLoans);
+
         HashMap<String, Object> assetOwnerTransferInterestOutstandingStrategy = new HashMap<>();
         assetOwnerTransferInterestOutstandingStrategy.put("name",
                 GlobalConfigurationConstants.ASSET_OWNER_TRANSFER_OUTSTANDING_INTEREST_CALCULATION_STRATEGY);
@@ -599,6 +607,12 @@ public class GlobalConfigurationHelper {
                 "ACTIVE,TRANSFER_IN_PROGRESS,TRANSFER_ON_HOLD,OVERPAID,CLOSED_OBLIGATIONS_MET");
         defaults.add(allowedLoanStatusesForDelayedSettlementExternalAssetTransfer);
 
+        HashMap<String, Object> maxLoginRetryAttempts = new HashMap<>();
+        maxLoginRetryAttempts.put("name", GlobalConfigurationConstants.MAX_LOGIN_RETRY_ATTEMPTS);
+        maxLoginRetryAttempts.put("value", 5L);
+        maxLoginRetryAttempts.put("enabled", false);
+        maxLoginRetryAttempts.put("trapDoor", false);
+        defaults.add(maxLoginRetryAttempts);
         HashMap<String, Object> enableOriginatorCreationDuringLoanApplication = new HashMap<>();
         enableOriginatorCreationDuringLoanApplication.put("name",
                 GlobalConfigurationConstants.ENABLE_ORIGINATOR_CREATION_DURING_LOAN_APPLICATION);
@@ -621,6 +635,79 @@ public class GlobalConfigurationHelper {
         enableAsynchronousFlexcubePosting.put("trapDoor", false);
         defaults.add(enableAsynchronousFlexcubePosting);
 
+        HashMap<String, Object> forceWithdrawalOnSavingsAccount = new HashMap<>();
+        forceWithdrawalOnSavingsAccount.put("name", GlobalConfigurationConstants.FORCE_WITHDRAWAL_ON_SAVINGS_ACCOUNT);
+        forceWithdrawalOnSavingsAccount.put("value", 0L);
+        forceWithdrawalOnSavingsAccount.put("enabled", false);
+        forceWithdrawalOnSavingsAccount.put("trapDoor", false);
+        defaults.add(forceWithdrawalOnSavingsAccount);
+
+        HashMap<String, Object> forceWithdrawalOnSavingsAccountLimit = new HashMap<>();
+        forceWithdrawalOnSavingsAccountLimit.put("name", GlobalConfigurationConstants.FORCE_WITHDRAWAL_ON_SAVINGS_ACCOUNT_LIMIT);
+        forceWithdrawalOnSavingsAccountLimit.put("value", 0L);
+        forceWithdrawalOnSavingsAccountLimit.put("enabled", false);
+        forceWithdrawalOnSavingsAccountLimit.put("trapDoor", false);
+        defaults.add(forceWithdrawalOnSavingsAccountLimit);
+
+        HashMap<String, Object> allowCashAndNonCashAccrual = new HashMap<>();
+        allowCashAndNonCashAccrual.put("name", GlobalConfigurationConstants.ALLOW_CASH_AND_NON_CASH_ACCRUAL);
+        allowCashAndNonCashAccrual.put("value", 0L);
+        allowCashAndNonCashAccrual.put("enabled", true);
+        allowCashAndNonCashAccrual.put("trapDoor", false);
+        defaults.add(allowCashAndNonCashAccrual);
+
+        HashMap<String, Object> enableInstantDelinquencyCalculation = new HashMap<>();
+        enableInstantDelinquencyCalculation.put("name", GlobalConfigurationConstants.ENABLE_INSTANT_DELINQUENCY_CALCULATION);
+        enableInstantDelinquencyCalculation.put("value", 0L);
+        enableInstantDelinquencyCalculation.put("enabled", true);
+        enableInstantDelinquencyCalculation.put("trapDoor", false);
+        defaults.add(enableInstantDelinquencyCalculation);
+
+        HashMap<String, Object> lastDayOfFinancialYear = new HashMap<>();
+        lastDayOfFinancialYear.put("name", GlobalConfigurationConstants.LAST_DAY_OF_FINANCIAL_YEAR);
+        lastDayOfFinancialYear.put("value", 31L);
+        lastDayOfFinancialYear.put("enabled", true);
+        lastDayOfFinancialYear.put("trapDoor", false);
+        defaults.add(lastDayOfFinancialYear);
+
+        HashMap<String, Object> lastMonthOfFinancialYear = new HashMap<>();
+        lastMonthOfFinancialYear.put("name", GlobalConfigurationConstants.LAST_MONTH_OF_FINANCIAL_YEAR);
+        lastMonthOfFinancialYear.put("value", 12L);
+        lastMonthOfFinancialYear.put("enabled", true);
+        lastMonthOfFinancialYear.put("trapDoor", false);
+        defaults.add(lastMonthOfFinancialYear);
+
+        HashMap<String, Object> incomeExpenseGlAccounts = new HashMap<>();
+        incomeExpenseGlAccounts.put("name", GlobalConfigurationConstants.INCOME_EXPENSE_GL_ACCOUNTS);
+        incomeExpenseGlAccounts.put("value", 0L);
+        incomeExpenseGlAccounts.put("enabled", true);
+        incomeExpenseGlAccounts.put("trapDoor", false);
+        incomeExpenseGlAccounts.put("string_value", "");
+        defaults.add(incomeExpenseGlAccounts);
+
+        HashMap<String, Object> retainedEarningGlAccount = new HashMap<>();
+        retainedEarningGlAccount.put("name", GlobalConfigurationConstants.RETAINED_EARNING_GL_ACCOUNT);
+        retainedEarningGlAccount.put("value", 0L);
+        retainedEarningGlAccount.put("enabled", true);
+        retainedEarningGlAccount.put("trapDoor", false);
+        retainedEarningGlAccount.put("string_value", "");
+        defaults.add(retainedEarningGlAccount);
+
+        HashMap<String, Object> officeId = new HashMap<>();
+        officeId.put("name", GlobalConfigurationConstants.OFFICE_ID);
+        officeId.put("value", 1L);
+        officeId.put("enabled", true);
+        officeId.put("trapDoor", false);
+        defaults.add(officeId);
+
+        HashMap<String, Object> retainedEarningUsedByReportName = new HashMap<>();
+        retainedEarningUsedByReportName.put("name", GlobalConfigurationConstants.RETAINED_EARNING_USED_BY_REPORT_NAME);
+        retainedEarningUsedByReportName.put("value", 0L);
+        retainedEarningUsedByReportName.put("enabled", true);
+        retainedEarningUsedByReportName.put("trapDoor", false);
+        retainedEarningUsedByReportName.put("string_value", "Trial Balance Summary Report with Asset Owner");
+        defaults.add(retainedEarningUsedByReportName);
+
         return defaults;
     }
 
@@ -631,7 +718,7 @@ public class GlobalConfigurationHelper {
 
     public void updateGlobalConfigurationInternal(final String configName, final Long value) {
         log.info("---------------------------UPDATE VALUE FOR GLOBAL CONFIG (internal) ---------------------------------------");
-        Calls.ok(FineractClientHelper.getFineractClient().legacy.updateGlobalConfiguration(configName, value));
+        Calls.ok(FineractClientHelper.getFineractClient().legacy.updateInternalGlobalConfiguration(configName, value));
     }
 
     public void manageConfigurations(final String configurationName, final boolean enabled) {

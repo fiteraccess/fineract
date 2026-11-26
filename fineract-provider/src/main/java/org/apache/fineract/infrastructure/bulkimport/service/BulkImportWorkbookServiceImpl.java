@@ -27,11 +27,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Collection;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.IOUtils;
-import org.apache.fineract.command.core.CommandPipeline;
 import org.apache.fineract.infrastructure.bulkimport.data.BulkImportEvent;
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
 import org.apache.fineract.infrastructure.bulkimport.data.ImportData;
@@ -44,16 +41,16 @@ import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
-import org.apache.fineract.infrastructure.documentmanagement.command.DocumentCreateCommand;
+import org.apache.fineract.infrastructure.core.service.TransactionBoundApplicationEventPublisher;
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentCreateRequest;
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentCreateResponse;
+import org.apache.fineract.infrastructure.documentmanagement.service.DocumentWritePlatformService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.tika.Tika;
 import org.apache.tika.io.TikaInputStream;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
-import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
@@ -63,12 +60,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService {
 
-    private final ApplicationContext applicationContext;
+    private final TransactionBoundApplicationEventPublisher eventPublisher;
     private final PlatformSecurityContext securityContext;
     private final ImportDocumentRepository importDocumentRepository;
+    private final DocumentWritePlatformService writePlatformService;
     private final JdbcTemplate jdbcTemplate;
     private final ContentPipe pipe;
-    private final CommandPipeline commandPipeline;
     private final ImportDocumentMapper mapper;
 
     @Override
@@ -77,7 +74,7 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
         try {
             if (entity != null && inputStream != null && fileDetail != null && locale != null && dateFormat != null) {
                 final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                IOUtils.copy(inputStream, baos);
+                inputStream.transferTo(baos);
                 final byte[] bytes = baos.toByteArray();
                 InputStream clonedInputStream = new ByteArrayInputStream(bytes);
                 final BufferedInputStream bis = new BufferedInputStream(new ByteArrayInputStream(bytes));
@@ -174,16 +171,12 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
             workbook.write(output);
         });
 
-        final var command = new DocumentCreateCommand();
-
         // TODO: does it really make sense to use the current user's ID?
         // TODO: wouldn't it be better to use "entityType.name()" as entity name?
-        command.setPayload(DocumentCreateRequest.builder().entityId(this.securityContext.authenticatedUser().getId()).entityType("IMPORT")
-                .name(fileDetail.getFileName()).description(fileDetail.getFileName()).fileName(fileDetail.getFileName())
-                .size(fileDetail.getSize()).type(fileType).stream(pipedInputStream).build());
-
-        final Supplier<DocumentCreateResponse> response = commandPipeline.send(command);
-        return response.get();
+        return writePlatformService
+                .createDocument(DocumentCreateRequest.builder().entityId(this.securityContext.authenticatedUser().getId())
+                        .entityType("IMPORT").name(fileDetail.getFileName()).description(fileDetail.getFileName())
+                        .fileName(fileDetail.getFileName()).size(fileDetail.getSize()).type(fileType).stream(pipedInputStream).build());
     }
 
     private Long publishEvent(final Integer primaryColumn, final FormDataContentDisposition fileDetail, final String fileType,
@@ -202,10 +195,7 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
         final var event = new BulkImportEvent(this, workbook, fileDetail.getFileName(), fileType, importDocument, locale, dateFormat,
                 ThreadLocalContextUtil.getContext(), this.securityContext.authenticatedUser().getId());
 
-        applicationContext.publishEvent(event);
-
-        // TODO: remove when done
-        log.warn("Import document ID: {} ({})", importDocument.getId(), importDocument.getDocumentId());
+        eventPublisher.publishEvent(event);
 
         return importDocument.getId();
     }
@@ -227,13 +217,14 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
 
     private static final class ImportMapper implements RowMapper<ImportData> {
 
+        private static final String IMPORT_SCHEMA = """
+                i.id as id, i.document_id as documentId, d.name as name, i.import_time as importTime, i.end_time as endTime,
+                i.completed as completed, i.total_records as totalRecords, i.success_count as successCount,
+                i.failure_count as failureCount, i.createdby_id as createdBy
+                from m_import_document i inner join m_document d on i.document_id=d.id where i.entity_type= ?\s""";
+
         public String schema() {
-            final StringBuilder sql = new StringBuilder();
-            sql.append("i.id as id, i.document_id as documentId, d.name as name, i.import_time as importTime, i.end_time as endTime, ")
-                    .append("i.completed as completed, i.total_records as totalRecords, i.success_count as successCount, ")
-                    .append("i.failure_count as failureCount, i.createdby_id as createdBy ")
-                    .append("from m_import_document i inner join m_document d on i.document_id=d.id ").append("where i.entity_type= ? ");
-            return sql.toString();
+            return IMPORT_SCHEMA;
         }
 
         @Override

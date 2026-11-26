@@ -19,6 +19,7 @@
 package org.apache.fineract.infrastructure.configuration.api;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -31,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.configuration.domain.GlobalConfigurationProperty;
 import org.apache.fineract.infrastructure.configuration.domain.GlobalConfigurationRepositoryWrapper;
 import org.apache.fineract.infrastructure.configuration.service.MoneyHelperInitializationService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.boot.FineractProfiles;
 import org.apache.fineract.infrastructure.core.config.cache.CacheConfig;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
@@ -67,6 +69,8 @@ public class InternalConfigurationsApiResource implements InitializingBean {
     @Path("name/{configName}/value/{configValue}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Update internal global configuration", operationId = "updateInternalGlobalConfiguration")
+    @AlternativeOperationId("updateGlobalConfiguration")
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
     @CacheEvict(value = CacheConfig.CONFIG_BY_NAME_CACHE_NAME, allEntries = true)
     public Response updateGlobalConfiguration(@PathParam("configName") String configName, @PathParam("configValue") Long configValue) {

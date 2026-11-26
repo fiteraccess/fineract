@@ -33,7 +33,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.command.core.CommandPipeline;
+import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.portfolio.note.command.NoteCreateCommand;
 import org.apache.fineract.portfolio.note.command.NoteDeleteCommand;
 import org.apache.fineract.portfolio.note.command.NoteUpdateCommand;
@@ -49,8 +49,7 @@ import org.apache.fineract.portfolio.note.exception.NoteResourceNotSupportedExce
 import org.apache.fineract.portfolio.note.service.NoteReadPlatformService;
 import org.springframework.stereotype.Component;
 
-@Path("/v1/{resourceType}/{resourceId}/notes")
-@Consumes({ MediaType.APPLICATION_JSON })
+@Path("/v1/{resourceType:.+}/{resourceId}/notes")
 @Produces({ MediaType.APPLICATION_JSON })
 @Component
 @Tag(name = "Notes", description = """
@@ -60,7 +59,7 @@ import org.springframework.stereotype.Component;
 public class NotesApiResource {
 
     private final NoteReadPlatformService readPlatformService;
-    private final CommandPipeline commandPipeline;
+    private final CommandDispatcher dispatcher;
 
     @GET
     @Operation(summary = "Retrieve a Resource's description", description = """
@@ -108,6 +107,7 @@ public class NotesApiResource {
     }
 
     @POST
+    @Consumes({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Add a Resource Note", description = """
             Adds a new note to a supported resource.
 
@@ -131,13 +131,14 @@ public class NotesApiResource {
 
         command.setPayload(request);
 
-        final Supplier<NoteCreateResponse> response = commandPipeline.send(command);
+        final Supplier<NoteCreateResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }
 
     @PUT
     @Path("{noteId}")
+    @Consumes({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Update a Resource Note", description = """
             Updates a Resource Note
             """)
@@ -158,7 +159,7 @@ public class NotesApiResource {
 
         command.setPayload(request);
 
-        final Supplier<NoteUpdateResponse> response = commandPipeline.send(command);
+        final Supplier<NoteUpdateResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }
@@ -182,7 +183,7 @@ public class NotesApiResource {
 
         command.setPayload(request);
 
-        final Supplier<NoteDeleteResponse> response = commandPipeline.send(command);
+        final Supplier<NoteDeleteResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }

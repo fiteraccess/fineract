@@ -32,12 +32,12 @@ import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.BusinessStep;
 import org.apache.fineract.client.models.BusinessStepRequest;
-import org.apache.fineract.client.models.ChargeRequest;
 import org.apache.fineract.client.models.ExternalAssetOwnerRequest;
 import org.apache.fineract.client.models.GetFinancialActivityAccountsResponse;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
 import org.apache.fineract.client.models.PostInitiateTransferResponse;
+import org.apache.fineract.client.models.PostLoanOriginatorsRequest;
 import org.apache.fineract.client.models.PostLoanProductsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdChargesRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdRequest;
@@ -49,9 +49,11 @@ import org.apache.fineract.client.models.RunReportsResponse;
 import org.apache.fineract.integrationtests.client.FeignIntegrationTest;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignBusinessDateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignChargesHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignGlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanOriginatorHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSchedulerHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignTransactionHelper;
 import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
@@ -79,6 +81,8 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
     private FeignTransactionHelper transactionHelper;
     private FeignClientHelper clientHelper;
     private FeignSchedulerHelper schedulerHelper;
+    private FeignChargesHelper chargesHelper;
+    private static FeignLoanOriginatorHelper originatorHelper;
 
     private Account assetAccount;
     private Account feePenaltyAccount;
@@ -99,6 +103,8 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         transactionHelper = new FeignTransactionHelper(fineractClient());
         clientHelper = new FeignClientHelper(fineractClient());
         schedulerHelper = new FeignSchedulerHelper(fineractClient());
+        originatorHelper = new FeignLoanOriginatorHelper(fineractClient());
+        chargesHelper = new FeignChargesHelper(fineractClient());
 
         todaysDate = Utils.getLocalDateOfTenant().toString();
 
@@ -126,11 +132,12 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         List<GetFinancialActivityAccountsResponse> currentMappings = ok(
                 () -> fineractClient().mappingFinancialActivitiesToAccounts().retrieveAll());
         for (GetFinancialActivityAccountsResponse mapping : currentMappings) {
-            executeVoid(() -> fineractClient().mappingFinancialActivitiesToAccounts().deleteGLAccount(mapping.getId()));
+            executeVoid(() -> fineractClient().mappingFinancialActivitiesToAccounts()
+                    .deleteGLAccountMappingFinancialActivityAccount(mapping.getId()));
         }
         for (GetFinancialActivityAccountsResponse mapping : originalFinancialMappings) {
             ok(() -> fineractClient().mappingFinancialActivitiesToAccounts()
-                    .createGLAccount(new PostFinancialActivityAccountsRequest()
+                    .createGLAccountMappingFinancialActivityAccount(new PostFinancialActivityAccountsRequest()
                             .financialActivityId(Long.valueOf(mapping.getFinancialActivityData().getId()))
                             .glAccountId(mapping.getGlAccountData().getId())));
         }
@@ -147,7 +154,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         assertFalse(response.getColumnHeaders().isEmpty());
 
         List<String> expectedColumns = List.of("postingdate", "product", "glacct", "description", "assetowner", "beginningbalance",
-                "debitmovement", "creditmovement", "endingbalance", "originators");
+                "debitmovement", "creditmovement", "endingbalance", "originator_external_ids");
         List<String> actualColumns = response.getColumnHeaders().stream().map(ResultsetColumnHeaderData::getColumnName).toList();
         Assertions.assertEquals(expectedColumns, actualColumns);
     }
@@ -157,7 +164,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
     public void testExternalAssetOwnerEntriesAppearInReport() {
         runWithBusinessDate("2020-03-02", () -> {
             Long clientId = createClient("01 March 2020");
-            Long loanId = createAndDisburseLoan(clientId, "01 March 2020", "02 March 2020", null);
+            Long loanId = createAndDisburseLoan(clientId, "01 March 2020", "02 March 2020", null, null);
 
             String ownerExternalId = UUID.randomUUID().toString();
             PostInitiateTransferResponse saleResponse = ok(() -> fineractClient().externalAssetOwners().transferRequestWithLoanId(loanId,
@@ -186,7 +193,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         runWithBusinessDate("2020-06-01", () -> {
             Long clientId = createClient("01 June 2020");
             Long chargeId = createFlatFeeCharge(500.0);
-            Long loanId = createAndDisburseLoan(clientId, "01 June 2020", "01 June 2020", chargeId);
+            Long loanId = createAndDisburseLoan(clientId, "01 June 2020", "01 June 2020", chargeId, null);
 
             String productName = loanHelper.getLoanDetails(loanId).getLoanProductName();
 
@@ -250,6 +257,28 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         assertFalse(hasRetainedEarningsRow, "Report should not contain Retained Earnings rows when no annual summary data exists.");
     }
 
+    @Test
+    @Order(5)
+    public void testOriginatorExternalIdsEntriesAppearInReport() {
+        runWithBusinessDate("2020-03-02", () -> {
+            Long clientId = createClient("01 March 2020");
+            String originatorExternalId = UUID.randomUUID().toString();
+            Long loanId = createAndDisburseLoan(clientId, "01 March 2020", "02 March 2020", null, originatorExternalId);
+
+            advanceBusinessDateAndRunCob("2020-03-03");
+
+            RunReportsResponse report = runReport("2020-03-02");
+            assertNotNull(report.getData());
+
+            int originatorIdColIdx = findColumnIndex(report, "originator_external_ids");
+            boolean hasOriginatorIdEntry = report.getData().stream()
+                    .anyMatch(row -> originatorExternalId.equals(String.valueOf(row.getRow().get(originatorIdColIdx))));
+
+            assertTrue(hasOriginatorIdEntry, "Report must contain entries for originator external ids '" + originatorExternalId
+                    + "'. Actual rows: " + report.getData());
+        });
+    }
+
     private void configureBusinessSteps() {
         List<String> stepNames = List.of("APPLY_CHARGE_TO_OVERDUE_LOANS", "LOAN_DELINQUENCY_CLASSIFICATION", "CHECK_LOAN_REPAYMENT_DUE",
                 "CHECK_LOAN_REPAYMENT_OVERDUE", "UPDATE_LOAN_ARREARS_AGING", "ADD_PERIODIC_ACCRUAL_ENTRIES",
@@ -264,9 +293,10 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         List<GetFinancialActivityAccountsResponse> mappings = ok(
                 () -> fineractClient().mappingFinancialActivitiesToAccounts().retrieveAll());
         for (GetFinancialActivityAccountsResponse mapping : mappings) {
-            executeVoid(() -> fineractClient().mappingFinancialActivitiesToAccounts().deleteGLAccount(mapping.getId()));
+            executeVoid(() -> fineractClient().mappingFinancialActivitiesToAccounts()
+                    .deleteGLAccountMappingFinancialActivityAccount(mapping.getId()));
         }
-        ok(() -> fineractClient().mappingFinancialActivitiesToAccounts().createGLAccount(
+        ok(() -> fineractClient().mappingFinancialActivitiesToAccounts().createGLAccountMappingFinancialActivityAccount(
                 new PostFinancialActivityAccountsRequest().financialActivityId(100L).glAccountId((long) transferAccount.getAccountID())));
     }
 
@@ -328,10 +358,10 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
                 .mobileNo(Utils.randomStringGenerator("M", 10))//
                 .emailAddress(UUID.randomUUID().toString() + "@example.com")//
                 .dateOfBirth(LocalDate.of(1990, 1, 1))//
-                .genderId(clientHelper.getMaleGenderId()));
+                .genderId(clientHelper.getMaleGenderId())).getClientId();
     }
 
-    private Long createAndDisburseLoan(Long clientId, String submitDate, String disburseDate, Long chargeId) {
+    private Long createAndDisburseLoan(Long clientId, String submitDate, String disburseDate, Long chargeId, String originatorExternalId) {
         Long loanProductId = createLoanProduct();
         assertNotNull(loanProductId);
 
@@ -359,9 +389,13 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         assertNotNull(loanId);
 
         if (chargeId != null) {
-            ok(() -> fineractClient().loanCharges().executeLoanCharge(loanId, new PostLoansLoanIdChargesRequest().chargeId(chargeId)
+            ok(() -> fineractClient().loanCharges().createOrPayLoanCharge(loanId, new PostLoansLoanIdChargesRequest().chargeId(chargeId)
                     .amount(500.0).dueDate(disburseDate).dateFormat(LoanTestData.DATETIME_PATTERN).locale(LoanTestData.LOCALE),
                     (String) null));
+        }
+
+        if (originatorExternalId != null) {
+            createAndAttachOriginator(loanId, originatorExternalId);
         }
 
         loanHelper.approveLoan(loanId, new PostLoansLoanIdRequest()//
@@ -380,23 +414,20 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         return loanId;
     }
 
+    private void createAndAttachOriginator(Long loanId, String originatorExternalId) {
+        Long originatorId = originatorHelper.createOriginator(new PostLoanOriginatorsRequest().externalId(originatorExternalId));
+        assertNotNull(originatorId);
+        originatorHelper.attachOriginatorToLoan(loanId, originatorId);
+    }
+
     private Long createFlatFeeCharge(double amount) {
-        return ok(() -> fineractClient().charges().createCharge(new ChargeRequest()//
-                .name("TB Fee " + System.currentTimeMillis())//
-                .currencyCode("USD")//
-                .chargeAppliesTo(1)//
-                .chargeTimeType(2)//
-                .chargeCalculationType(1)//
-                .chargePaymentMode(0)//
-                .amount(amount)//
-                .active(true)//
-                .locale(LoanTestData.LOCALE))).getResourceId();
+        return chargesHelper.createLoanSpecifiedDueDateCharge(amount);
     }
 
     private Long createLoanProduct() {
         return loanHelper.createLoanProduct(new PostLoanProductsRequest()//
                 .name("TrialBal Product " + System.currentTimeMillis())//
-                .shortName(UUID.randomUUID().toString().substring(0, 4).toUpperCase())//
+                .shortName(Utils.uniqueRandomStringGenerator("", 4))//
                 .currencyCode("USD")//
                 .digitsAfterDecimal(2)//
                 .inMultiplesOf(1)//

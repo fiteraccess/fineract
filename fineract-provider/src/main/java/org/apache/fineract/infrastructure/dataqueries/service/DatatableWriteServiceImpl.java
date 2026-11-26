@@ -64,11 +64,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.fineract.infrastructure.codes.service.CodeReadPlatformService;
@@ -277,7 +277,7 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
             sqlBuilder.append(constrainBuilder);
             sqlBuilder.append(")");
             if (databaseTypeResolver.isMySQL()) {
-                sqlBuilder.append(" ENGINE=InnoDB DEFAULT CHARSET=UTF8MB4;");
+                sqlBuilder.append(" ENGINE=InnoDB DEFAULT CHARSET=UTF8MB4 COLLATE=UTF8MB4_UNICODE_CI;");
             }
             log.debug("SQL:: {}", sqlBuilder);
 
@@ -311,7 +311,10 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
             baseDataValidator.throwValidationErrors();
         }
 
-        return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withResourceIdAsString(datatableName).build();
+        return new CommandProcessingResultBuilder() //
+                .withCommandId(command.commandId()) //
+                .withResourceIdAsString(datatableName) //
+                .build();
     }
 
     @Transactional
@@ -791,8 +794,8 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
             }
             String fkName = "fk_" + dataTableNameAlias + "_" + oldName;
             String newFkName = "fk_" + dataTableNameAlias + "_" + newName;
-            if (!StringUtils.equalsIgnoreCase(code, newCode) || !StringUtils.equalsIgnoreCase(oldName, newName)) {
-                if (StringUtils.equalsIgnoreCase(code, newCode)) {
+            if (!equalsIgnoreCase(code, newCode) || !equalsIgnoreCase(oldName, newName)) {
+                if (equalsIgnoreCase(code, newCode)) {
                     final int codeId = getCodeIdForColumn(dataTableNameAlias, oldName);
                     if (codeId > 0) {
                         removeMappings.add(dataTableNameAlias + "_" + oldName);
@@ -806,13 +809,13 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
                 } else {
                     if (code != null) {
                         removeMappings.add(dataTableNameAlias + "_" + oldName);
-                        if (newCode == null || !StringUtils.equalsIgnoreCase(oldName, newName)) {
+                        if (newCode == null || !equalsIgnoreCase(oldName, newName)) {
                             constrainBuilder.append(", DROP CONSTRAINT ").append(sqlGenerator.escape(fkName)).append(" ");
                         }
                     }
                     if (newCode != null) {
                         codeMappings.put(dataTableNameAlias + "_" + newName, this.codeReadPlatformService.retrieveCode(newCode).getId());
-                        if (code == null || !StringUtils.equalsIgnoreCase(oldName, newName)) {
+                        if (code == null || !equalsIgnoreCase(oldName, newName)) {
                             constrainBuilder.append(", ADD CONSTRAINT  ").append(sqlGenerator.escape(newFkName)).append(" ")
                                     .append("FOREIGN KEY (").append(sqlGenerator.escape(newName)).append(") ").append(REFERENCES_CLAUSE)
                                     .append(sqlGenerator.escape(CODE_VALUES_TABLE)).append(" (").append(TABLE_FIELD_ID).append(")");
@@ -921,7 +924,7 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
         } catch (final EmptyResultDataAccessException e) {
             log.warn("Error occurred.", e);
         }
-        return ObjectUtils.defaultIfNull(codeId, 0);
+        return Objects.requireNonNullElse(codeId, 0);
     }
 
     /**
@@ -1274,7 +1277,8 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
                 dataObjectParams);
         businessEventNotifierService.notifyPostBusinessEvent(new DatatableEntryUpdatedBusinessEvent(datatableEntryDetails));
 
-        return new CommandProcessingResultBuilder().withCommandId(command.commandId()) //
+        return new CommandProcessingResultBuilder() //
+                .withCommandId(command.commandId()) //
                 .withEntityId(primaryKey) //
                 .withOfficeId(commandProcessingResult.getOfficeId()) //
                 .withGroupId(commandProcessingResult.getGroupId()) //
@@ -1282,7 +1286,8 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
                 .withSavingsId(commandProcessingResult.getSavingsId()) //
                 .withLoanId(commandProcessingResult.getLoanId()) //
                 .withTransactionId(commandProcessingResult.getTransactionId()) //
-                .with(changes).build();
+                .with(changes) //
+                .build();
     }
 
     private static boolean isUserUpdatable(@NonNull EntityTables entityTable, @NonNull ResultsetColumnHeaderData columnHeader) {
@@ -1387,6 +1392,10 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
 
     private static boolean isTechnicalParam(String param) {
         return API_PARAM_DATE_FORMAT.equals(param) || API_PARAM_DATETIME_FORMAT.equals(param) || API_PARAM_LOCALE.equals(param);
+    }
+
+    private static boolean equalsIgnoreCase(String left, String right) {
+        return left == null ? right == null : left.equalsIgnoreCase(right);
     }
 
     private String datatableColumnNameToCodeValueName(final String columnName, final String code) {

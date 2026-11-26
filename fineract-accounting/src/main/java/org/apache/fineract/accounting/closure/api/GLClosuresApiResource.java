@@ -46,6 +46,7 @@ import org.apache.fineract.accounting.closure.service.GLClosureReadPlatformServi
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -63,7 +64,7 @@ import org.springframework.stereotype.Component;
         closingDate
         The date for which the accounting closure is defined
         officeId
-        The identifer of the branch for which accounting has been closed
+        The identifier of the branch for which accounting has been closed
         comments
         Description associated with an Accounting closure
         """)
@@ -80,12 +81,12 @@ public class GLClosuresApiResource {
     private final OfficeReadPlatformService officeReadPlatformService;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Accounting closures", description = """
+    @Operation(summary = "List Accounting closures", operationId = "retrieveAllGLClosures", description = """
             Example Requests:
 
             glclosures""")
+    @AlternativeOperationId("retrieveAllClosures")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = GLClosuresApiResourceSwagger.GetGlClosureResponse.class))))
     public List<GLClosureData> retrieveAllClosures(@QueryParam("officeId") @Parameter(name = "officeId") final Long officeId) {
 
@@ -95,15 +96,15 @@ public class GLClosuresApiResource {
 
     @GET
     @Path("{glClosureId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve an Accounting Closure", description = """
+    @Operation(summary = "Retrieve an Accounting Closure", operationId = "retrieveOneGLClosure", description = """
             Example Requests:
 
             glclosures/1
 
 
             /glclosures/1?fields=officeName,closingDate""")
+    @AlternativeOperationId("retreiveClosure")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLClosuresApiResourceSwagger.GetGlClosureResponse.class)))
     public GLClosureData retreiveClosure(@PathParam("glClosureId") @Parameter(description = "glClosureId") final Long glClosureId,
             @Context final UriInfo uriInfo) {
@@ -122,7 +123,8 @@ public class GLClosuresApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create an Accounting Closure", description = "Mandatory Fields\n" + "officeId,closingDate")
+    @Operation(summary = "Create an Accounting Closure", operationId = "createGLClosure", description = "Mandatory Fields\n"
+            + "officeId,closingDate")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = GLClosuresApiResourceSwagger.PostGlClosuresRequest.class, description = "Request Body")))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLClosuresApiResourceSwagger.PostGlClosuresResponse.class)))
     public CommandProcessingResult createGLClosure(@Parameter(hidden = true) GLClosureRequest glClosureRequest) {
@@ -136,7 +138,7 @@ public class GLClosuresApiResource {
     @Path("{glClosureId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update an Accounting closure", description = "Once an accounting closure is created, only the comments associated with it may be edited")
+    @Operation(summary = "Update an Accounting closure", operationId = "updateGLClosure", description = "Once an accounting closure is created, only the comments associated with it may be edited")
     @RequestBody(content = @Content(schema = @Schema(implementation = GLClosuresApiResourceSwagger.PutGlClosuresRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLClosuresApiResourceSwagger.PutGlClosuresResponse.class)))
     public CommandProcessingResult updateGLClosure(@PathParam("glClosureId") @Parameter(description = "glClosureId") final Long glClosureId,
@@ -148,9 +150,8 @@ public class GLClosuresApiResource {
 
     @DELETE
     @Path("{glClosureId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Delete an accounting closure", description = "Note: Only the latest accounting closure associated with a branch may be deleted.")
+    @Operation(summary = "Delete an accounting closure", operationId = "deleteGLClosure", description = "Note: Only the latest accounting closure associated with a branch may be deleted.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = GLClosuresApiResourceSwagger.DeleteGlClosuresResponse.class)))
     public CommandProcessingResult deleteGLClosure(
             @PathParam("glClosureId") @Parameter(description = "glclosureId") final Long glClosureId) {

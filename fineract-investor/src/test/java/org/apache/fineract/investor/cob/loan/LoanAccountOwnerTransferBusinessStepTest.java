@@ -62,6 +62,8 @@ import org.apache.fineract.investor.service.LoanTransferabilityService;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
+import org.apache.fineract.portfolio.loanaccount.service.LoanBuyDownFeeAmortizationProcessingService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanCapitalizedIncomeAmortizationProcessingService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanJournalEntryPoster;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -110,6 +112,12 @@ public class LoanAccountOwnerTransferBusinessStepTest {
     @Mock
     private ExternalAssetOwnerTransferOutstandingInterestCalculation externalAssetOwnerTransferOutstandingInterestCalculation;
 
+    @Mock
+    private LoanCapitalizedIncomeAmortizationProcessingService loanCapitalizedIncomeAmortizationProcessingService;
+
+    @Mock
+    private LoanBuyDownFeeAmortizationProcessingService loanBuyDownFeeAmortizationProcessingService;
+
     private LoanAccountOwnerTransferBusinessStep underTest;
 
     @BeforeAll
@@ -130,7 +138,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, actualDate)));
         underTest = new LoanAccountOwnerTransferBusinessStep(externalAssetOwnerTransferRepository,
                 externalAssetOwnerTransferLoanMappingRepository, loanJournalEntryPoster, businessEventNotifierService,
-                loanTransferabilityService, delayedSettlementAttributeService, externalAssetOwnerTransferOutstandingInterestCalculation);
+                loanTransferabilityService, delayedSettlementAttributeService, externalAssetOwnerTransferOutstandingInterestCalculation,
+                loanCapitalizedIncomeAmortizationProcessingService, loanBuyDownFeeAmortizationProcessingService);
     }
 
     @AfterEach
@@ -478,6 +487,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
 
         ArgumentCaptor<ExternalAssetOwnerTransfer> externalAssetOwnerTransferArgumentCaptor = ArgumentCaptor
                 .forClass(ExternalAssetOwnerTransfer.class);
+        // 3 saves: activeIntermediateTransfer (expire), pendingTransfer (expire), activeTransfer (new, with previous
+        // owner set)
         verify(externalAssetOwnerTransferRepository, times(3)).save(externalAssetOwnerTransferArgumentCaptor.capture());
         ExternalAssetOwnerTransfer capturedActiveIntermediateTransfer = externalAssetOwnerTransferArgumentCaptor.getAllValues().get(0);
         ExternalAssetOwnerTransfer capturedPendingTransfer = externalAssetOwnerTransferArgumentCaptor.getAllValues().get(1);

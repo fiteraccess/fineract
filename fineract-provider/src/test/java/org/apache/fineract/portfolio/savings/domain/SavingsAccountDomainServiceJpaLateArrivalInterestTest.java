@@ -51,6 +51,7 @@ import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountPostInterestService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -93,6 +94,8 @@ class SavingsAccountDomainServiceJpaLateArrivalInterestTest {
     private SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private SavingsAccountPostInterestService savingsAccountPostInterestService;
 
     private SavingsAccount account;
 
@@ -149,12 +152,12 @@ class SavingsAccountDomainServiceJpaLateArrivalInterestTest {
         return new SavingsAccountDomainServiceJpa(savingsAccountRepository, savingsAccountTransactionRepository,
                 journalEntryWritePlatformService, configurationDomainService, context, depositAccountOnHoldTransactionRepository,
                 businessEventNotifierService, balanceValidationService, entityManager, cacheableSavingsProductConfigService,
-                savingsDailyBalanceSyncRepository, noteRepository, properties);
+                savingsDailyBalanceSyncRepository, noteRepository, properties, savingsAccountPostInterestService);
     }
 
     private void verifyInterest(final boolean expectLocalRepost) {
-        verify(account, expectLocalRepost ? times(1) : never()).postInterest(any(MathContext.class), eq(BUSINESS_DATE), anyBoolean(),
-                anyBoolean(), any(), isNull(), eq(false), anyBoolean());
+        verify(savingsAccountPostInterestService, expectLocalRepost ? times(1) : never()).postInterest(eq(account), any(MathContext.class),
+                eq(BUSINESS_DATE), anyBoolean(), anyBoolean(), any(), isNull(), eq(false), anyBoolean());
         verify(account, expectLocalRepost ? never() : times(1)).calculateInterestUsing(any(MathContext.class), eq(BUSINESS_DATE),
                 anyBoolean(), anyBoolean(), any(), isNull(), eq(false), anyBoolean());
         verify(savingsAccountTransactionRepository).saveAndFlush(any(SavingsAccountTransaction.class));

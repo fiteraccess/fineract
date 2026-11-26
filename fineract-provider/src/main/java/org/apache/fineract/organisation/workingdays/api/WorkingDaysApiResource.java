@@ -30,7 +30,8 @@ import jakarta.ws.rs.core.MediaType;
 import java.time.Instant;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.command.core.CommandPipeline;
+import org.apache.fineract.command.core.CommandDispatcher;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.organisation.workingdays.command.WorkingDaysUpdateCommand;
 import org.apache.fineract.organisation.workingdays.data.WorkingDaysData;
 import org.apache.fineract.organisation.workingdays.data.WorkingDaysUpdateRequest;
@@ -50,12 +51,13 @@ public class WorkingDaysApiResource {
 
     private final WorkingDaysReadPlatformService workingDaysReadPlatformService;
     private final WorkingDaysUpdateRequestValidator workingDaysUpdateRequestValidator;
-    private final CommandPipeline commandPipeline;
+    private final CommandDispatcher dispatcher;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List Working days", description = "Example Requests:\n" + "\n" + "workingdays")
+    @Operation(summary = "List Working days", operationId = "retrieveAllWorkingDays", description = "Example Requests:\n" + "\n"
+            + "workingdays")
+    @AlternativeOperationId("retrieveAll_17")
     public WorkingDaysData retrieveAll() {
         return this.workingDaysReadPlatformService.retrieve();
     }
@@ -63,8 +65,9 @@ public class WorkingDaysApiResource {
     @PUT
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a Working Day", description = "Mandatory Fields\n"
+    @Operation(summary = "Update a Working Day", operationId = "updateWorkingDay", description = "Mandatory Fields\n"
             + "recurrence,repaymentRescheduleType,extendTermForDailyRepayments,locale")
+    @AlternativeOperationId("update_8")
     public WorkingDaysUpdateResponse update(@Valid WorkingDaysUpdateRequest request) {
 
         final var command = new WorkingDaysUpdateCommand();
@@ -73,17 +76,17 @@ public class WorkingDaysApiResource {
         command.setCreatedAt(Instant.now());
         command.setPayload(request);
 
-        final Supplier<WorkingDaysUpdateResponse> response = commandPipeline.send(command);
+        final Supplier<WorkingDaysUpdateResponse> response = dispatcher.dispatch(command);
 
         return response.get();
     }
 
     @GET
     @Path("/template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Working Days Template", description = "This is a convenience resource. It can be useful when building maintenance user interface screens for working days.\n"
+    @Operation(summary = "Working Days Template", operationId = "retrieveTemplateWorkingDays", description = "This is a convenience resource. It can be useful when building maintenance user interface screens for working days.\n"
             + "\n" + "Example Request:\n" + "\n" + "workingdays/template")
+    @AlternativeOperationId("template_4")
     public WorkingDaysData template() {
         return this.workingDaysReadPlatformService.repaymentRescheduleType();
     }

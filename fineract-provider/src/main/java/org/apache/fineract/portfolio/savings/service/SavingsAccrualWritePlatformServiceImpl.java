@@ -38,6 +38,7 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
+import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsAccrualData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
@@ -85,7 +86,7 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
         List<Throwable> errors = new ArrayList<>();
         for (SavingsAccrualData savingsAccrual : savingsAccrualData) {
             try {
-                if (savingsAccrual.getDepositType().isSavingsDeposit() && savingsAccrual.getIsAllowOverdraft()) {
+                if (savingsAccrual.getDepositType() == DepositAccountType.SAVINGS_DEPOSIT && savingsAccrual.getIsAllowOverdraft()) {
                     if (!savingsAccrual.getIsTypeInterestReceivable()) {
                         continue;
                     }

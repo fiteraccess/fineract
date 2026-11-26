@@ -89,7 +89,6 @@ public final class Utils {
     public static final String DATE_TIME_FORMAT = "dd MMMM yyyy HH:mm";
     public static final String LOCALE = "en";
     public static final DateTimeFormatter dateFormatter = new DateTimeFormatterBuilder().appendPattern(DATE_FORMAT).toFormatter();
-    public static final DateTimeFormatter dateTimeFormatter = new DateTimeFormatterBuilder().appendPattern(DATE_TIME_FORMAT).toFormatter();
     private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
     private static final SecureRandom random = new SecureRandom();
     private static final Gson gson = new Gson();
@@ -568,6 +567,13 @@ public final class Utils {
     }
 
     @Deprecated(forRemoval = true)
+    public static byte[] performServerOutputTemplateDownloadGet(final RequestSpecification requestSpec,
+            final ResponseSpecification responseSpec, final String getURL, final String importDocumentId) {
+        return given().spec(requestSpec).queryParam("importDocumentId", importDocumentId).expect().spec(responseSpec).log().ifError().when()
+                .get(getURL).andReturn().asByteArray();
+    }
+
+    @Deprecated(forRemoval = true)
     public static String emptyJson() {
         return "{}";
     }
@@ -591,7 +597,7 @@ public final class Utils {
     }
 
     private static int getYear() {
-        return 1000 + random.nextInt(1001);
+        return 2000 + random.nextInt(31);
     }
 
     private static int getMonth() {

@@ -27,7 +27,28 @@ public class SavingsTransactionBooleanValues {
     private final boolean isApplyWithdrawFee;
     private final boolean isInterestTransfer;
     private final boolean isExceptionForBalanceCheck;
+    private final boolean isForceWithdrawal;
     private final BigDecimal chargeableAmount;
+
+    public SavingsTransactionBooleanValues(final boolean isAccountTransfer, final boolean isRegularTransaction,
+            final boolean isApplyWithdrawFee, final boolean isInterestTransfer, final boolean isExceptionForBalanceCheck,
+            final boolean isForceWithdrawal) {
+        this(isAccountTransfer, isRegularTransaction, isApplyWithdrawFee, isInterestTransfer, isExceptionForBalanceCheck, isForceWithdrawal,
+                null);
+    }
+
+    public SavingsTransactionBooleanValues(final boolean isAccountTransfer, final boolean isRegularTransaction,
+            final boolean isApplyWithdrawFee, final boolean isInterestTransfer, final boolean isExceptionForBalanceCheck,
+            final boolean isForceWithdrawal, final BigDecimal chargeableAmount) {
+
+        this.isAccountTransfer = isAccountTransfer;
+        this.isRegularTransaction = isRegularTransaction;
+        this.isApplyWithdrawFee = isApplyWithdrawFee;
+        this.isInterestTransfer = isInterestTransfer;
+        this.isExceptionForBalanceCheck = isExceptionForBalanceCheck;
+        this.isForceWithdrawal = isForceWithdrawal;
+        this.chargeableAmount = chargeableAmount;
+    }
 
     public SavingsTransactionBooleanValues(final boolean isAccountTransfer, final boolean isRegularTransaction,
             final boolean isApplyWithdrawFee, final boolean isInterestTransfer, final boolean isExceptionForBalanceCheck) {
@@ -50,6 +71,7 @@ public class SavingsTransactionBooleanValues {
         this.isInterestTransfer = isInterestTransfer;
         this.isExceptionForBalanceCheck = isExceptionForBalanceCheck;
         this.chargeableAmount = chargeableAmount;
+        this.isForceWithdrawal = false;
     }
 
     public boolean isAccountTransfer() {
@@ -82,6 +104,10 @@ public class SavingsTransactionBooleanValues {
      */
     public BigDecimal withdrawalFeeBase(final BigDecimal transactionAmount) {
         return this.chargeableAmount == null ? transactionAmount : this.chargeableAmount;
+    }
+
+    public boolean isForceWithdrawal() {
+        return this.isForceWithdrawal;
     }
 
 }

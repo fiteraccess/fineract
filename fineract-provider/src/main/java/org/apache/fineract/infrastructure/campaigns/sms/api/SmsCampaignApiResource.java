@@ -54,6 +54,7 @@ import org.apache.fineract.infrastructure.campaigns.sms.data.dto.SmsCampaignPrev
 import org.apache.fineract.infrastructure.campaigns.sms.data.dto.SmsCampaignUpdateDto;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignReadPlatformService;
 import org.apache.fineract.infrastructure.campaigns.sms.service.SmsCampaignWritePlatformService;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
@@ -80,7 +81,7 @@ public class SmsCampaignApiResource {
 
     @GET
     @Path("template")
-    @Operation(summary = "Retrieve a SMS Campaign", description = """
+    @Operation(summary = "Retrieve a SMS Campaign", operationId = "retrieveTemplateSmsCampaign", description = """
             Example Requests:
 
             smscampaigns/1
@@ -90,6 +91,7 @@ public class SmsCampaignApiResource {
 
 
             smscampaigns/template""")
+    @AlternativeOperationId("template_2")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SmsCampaignData.class)))
     public SmsCampaignData template() {
         platformSecurityContext.authenticatedUser().validateHasReadPermission(SmsCampaignConstants.RESOURCE_NAME);
@@ -99,12 +101,13 @@ public class SmsCampaignApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a SMS Campaign", description = """
+    @Operation(summary = "Create a SMS Campaign", operationId = "createSmsCampaign", description = """
             Mandatory Fields
             campaignName, campaignType, triggerType, providerId, runReportId, message
 
             Mandatory Fields for Cash based on selected report id
             paramValue in json format""")
+    @AlternativeOperationId("createCampaign_1")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CommandWrapper.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult createCampaign(@Parameter(hidden = true) final SmsCampaignCreationDto smsCampaignCreationDto) {
@@ -117,11 +120,12 @@ public class SmsCampaignApiResource {
     @GET
     @Path("{resourceId}")
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a SMS Campaign", description = """
+    @Operation(summary = "Retrieve a SMS Campaign", operationId = "retrieveOneSmsCampaign", description = """
             Example Requests:
 
             smscampaigns/1
             """)
+    @AlternativeOperationId("retrieveCampaign")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SmsCampaignData.class)))
     public SmsCampaignData retrieveCampaign(@PathParam("resourceId") final Long resourceId) {
         platformSecurityContext.authenticatedUser().validateHasReadPermission(SmsCampaignConstants.RESOURCE_NAME);
@@ -130,10 +134,11 @@ public class SmsCampaignApiResource {
 
     @GET
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List SMS Campaigns", description = """
+    @Operation(summary = "List SMS Campaigns", operationId = "retrieveAllSmsCampaigns", description = """
             Example Requests:
 
             smscampaigns""")
+    @AlternativeOperationId("retrieveAllEmails_1")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SmsCampaignData.class)))
     public Page<SmsCampaignData> retrieveAllEmails(@QueryParam("offset") final Integer offset, @QueryParam("limit") final Integer limit,
             @QueryParam("orderBy") final String orderBy, @QueryParam("sortOrder") final String sortOrder) {
@@ -147,7 +152,8 @@ public class SmsCampaignApiResource {
     @Path("{campaignId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a Campaign")
+    @Operation(summary = "Update a Campaign", operationId = "updateSmsCampaign")
+    @AlternativeOperationId("updateCampaign_1")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = CommandWrapper.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult updateCampaign(@PathParam("campaignId") final Long campaignId,
@@ -161,7 +167,8 @@ public class SmsCampaignApiResource {
     @Path("{campaignId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "SMS Campaign", description = "Activates | Deactivates | Reactivates")
+    @Operation(summary = "SMS Campaign", operationId = "handleCommandsSmsCampaign", description = "Activates | Deactivates | Reactivates")
+    @AlternativeOperationId("handleCommands")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult handleCommands(@PathParam("campaignId") final Long campaignId,
             @QueryParam("command") final String commandParam, @Parameter(hidden = true) SmsCampaignHandlerDto campaignHandlerDto) {
@@ -173,6 +180,8 @@ public class SmsCampaignApiResource {
     @Path("preview")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Preview SMS Campaign message", operationId = "previewSmsCampaign")
+    @AlternativeOperationId("preview_1")
     public CampaignPreviewData preview(SmsCampaignPreviewDto previewDto) {
         context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final String strPreviewDtoJson = toApiJsonSerializer.serialize(previewDto);
@@ -183,7 +192,8 @@ public class SmsCampaignApiResource {
 
     @DELETE
     @Path("{campaignId}")
-    @Operation(summary = "Delete a SMS Campaign", description = "Note: Only closed SMS Campaigns can be deleted")
+    @Operation(summary = "Delete a SMS Campaign", operationId = "deleteSmsCampaign", description = "Note: Only closed SMS Campaigns can be deleted")
+    @AlternativeOperationId("delete_3")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult delete(@PathParam("campaignId") final Long campaignId) {
         final CommandWrapper commandRequest = new CommandWrapperBuilder().deleteSmsCampaign(campaignId).build();

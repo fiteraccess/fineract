@@ -21,7 +21,6 @@ package org.apache.fineract.infrastructure.bulkimport.api;
 import static org.apache.fineract.util.StreamResponseUtil.DISPOSITION_TYPE_ATTACHMENT;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -59,7 +58,6 @@ public class BulkImportApiResource {
     private final ApiRequestParameterHelper apiRequestParameterHelper;
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public String retrieveImportDocuments(@Context final UriInfo uriInfo, @QueryParam("entityType") final String entityType) {
         Collection<ImportData> importData = new ArrayList<>();
@@ -102,13 +100,16 @@ public class BulkImportApiResource {
     @Path("downloadOutputTemplate")
     @Produces("application/vnd.ms-excel")
     public Response getOutputTemplate(@QueryParam("importDocumentId") final Long importDocumentId) {
-        // TODO: can we avoid 2 calls by introducing a new function? clean code more important now
-        final var docs = documentReadPlatformService.retrieveAllDocuments("IMPORT", importDocumentId);
-
-        final var docData = docs.stream().findFirst();
-
-        final var d = docData.orElseThrow(() -> new DocumentNotFoundException("IMPORT", importDocumentId, -1L));
-        final var content = documentReadPlatformService.retrieveDocumentContent(d.getParentEntityType(), d.getParentEntityId(), d.getId());
+        final var importData = bulkImportWorkbookService.getImport(importDocumentId);
+        if (importData == null) {
+            throw new DocumentNotFoundException("IMPORT", importDocumentId, -1L);
+        }
+        final var doc = documentReadPlatformService.retrieveDocument(importData.getDocumentId());
+        if (doc == null) {
+            throw new DocumentNotFoundException("IMPORT", importDocumentId, importData.getDocumentId());
+        }
+        final var content = documentReadPlatformService.retrieveDocumentContent(doc.getParentEntityType(), doc.getParentEntityId(),
+                doc.getId());
         final var streamResponseData = StreamResponseUtil.StreamResponseData.builder().type(content.getContentType())
                 .fileName(content.getFileName()).stream(content.getStream()).dispositionType(DISPOSITION_TYPE_ATTACHMENT).build();
 

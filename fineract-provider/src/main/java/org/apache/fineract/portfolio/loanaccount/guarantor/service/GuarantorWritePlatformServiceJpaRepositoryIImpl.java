@@ -155,7 +155,7 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                         /** Get the right guarantor based on guarantorType **/
                         String defaultUserMessage = null;
                         if (guarantorTypeId.equals(GuarantorType.STAFF.getValue())) {
-                            defaultUserMessage = this.staffRepositoryWrapper.findOneWithNotFoundDetection(entityId).displayName();
+                            defaultUserMessage = this.staffRepositoryWrapper.findOneWithNotFoundDetection(entityId).getDisplayName();
                         } else if (guarantorTypeId.equals(GuarantorType.GROUP.getValue())) {
                             defaultUserMessage = this.groupRepositoryWrapper.findOneWithNotFoundDetection(entityId).getName();
                         } else {
@@ -186,8 +186,12 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                 this.accountAssociationsRepository.saveAndFlush(accountAssociations);
             }
             this.guarantorRepository.saveAndFlush(guarantor);
-            return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withOfficeId(guarantor.getOfficeId())
-                    .withEntityId(guarantor.getId()).withLoanId(loan.getId()).build();
+            return new CommandProcessingResultBuilder() //
+                    .withCommandId(command.commandId()) //
+                    .withOfficeId(guarantor.getOfficeId()) //
+                    .withEntityId(guarantor.getId()) //
+                    .withLoanId(loan.getId()) //
+                    .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             final Throwable throwable = dve.getMostSpecificCause();
             handleGuarantorDataIntegrityIssues(throwable, dve);
@@ -242,7 +246,7 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                             && !guarantorForUpdate.getId().equals(guarantor.getId())) {
                         String defaultUserMessage = null;
                         if (guarantorTypeId.equals(GuarantorType.STAFF.getValue())) {
-                            defaultUserMessage = this.staffRepositoryWrapper.findOneWithNotFoundDetection(entityId).displayName();
+                            defaultUserMessage = this.staffRepositoryWrapper.findOneWithNotFoundDetection(entityId).getDisplayName();
                         } else if (guarantorTypeId.equals(GuarantorType.GROUP.getValue())) {
                             defaultUserMessage = this.groupRepositoryWrapper.findOneWithNotFoundDetection(entityId).getName();
                         } else {
@@ -264,8 +268,13 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                 this.guarantorRepository.saveAndFlush(guarantorForUpdate);
             }
 
-            return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withOfficeId(guarantorForUpdate.getOfficeId())
-                    .withEntityId(guarantorForUpdate.getId()).withOfficeId(guarantorForUpdate.getLoanId()).with(changesOnly).build();
+            return new CommandProcessingResultBuilder() //
+                    .withCommandId(command.commandId()) //
+                    .withOfficeId(guarantorForUpdate.getOfficeId()) //
+                    .withEntityId(guarantorForUpdate.getId()) //
+                    .withOfficeId(guarantorForUpdate.getLoanId()) //
+                    .with(changesOnly) //
+                    .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             final Throwable throwable = dve.getMostSpecificCause();
             handleGuarantorDataIntegrityIssues(throwable, dve);
@@ -311,8 +320,9 @@ public class GuarantorWritePlatformServiceJpaRepositoryIImpl implements Guaranto
                     dataValidationErrors);
         }
         this.guarantorRepository.saveAndFlush(guarantorForDelete);
-        CommandProcessingResultBuilder commandProcessingResultBuilder = new CommandProcessingResultBuilder()
-                .withEntityId(guarantorForDelete.getId()).withLoanId(guarantorForDelete.getLoanId())
+        CommandProcessingResultBuilder commandProcessingResultBuilder = new CommandProcessingResultBuilder() //
+                .withEntityId(guarantorForDelete.getId()) //
+                .withLoanId(guarantorForDelete.getLoanId()) //
                 .withOfficeId(guarantorForDelete.getOfficeId());
         if (guarantorFundingId != null) {
             commandProcessingResultBuilder.withSubEntityId(guarantorFundingId);

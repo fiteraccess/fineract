@@ -330,7 +330,7 @@ public class SavingsAccountAssembler {
                 minRequiredOpeningBalance, lockinPeriodFrequency, lockinPeriodFrequencyType, iswithdrawalFeeApplicableForTransfer, charges,
                 allowOverdraft, overdraftLimit, enforceMinRequiredBalance, minRequiredBalance, maxAllowedLienLimit, lienAllowed,
                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax);
-        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
 
         account.validateNewApplicationState(SAVINGS_ACCOUNT_RESOURCE_NAME);
 
@@ -352,7 +352,7 @@ public class SavingsAccountAssembler {
      */
     public SavingsAccount assembleFromLightweight(final Long savingsId) {
         SavingsAccount account = this.savingsAccountRepository.findOneWithNotFoundDetectionLightweight(savingsId);
-        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
         return account;
     }
 
@@ -393,7 +393,7 @@ public class SavingsAccountAssembler {
             }
         }
 
-        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
         return account;
     }
 
@@ -433,7 +433,7 @@ public class SavingsAccountAssembler {
     }
 
     public void setHelpers(final SavingsAccount account) {
-        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
     }
 
     /**
@@ -477,7 +477,7 @@ public class SavingsAccountAssembler {
                 product.isMinRequiredBalanceEnforced(), product.minRequiredBalance(), product.maxAllowedLienLimit(),
                 product.isLienAllowed(), product.nominalAnnualInterestRateOverdraft(), product.minOverdraftForInterestCalculation(),
                 product.withHoldTax());
-        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
 
         account.validateNewApplicationState(SAVINGS_ACCOUNT_RESOURCE_NAME);
 
@@ -487,7 +487,7 @@ public class SavingsAccountAssembler {
     }
 
     public void assignSavingAccountHelpers(final SavingsAccount savingsAccount) {
-        savingsAccount.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper);
+        savingsAccount.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
     }
 
     public void assignSavingAccountHelpers(final SavingsAccountData savingsAccountData) {

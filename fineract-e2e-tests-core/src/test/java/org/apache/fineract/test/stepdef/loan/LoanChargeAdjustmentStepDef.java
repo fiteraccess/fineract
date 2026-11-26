@@ -40,6 +40,7 @@ import org.apache.fineract.client.models.PostLoansLoanIdChargesChargeIdRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdChargesChargeIdResponse;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsTransactionIdRequest;
 import org.apache.fineract.client.models.PostLoansResponse;
+import org.apache.fineract.test.data.ChargeProductResolver;
 import org.apache.fineract.test.data.ChargeProductType;
 import org.apache.fineract.test.factory.LoanRequestFactory;
 import org.apache.fineract.test.helper.ErrorMessageHelper;
@@ -62,6 +63,10 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
     private EventCheckHelper eventCheckHelper;
     @Autowired
     private EventStore eventStore;
+    @Autowired
+    private ChargeProductResolver chargeProductResolver;
+    @Autowired
+    private LoanRequestFactory loanRequestFactory;
 
     @When("Admin makes a charge adjustment for the last {string} type charge which is due on {string} with {double} EUR transaction amount and externalId {string}")
     public void makeLoanChargeAdjustment(String chargeTypeEnum, String date, Double transactionAmount, String externalId)
@@ -70,7 +75,7 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         GetLoansLoanIdResponse loanDetailsResponse = ok(
-                () -> fineractClient.loans().retrieveLoan(loanId, Map.of("associations", "charges")));
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "charges")));
 
         Long transactionId = getTransactionIdForLastChargeMetConditions(chargeTypeEnum, date, loanDetailsResponse);
         makeChargeAdjustmentCall(loanId, transactionId, externalId, transactionAmount);
@@ -82,17 +87,17 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         GetLoansLoanIdResponse loanDetailsResponse = ok(
-                () -> fineractClient.loans().retrieveLoan(loanId, Map.of("associations", "charges")));
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "charges")));
 
         Long transactionId = getTransactionIdForLastChargeMetConditions(chargeTypeEnum, date, loanDetailsResponse);
-        PostLoansLoanIdChargesChargeIdRequest chargeAdjustmentRequest = LoanRequestFactory.defaultChargeAdjustmentRequest().amount(amount)
+        PostLoansLoanIdChargesChargeIdRequest chargeAdjustmentRequest = loanRequestFactory.defaultChargeAdjustmentRequest().amount(amount)
                 .externalId("");
 
         Integer httpStatusCodeExpected = 403;
         String developerMessageExpected = "Transaction amount cannot be higher than the available charge amount for adjustment: 7.000000";
 
         try {
-            fineractClient.loanCharges().executeLoanCharge2(loanId, transactionId, chargeAdjustmentRequest,
+            fineractClient.loanCharges().executeLoanChargeOnExistingCharge(loanId, transactionId, chargeAdjustmentRequest,
                     Map.<String, Object>of("command", "adjustment"));
             throw new AssertionError("Expected FeignException but request succeeded");
         } catch (FeignException e) {
@@ -118,7 +123,7 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
         long loanId = loanResponse.getLoanId();
 
         GetLoansLoanIdResponse loanDetailsResponse = ok(
-                () -> fineractClient.loans().retrieveLoan(loanId, Map.of("associations", "transactions")));
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "transactions")));
 
         Long transactionId = getTransactionIdForTransactionMetConditions(transactionDate, transactionAmount, loanDetailsResponse);
 
@@ -128,7 +133,7 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_FORMAT);
         String businessDateActual = formatter.format(businessDate);
 
-        PostLoansLoanIdTransactionsTransactionIdRequest chargeAdjustmentUndoRequest = LoanRequestFactory
+        PostLoansLoanIdTransactionsTransactionIdRequest chargeAdjustmentUndoRequest = loanRequestFactory
                 .defaultChargeAdjustmentTransactionUndoRequest().transactionDate(businessDateActual);
 
         ok(() -> fineractClient.loanTransactions().adjustLoanTransaction(loanId, transactionId, chargeAdjustmentUndoRequest,
@@ -162,11 +167,12 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
 
     private void makeChargeAdjustmentCall(Long loanId, Long transactionId, String externalId, double transactionAmount) throws IOException {
         eventStore.reset();
-        PostLoansLoanIdChargesChargeIdRequest chargeAdjustmentRequest = LoanRequestFactory.defaultChargeAdjustmentRequest()
+        PostLoansLoanIdChargesChargeIdRequest chargeAdjustmentRequest = loanRequestFactory.defaultChargeAdjustmentRequest()
                 .amount(transactionAmount).externalId(externalId);
 
-        PostLoansLoanIdChargesChargeIdResponse chargeAdjustmentResponse = ok(() -> fineractClient.loanCharges().executeLoanCharge2(loanId,
-                transactionId, chargeAdjustmentRequest, Map.<String, Object>of("command", "adjustment")));
+        PostLoansLoanIdChargesChargeIdResponse chargeAdjustmentResponse = ok(
+                () -> fineractClient.loanCharges().executeLoanChargeOnExistingCharge(loanId, transactionId, chargeAdjustmentRequest,
+                        Map.<String, Object>of("command", "adjustment")));
         testContext().set(TestContextKey.LOAN_CHARGE_ADJUSTMENT_RESPONSE, chargeAdjustmentResponse);
         eventCheckHelper.loanBalanceChangedEventCheck(loanId);
     }
@@ -176,7 +182,7 @@ public class LoanChargeAdjustmentStepDef extends AbstractStepDef {
         List<GetLoansLoanIdLoanChargeData> charges = loanDetailsResponse.getCharges();
 
         ChargeProductType chargeType = ChargeProductType.valueOf(chargeTypeEnum);
-        Long chargeProductId = chargeType.getValue();
+        Long chargeProductId = chargeProductResolver.resolve(chargeType);
 
         List<GetLoansLoanIdLoanChargeData> resultList = new ArrayList<>();
         charges.forEach(charge -> {

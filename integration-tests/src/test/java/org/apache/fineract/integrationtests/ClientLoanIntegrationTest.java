@@ -28,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
@@ -92,7 +91,6 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
-import org.apache.fineract.integrationtests.common.LoanRescheduleRequestHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
@@ -125,7 +123,7 @@ import org.slf4j.LoggerFactory;
  * repayments and verifying accounting transactions
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
-@SuppressFBWarnings(value = "RV_EXCEPTION_NOT_THROWN", justification = "False positive")
+
 public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
 
     static {
@@ -164,8 +162,6 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
     private static final Account WRITTEN_OFF_ACCOUNT = ACCOUNT_HELPER.createExpenseAccount();
     private static final Account GOODWILL_EXPENSE_ACCOUNT = ACCOUNT_HELPER.createExpenseAccount();
     private static final SchedulerJobHelper SCHEDULER_JOB_HELPER = new SchedulerJobHelper(REQUEST_SPEC);
-    private static final PeriodicAccrualAccountingHelper PERIODIC_ACCRUAL_ACCOUNTING_HELPER = new PeriodicAccrualAccountingHelper(
-            REQUEST_SPEC, RESPONSE_SPEC);
     private static final SavingsAccountHelper SAVINGS_ACCOUNT_HELPER = new SavingsAccountHelper(REQUEST_SPEC, RESPONSE_SPEC);
     private static final AccountTransferHelper ACCOUNT_TRANSFER_HELPER = new AccountTransferHelper(REQUEST_SPEC, RESPONSE_SPEC);
     private static final LoanProductHelper LOAN_PRODUCT_HELPER = new LoanProductHelper();
@@ -175,8 +171,6 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
     private static final BusinessDateHelper BUSINESS_DATE_HELPER = new BusinessDateHelper();
     private static final ChargesHelper CHARGES_HELPER = new ChargesHelper();
     private static final ClientHelper CLIENT_HELPER = new ClientHelper(REQUEST_SPEC, RESPONSE_SPEC);
-    private static final LoanRescheduleRequestHelper LOAN_RESCHEDULE_REQUEST_HELPER = new LoanRescheduleRequestHelper(REQUEST_SPEC,
-            RESPONSE_SPEC);
 
     private static RequestSpecification createRequestSpecification() {
         RequestSpecification request = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
@@ -3942,7 +3936,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
         todaysDate = Calendar.getInstance(Utils.getTimeZoneOfTenant());
         String runOndate = dateFormat.format(todaysDate.getTime());
         LOG.info("runOndate : {}", runOndate);
-        PERIODIC_ACCRUAL_ACCOUNTING_HELPER.runPeriodicAccrualAccounting(runOndate);
+        PeriodicAccrualAccountingHelper.runPeriodicAccrualAccounting(runOndate);
         LOAN_TRANSACTION_HELPER.checkAccrualTransactionForRepayment(Utils.getLocalDateOfTenant().minusDays(7), 46.15f, 0f, 0f, loanID);
         LOAN_TRANSACTION_HELPER.checkAccrualTransactionForRepayment(Utils.getLocalDateOfTenant(), 46.15f, 0f, 0f, loanID);
 
@@ -3961,7 +3955,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
         addRepaymentValues(expectedvalues, todaysDate, 1, false, "2517.29", "11.62", "0.0", "0.0");
         verifyLoanRepaymentSchedule(loanSchedule, expectedvalues);
 
-        PERIODIC_ACCRUAL_ACCOUNTING_HELPER.runPeriodicAccrualAccounting(runOndate);
+        PeriodicAccrualAccountingHelper.runPeriodicAccrualAccounting(runOndate);
         LOAN_TRANSACTION_HELPER.checkAccrualTransactionForRepayment(Utils.getLocalDateOfTenant().minusDays(7), 46.15f, 0f, 0f, loanID);
         LOAN_TRANSACTION_HELPER.checkAccrualTransactionForRepayment(Utils.getLocalDateOfTenant(), 34.69f, 0f, 0f, loanID);
 
@@ -5559,7 +5553,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
                     .getSpecifiedDueDateChargesForLoanAsJSON(String.valueOf(penaltyCharge.getResourceId()), penaltyCharge1AddedDate, "10"));
 
             final String penalty1LoanChargeDate = DATE_TIME_FORMATTER.format(targetDate);
-            PERIODIC_ACCRUAL_ACCOUNTING_HELPER.runPeriodicAccrualAccounting(penalty1LoanChargeDate);
+            PeriodicAccrualAccountingHelper.runPeriodicAccrualAccounting(penalty1LoanChargeDate);
 
             loanDetails = LOAN_TRANSACTION_HELPER.getLoanDetails((long) loanID);
             List<GetLoansLoanIdTransactions> transactions = loanDetails.getTransactions();
@@ -5649,7 +5643,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
 
             globalConfigurationHelper.manageConfigurations(GlobalConfigurationConstants.ENABLE_AUTO_GENERATED_EXTERNAL_ID, true);
             final String feeLoanChargeDate = DATE_TIME_FORMATTER.format(targetDate);
-            PERIODIC_ACCRUAL_ACCOUNTING_HELPER.runPeriodicAccrualAccounting(feeLoanChargeDate);
+            PeriodicAccrualAccountingHelper.runPeriodicAccrualAccounting(feeLoanChargeDate);
 
             loanDetails = LOAN_TRANSACTION_HELPER.getLoanDetails((long) loanID);
             transactions = loanDetails.getTransactions();
@@ -6041,7 +6035,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
         Integer fee1LoanChargeId = LOAN_TRANSACTION_HELPER.addChargesForLoan(loanID,
                 LoanTransactionHelper.getSpecifiedDueDateChargesForLoanAsJSON(String.valueOf(fee), feeCharge1AddedDate, "10"));
 
-        PERIODIC_ACCRUAL_ACCOUNTING_HELPER.runPeriodicAccrualAccounting(feeCharge1AddedDate);
+        PeriodicAccrualAccountingHelper.runPeriodicAccrualAccounting(feeCharge1AddedDate);
 
         transactions = LOAN_TRANSACTION_HELPER.getLoanDetail(REQUEST_SPEC, RESPONSE_SPEC, loanID, "transactions");
         assertEquals(10, (int) ((HashMap) transactions.get(2).get("type")).get("id"));
@@ -6413,7 +6407,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
                                 .locale("en").dateFormat(DATETIME_PATTERN));
             });
             assertEquals(403, exception.getResponse().code());
-            assertTrue(exception.getMessage().contains("error.msg.loan.disbursal.not.allowed.on.charged.off"));
+            assertTrue(exception.getMessage().contains("amount.can't.be.greater.than.maximum.applied.loan.amount.calculation"));
 
             exception = assertThrows(CallFailedRuntimeException.class, () -> {
                 errorLoanTransactionHelper.disburseLoan((long) loanID,
@@ -6421,7 +6415,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
                                 .locale("en").dateFormat(DATETIME_PATTERN));
             });
             assertEquals(403, exception.getResponse().code());
-            assertTrue(exception.getMessage().contains("error.msg.loan.disbursal.not.allowed.on.charged.off"));
+            assertTrue(exception.getMessage().contains("amount.can't.be.greater.than.maximum.applied.loan.amount.calculation"));
 
             LOAN_TRANSACTION_HELPER.makeLoanRepayment((long) loanID, new PostLoansLoanIdTransactionsRequest().dateFormat(DATETIME_PATTERN)
                     .transactionDate("07 September 2022").locale("en").transactionAmount(5000.0));
@@ -6951,7 +6945,7 @@ public class ClientLoanIntegrationTest extends BaseLoanIntegrationTest {
 
             LOAN_TRANSACTION_HELPER.makeRepayment("04 September 2022", Float.parseFloat("5"), loanID);
 
-            PERIODIC_ACCRUAL_ACCOUNTING_HELPER.runPeriodicAccrualAccounting("04 September 2022");
+            PeriodicAccrualAccountingHelper.runPeriodicAccrualAccounting("04 September 2022");
 
             Integer penalty = ChargesHelper.createCharges(REQUEST_SPEC, RESPONSE_SPEC,
                     ChargesHelper.getLoanSpecifiedDueDateJSON(ChargesHelper.CHARGE_CALCULATION_TYPE_FLAT, "11", true));

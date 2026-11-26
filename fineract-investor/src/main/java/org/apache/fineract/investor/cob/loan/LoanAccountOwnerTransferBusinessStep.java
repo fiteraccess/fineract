@@ -43,9 +43,13 @@ import org.apache.fineract.investor.service.DelayedSettlementAttributeService;
 import org.apache.fineract.investor.service.ExternalAssetOwnerTransferOutstandingInterestCalculation;
 import org.apache.fineract.investor.service.LoanTransferabilityService;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanaccount.service.LoanBuyDownFeeAmortizationProcessingService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanCapitalizedIncomeAmortizationProcessingService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanJournalEntryPoster;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.data.domain.Sort;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -66,6 +70,8 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
     private final LoanTransferabilityService loanTransferabilityService;
     private final DelayedSettlementAttributeService delayedSettlementAttributeService;
     private final ExternalAssetOwnerTransferOutstandingInterestCalculation externalAssetOwnerTransferOutstandingInterestCalculation;
+    private final LoanCapitalizedIncomeAmortizationProcessingService loanCapitalizedIncomeAmortizationProcessingService;
+    private final LoanBuyDownFeeAmortizationProcessingService loanBuyDownFeeAmortizationProcessingService;
 
     @Override
     public Loan execute(Loan loan) {
@@ -173,21 +179,34 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
         ExternalAssetOwner previousOwner = determinePreviousOwnerAndCleanupIfNeeded(loan, settlementDate, externalAssetOwnerTransfer);
         ExternalTransferStatus activeStatus = determineActiveStatus(externalAssetOwnerTransfer);
 
-        ExternalAssetOwnerTransfer newTransfer = activatePendingEntry(settlementDate, externalAssetOwnerTransfer, activeStatus);
+        ExternalAssetOwnerTransfer newTransfer = activatePendingEntry(settlementDate, externalAssetOwnerTransfer, activeStatus,
+                previousOwner);
+
+        recognizeRemainingDeferredIncomeOnLoanSale(loan, settlementDate);
         loanJournalEntryPoster.postJournalEntriesForExternalOwnerTransfer(loan, newTransfer, previousOwner);
         return newTransfer;
     }
 
+    private void recognizeRemainingDeferredIncomeOnLoanSale(final Loan loan, final LocalDate settlementDate) {
+        final LoanProductRelatedDetail loanProductRelatedDetail = loan.getLoanProductRelatedDetail();
+        if (loanProductRelatedDetail == null) {
+            return;
+        }
+        if (loanProductRelatedDetail.isEnableIncomeCapitalization()) {
+            loanCapitalizedIncomeAmortizationProcessingService.processCapitalizedIncomeAmortizationOnLoanSale(loan, settlementDate, true);
+        }
+        if (loanProductRelatedDetail.isEnableBuyDownFee()) {
+            loanBuyDownFeeAmortizationProcessingService.processBuyDownFeeAmortizationOnLoanSale(loan, settlementDate, true);
+        }
+    }
+
     private ExternalAssetOwner determinePreviousOwnerAndCleanupIfNeeded(final Loan loan, final LocalDate settlementDate,
             final ExternalAssetOwnerTransfer externalAssetOwnerTransfer) {
-        if (!delayedSettlementAttributeService.isEnabled(loan.getProductId())) {
-            // When delayed settlement is disabled, asset is directly sold to investor, and we are the previous owner.
-            return null;
-        }
-
-        if (ExternalTransferStatus.PENDING_INTERMEDIATE == externalAssetOwnerTransfer.getStatus()) {
-            // When delayed settlement is enabled and asset is sold to intermediate, we are the previous owner.
-            return null;
+        if (!delayedSettlementAttributeService.isEnabled(loan.getProductId())
+                || ExternalTransferStatus.PENDING_INTERMEDIATE == externalAssetOwnerTransfer.getStatus()) {
+            // Use the loan mapping as the source of truth for the current owner.
+            // If a mapping exists, this is an owner-to-owner transfer — expire the current active and clean up.
+            return expireCurrentOwnerIfPresent(loan, settlementDate);
         }
 
         // When delayed settlement is enabled and asset is sold from intermediate to investor, the intermediate is the
@@ -199,6 +218,19 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
         return activeIntermediateTransfer.getOwner();
     }
 
+    @Nullable
+    private ExternalAssetOwner expireCurrentOwnerIfPresent(final Loan loan, final LocalDate settlementDate) {
+        Optional<ExternalAssetOwnerTransfer> activeTransfer = externalAssetOwnerTransferRepository.findActiveByLoanId(loan.getId());
+        if (activeTransfer.isPresent()) {
+            ExternalAssetOwnerTransfer currentActiveTransfer = activeTransfer.get();
+            expireTransfer(settlementDate, currentActiveTransfer);
+            externalAssetOwnerTransferLoanMappingRepository.deleteByLoanIdAndOwnerTransfer(loan.getId(), currentActiveTransfer);
+            return currentActiveTransfer.getOwner();
+        }
+        // Internal-to-external transfer: no previous external owner
+        return null;
+    }
+
     private ExternalTransferStatus determineActiveStatus(final ExternalAssetOwnerTransfer externalAssetOwnerTransfer) {
         if (ExternalTransferStatus.PENDING_INTERMEDIATE == externalAssetOwnerTransfer.getStatus()) {
             return ExternalTransferStatus.ACTIVE_INTERMEDIATE;
@@ -208,13 +240,16 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
     }
 
     private ExternalAssetOwnerTransfer getActiveIntermediateOrThrow(final Loan loan) {
-        Optional<ExternalAssetOwnerTransfer> optionalActiveIntermediateTransfer = externalAssetOwnerTransferRepository
+        Optional<ExternalAssetOwnerTransfer> optionalActiveIntermediateTransfer = findActiveIntermediateTransfer(loan);
+        return optionalActiveIntermediateTransfer
+                .orElseThrow(() -> new IllegalStateException("Expected a effective transfer of ACTIVE_INTERMEDIATE status to be present."));
+    }
+
+    private Optional<ExternalAssetOwnerTransfer> findActiveIntermediateTransfer(final Loan loan) {
+        return externalAssetOwnerTransferRepository
                 .findOne((root, query, criteriaBuilder) -> criteriaBuilder.and(criteriaBuilder.equal(root.get("loanId"), loan.getId()),
                         criteriaBuilder.equal(root.get("status"), ExternalTransferStatus.ACTIVE_INTERMEDIATE),
                         criteriaBuilder.equal(root.get("effectiveDateTo"), FUTURE_DATE_9999_12_31)));
-
-        return optionalActiveIntermediateTransfer
-                .orElseThrow(() -> new IllegalStateException("Expected a effective transfer of ACTIVE_INTERMEDIATE status to be present."));
     }
 
     private ExternalAssetOwnerTransferDetails createAssetOwnerTransferDetails(Loan loan,
@@ -253,9 +288,11 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
     }
 
     private ExternalAssetOwnerTransfer activatePendingEntry(final LocalDate settlementDate,
-            final ExternalAssetOwnerTransfer pendingTransfer, final ExternalTransferStatus activeStatus) {
+            final ExternalAssetOwnerTransfer pendingTransfer, final ExternalTransferStatus activeStatus,
+            final ExternalAssetOwner previousOwner) {
         LocalDate effectiveFrom = settlementDate.plusDays(1);
-        return createNewEntryAndExpireOldEntry(settlementDate, pendingTransfer, activeStatus, null, effectiveFrom, FUTURE_DATE_9999_12_31);
+        return createNewEntryAndExpireOldEntry(settlementDate, pendingTransfer, activeStatus, null, effectiveFrom, FUTURE_DATE_9999_12_31,
+                previousOwner);
     }
 
     private ExternalAssetOwnerTransfer declinePendingEntry(final Loan loan, final LocalDate settlementDate,
@@ -267,6 +304,14 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
     private ExternalAssetOwnerTransfer createNewEntryAndExpireOldEntry(final LocalDate settlementDate,
             final ExternalAssetOwnerTransfer externalAssetOwnerTransfer, final ExternalTransferStatus status,
             final ExternalTransferSubStatus subStatus, final LocalDate effectiveDateFrom, final LocalDate effectiveDateTo) {
+        return createNewEntryAndExpireOldEntry(settlementDate, externalAssetOwnerTransfer, status, subStatus, effectiveDateFrom,
+                effectiveDateTo, null);
+    }
+
+    private ExternalAssetOwnerTransfer createNewEntryAndExpireOldEntry(final LocalDate settlementDate,
+            final ExternalAssetOwnerTransfer externalAssetOwnerTransfer, final ExternalTransferStatus status,
+            final ExternalTransferSubStatus subStatus, final LocalDate effectiveDateFrom, final LocalDate effectiveDateTo,
+            final ExternalAssetOwner previousOwner) {
         ExternalAssetOwnerTransfer newExternalAssetOwnerTransfer = new ExternalAssetOwnerTransfer();
         newExternalAssetOwnerTransfer.setOwner(externalAssetOwnerTransfer.getOwner());
         newExternalAssetOwnerTransfer.setExternalId(externalAssetOwnerTransfer.getExternalId());
@@ -279,7 +324,8 @@ public class LoanAccountOwnerTransferBusinessStep implements LoanCOBBusinessStep
         newExternalAssetOwnerTransfer.setPurchasePriceRatio(externalAssetOwnerTransfer.getPurchasePriceRatio());
         newExternalAssetOwnerTransfer.setEffectiveDateFrom(effectiveDateFrom);
         newExternalAssetOwnerTransfer.setEffectiveDateTo(effectiveDateTo);
-        newExternalAssetOwnerTransfer.setPreviousOwner(externalAssetOwnerTransfer.getPreviousOwner());
+        newExternalAssetOwnerTransfer
+                .setPreviousOwner(previousOwner != null ? previousOwner : externalAssetOwnerTransfer.getPreviousOwner());
 
         expireTransfer(settlementDate, externalAssetOwnerTransfer);
 

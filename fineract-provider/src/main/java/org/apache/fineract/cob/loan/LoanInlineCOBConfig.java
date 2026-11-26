@@ -22,6 +22,7 @@ import org.apache.fineract.cob.COBBusinessStepService;
 import org.apache.fineract.cob.common.CustomJobParameterResolver;
 import org.apache.fineract.cob.common.ResetContextTasklet;
 import org.apache.fineract.cob.conditions.LoanCOBEnabledCondition;
+import org.apache.fineract.cob.domain.LockingService;
 import org.apache.fineract.cob.listener.InlineCOBLoanItemListener;
 import org.apache.fineract.infrastructure.jobs.domain.CustomJobParameterRepository;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
@@ -39,6 +40,7 @@ import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.config.annotation.EnableBatchIntegration;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
@@ -61,20 +63,22 @@ public class LoanInlineCOBConfig {
     @Autowired
     private COBBusinessStepService cobBusinessStepService;
     @Autowired
-    private TransactionTemplate transactionTemplate;
+    @Qualifier("requiresNewTransactionJdbcTemplate")
+    private TransactionTemplate requiresNewTransactionJdbcTemplate;
     @Autowired
     private CustomJobParameterRepository customJobParameterRepository;
     @Autowired
     private CustomJobParameterResolver customJobParameterResolver;
     @Autowired
-    private LoanLockingService loanLockingService;
+    @Qualifier("retrieveLoanLockingService")
+    private LockingService loanLockingService;
     @Autowired
     private ProgressiveLoanModelProcessingService progressiveLoanModelProcessingService;
 
     @Bean
-    public InlineLoanCOBBuildExecutionContextTasklet inlineLoanCOBBuildExecutionContextTasklet() {
-        return new InlineLoanCOBBuildExecutionContextTasklet(cobBusinessStepService, customJobParameterRepository,
-                customJobParameterResolver);
+    public InlineLoanCOBBuildExecutionContextTasklet<Loan, LoanCOBBusinessStep> inlineLoanCOBBuildExecutionContextTasklet() {
+        return new InlineLoanCOBBuildExecutionContextTasklet<>(cobBusinessStepService, customJobParameterRepository,
+                customJobParameterResolver, LoanCOBBusinessStep.class, LoanCOBConstant.LOAN_COB_JOB_NAME);
     }
 
     @Bean
@@ -125,7 +129,7 @@ public class LoanInlineCOBConfig {
 
     @Bean
     public InlineCOBLoanItemListener inlineCobLoanItemListener() {
-        return new InlineCOBLoanItemListener(loanLockingService, transactionTemplate);
+        return new InlineCOBLoanItemListener(loanLockingService, requiresNewTransactionJdbcTemplate);
     }
 
     @Bean
@@ -136,7 +140,7 @@ public class LoanInlineCOBConfig {
     @Bean
     public ExecutionContextPromotionListener inlineCobPromotionListener() {
         ExecutionContextPromotionListener listener = new ExecutionContextPromotionListener();
-        listener.setKeys(new String[] { LoanCOBConstant.LOAN_COB_PARAMETER, LoanCOBConstant.BUSINESS_STEPS,
+        listener.setKeys(new String[] { LoanCOBConstant.COB_PARAMETER, LoanCOBConstant.BUSINESS_STEPS,
                 LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME });
         return listener;
     }

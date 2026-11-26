@@ -27,6 +27,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.service.PagedRequest;
 import org.apache.fineract.portfolio.client.service.search.domain.ClientSearchData;
 import org.apache.fineract.portfolio.client.service.search.domain.ClientTextSearch;
@@ -46,7 +47,8 @@ public class ClientSearchV2ApiResource implements ClientSearchV2Api {
     @Path("search")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Search Clients by text")
+    @Operation(summary = "Search Clients by text", operationId = "searchClientsByText")
+    @AlternativeOperationId("searchByText")
     public Page<ClientSearchData> searchByText(@Parameter PagedRequest<ClientTextSearch> request) {
         return delegate.searchByText(request);
     }

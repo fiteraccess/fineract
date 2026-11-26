@@ -36,8 +36,10 @@ import java.util.stream.LongStream;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.batch.domain.BatchRequest;
 import org.apache.fineract.batch.domain.BatchResponse;
-import org.apache.fineract.client.models.DelinquencyBucketData;
-import org.apache.fineract.client.models.DelinquencyRangeData;
+import org.apache.fineract.client.models.DelinquencyBucketRequest;
+import org.apache.fineract.client.models.DelinquencyBucketResponse;
+import org.apache.fineract.client.models.DelinquencyRangeRequest;
+import org.apache.fineract.client.models.DelinquencyRangeResponse;
 import org.apache.fineract.client.models.GetDelinquencyTagHistoryResponse;
 import org.apache.fineract.client.models.GetLoansLoanIdResponse;
 import org.apache.fineract.client.models.PostDelinquencyBucketResponse;
@@ -52,7 +54,6 @@ import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
-import org.apache.fineract.integrationtests.common.loans.LoanAccountLockHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanStatusChecker;
@@ -72,7 +73,6 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
     private RequestSpecification requestSpec;
     private InlineLoanCOBHelper inlineLoanCOBHelper;
     private LoanTransactionHelper loanTransactionHelper;
-    private LoanAccountLockHelper loanAccountLockHelper;
 
     @BeforeEach
     public void setup() {
@@ -90,7 +90,7 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
                     new PutGlobalConfigurationsRequest().value(0L));
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
@@ -121,18 +121,18 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
             LoanStatusChecker.verifyLoanIsActive(loanStatusHashMap);
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(LocalDate.of(2020, 3, 2), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 3));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 3));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
 
             loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(LocalDate.of(2020, 3, 3), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 10));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 10));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
 
             loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
@@ -162,34 +162,30 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("1"));
             Assertions.assertNotNull(overdueFeeChargeId);
 
-            ArrayList<Integer> rangeIds = new ArrayList<>();
+            ArrayList<Long> rangeIds = new ArrayList<>();
             // First Range
-            String jsonRange = DelinquencyRangesHelper.getAsJSON(1, 3);
-            PostDelinquencyRangeResponse delinquencyRangeResponse = DelinquencyRangesHelper.createDelinquencyRange(requestSpec,
-                    responseSpec, jsonRange);
-            rangeIds.add(Math.toIntExact(delinquencyRangeResponse.getResourceId()));
-            jsonRange = DelinquencyRangesHelper.getAsJSON(4, 60);
+            PostDelinquencyRangeResponse delinquencyRangeResponse = DelinquencyRangesHelper.createRange(new DelinquencyRangeRequest()
+                    .minimumAgeDays(1).maximumAgeDays(3).locale("en").classification(Utils.randomStringGenerator("DLQ_R_", 10)));
+            rangeIds.add(delinquencyRangeResponse.getResourceId());
 
-            DelinquencyRangeData range = DelinquencyRangesHelper.getDelinquencyRange(requestSpec, responseSpec,
-                    Math.toIntExact(delinquencyRangeResponse.getResourceId()));
+            DelinquencyRangeResponse range = DelinquencyRangesHelper.getRange(delinquencyRangeResponse.getResourceId());
 
             // Second Range
-            delinquencyRangeResponse = DelinquencyRangesHelper.createDelinquencyRange(requestSpec, responseSpec, jsonRange);
-            rangeIds.add(Math.toIntExact(delinquencyRangeResponse.getResourceId()));
+            delinquencyRangeResponse = DelinquencyRangesHelper.createRange(new DelinquencyRangeRequest().minimumAgeDays(4)
+                    .maximumAgeDays(60).locale("en").classification(Utils.randomStringGenerator("DLQ_R_", 10)));
+            rangeIds.add(delinquencyRangeResponse.getResourceId());
 
-            range = DelinquencyRangesHelper.getDelinquencyRange(requestSpec, responseSpec,
-                    Math.toIntExact(delinquencyRangeResponse.getResourceId()));
+            range = DelinquencyRangesHelper.getRange(delinquencyRangeResponse.getResourceId());
             final String classificationExpected = range.getClassification();
             log.info("Expected Delinquency Range classification after Disbursement {}", classificationExpected);
 
-            String jsonBucket = DelinquencyBucketsHelper.getAsJSON(rangeIds);
-            PostDelinquencyBucketResponse delinquencyBucketResponse = DelinquencyBucketsHelper.createDelinquencyBucket(requestSpec,
-                    responseSpec, jsonBucket);
+            PostDelinquencyBucketResponse delinquencyBucketResponse = DelinquencyBucketsHelper
+                    .createBucket(new DelinquencyBucketRequest().name(Utils.randomStringGenerator("DLQ_B_", 10)).ranges(rangeIds));
             assertNotNull(delinquencyBucketResponse);
-            final DelinquencyBucketData delinquencyBucket = DelinquencyBucketsHelper.getDelinquencyBucket(requestSpec, responseSpec,
-                    Math.toIntExact(delinquencyBucketResponse.getResourceId()));
+            final DelinquencyBucketResponse delinquencyBucket = DelinquencyBucketsHelper
+                    .getBucket(delinquencyBucketResponse.getResourceId());
 
-            final Integer loanProductID = createLoanProduct(loanTransactionHelper, Math.toIntExact(delinquencyBucket.getId()));
+            final Integer loanProductID = createLoanProduct(loanTransactionHelper, delinquencyBucket.getId());
 
             Assertions.assertNotNull(loanProductID);
             HashMap loanStatusHashMap;
@@ -209,7 +205,7 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
             LoanStatusChecker.verifyLoanIsActive(loanStatusHashMap);
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             ArrayList<GetDelinquencyTagHistoryResponse> loanDelinquencyTags = loanTransactionHelper.getLoanDelinquencyTags(requestSpec,
@@ -217,7 +213,7 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
             Assertions.assertTrue(loanDelinquencyTags.isEmpty());
             Assertions.assertEquals(LocalDate.of(2020, 3, 2), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 4, 4));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 4, 4));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
 
             loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
@@ -226,7 +222,7 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
             Assertions.assertEquals(1, loanDelinquencyTags.size());
             Assertions.assertEquals(LocalDate.of(2020, 4, 3), loanDelinquencyTags.get(0).getAddedOnDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 4, 10));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 4, 10));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
 
             loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
@@ -251,11 +247,10 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
                     new PutGlobalConfigurationsRequest().value(0L));
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-            loanAccountLockHelper = new LoanAccountLockHelper(requestSpec, new ResponseSpecBuilder().expectStatusCode(202).build());
 
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
@@ -282,12 +277,12 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
             LoanStatusChecker.verifyLoanIsActive(loanStatusHashMap);
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(LocalDate.of(2020, 3, 2), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
 
             requestSpec = UserHelper.getSimpleUserWithoutBypassPermission(requestSpec, responseSpec);
 
@@ -312,11 +307,10 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
         try {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
                     new PutGlobalConfigurationsRequest().value(0L));
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-            loanAccountLockHelper = new LoanAccountLockHelper(requestSpec, new ResponseSpecBuilder().expectStatusCode(202).build());
 
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
@@ -343,12 +337,12 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
             LoanStatusChecker.verifyLoanIsActive(loanStatusHashMap);
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(LocalDate.of(2020, 3, 2), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
 
             requestSpec = UserHelper.getSimpleUserWithoutBypassPermission(requestSpec, responseSpec);
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
@@ -372,11 +366,10 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
         try {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
                     new PutGlobalConfigurationsRequest().value(0L));
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-            loanAccountLockHelper = new LoanAccountLockHelper(requestSpec, new ResponseSpecBuilder().expectStatusCode(202).build());
 
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
@@ -403,12 +396,12 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
             LoanStatusChecker.verifyLoanIsActive(loanStatusHashMap);
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(LocalDate.of(2020, 3, 2), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
 
             requestSpec = UserHelper.getSimpleUserWithoutBypassPermission(requestSpec, responseSpec);
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
@@ -442,11 +435,10 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
         try {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 2));
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
                     new PutGlobalConfigurationsRequest().value(0L));
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-            loanAccountLockHelper = new LoanAccountLockHelper(requestSpec, new ResponseSpecBuilder().expectStatusCode(202).build());
 
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
@@ -473,12 +465,12 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
                     JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
             LoanStatusChecker.verifyLoanIsActive(loanStatusHashMap);
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2020, 3, 2));
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanID.longValue()));
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoan(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(LocalDate.of(2020, 3, 2), loan.getLastClosedBusinessDate());
 
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, LocalDate.of(2020, 3, 10));
 
             requestSpec = UserHelper.getSimpleUserWithoutBypassPermission(requestSpec, responseSpec);
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
@@ -524,7 +516,7 @@ public class InlineLoanCOBTest extends BaseLoanIntegrationTest {
         return this.loanTransactionHelper.getLoanProductId(loanProductJSON);
     }
 
-    private Integer createLoanProduct(final LoanTransactionHelper loanTransactionHelper, final Integer delinquencyBucketId) {
+    private Integer createLoanProduct(final LoanTransactionHelper loanTransactionHelper, final Long delinquencyBucketId) {
         final HashMap<String, Object> loanProductMap = new LoanProductTestBuilder().build(null, delinquencyBucketId);
         return loanTransactionHelper.getLoanProductId(Utils.convertToJson(loanProductMap));
     }

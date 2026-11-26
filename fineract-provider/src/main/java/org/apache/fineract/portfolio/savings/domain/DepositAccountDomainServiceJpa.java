@@ -64,6 +64,7 @@ import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeDTO;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountActivationService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DepositAccountDomainServiceJpa implements DepositAccountDomainService {
 
     private final SavingsAccountRepositoryWrapper savingsAccountRepository;
+    private final SavingsAccountActivationService savingsAccountActivationService;
     private final JournalEntryWritePlatformService journalEntryWritePlatformService;
     private final AccountNumberGenerator accountNumberGenerator;
     private final DepositAccountAssembler depositAccountAssembler;
@@ -132,7 +134,8 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final boolean isAnyActivationChargesDue = isAnyActivationChargesDue(account);
         if (isAnyActivationChargesDue) {
             updateExistingTransactionsDetails(account, existingTransactionIds, existingReversedTransactionIds);
-            account.processAccountUponActivation(isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth);
+            savingsAccountActivationService.processAccountUponActivation(account, isSavingsInterestPostingAtCurrentPeriodEnd,
+                    financialYearBeginningMonth);
             this.savingsAccountRepository.saveAndFlush(account);
         }
         account.handleScheduleInstallments(deposit);
@@ -204,7 +207,8 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         account.setClosedOnDate(closedDate);
         final Integer onAccountClosureId = command.integerValueOfParameterNamed(onAccountClosureIdParamName);
         final DepositAccountOnClosureType onClosureType = DepositAccountOnClosureType.fromInt(onAccountClosureId);
-        if (onClosureType.isReinvest()) {
+        if (onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_AND_INTEREST
+                || onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_ONLY) {
             final SavingsProduct product = this.savingsProductRepository.findById(account.productId())
                     .orElseThrow(() -> new SavingsProductNotFoundException(account.productId()));
             ExternalId externalId = this.externalIdFactory.create();
@@ -217,7 +221,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
             final SavingsAccountTransaction withdrawal = this.handleWithdrawal(account, fmt, closedDate, account.getAccountBalance(),
                     paymentDetail, false, isRegularTransaction);
             savingsTransactionId = withdrawal.getId();
-        } else if (onClosureType.isTransferToSavings()) {
+        } else if (onClosureType == DepositAccountOnClosureType.TRANSFER_TO_SAVINGS) {
             final Long toSavingsId = command.longValueOfParameterNamed(toSavingsAccountIdParamName);
             final String transferDescription = command.stringValueOfParameterNamed(transferDescriptionParamName);
             final SavingsAccount toSavingsAccount = this.depositAccountAssembler.assembleFrom(toSavingsId,
@@ -267,9 +271,10 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         account.postMaturityInterest(isSavingsInterestPostingAtCurrentPeriodEnd, financialYearBeginningMonth);
         account.setClosedOnDate(closedDate);
         final DepositAccountOnClosureType onClosureType = DepositAccountOnClosureType.fromInt(onAccountClosureId);
-        if (onClosureType.isReinvest()) {
+        if (onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_AND_INTEREST
+                || onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_ONLY) {
             BigDecimal reInvestAmount;
-            if (onClosureType.isReinvestPrincipal()) {
+            if (onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_ONLY) {
                 reInvestAmount = account.getDepositAmount();
             } else {
                 reInvestAmount = account.getAccountBalance();
@@ -289,7 +294,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
                     false, isRegularTransaction);
             savingsTransactionId = withdrawal.getId();
 
-            if (onClosureType.isReinvestPrincipalAndInterest()) {
+            if (onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_AND_INTEREST) {
                 account.updateClosedStatus();
                 account.updateOnAccountClosureStatus(onClosureType);
             }
@@ -297,7 +302,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
             reinvestedDeposit.approveAndActivateApplication(closedDate, user);
             this.savingsAccountRepository.save(reinvestedDeposit);
 
-        } else if (onClosureType.isTransferToSavings()) {
+        } else if (onClosureType == DepositAccountOnClosureType.TRANSFER_TO_SAVINGS) {
             final SavingsAccount toSavingsAccount = this.depositAccountAssembler.assembleFrom(toSavingsId,
                     DepositAccountType.SAVINGS_DEPOSIT);
             final boolean isExceptionForBalanceCheck = false;
@@ -351,9 +356,10 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final BigDecimal transactionAmount = account.getAccountBalance();
         final Integer onAccountClosureId = command.integerValueOfParameterNamed(onAccountClosureIdParamName);
         final DepositAccountOnClosureType onClosureType = DepositAccountOnClosureType.fromInt(onAccountClosureId);
-        if (onClosureType.isReinvest()) {
+        if (onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_AND_INTEREST
+                || onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_ONLY) {
             BigDecimal reInvestAmount;
-            if (onClosureType.isReinvestPrincipal()) {
+            if (onClosureType == DepositAccountOnClosureType.REINVEST_PRINCIPAL_ONLY) {
                 reInvestAmount = account.getDepositAmount();
             } else {
                 reInvestAmount = account.getAccountBalance();
@@ -381,7 +387,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
                     paymentDetail, false, isRegularTransaction);
             savingsTransactionId = withdrawal.getId();
 
-        } else if (onClosureType.isTransferToSavings()) {
+        } else if (onClosureType == DepositAccountOnClosureType.TRANSFER_TO_SAVINGS) {
             final Long toSavingsId = command.longValueOfParameterNamed(toSavingsAccountIdParamName);
             final String transferDescription = command.stringValueOfParameterNamed(transferDescriptionParamName);
             final SavingsAccount toSavingsAccount = this.depositAccountAssembler.assembleFrom(toSavingsId,
@@ -470,7 +476,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final Integer closureTypeValue = command.integerValueOfParameterNamed(DepositsApiConstants.onAccountClosureIdParamName);
         DepositAccountOnClosureType closureType = DepositAccountOnClosureType.fromInt(closureTypeValue);
 
-        if (closureType.isTransferToSavings()) {
+        if (closureType == DepositAccountOnClosureType.TRANSFER_TO_SAVINGS) {
             final boolean isExceptionForBalanceCheck = false;
             final Long toSavingsId = command.longValueOfParameterNamed(toSavingsAccountIdParamName);
             final String transferDescription = command.stringValueOfParameterNamed(transferDescriptionParamName);
@@ -527,7 +533,7 @@ public class DepositAccountDomainServiceJpa implements DepositAccountDomainServi
         final Integer closureTypeValue = command.integerValueOfParameterNamed(DepositsApiConstants.onAccountClosureIdParamName);
         DepositAccountOnClosureType closureType = DepositAccountOnClosureType.fromInt(closureTypeValue);
 
-        if (closureType.isTransferToSavings()) {
+        if (closureType == DepositAccountOnClosureType.TRANSFER_TO_SAVINGS) {
             final boolean isExceptionForBalanceCheck = false;
             final Long toSavingsId = command.longValueOfParameterNamed(toSavingsAccountIdParamName);
             final String transferDescription = command.stringValueOfParameterNamed(transferDescriptionParamName);

@@ -62,7 +62,7 @@ public class LoanOriginatorApiResource {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Create a new loan originator", description = "Creates a new loan originator record. Requires CREATE_LOAN_ORIGINATOR permission.")
+    @Operation(summary = "Create a new loan originator", operationId = "createLoanOriginator", description = "Creates a new loan originator record. Requires CREATE_LOAN_ORIGINATOR permission.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.PostLoanOriginatorsRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.PostLoanOriginatorsResponse.class)))
     @ApiResponse(responseCode = "400", description = "Required parameter is missing or incorrect format")
@@ -73,9 +73,8 @@ public class LoanOriginatorApiResource {
     }
 
     @GET
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "List all loan originators", description = "Retrieves all loan originator records. Requires READ_LOAN_ORIGINATOR permission.")
+    @Operation(summary = "List all loan originators", operationId = "retrieveAllLoanOriginators", description = "Retrieves all loan originator records. Requires READ_LOAN_ORIGINATOR permission.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.GetLoanOriginatorsResponse.class))))
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     public List<LoanOriginatorData> retrieveAll() {
@@ -86,7 +85,6 @@ public class LoanOriginatorApiResource {
 
     @GET
     @Path("template")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Get loan originator template data", description = "Retrieves the Loan Originator template data")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.GetLoanOriginatorTemplateResponse.class)))
@@ -99,9 +97,8 @@ public class LoanOriginatorApiResource {
 
     @GET
     @Path("{originatorId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Retrieve a loan originator by ID", description = "Retrieves a loan originator by its internal ID. Requires READ_LOAN_ORIGINATOR permission.")
+    @Operation(summary = "Retrieve a loan originator by ID", operationId = "retrieveOneLoanOriginator", description = "Retrieves a loan originator by its internal ID. Requires READ_LOAN_ORIGINATOR permission.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.GetLoanOriginatorsResponse.class)))
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Originator not found")
@@ -113,7 +110,6 @@ public class LoanOriginatorApiResource {
 
     @GET
     @Path("external-id/{externalId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a loan originator by external ID", description = "Retrieves a loan originator by its external ID. Requires READ_LOAN_ORIGINATOR permission.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.GetLoanOriginatorsResponse.class)))
@@ -130,7 +126,7 @@ public class LoanOriginatorApiResource {
     @Path("{originatorId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Update a loan originator by ID", description = "Updates a loan originator by its internal ID. Requires UPDATE_LOAN_ORIGINATOR permission.")
+    @Operation(summary = "Update a loan originator by ID", operationId = "updateLoanOriginator", description = "Updates a loan originator by its internal ID. Requires UPDATE_LOAN_ORIGINATOR permission.")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.PutLoanOriginatorsRequest.class)))
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.PutLoanOriginatorsResponse.class)))
     @ApiResponse(responseCode = "400", description = "Incorrect format")
@@ -165,9 +161,8 @@ public class LoanOriginatorApiResource {
 
     @DELETE
     @Path("{originatorId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Delete a loan originator by ID", description = "Deletes a loan originator by its internal ID. Requires DELETE_LOAN_ORIGINATOR permission.")
+    @Operation(summary = "Delete a loan originator by ID", operationId = "deleteLoanOriginator", description = "Deletes a loan originator by its internal ID. Requires DELETE_LOAN_ORIGINATOR permission.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.DeleteLoanOriginatorsResponse.class)))
     @ApiResponse(responseCode = "403", description = "Originator is mapped to loans and cannot be deleted, or insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Originator not found")
@@ -178,7 +173,6 @@ public class LoanOriginatorApiResource {
 
     @DELETE
     @Path("external-id/{externalId}")
-    @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Delete a loan originator by external ID", description = "Deletes a loan originator by its external ID. Requires DELETE_LOAN_ORIGINATOR permission.")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanOriginatorApiResourceSwagger.DeleteLoanOriginatorsResponse.class)))

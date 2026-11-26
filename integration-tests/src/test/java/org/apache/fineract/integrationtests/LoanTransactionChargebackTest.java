@@ -41,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.AdvancedPaymentData;
 import org.apache.fineract.client.models.CreditAllocationData;
 import org.apache.fineract.client.models.CreditAllocationOrder;
-import org.apache.fineract.client.models.DelinquencyBucketData;
+import org.apache.fineract.client.models.DelinquencyBucketResponse;
 import org.apache.fineract.client.models.DelinquencyRangeData;
 import org.apache.fineract.client.models.GetLoanProductsProductIdResponse;
 import org.apache.fineract.client.models.GetLoansLoanIdRepaymentPeriod;
@@ -211,7 +211,7 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
                     new PutGlobalConfigurationsRequest().enabled(true));
             LocalDate businessDate = LocalDate.of(2023, 1, 20);
             todaysDate = businessDate;
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, businessDate);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, businessDate);
             // Client and Loan account creation
             final Integer daysToSubtract = 1;
             final Integer numberOfRepayments = 3;
@@ -260,7 +260,7 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
             DelinquencyBucketsHelper.evaluateLoanCollectionData(getLoansLoanIdResponse, 0, Double.valueOf("0.00"));
         } finally {
             final LocalDate todaysDate = Utils.getLocalDateOfTenant();
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, todaysDate);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, todaysDate);
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(false));
         }
@@ -294,7 +294,7 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
                     new PutGlobalConfigurationsRequest().enabled(true));
 
             final LocalDate todaysDate = Utils.getLocalDateOfTenant();
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, todaysDate);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, todaysDate);
             log.info("Current Business date {}", todaysDate);
 
             // Client and Loan account creation
@@ -388,7 +388,7 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
 
             // Move the Business date few days to get Collection data
             LocalDate businessDate = todaysDate.plusDays(4);
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, businessDate);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, businessDate);
             log.info("Current Business date {}", businessDate);
 
             // Get loan details expecting to have a delinquency classification
@@ -540,7 +540,7 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,
                     new PutGlobalConfigurationsRequest().enabled(true));
             final LocalDate todaysDate = Utils.getLocalDateOfTenant();
-            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, todaysDate);
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, todaysDate);
             log.info("Current Business date {}", todaysDate);
 
             // Client and Loan account creation
@@ -1391,9 +1391,8 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
     private Integer createAccounts(final Integer daysToSubtract, final Integer numberOfRepayments, final boolean withJournalEntries,
             LoanProductTestBuilder loanProductTestBuilder) {
         // Delinquency Bucket
-        final Integer delinquencyBucketId = DelinquencyBucketsHelper.createDelinquencyBucket(requestSpec, responseSpec);
-        final DelinquencyBucketData delinquencyBucket = DelinquencyBucketsHelper.getDelinquencyBucket(requestSpec, responseSpec,
-                delinquencyBucketId);
+        final Long delinquencyBucketId = DelinquencyBucketsHelper.createDefaultBucket();
+        final DelinquencyBucketResponse delinquencyBucket = DelinquencyBucketsHelper.getBucket(delinquencyBucketId);
 
         // Client and Loan account creation
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec, "01 January 2012");
@@ -1412,7 +1411,7 @@ public class LoanTransactionChargebackTest extends BaseLoanIntegrationTest {
     }
 
     private GetLoanProductsProductIdResponse createLoanProduct(final LoanTransactionHelper loanTransactionHelper,
-            final Integer delinquencyBucketId, final boolean withJournalEntries, LoanProductTestBuilder loanProductTestBuilder) {
+            final Long delinquencyBucketId, final boolean withJournalEntries, LoanProductTestBuilder loanProductTestBuilder) {
         final HashMap<String, Object> loanProductMap;
         if (withJournalEntries) {
             loanProductMap = loanProductTestBuilder
