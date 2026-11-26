@@ -170,6 +170,18 @@ final class AccountTransfersApiResourceSwagger {
         public Float transferAmount;
         @Schema(example = "A description of the transfer")
         public String transferDescription;
+        @Schema(example = "1")
+        public Long paymentTypeId;
+        @Schema(example = "ACC-123")
+        public String accountNumber;
+        @Schema(example = "CHK-123")
+        public String checkNumber;
+        @Schema(example = "RT-123")
+        public String routingCode;
+        @Schema(example = "RC-123")
+        public String receiptNumber;
+        @Schema(example = "BNK-123")
+        public String bankNumber;
     }
 
     @Schema(description = "Optional body for command=reverse; ignored for command=undo")
@@ -266,6 +278,35 @@ final class AccountTransfersApiResourceSwagger {
                 public String description;
             }
 
+            static final class GetAccountTransfersPageItemsPaymentDetailData {
+
+                private GetAccountTransfersPageItemsPaymentDetailData() {}
+
+                static final class GetAccountTransfersPageItemsPaymentType {
+
+                    private GetAccountTransfersPageItemsPaymentType() {}
+
+                    @Schema(example = "1")
+                    public Long id;
+                    @Schema(example = "Cash")
+                    public String name;
+                }
+
+                @Schema(example = "1")
+                public Long id;
+                public GetAccountTransfersPageItemsPaymentType paymentType;
+                @Schema(example = "ACC-123")
+                public String accountNumber;
+                @Schema(example = "CHK-123")
+                public String checkNumber;
+                @Schema(example = "RT-123")
+                public String routingCode;
+                @Schema(example = "RC-123")
+                public String receiptNumber;
+                @Schema(example = "BNK-123")
+                public String bankNumber;
+            }
+
             @Schema(example = "1")
             public Long id;
             @Schema(example = "false")
@@ -285,6 +326,7 @@ final class AccountTransfersApiResourceSwagger {
             public GetAccountTransfersTemplateResponse.GetAccountTransfersFromClientOptions toClient;
             public GetAccountTransfersPageItemsToAccountType toAccountType;
             public GetAccountTransfersPageItemsFromAccount toAccount;
+            public GetAccountTransfersPageItemsPaymentDetailData paymentDetailData;
         }
 
         @Schema(example = "4")

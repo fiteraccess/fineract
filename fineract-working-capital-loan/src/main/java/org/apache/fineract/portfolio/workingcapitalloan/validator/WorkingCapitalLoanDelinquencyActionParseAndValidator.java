@@ -29,7 +29,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -46,9 +47,11 @@ import org.apache.fineract.portfolio.delinquency.domain.DelinquencyMinimumPaymen
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoan;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanDelinquencyAction;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanDelinquencyPauseUtils;
-import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanDelinquencyRangeSchedule;
-import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanDisbursementDetails;
+import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanDelinquencyRangeScheduleEvaluationUtils;
+import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanPausePeriodUtils;
+import org.apache.fineract.portfolio.workingcapitalloan.repository.WorkingCapitalLoanDelinquencyActionRepository;
 import org.apache.fineract.portfolio.workingcapitalloan.repository.WorkingCapitalLoanDelinquencyRangeScheduleRepository;
+import org.apache.fineract.portfolio.workingcapitalloanproduct.domain.WorkingCapitalLoanProductRelatedDetails;
 import org.springframework.stereotype.Component;
 
 @RequiredArgsConstructor
@@ -60,26 +63,101 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
     private static final String MINIMUM_PAYMENT_TYPE = "minimumPaymentType";
     private static final String FREQUENCY = "frequency";
     private static final String FREQUENCY_TYPE = "frequencyType";
+    private static final String START_NEW_PERIOD = "startNewPeriod";
 
     private final FromJsonHelper jsonHelper;
     private final WorkingCapitalLoanDelinquencyRangeScheduleRepository rangeScheduleRepository;
+    private final WorkingCapitalLoanDelinquencyActionRepository actionRepository;
 
     public WorkingCapitalLoanDelinquencyAction validateAndParse(final JsonCommand command, final WorkingCapitalLoan workingCapitalLoan,
             final List<WorkingCapitalLoanDelinquencyAction> existing) {
         final DataValidatorBuilder dataValidator = createValidator();
         final WorkingCapitalLoanDelinquencyAction parsedAction = parseCommand(command, workingCapitalLoan, dataValidator);
         validateLoanIsActive(workingCapitalLoan, dataValidator);
+        validateDelinquencyConfigurationExists(workingCapitalLoan, dataValidator);
 
-        if (DelinquencyAction.PAUSE.equals(parsedAction.getAction())) {
+        final DelinquencyAction action = parsedAction.getAction();
+        if (DelinquencyAction.DISABLE.equals(action) || DelinquencyAction.ENABLE.equals(action)) {
+            return parseAndValidateDisableOrEnable(command.parsedJson(), workingCapitalLoan, DelinquencyAction.ENABLE.equals(action),
+                    dataValidator);
+        }
+
+        validateDelinquencyNotDisabled(workingCapitalLoan.getId(), dataValidator);
+        if (DelinquencyAction.PAUSE.equals(action)) {
             validatePause(parsedAction, workingCapitalLoan, existing, dataValidator);
-        } else if (DelinquencyAction.RESCHEDULE.equals(parsedAction.getAction())) {
-            validateReschedule(parsedAction, workingCapitalLoan, dataValidator);
-        } else if (DelinquencyAction.RESUME.equals(parsedAction.getAction())) {
+        } else if (DelinquencyAction.RESCHEDULE.equals(action)) {
+            validateReschedule(parsedAction, workingCapitalLoan, existing, dataValidator);
+        } else if (DelinquencyAction.RESUME.equals(action)) {
             validateResume(parsedAction, existing, dataValidator);
+        } else if (DelinquencyAction.RESET.equals(parsedAction.getAction())) {
+            validateReset(parsedAction, dataValidator);
+        } else if (DelinquencyAction.UNDO_RESET.equals(parsedAction.getAction())) {
+            validateUndoReset(parsedAction, dataValidator);
         }
 
         throwExceptionIfValidationWarningsExist(dataValidator);
         return parsedAction;
+    }
+
+    /**
+     * Validates a disable or enable action. Both are always applied as of the current business date (backdating is not
+     * permitted) and must not carry an end date. A disable is rejected when one is already active; an enable is
+     * rejected when there is no active disable. Each action is persisted as its own row (mirroring the breach action
+     * management): a disable yields a new DISABLE action and an enable yields a new ENABLE action; the caller closes
+     * the currently open disable window.
+     */
+    private WorkingCapitalLoanDelinquencyAction parseAndValidateDisableOrEnable(final JsonElement json,
+            final WorkingCapitalLoan workingCapitalLoan, final boolean isEnable, final DataValidatorBuilder dataValidator) {
+        final LocalDate startDate = extractDate(json, START_DATE);
+        dataValidator.reset().parameter(START_DATE).value(startDate).notNull();
+
+        final LocalDate endDate = extractDate(json, END_DATE);
+        if (endDate != null) {
+            failParameterValidation(dataValidator, END_DATE, "must.not.be.provided.for.disable.or.enable",
+                    "End date must not be provided for a disable or enable action");
+        }
+
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+        if (startDate != null && !startDate.isEqual(businessDate)) {
+            failParameterValidation(dataValidator, START_DATE, "must.be.current.business.date",
+                    "Start date of a disable or enable action must be the current business date");
+        }
+
+        validateDisableState(dataValidator, workingCapitalLoan.getId(), isEnable);
+        throwExceptionIfValidationWarningsExist(dataValidator);
+
+        final WorkingCapitalLoanDelinquencyAction action = new WorkingCapitalLoanDelinquencyAction();
+        action.setAction(isEnable ? DelinquencyAction.ENABLE : DelinquencyAction.DISABLE);
+        action.setStartDate(startDate);
+        action.setWorkingCapitalLoan(workingCapitalLoan);
+        return action;
+    }
+
+    private void validateDisableState(final DataValidatorBuilder dataValidator, final Long loanId, final boolean isEnable) {
+        final boolean alreadyDisabled = actionRepository.isDelinquencyDisabled(loanId);
+        if (isEnable && !alreadyDisabled) {
+            failGeneralValidation(dataValidator, "no.active.delinquency.disable.to.enable",
+                    "There is no active delinquency disable to enable for this Working Capital loan.");
+        } else if (!isEnable && alreadyDisabled) {
+            failGeneralValidation(dataValidator, "delinquency.already.disabled",
+                    "Delinquency evaluation is already disabled for this Working Capital loan. It must be enabled before disabling again.");
+        }
+    }
+
+    private void validateDelinquencyNotDisabled(final Long loanId, final DataValidatorBuilder dataValidator) {
+        if (actionRepository.isDelinquencyDisabled(loanId)) {
+            failGeneralValidation(dataValidator, "delinquency.is.disabled",
+                    "Delinquency pause, resume and reschedule actions are not allowed while delinquency evaluation is disabled for this Working Capital loan.");
+        }
+    }
+
+    /**
+     * Returns the currently open (not-yet-enabled) disable so the caller can close its window on enable. There is at
+     * most one such row (guaranteed by the singleton disable invariant).
+     */
+    public WorkingCapitalLoanDelinquencyAction findActiveDisable(final List<WorkingCapitalLoanDelinquencyAction> existing) {
+        return existing.stream().filter(action -> DelinquencyAction.DISABLE.equals(action.getAction()))
+                .filter(action -> action.getEndDate() == null).findFirst().orElse(null);
     }
 
     public WorkingCapitalLoanDelinquencyAction findActivePauseForResume(final List<WorkingCapitalLoanDelinquencyAction> existing,
@@ -101,13 +179,29 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
                 resume -> !pause.getStartDate().isAfter(resume.getStartDate()) && !resume.getStartDate().isAfter(pause.getEndDate()));
     }
 
-    private void validatePause(final WorkingCapitalLoanDelinquencyAction action, final WorkingCapitalLoan workingCapitalLoan,
+    void validatePause(final WorkingCapitalLoanDelinquencyAction action, final WorkingCapitalLoan workingCapitalLoan,
             final List<WorkingCapitalLoanDelinquencyAction> existing, final DataValidatorBuilder dataValidator) {
         validateBothDatesProvided(action, dataValidator);
         validateStartBeforeEnd(action, dataValidator);
         validateNotBeforeDisbursement(action, workingCapitalLoan, dataValidator);
-        validateNotInEvaluatedPeriod(action, workingCapitalLoan, dataValidator);
         validateNoOverlap(action, existing, dataValidator);
+        validateNotBeforeReset(action, existing, dataValidator);
+    }
+
+    private void validateNotBeforeReset(WorkingCapitalLoanDelinquencyAction action, List<WorkingCapitalLoanDelinquencyAction> existing,
+            DataValidatorBuilder dataValidator) {
+        if (action.getStartDate() == null) {
+            // start date is mandatory if it is missing, validator already should fail properly.
+            return;
+        }
+        // An undone reset that started a new period still bounds the schedule (the undo leaves the cut in place), so it
+        // blocks an earlier pause just like an active reset does.
+        existing.stream()
+                .filter(existingAction -> existingAction.getAction().equals(DelinquencyAction.RESET)
+                        && (existingAction.getEndDate() == null || Boolean.TRUE.equals(existingAction.getStartNewPeriod()))
+                        && existingAction.getStartDate().isAfter(action.getStartDate()))
+                .findAny().ifPresent(existingAction -> failParameterValidation(dataValidator, START_DATE, "reset.exists.after.pause",
+                        "Delinquency pause cannot start before the latest delinquency reset date: " + existingAction.getStartDate()));
     }
 
     private void validateResume(final WorkingCapitalLoanDelinquencyAction action, final List<WorkingCapitalLoanDelinquencyAction> existing,
@@ -117,6 +211,22 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
         if (!dataValidator.hasError()) {
             final WorkingCapitalLoanDelinquencyAction activePause = findActivePauseForResume(existing, businessDate);
             validateResumeShortensActivePause(action, activePause, dataValidator);
+        }
+    }
+
+    private void validateReset(WorkingCapitalLoanDelinquencyAction action, DataValidatorBuilder dataValidator) {
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+        dataValidator.reset().parameter(START_DATE).value(action.getStartDate()).ignoreIfNull().isOneOfTheseValues(businessDate);
+        if (action.getEndDate() == null) {
+            action.setStartDate(businessDate);
+        }
+    }
+
+    private void validateUndoReset(WorkingCapitalLoanDelinquencyAction action, DataValidatorBuilder dataValidator) {
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+        dataValidator.reset().parameter(START_DATE).value(action.getStartDate()).ignoreIfNull().isOneOfTheseValues(businessDate);
+        if (action.getEndDate() == null) {
+            action.setStartDate(businessDate);
         }
     }
 
@@ -142,7 +252,7 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
     }
 
     private void validateReschedule(final WorkingCapitalLoanDelinquencyAction action, final WorkingCapitalLoan workingCapitalLoan,
-            final DataValidatorBuilder dataValidator) {
+            final List<WorkingCapitalLoanDelinquencyAction> existing, final DataValidatorBuilder dataValidator) {
         validateLoanIsDisbursed(workingCapitalLoan, dataValidator);
         validateScheduleExists(workingCapitalLoan, dataValidator);
 
@@ -158,6 +268,30 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
         }
         if (hasFrequencyGroup) {
             validateFrequencyGroupProvided(action, dataValidator);
+            if (action.getFrequency() != null && action.getFrequency() > 0 && action.getFrequencyType() != null) {
+                validateFrequencyDoesNotEndBeforeBusinessDate(action, workingCapitalLoan, existing, dataValidator);
+            }
+        }
+    }
+
+    /**
+     * Rejects a frequency change whose resulting period end date falls before the business date. The candidate end date
+     * is derived exactly as the re-date derives it: from the current open period fromDate, carrying the delinquency
+     * grace days when that period is the first one, and extended by the pauses.
+     */
+    private void validateFrequencyDoesNotEndBeforeBusinessDate(final WorkingCapitalLoanDelinquencyAction action,
+            final WorkingCapitalLoan workingCapitalLoan, final List<WorkingCapitalLoanDelinquencyAction> existing,
+            final DataValidatorBuilder dataValidator) {
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+        final WorkingCapitalLoanProductRelatedDetails details = workingCapitalLoan.getLoanProductRelatedDetails();
+        final Integer delinquencyGraceDays = details == null ? null : details.getDelinquencyGraceDays();
+        final Optional<LocalDate> candidateToDate = rangeScheduleRepository.findCurrentOpenPeriod(workingCapitalLoan.getId(), businessDate)
+                .map(currentPeriod -> WorkingCapitalLoanDelinquencyRangeScheduleEvaluationUtils.calculateRescheduledToDate(
+                        currentPeriod.getFromDate(), currentPeriod.getPeriodNumber(), action.getFrequency(), action.getFrequencyType(),
+                        delinquencyGraceDays, existing));
+        if (candidateToDate.filter(toDate -> toDate.isBefore(businessDate)).isPresent()) {
+            failGeneralValidation(dataValidator, "reschedule.frequency.results.endDate.before.businessDate",
+                    "Frequency change results a delinquency period endDate before current businessDate is not allowed");
         }
     }
 
@@ -179,6 +313,11 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
             action.setFrequencyType(extractFrequencyType(json, dataValidator));
         } else if (DelinquencyAction.RESUME.equals(action.getAction())) {
             action.setStartDate(extractDate(json, START_DATE));
+        } else if (DelinquencyAction.RESET.equals(action.getAction())) {
+            action.setStartDate(extractDate(json, START_DATE));
+            action.setStartNewPeriod(jsonHelper.extractBooleanNamed(START_NEW_PERIOD, json));
+        } else if (DelinquencyAction.UNDO_RESET.equals(action.getAction())) {
+            action.setStartDate(extractDate(json, START_DATE));
         }
 
         return action;
@@ -196,9 +335,17 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
             return DelinquencyAction.RESCHEDULE;
         } else if ("resume".equalsIgnoreCase(actionString)) {
             return DelinquencyAction.RESUME;
+        } else if ("reset".equalsIgnoreCase(actionString)) {
+            return DelinquencyAction.RESET;
+        } else if ("undo_reset".equalsIgnoreCase(actionString)) {
+            return DelinquencyAction.UNDO_RESET;
+        } else if ("disable".equalsIgnoreCase(actionString)) {
+            return DelinquencyAction.DISABLE;
+        } else if ("enable".equalsIgnoreCase(actionString)) {
+            return DelinquencyAction.ENABLE;
         }
         failParameterValidation(dataValidator, ACTION, "invalid.action",
-                "Invalid Delinquency Action: " + actionString + ". Supported actions: pause, reschedule, resume");
+                "Invalid Delinquency Action: " + actionString + ". Supported actions: pause, reschedule, resume, disable, enable");
         return null;
     }
 
@@ -228,7 +375,7 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
             return null;
         }
         try {
-            return DelinquencyMinimumPaymentType.valueOf(value.toUpperCase());
+            return DelinquencyMinimumPaymentType.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             failParameterValidation(dataValidator, MINIMUM_PAYMENT_TYPE, "invalid.minimum.payment.type",
                     "Invalid minimum payment type: " + value + ". Supported: PERCENTAGE, FLAT");
@@ -242,7 +389,7 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
             return null;
         }
         try {
-            return DelinquencyFrequencyType.valueOf(value.toUpperCase());
+            return DelinquencyFrequencyType.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             failParameterValidation(dataValidator, FREQUENCY_TYPE, "invalid.frequency.type",
                     "Invalid frequency type: " + value + ". Supported: DAYS, WEEKS, MONTHS, YEARS");
@@ -251,24 +398,29 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
     }
 
     private void validateLoanIsActive(final WorkingCapitalLoan workingCapitalLoan, final DataValidatorBuilder dataValidator) {
-        if (!workingCapitalLoan.getLoanStatus().isActive()) {
+        if (!workingCapitalLoan.isOpen()) {
             failGeneralValidation(dataValidator, "invalid.loan.state",
                     "Delinquency actions can be created only for active Working Capital loans.");
         }
     }
 
+    private void validateDelinquencyConfigurationExists(final WorkingCapitalLoan workingCapitalLoan,
+            final DataValidatorBuilder dataValidator) {
+        if (workingCapitalLoan.getLoanProductRelatedDetails() == null
+                || workingCapitalLoan.getLoanProductRelatedDetails().getDelinquencyBucket() == null) {
+            failGeneralValidation(dataValidator, "no.delinquency.configuration",
+                    "Delinquency actions require a delinquency bucket configured for the Working Capital loan.");
+        }
+    }
+
     private void validateLoanIsDisbursed(final WorkingCapitalLoan workingCapitalLoan, final DataValidatorBuilder dataValidator) {
-        final boolean isDisbursed = workingCapitalLoan.getDisbursementDetails().stream()
-                .map(WorkingCapitalLoanDisbursementDetails::getActualDisbursementDate).anyMatch(Objects::nonNull);
-        if (!isDisbursed) {
+        if (workingCapitalLoan.isNotDisbursed()) {
             failGeneralValidation(dataValidator, "loan.not.disbursed", "Reschedule action requires the loan to be disbursed.");
         }
     }
 
     private void validateScheduleExists(final WorkingCapitalLoan workingCapitalLoan, final DataValidatorBuilder dataValidator) {
-        final List<WorkingCapitalLoanDelinquencyRangeSchedule> periods = rangeScheduleRepository
-                .findByLoanIdOrderByPeriodNumberAsc(workingCapitalLoan.getId());
-        if (periods.isEmpty()) {
+        if (!rangeScheduleRepository.existsByLoanId(workingCapitalLoan.getId())) {
             failGeneralValidation(dataValidator, "no.schedule", "Reschedule action requires an existing delinquency range schedule.");
         }
     }
@@ -308,26 +460,10 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
         if (action.getStartDate() == null) {
             return;
         }
-        final LocalDate firstDisbursementDate = workingCapitalLoan.getDisbursementDetails().stream()
-                .map(WorkingCapitalLoanDisbursementDetails::getActualDisbursementDate).filter(Objects::nonNull).findFirst().orElse(null);
+        final LocalDate firstDisbursementDate = workingCapitalLoan.getFirstActualDisbursementDate();
         if (firstDisbursementDate != null && firstDisbursementDate.isAfter(action.getStartDate())) {
             failParameterValidation(dataValidator, START_DATE, "must.be.after.first.disbursal.date",
                     "Start date of pause period must be after first disbursal date");
-        }
-    }
-
-    private void validateNotInEvaluatedPeriod(final WorkingCapitalLoanDelinquencyAction action, final WorkingCapitalLoan workingCapitalLoan,
-            final DataValidatorBuilder dataValidator) {
-        if (action.getStartDate() == null) {
-            return;
-        }
-        final List<WorkingCapitalLoanDelinquencyRangeSchedule> periods = rangeScheduleRepository
-                .findByLoanIdOrderByPeriodNumberAsc(workingCapitalLoan.getId());
-        final boolean startsInEvaluatedPeriod = periods.stream().filter(p -> p.getMinPaymentCriteriaMet() != null)
-                .anyMatch(p -> !action.getStartDate().isAfter(p.getToDate()));
-        if (startsInEvaluatedPeriod) {
-            failParameterValidation(dataValidator, START_DATE, "pause.in.evaluated.period",
-                    "Pause start date cannot fall within or before an already evaluated delinquency range period");
         }
     }
 
@@ -337,9 +473,8 @@ public class WorkingCapitalLoanDelinquencyActionParseAndValidator extends ParseA
             return;
         }
         final boolean overlaps = existing.stream().filter(e -> DelinquencyAction.PAUSE.equals(e.getAction()))
-                .anyMatch(e -> WorkingCapitalLoanDelinquencyPauseUtils.inclusivePausePeriodsOverlap(parsed.getStartDate(),
-                        parsed.getEndDate(), e.getStartDate(),
-                        WorkingCapitalLoanDelinquencyPauseUtils.resolveEffectivePauseEnd(e, existing)));
+                .anyMatch(e -> WorkingCapitalLoanPausePeriodUtils.inclusivePausePeriodsOverlap(parsed.getStartDate(), parsed.getEndDate(),
+                        e.getStartDate(), WorkingCapitalLoanDelinquencyPauseUtils.resolveEffectivePauseEnd(e, existing)));
         if (overlaps) {
             failGeneralValidation(dataValidator, "overlapping", "Delinquency pause period cannot overlap with another pause period");
         }

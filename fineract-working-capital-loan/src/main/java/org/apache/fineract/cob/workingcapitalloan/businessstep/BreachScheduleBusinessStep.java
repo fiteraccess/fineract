@@ -19,12 +19,13 @@
 package org.apache.fineract.cob.workingcapitalloan.businessstep;
 
 import java.time.LocalDate;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachChangeBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachScheduleChangedBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoan;
-import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanDisbursementDetails;
 import org.apache.fineract.portfolio.workingcapitalloan.service.WorkingCapitalLoanBreachScheduleService;
 import org.apache.fineract.portfolio.workingcapitalloanproduct.domain.WorkingCapitalLoanProductRelatedDetails;
 import org.springframework.stereotype.Component;
@@ -35,12 +36,11 @@ import org.springframework.stereotype.Component;
 public class BreachScheduleBusinessStep extends WorkingCapitalLoanCOBBusinessStep {
 
     private final WorkingCapitalLoanBreachScheduleService breachScheduleService;
+    private final BusinessEventNotifierService businessEventNotifierService;
 
     @Override
     public WorkingCapitalLoan execute(final WorkingCapitalLoan loan) {
-        final boolean isDisbursed = loan.getDisbursementDetails().stream()
-                .map(WorkingCapitalLoanDisbursementDetails::getActualDisbursementDate).anyMatch(Objects::nonNull);
-        if (!isDisbursed) {
+        if (loan.isNotDisbursed()) {
             log.debug("Skipping breach schedule for WC loan {} - not yet disbursed", loan.getId());
             return loan;
         }
@@ -53,12 +53,21 @@ public class BreachScheduleBusinessStep extends WorkingCapitalLoanCOBBusinessSte
 
         final LocalDate businessDate = DateUtils.getBusinessLocalDate();
 
+        boolean scheduleChanged = false;
         if (!breachScheduleService.hasSchedule(loan.getId())) {
-            breachScheduleService.generateInitialPeriod(loan);
+            scheduleChanged = breachScheduleService.generateInitialPeriod(loan);
         }
 
-        breachScheduleService.generateNextPeriodIfNeeded(loan, businessDate);
-        breachScheduleService.evaluateBreach(loan, businessDate);
+        scheduleChanged |= breachScheduleService.generateNextPeriodIfNeeded(loan, businessDate);
+        final boolean breachFlagChanged = breachScheduleService.evaluateBreach(loan, businessDate);
+        breachScheduleService.recalculatePastDueAmount(loan);
+
+        if (scheduleChanged) {
+            businessEventNotifierService.notifyPostBusinessEvent(new WorkingCapitalLoanBreachScheduleChangedBusinessEvent(loan));
+        }
+        if (breachFlagChanged) {
+            businessEventNotifierService.notifyPostBusinessEvent(new WorkingCapitalLoanBreachChangeBusinessEvent(loan));
+        }
 
         return loan;
     }

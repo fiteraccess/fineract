@@ -52,4 +52,10 @@ public class AccountTransferRequest implements Serializable {
     // parses them via ReferenceTransaction.parseArray downstream.
     private List<Map<String, Object>> sourceReferenceTransactions;
     private List<Map<String, Object>> destinationReferenceTransactions;
+    private Long paymentTypeId;
+    private String accountNumber;
+    private String checkNumber;
+    private String routingCode;
+    private String receiptNumber;
+    private String bankNumber;
 }

@@ -47,7 +47,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.fineract.cob.loan.ContextAwareTaskDecorator;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.config.FineractProperties.FineractSynapseProperties;
@@ -66,9 +65,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.core.step.StepContribution;
+import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @ExtendWith(MockitoExtension.class)
@@ -408,7 +407,6 @@ class SynapseOutboxTaskletTest {
             decoratedExecutor = new ThreadPoolTaskExecutor();
             decoratedExecutor.setCorePoolSize(2);
             decoratedExecutor.setMaxPoolSize(2);
-            decoratedExecutor.setTaskDecorator(new ContextAwareTaskDecorator());
             decoratedExecutor.initialize();
         }
 

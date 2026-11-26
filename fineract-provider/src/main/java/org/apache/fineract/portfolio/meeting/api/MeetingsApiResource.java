@@ -20,6 +20,7 @@ package org.apache.fineract.portfolio.meeting.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -31,6 +32,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import java.util.Collection;
+import java.util.Locale;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.command.core.CommandDispatcher;
@@ -85,7 +87,7 @@ public class MeetingsApiResource {
 
         if (calendarId != null) {
             calendarData = calendarReadPlatformService.retrieveCalendar(calendarId, entityId,
-                    CalendarEntityType.valueOf(entityType.toUpperCase()).getValue());
+                    CalendarEntityType.valueOf(entityType.toUpperCase(Locale.ROOT)).getValue());
 
             var recurringDates = calendarReadPlatformService.generateRecurringDates(calendarData, true, DateUtils.getBusinessLocalDate());
             var nextTenRecurringDates = calendarReadPlatformService.generateNextTenRecurringDates(calendarData);
@@ -116,8 +118,8 @@ public class MeetingsApiResource {
     public Collection<MeetingData> retrieveMeetings(@PathParam("entityType") final String entityType,
             @PathParam("entityId") final Long entityId, @QueryParam("limit") final Integer limit) {
 
-        return meetingReadService.retrieveMeetingsByEntity(entityId, CalendarEntityType.valueOf(entityType.toUpperCase()).getValue(),
-                limit);
+        return meetingReadService.retrieveMeetingsByEntity(entityId,
+                CalendarEntityType.valueOf(entityType.toUpperCase(Locale.ROOT)).getValue(), limit);
     }
 
     @GET
@@ -128,7 +130,7 @@ public class MeetingsApiResource {
             @PathParam("entityId") final Long entityId) {
 
         var meetingData = meetingReadService.retrieveMeeting(meetingId, entityId,
-                CalendarEntityType.valueOf(entityType.toUpperCase()).getValue());
+                CalendarEntityType.valueOf(entityType.toUpperCase(Locale.ROOT)).getValue());
         var clientsAttendance = meetingAttendanceReadService.retrieveClientAttendanceByMeetingId(meetingId);
 
         return MeetingData.builder().id(meetingData.getId()).meetingDate(meetingData.getMeetingDate()).clients(meetingData.getClients())
@@ -140,7 +142,7 @@ public class MeetingsApiResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Create a Meeting", operationId = "createMeeting")
     public MeetingCreateResponse createMeeting(@PathParam("entityType") final String entityType, @PathParam("entityId") final Long entityId,
-            final MeetingCreateRequest request) {
+            @Valid final MeetingCreateRequest request) {
 
         var calendarEntityType = CalendarEntityType.getEntityType(entityType);
 
@@ -211,7 +213,7 @@ public class MeetingsApiResource {
     @AlternativeOperationId("performMeetingCommands")
     public MeetingAttendanceUpdateResponse updateMeetingAttendance(@PathParam("entityType") final String entityType,
             @PathParam("entityId") final Long entityId, @PathParam("meetingId") final Long meetingId,
-            @QueryParam("command") final String commandParam, final MeetingAttendanceUpdateRequest request) {
+            @QueryParam("command") final String commandParam, @Valid final MeetingAttendanceUpdateRequest request) {
 
         final CalendarEntityType calendarEntityType = CalendarEntityType.getEntityType(entityType);
 

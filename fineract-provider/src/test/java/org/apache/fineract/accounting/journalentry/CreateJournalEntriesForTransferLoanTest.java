@@ -33,7 +33,7 @@ import java.util.List;
 import org.apache.fineract.accounting.common.AccountingConstants.AccrualAccountsForLoan;
 import org.apache.fineract.accounting.journalentry.data.LoanDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanTransactionDTO;
-import org.apache.fineract.accounting.journalentry.service.AccountingProcessorHelper;
+import org.apache.fineract.accounting.journalentry.service.AccountingProcessorHelperImpl;
 import org.apache.fineract.accounting.journalentry.service.AccrualBasedAccountingProcessorForLoan;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionEnumData;
@@ -58,7 +58,7 @@ class CreateJournalEntriesForTransferLoanTest {
     private static final BigDecimal PRINCIPAL_AMOUNT = new BigDecimal("500.00");
 
     @Mock
-    private AccountingProcessorHelper helper;
+    private AccountingProcessorHelperImpl helper;
     @InjectMocks
     private AccrualBasedAccountingProcessorForLoan processor;
     private Office office;

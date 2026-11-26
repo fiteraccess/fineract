@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +39,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.fineract.accounting.journalentry.service.JournalEntryWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -117,9 +119,9 @@ class SavingsAccountWritePlatformServiceJpaRepositoryImplTest {
     @Mock
     private PaymentDetailWritePlatformService paymentDetailWritePlatformService;
     @Mock
-    private JournalEntryWritePlatformService journalEntryWritePlatformService;
-    @Mock
     private SavingsAccountDomainService savingsAccountDomainService;
+    @Mock
+    private JournalEntryWritePlatformService journalEntryWritePlatformService;
     @Mock
     private NoteRepository noteRepository;
     @Mock
@@ -170,12 +172,16 @@ class SavingsAccountWritePlatformServiceJpaRepositoryImplTest {
     private SavingsAccountWritePlatformServiceJpaRepositoryImpl service;
 
     private Method validateTransactionsForTransfer;
+    private Method undoWithdrawalFee;
 
     @BeforeEach
     void setUp() throws Exception {
         validateTransactionsForTransfer = SavingsAccountWritePlatformServiceJpaRepositoryImpl.class
                 .getDeclaredMethod("validateTransactionsForTransfer", SavingsAccount.class, LocalDate.class);
         validateTransactionsForTransfer.setAccessible(true);
+        undoWithdrawalFee = SavingsAccountWritePlatformServiceJpaRepositoryImpl.class.getDeclaredMethod("undoWithdrawalFee",
+                SavingsAccount.class, SavingsAccountTransaction.class);
+        undoWithdrawalFee.setAccessible(true);
     }
 
     @AfterEach
@@ -413,6 +419,31 @@ class SavingsAccountWritePlatformServiceJpaRepositoryImplTest {
         verify(savingsAccountTransactionRepository).save(postingTransaction);
     }
 
+    @Test
+    void calculateInterest_shouldPersistBeforePostingReplacementAwareJournalEntries() {
+        final Long savingsId = 1L;
+        final LocalDate businessDate = LocalDate.of(2024, 4, 5);
+        final SavingsAccount account = mock(SavingsAccount.class);
+
+        setupTenantContext(businessDate);
+        when(savingAccountAssembler.getPivotConfigStatus()).thenReturn(false);
+        when(savingAccountAssembler.assembleFrom(savingsId, false)).thenReturn(account);
+        when(account.findExistingTransactionIds()).thenReturn(Set.of(10L));
+        when(account.findExistingReversedTransactionIds()).thenReturn(Set.of(11L));
+        when(account.savingsProduct()).thenReturn(mock(SavingsProduct.class));
+        when(account.officeId()).thenReturn(1L);
+        when(account.clientId()).thenReturn(2L);
+        when(account.groupId()).thenReturn(3L);
+        when(configurationDomainService.isSavingsInterestPostingAtCurrentPeriodEnd()).thenReturn(false);
+        when(configurationDomainService.retrieveFinancialYearBeginningMonth()).thenReturn(1);
+
+        service.calculateInterest(savingsId);
+
+        final var inOrder = Mockito.inOrder(savingAccountRepositoryWrapper, savingsAccountDomainService);
+        inOrder.verify(savingAccountRepositoryWrapper).saveAndFlush(account);
+        inOrder.verify(savingsAccountDomainService).postJournalEntries(account, Set.of(10L), Set.of(11L), false);
+    }
+
     private void setupTenantContext(final LocalDate businessDate) {
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "test", "Test Tenant", "UTC", null));
         MoneyHelper.initializeTenantRoundingMode("test", 6);
@@ -474,5 +505,60 @@ class SavingsAccountWritePlatformServiceJpaRepositoryImplTest {
 
         // Then
         assertThat(result.getTransactionId()).isEqualTo(expectedTransactionId.toString());
+    }
+
+    @Test
+    void undoWithdrawalFee_feeSavedBeforeTheWithdrawal_isFoundByRefNo() throws Exception {
+        SavingsAccount savingsAccount = mock(SavingsAccount.class);
+        when(savingsAccount.getId()).thenReturn(1L);
+        SavingsAccountTransaction withdrawal = transaction(14L, "ref-1", savingsAccount, false);
+        SavingsAccountTransaction fee = transaction(13L, "ref-1", savingsAccount, true);
+        when(savingsAccountTransactionRepository.findByRefNo("ref-1")).thenReturn(List.of(fee, withdrawal));
+
+        undoWithdrawalFee.invoke(service, savingsAccount, withdrawal);
+
+        verify(savingsAccount).undoTransaction(13L);
+        verify(savingsAccount, never()).undoTransaction(14L);
+        verify(savingsAccountTransactionRepository, never()).findOneByIdAndSavingsAccountId(anyLong(), anyLong());
+    }
+
+    @Test
+    void undoWithdrawalFee_ignoresFeesOfOtherAccountsAndReversedFees() throws Exception {
+        SavingsAccount savingsAccount = mock(SavingsAccount.class);
+        when(savingsAccount.getId()).thenReturn(1L);
+        SavingsAccount otherAccount = mock(SavingsAccount.class);
+        when(otherAccount.getId()).thenReturn(2L);
+        SavingsAccountTransaction withdrawal = transaction(20L, "ref-2", savingsAccount, false);
+        SavingsAccountTransaction otherAccountFee = transaction(21L, "ref-2", otherAccount, true);
+        SavingsAccountTransaction reversedFee = transaction(19L, "ref-2", savingsAccount, false);
+        when(savingsAccountTransactionRepository.findByRefNo("ref-2")).thenReturn(List.of(withdrawal, otherAccountFee, reversedFee));
+
+        undoWithdrawalFee.invoke(service, savingsAccount, withdrawal);
+
+        verify(savingsAccount, never()).undoTransaction(anyLong());
+    }
+
+    @Test
+    void undoWithdrawalFee_withoutRefNo_usesTheNextTransaction() throws Exception {
+        SavingsAccount savingsAccount = mock(SavingsAccount.class);
+        when(savingsAccount.getId()).thenReturn(1L);
+        SavingsAccountTransaction withdrawal = transaction(30L, null, savingsAccount, false);
+        SavingsAccountTransaction fee = transaction(31L, null, savingsAccount, true);
+        when(savingsAccountTransactionRepository.findOneByIdAndSavingsAccountId(31L, 1L)).thenReturn(fee);
+
+        undoWithdrawalFee.invoke(service, savingsAccount, withdrawal);
+
+        verify(savingsAccount).undoTransaction(31L);
+        verify(savingsAccountTransactionRepository, never()).findByRefNo(any());
+    }
+
+    private static SavingsAccountTransaction transaction(Long id, String refNo, SavingsAccount savingsAccount,
+            boolean withdrawalFeeAndNotReversed) {
+        SavingsAccountTransaction transaction = mock(SavingsAccountTransaction.class);
+        when(transaction.getId()).thenReturn(id);
+        when(transaction.getRefNo()).thenReturn(refNo);
+        when(transaction.getSavingsAccount()).thenReturn(savingsAccount);
+        when(transaction.isWithdrawalFeeAndNotReversed()).thenReturn(withdrawalFeeAndNotReversed);
+        return transaction;
     }
 }

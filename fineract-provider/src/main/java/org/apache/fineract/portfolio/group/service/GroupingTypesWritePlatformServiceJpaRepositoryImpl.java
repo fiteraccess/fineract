@@ -47,6 +47,7 @@ import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
 import org.apache.fineract.infrastructure.dataqueries.data.StatusEnum;
 import org.apache.fineract.infrastructure.dataqueries.service.EntityDatatableChecksWritePlatformService;
@@ -76,6 +77,7 @@ import org.apache.fineract.portfolio.group.domain.GroupRepositoryWrapper;
 import org.apache.fineract.portfolio.group.domain.GroupTypes;
 import org.apache.fineract.portfolio.group.exception.GroupAccountExistsException;
 import org.apache.fineract.portfolio.group.exception.GroupHasNoStaffException;
+import org.apache.fineract.portfolio.group.exception.GroupLevelNotFoundException;
 import org.apache.fineract.portfolio.group.exception.GroupMemberCountNotInPermissibleRangeException;
 import org.apache.fineract.portfolio.group.exception.GroupMustBePendingToBeDeletedException;
 import org.apache.fineract.portfolio.group.exception.InvalidGroupLevelException;
@@ -118,12 +120,14 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
     private final EntityDatatableChecksWritePlatformService entityDatatableChecksWritePlatformService;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final LoanOfficerService loanOfficerService;
+    private final ExternalIdFactory externalIdFactory;
 
     private CommandProcessingResult createGroupingType(final JsonCommand command, final GroupTypes groupingType, final Long centerId) {
         try {
             final String accountNo = command.stringValueOfParameterNamed(GroupingTypesApiConstants.accountNoParamName);
             final String name = command.stringValueOfParameterNamed(GroupingTypesApiConstants.nameParamName);
-            final String externalId = command.stringValueOfParameterNamed(GroupingTypesApiConstants.externalIdParamName);
+            final String externalId = this.externalIdFactory.createFromCommand(command, GroupingTypesApiConstants.externalIdParamName)
+                    .getValue();
 
             final AppUser currentUser = this.context.authenticatedUser();
             Long officeId = null;
@@ -139,7 +143,8 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
             final Office groupOffice = this.officeRepositoryWrapper.findOneWithNotFoundDetection(officeId);
 
             final LocalDate activationDate = command.localDateValueOfParameterNamed(GroupingTypesApiConstants.activationDateParamName);
-            final GroupLevel groupLevel = this.groupLevelRepository.findById(groupingType.getId()).orElse(null);
+            final GroupLevel groupLevel = this.groupLevelRepository.findById(groupingType.getId())
+                    .orElseThrow(() -> new GroupLevelNotFoundException(groupingType.getId()));
 
             validateOfficeOpeningDateisAfterGroupOrCenterOpeningDate(groupOffice, groupLevel, activationDate);
 
@@ -381,7 +386,8 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
                 groupForUpdate.updateStaff(newStaff);
             }
 
-            final GroupLevel groupLevel = this.groupLevelRepository.findById(groupForUpdate.getGroupLevel().getId()).orElse(null);
+            final GroupLevel groupLevel = this.groupLevelRepository.findById(groupForUpdate.getGroupLevel().getId())
+                    .orElseThrow(() -> new GroupLevelNotFoundException(groupForUpdate.getGroupLevel().getId()));
 
             /*
              * Ignoring parentId param, if group for update is super parent. TODO Need to check: Ignoring is correct or
@@ -568,7 +574,7 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
                     .build();
         } catch (final JpaSystemException | DataIntegrityViolationException dve) {
             Throwable throwable = ExceptionUtils.getRootCause(dve.getCause());
-            log.error("Error occured.", throwable);
+            log.error("Error occurred.", throwable);
             throw ErrorHandler.getMappable(dve, "error.msg.group.unknown.data.integrity.issue",
                     "Unknown data integrity issue with resource.");
         }
@@ -757,7 +763,7 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
                     name);
         }
 
-        log.error("Error occured.", dve);
+        log.error("Error occurred.", dve);
         throw ErrorHandler.getMappable(dve, "error.msg.group.unknown.data.integrity.issue", "Unknown data integrity issue with resource.");
     }
 

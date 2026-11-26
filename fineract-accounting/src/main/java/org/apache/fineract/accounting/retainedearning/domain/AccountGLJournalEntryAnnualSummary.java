@@ -43,6 +43,9 @@ public class AccountGLJournalEntryAnnualSummary extends AbstractAuditableWithUTC
     @Column(name = "product_id")
     private Long productId;
 
+    @Column(name = "product_type", nullable = false)
+    private Integer productType;
+
     @Column(name = "office_id")
     private Long officeId;
 
@@ -54,6 +57,9 @@ public class AccountGLJournalEntryAnnualSummary extends AbstractAuditableWithUTC
 
     @Column(name = "owner_external_id")
     private ExternalId ownerExternalId;
+
+    @Column(name = "originator_external_ids", length = 1000)
+    private String originatorExternalIds;
 
     @Column(name = "manual_entry", nullable = false)
     private Boolean manualEntry = false;

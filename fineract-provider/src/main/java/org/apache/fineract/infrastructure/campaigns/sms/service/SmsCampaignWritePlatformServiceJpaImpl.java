@@ -18,15 +18,11 @@
  */
 package org.apache.fineract.infrastructure.campaigns.sms.service;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.mustachejava.DefaultMustacheFactory;
 import com.github.mustachejava.Mustache;
 import com.github.mustachejava.MustacheFactory;
 import com.google.gson.JsonElement;
-import java.io.IOException;
-import java.io.StringReader;
+import java.io.Reader;
 import java.io.StringWriter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +52,7 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
+import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.GenericResultsetData;
@@ -82,6 +79,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.exc.StreamReadException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @Slf4j
@@ -232,7 +233,7 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
                     }
                 }
             }
-        } catch (final IOException e) {
+        } catch (final JacksonException e) {
             log.error("Error occurred.", e);
         }
 
@@ -294,8 +295,8 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
                     }
                 }
             }
-        } catch (final IOException | RuntimeException e) {
-            log.error("Error occured.", e);
+        } catch (final RuntimeException e) {
+            log.error("Error occurred.", e);
         }
     }
 
@@ -336,8 +337,8 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
                     }
                 }
             }
-        } catch (final IOException | RuntimeException e) {
-            log.error("Error occured.", e);
+        } catch (final RuntimeException e) {
+            log.error("Error occurred.", e);
         }
     }
 
@@ -377,8 +378,8 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
                     }
                 }
             }
-        } catch (final IOException | RuntimeException e) {
-            log.error("Error occured.", e);
+        } catch (final RuntimeException e) {
+            log.error("Error occurred.", e);
         }
     }
 
@@ -455,7 +456,7 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
     @Override
     public String compileSmsTemplate(final String textMessageTemplate, final String campaignName, final Map<String, Object> smsParams) {
         final MustacheFactory mf = new DefaultMustacheFactory();
-        final Mustache mustache = mf.compile(new StringReader(textMessageTemplate), campaignName);
+        final Mustache mustache = mf.compile(Reader.of(textMessageTemplate), campaignName);
 
         final StringWriter stringWriter = new StringWriter();
         mustache.execute(stringWriter, smsParams);
@@ -463,8 +464,7 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
         return stringWriter.toString();
     }
 
-    private List<HashMap<String, Object>> getRunReportByServiceImpl(final String reportName, final Map<String, String> queryParams)
-            throws IOException {
+    private List<HashMap<String, Object>> getRunReportByServiceImpl(final String reportName, final Map<String, String> queryParams) {
         final String reportType = "report";
 
         List<HashMap<String, Object>> resultList = new ArrayList<>();
@@ -474,7 +474,7 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
         try {
             final String response = this.genericDataService.generateJsonFromGenericResultsetData(results);
             resultList = new ObjectMapper().readValue(response, new TypeReference<List<HashMap<String, Object>>>() {});
-        } catch (JsonParseException e) {
+        } catch (StreamReadException e) {
             log.warn("Conversion of report query results to JSON failed", e);
             return resultList;
         }
@@ -525,8 +525,9 @@ public class SmsCampaignWritePlatformServiceJpaImpl implements SmsCampaignWriteP
             } else {
                 campaignMessage = new CampaignPreviewData(textMessageTemplate, 0);
             }
-        } catch (final IOException e) {
-            // TODO throw something here
+        } catch (final JacksonException e) {
+            throw new PlatformDataIntegrityException("error.msg.sms.campaign.preview.parsing.error",
+                    "Error occurred while parsing campaign params for SMS campaign preview message", e.getMessage(), e);
         }
         return campaignMessage;
     }

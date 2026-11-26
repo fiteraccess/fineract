@@ -26,15 +26,17 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.core.domain.FineractContext;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.portfolio.savings.data.synapse.OutboxEntry;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapsePostingException;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTaskHandler;
-import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.step.tasklet.Tasklet;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
@@ -74,10 +76,14 @@ public class SynapseOutboxTasklet implements Tasklet {
 
         outboxRepository.reclaimStaleDispatched(staleDispatchedMinutes);
 
+        // The drain runs on pool threads, which do not inherit the scheduler thread's tenant, business date and auth
+        // context. It is captured here and installed around each task, so propagation does not depend on how the
+        // executor was built.
+        final FineractContext context = currentContextOrNull();
         List<CompletableFuture<DrainResult>> futures = new ArrayList<>(threadPoolSize);
         for (int i = 0; i < threadPoolSize; i++) {
             SynapseTaskHandler handler = handlers.get(i % handlers.size());
-            futures.add(CompletableFuture.supplyAsync(() -> drainTaskType(handler), executor));
+            futures.add(CompletableFuture.supplyAsync(() -> drainWithContext(context, handler), executor));
         }
 
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
@@ -108,6 +114,28 @@ public class SynapseOutboxTasklet implements Tasklet {
      * Drains all pending outbox entries for a single handler's task type. Claims a page, dispatches each entry, repeats
      * until no more work. Stale DISPATCHED rows from crashed runs are reclaimed at the start of execute().
      */
+    // The scheduler always binds a full context before the job runs. Outside it (a bare unit test of this tasklet)
+    // there is nothing to propagate, and getContext() rejects a missing business date.
+    private static FineractContext currentContextOrNull() {
+        try {
+            return ThreadLocalContextUtil.getContext();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private DrainResult drainWithContext(final FineractContext context, final SynapseTaskHandler handler) {
+        if (context == null) {
+            return drainTaskType(handler);
+        }
+        try {
+            ThreadLocalContextUtil.init(context);
+            return drainTaskType(handler);
+        } finally {
+            ThreadLocalContextUtil.reset();
+        }
+    }
+
     private DrainResult drainTaskType(SynapseTaskHandler handler) {
         String taskType = handler.taskType();
         log.debug("Worker started: taskType={}, thread={}", taskType, Thread.currentThread().getName());

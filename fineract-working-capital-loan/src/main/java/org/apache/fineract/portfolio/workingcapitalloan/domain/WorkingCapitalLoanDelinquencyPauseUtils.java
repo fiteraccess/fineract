@@ -19,7 +19,6 @@
 package org.apache.fineract.portfolio.workingcapitalloan.domain;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -31,18 +30,6 @@ public final class WorkingCapitalLoanDelinquencyPauseUtils {
 
     public static boolean isPauseActiveOnDate(final LocalDate pauseStart, final LocalDate pauseEnd, final LocalDate date) {
         return pauseStart != null && pauseEnd != null && date != null && !date.isBefore(pauseStart) && !date.isAfter(pauseEnd);
-    }
-
-    /**
-     * Returns whether a new inclusive pause period shares at least one day with an existing one. Touching periods
-     * (where one ends on the day the other starts) are treated as overlapping.
-     */
-    public static boolean inclusivePausePeriodsOverlap(final LocalDate parsedPauseStart, final LocalDate parsedPauseEnd,
-            final LocalDate existingPauseStart, final LocalDate existingPauseEnd) {
-        if (parsedPauseStart == null || parsedPauseEnd == null || existingPauseStart == null || existingPauseEnd == null) {
-            return false;
-        }
-        return !parsedPauseStart.isAfter(existingPauseEnd) && !parsedPauseEnd.isBefore(existingPauseStart);
     }
 
     public static LocalDate resolveEffectivePauseEnd(final WorkingCapitalLoanDelinquencyAction pause,
@@ -59,13 +46,52 @@ public final class WorkingCapitalLoanDelinquencyPauseUtils {
     }
 
     /**
-     * Inclusive pause length: both start and end dates count as paused days.
+     * The recorded pauses as plain date ranges, with resumes already applied to their end dates. A disable is
+     * deliberately not a pause: it suppresses evaluation, but its days still belong to the period.
      */
-    public static long calculatePauseExtensionDays(final LocalDate pauseStart, final LocalDate pauseEnd) {
-        if (pauseStart == null || pauseEnd == null || pauseStart.isAfter(pauseEnd)) {
-            return 0L;
+    public static List<WorkingCapitalLoanPausePeriod> toEffectivePauses(final List<WorkingCapitalLoanDelinquencyAction> actions) {
+        if (actions == null) {
+            return List.of();
         }
-        return ChronoUnit.DAYS.between(pauseStart, pauseEnd) + 1;
+        return actions.stream().filter(Objects::nonNull).filter(action -> DelinquencyAction.PAUSE.equals(action.getAction()))
+                .map(pause -> new WorkingCapitalLoanPausePeriod(pause.getStartDate(), resolveEffectivePauseEnd(pause, actions))).toList();
+    }
+
+    /**
+     * Start dates of the resets that started a new period, undone or not. A reset that only flags the periods before it
+     * leaves the geometry untouched and is therefore not a cut.
+     *
+     * Unlike breach, an undo does not merge the cut period back: it only clears the reset flags, so the period the
+     * reset started still begins on the reset date and the boundary has to keep holding after the undo.
+     */
+    public static List<LocalDate> restartResetDates(final List<WorkingCapitalLoanDelinquencyAction> actions) {
+        if (actions == null) {
+            return List.of();
+        }
+        return actions.stream().filter(Objects::nonNull) //
+                .filter(action -> DelinquencyAction.RESET.equals(action.getAction())) //
+                .filter(action -> Boolean.TRUE.equals(action.getStartNewPeriod())) //
+                .map(WorkingCapitalLoanDelinquencyAction::getStartDate) //
+                .filter(Objects::nonNull) //
+                .toList();
+    }
+
+    /**
+     * The bounds of a period after the recorded pauses, holding its start in place when a reset began it. See
+     * {@link WorkingCapitalLoanPausePeriodUtils#applyPauses(LocalDate, LocalDate, List, List)} for the rule, shared
+     * with the breach schedule.
+     */
+    public static WorkingCapitalLoanPeriodBounds applyRecordedPauses(final LocalDate fromDate, final LocalDate baseToDate,
+            final List<WorkingCapitalLoanDelinquencyAction> actions) {
+        return WorkingCapitalLoanPausePeriodUtils.applyPauses(fromDate, baseToDate, toEffectivePauses(actions), restartResetDates(actions));
+    }
+
+    /**
+     * Extends an inclusive period end date by the recorded pauses. See {@link #applyRecordedPauses} for the rule.
+     */
+    public static LocalDate extendToDateByRecordedPauses(final LocalDate fromDate, final LocalDate baseToDate,
+            final List<WorkingCapitalLoanDelinquencyAction> actions) {
+        return applyRecordedPauses(fromDate, baseToDate, actions).toDate();
     }
 
     /**
@@ -77,7 +103,8 @@ public final class WorkingCapitalLoanDelinquencyPauseUtils {
         if (pauseStart == null || resumeDate == null || originalPauseEnd == null || resumeDate.isAfter(originalPauseEnd)) {
             return 0L;
         }
-        return calculatePauseExtensionDays(pauseStart, originalPauseEnd) - calculatePauseExtensionDays(pauseStart, resumeDate);
+        return WorkingCapitalLoanPausePeriodUtils.calculatePauseExtensionDays(pauseStart, originalPauseEnd)
+                - WorkingCapitalLoanPausePeriodUtils.calculatePauseExtensionDays(pauseStart, resumeDate);
     }
 
 }

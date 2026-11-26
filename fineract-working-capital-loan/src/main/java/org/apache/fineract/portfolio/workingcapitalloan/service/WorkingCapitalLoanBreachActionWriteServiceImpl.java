@@ -24,6 +24,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
+import org.apache.fineract.infrastructure.event.business.domain.BusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachDisableBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachEnableBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachPauseBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachRescheduleBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachResetBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachResumeBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.workingcapitalloan.loan.WorkingCapitalLoanBreachUndoResetBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoan;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanBreachAction;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanBreachActionType;
@@ -44,6 +53,7 @@ public class WorkingCapitalLoanBreachActionWriteServiceImpl implements WorkingCa
     private final WorkingCapitalLoanBreachActionParseAndValidator validator;
     private final WorkingCapitalLoanBreachScheduleService breachScheduleService;
     private final WorkingCapitalLoanBreachResetService breachResetService;
+    private final BusinessEventNotifierService businessEventNotifierService;
 
     @Transactional
     @Override
@@ -59,21 +69,29 @@ public class WorkingCapitalLoanBreachActionWriteServiceImpl implements WorkingCa
         log.debug("Created WC loan breach action {} for loan {}", breachAction.getAction(), workingCapitalLoanId);
 
         if (WorkingCapitalLoanBreachActionType.PAUSE.equals(breachAction.getAction())
-                || WorkingCapitalLoanBreachActionType.RESUME.equals(breachAction.getAction())) {
-            breachScheduleService.recalculatePeriodsForPauses(workingCapitalLoan);
-        } else if (WorkingCapitalLoanBreachActionType.RESCHEDULE.equals(breachAction.getAction())) {
-            breachScheduleService.rescheduleMinimumPayment(workingCapitalLoan, breachAction);
+                || WorkingCapitalLoanBreachActionType.RESUME.equals(breachAction.getAction())
+                || WorkingCapitalLoanBreachActionType.RESCHEDULE.equals(breachAction.getAction())) {
+            breachScheduleService.replayForBreachAction(workingCapitalLoan, saved);
         } else if (WorkingCapitalLoanBreachActionType.RESET.equals(breachAction.getAction())) {
             breachResetService.resetBreach(workingCapitalLoan, saved);
         } else if (WorkingCapitalLoanBreachActionType.UNDO_RESET.equals(breachAction.getAction())) {
-            breachResetService.undoResetBreach(workingCapitalLoan, saved);
+            breachResetService.undoResetBreach(workingCapitalLoan, saved, existing);
         } else if (WorkingCapitalLoanBreachActionType.ENABLE.equals(breachAction.getAction())) {
             existing.stream().filter(action -> WorkingCapitalLoanBreachActionType.DISABLE == action.getAction())
                     .reduce((first, second) -> second).ifPresent(action -> {
                         action.setEndDate(breachAction.getStartDate().minusDays(1));
+                        actionRepository.saveAndFlush(action);
                     });
+            // Nothing was evaluated or updated while disabled, so every period is recalculated as if the loan had never
+            // been disabled.
+            if (!breachScheduleService.hasSchedule(workingCapitalLoanId)) {
+                breachScheduleService.generateInitialPeriod(workingCapitalLoan);
+            }
+            breachScheduleService.recalculateMinimumPayment(workingCapitalLoan);
             breachScheduleService.reprocessBreachSchedule(workingCapitalLoan);
         }
+
+        businessEventNotifierService.notifyPostBusinessEvent(breachActionEvent(breachAction.getAction(), workingCapitalLoan));
 
         return new CommandProcessingResultBuilder() //
                 .withCommandId(command.commandId()) //
@@ -82,6 +100,18 @@ public class WorkingCapitalLoanBreachActionWriteServiceImpl implements WorkingCa
                 .withOfficeId(workingCapitalLoan.getOfficeId()) //
                 .withClientId(workingCapitalLoan.getClientId()) //
                 .build();
+    }
+
+    private BusinessEvent<?> breachActionEvent(final WorkingCapitalLoanBreachActionType actionType, final WorkingCapitalLoan loan) {
+        return switch (actionType) {
+            case DISABLE -> new WorkingCapitalLoanBreachDisableBusinessEvent(loan);
+            case ENABLE -> new WorkingCapitalLoanBreachEnableBusinessEvent(loan);
+            case PAUSE -> new WorkingCapitalLoanBreachPauseBusinessEvent(loan);
+            case RESUME -> new WorkingCapitalLoanBreachResumeBusinessEvent(loan);
+            case RESCHEDULE -> new WorkingCapitalLoanBreachRescheduleBusinessEvent(loan);
+            case RESET -> new WorkingCapitalLoanBreachResetBusinessEvent(loan);
+            case UNDO_RESET -> new WorkingCapitalLoanBreachUndoResetBusinessEvent(loan);
+        };
     }
 
 }

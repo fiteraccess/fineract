@@ -150,7 +150,7 @@ public class GlobalConfigurationHelper {
      *      integration test state using Spring Framework's integration test infrastructure for transaction commits and
      *      rollbacks.
      */
-    private static ArrayList<HashMap> getAllDefaultGlobalConfigurations() {
+    public static ArrayList<HashMap> getAllDefaultGlobalConfigurations() {
 
         ArrayList<HashMap> defaults = new ArrayList<>();
 
@@ -635,19 +635,35 @@ public class GlobalConfigurationHelper {
         enableAsynchronousFlexcubePosting.put("trapDoor", false);
         defaults.add(enableAsynchronousFlexcubePosting);
 
+        // Access: seeded by 0219_emt_levy_seed.xml; it has no constant in GlobalConfigurationConstants.
+        HashMap<String, Object> emtLevy = new HashMap<>();
+        emtLevy.put("name", "emt-levy");
+        emtLevy.put("value", 50L);
+        emtLevy.put("enabled", false);
+        emtLevy.put("trapDoor", false);
+        defaults.add(emtLevy);
+
+        // Access: seeded by fork changelogs; no constants in GlobalConfigurationConstants.
+        HashMap<String, Object> emtLevyBaseThreshold = new HashMap<>();
+        emtLevyBaseThreshold.put("name", "emt-levy-base-threshold");
+        emtLevyBaseThreshold.put("value", 10000L);
+        emtLevyBaseThreshold.put("enabled", false);
+        emtLevyBaseThreshold.put("trapDoor", false);
+        defaults.add(emtLevyBaseThreshold);
+
+        HashMap<String, Object> lockSystemPaymentTypeFundSources = new HashMap<>();
+        lockSystemPaymentTypeFundSources.put("name", "lock-system-payment-type-fund-sources");
+        lockSystemPaymentTypeFundSources.put("value", 0L);
+        lockSystemPaymentTypeFundSources.put("enabled", true);
+        lockSystemPaymentTypeFundSources.put("trapDoor", false);
+        defaults.add(lockSystemPaymentTypeFundSources);
+
         HashMap<String, Object> forceWithdrawalOnSavingsAccount = new HashMap<>();
         forceWithdrawalOnSavingsAccount.put("name", GlobalConfigurationConstants.FORCE_WITHDRAWAL_ON_SAVINGS_ACCOUNT);
         forceWithdrawalOnSavingsAccount.put("value", 0L);
         forceWithdrawalOnSavingsAccount.put("enabled", false);
         forceWithdrawalOnSavingsAccount.put("trapDoor", false);
         defaults.add(forceWithdrawalOnSavingsAccount);
-
-        HashMap<String, Object> forceWithdrawalOnSavingsAccountLimit = new HashMap<>();
-        forceWithdrawalOnSavingsAccountLimit.put("name", GlobalConfigurationConstants.FORCE_WITHDRAWAL_ON_SAVINGS_ACCOUNT_LIMIT);
-        forceWithdrawalOnSavingsAccountLimit.put("value", 0L);
-        forceWithdrawalOnSavingsAccountLimit.put("enabled", false);
-        forceWithdrawalOnSavingsAccountLimit.put("trapDoor", false);
-        defaults.add(forceWithdrawalOnSavingsAccountLimit);
 
         HashMap<String, Object> allowCashAndNonCashAccrual = new HashMap<>();
         allowCashAndNonCashAccrual.put("name", GlobalConfigurationConstants.ALLOW_CASH_AND_NON_CASH_ACCRUAL);
@@ -707,6 +723,51 @@ public class GlobalConfigurationHelper {
         retainedEarningUsedByReportName.put("trapDoor", false);
         retainedEarningUsedByReportName.put("string_value", "Trial Balance Summary Report with Asset Owner");
         defaults.add(retainedEarningUsedByReportName);
+
+        HashMap<String, Object> retainedEarningWorkingCapitalUsedByReportName = new HashMap<>();
+        retainedEarningWorkingCapitalUsedByReportName.put("name", GlobalConfigurationConstants.RETAINED_EARNING_WC_USED_BY_REPORT_NAME);
+        retainedEarningWorkingCapitalUsedByReportName.put("value", 0L);
+        retainedEarningWorkingCapitalUsedByReportName.put("enabled", true);
+        retainedEarningWorkingCapitalUsedByReportName.put("trapDoor", false);
+        retainedEarningWorkingCapitalUsedByReportName.put("string_value", "Trial Balance Summary Report for Working Capital Loans");
+        defaults.add(retainedEarningWorkingCapitalUsedByReportName);
+
+        HashMap<String, Object> isDisallowBackdatedTransactions = new HashMap<>();
+        isDisallowBackdatedTransactions.put("name", GlobalConfigurationConstants.DISALLOW_BACKDATED_TRANSACTIONS);
+        isDisallowBackdatedTransactions.put("value", 0L);
+        isDisallowBackdatedTransactions.put("enabled", false);
+        isDisallowBackdatedTransactions.put("trapDoor", false);
+        defaults.add(isDisallowBackdatedTransactions);
+
+        HashMap<String, Object> wclChargeAccrualTime = new HashMap<>();
+        wclChargeAccrualTime.put("name", GlobalConfigurationConstants.WCL_CHARGE_ACCRUAL_TIME);
+        wclChargeAccrualTime.put("value", 0L);
+        wclChargeAccrualTime.put("enabled", true);
+        wclChargeAccrualTime.put("trapDoor", false);
+        wclChargeAccrualTime.put("string_value", "EOD");
+        defaults.add(wclChargeAccrualTime);
+
+        HashMap<String, Object> plChargeAccrualTime = new HashMap<>();
+        plChargeAccrualTime.put("name", GlobalConfigurationConstants.PL_CHARGE_ACCRUAL_TIME);
+        plChargeAccrualTime.put("value", 0L);
+        plChargeAccrualTime.put("enabled", true);
+        plChargeAccrualTime.put("trapDoor", false);
+        plChargeAccrualTime.put("string_value", "EOD");
+        defaults.add(plChargeAccrualTime);
+
+        HashMap<String, Object> payoffSchedulePreviewMaxPayoffPeriods = new HashMap<>();
+        payoffSchedulePreviewMaxPayoffPeriods.put("name", GlobalConfigurationConstants.PAYOFF_SCHEDULE_PREVIEW_MAX_PAYOFF_PERIODS);
+        payoffSchedulePreviewMaxPayoffPeriods.put("value", 1200L);
+        payoffSchedulePreviewMaxPayoffPeriods.put("enabled", true);
+        payoffSchedulePreviewMaxPayoffPeriods.put("trapDoor", false);
+        defaults.add(payoffSchedulePreviewMaxPayoffPeriods);
+
+        HashMap<String, Object> payoffSchedulePreviewMaxTermPeriods = new HashMap<>();
+        payoffSchedulePreviewMaxTermPeriods.put("name", GlobalConfigurationConstants.PAYOFF_SCHEDULE_PREVIEW_MAX_TERM_PERIODS);
+        payoffSchedulePreviewMaxTermPeriods.put("value", 1200L);
+        payoffSchedulePreviewMaxTermPeriods.put("enabled", true);
+        payoffSchedulePreviewMaxTermPeriods.put("trapDoor", false);
+        defaults.add(payoffSchedulePreviewMaxTermPeriods);
 
         return defaults;
     }

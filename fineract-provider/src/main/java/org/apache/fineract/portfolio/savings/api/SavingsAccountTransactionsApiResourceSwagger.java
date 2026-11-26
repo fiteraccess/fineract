@@ -189,7 +189,12 @@ final class SavingsAccountTransactionsApiResourceSwagger {
 
         @Schema(example = "2")
         public Long total;
-        public Set<GetSavingsAccountTransactionsPageItem> content;
+        /**
+         * A page of search results is ordered by the request's {@code orderBy}/{@code sortOrder} (defaulting to most
+         * recent first), so it is documented as an ordered list. Declaring it as a set made generated clients drop that
+         * ordering. The serialized response is a JSON array either way, so the wire format is unchanged.
+         */
+        public List<GetSavingsAccountTransactionsPageItem> content;
     }
 
     @Schema(description = "PostSavingsAccountTransactionsRequest")
@@ -230,6 +235,9 @@ final class SavingsAccountTransactionsApiResourceSwagger {
             public PostNipCommissionBreakdown breakdown;
         }
 
+        @Schema(description = "command=gsimDeposit: the child accounts of a GSIM parent to deposit into, and how much into each")
+        public List<SavingsAccountsApiResourceSwagger.PostSavingsAccountsGsimRequest.PostSavingsAccountsGsimSavings> savingsArray;
+
         @Schema(example = "27 March 2022")
         public String transactionDate;
         @Schema(example = "1000")
@@ -242,6 +250,8 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public String externalId;
         @Schema(example = "true")
         public Boolean isPostInterestAsOn;
+        @Schema(example = "true")
+        public Boolean postInterestManualOrAutomatic;
         @Schema(example = "true")
         public String lienAllowed;
         @Schema(example = "String")
@@ -256,6 +266,14 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public BigDecimal aggregatorCommissionAmount;
         @Schema(description = "Optional references recorded in supplied order. NIP withdrawals accept EMT_LEVY, Commission, and VAT; bills/airtime withdrawals accept Convenience Fee and VAT; inbound NIP deposits accept only EMT_LEVY.")
         public List<PostSavingsReferenceTransaction> referenceTransactions;
+        @Schema(example = "CHQ-001")
+        public String checkNumber;
+        @Schema(example = "ROUTE-001")
+        public String routingCode;
+        @Schema(example = "RCPT-001")
+        public String receiptNumber;
+        @Schema(example = "A note about this transaction")
+        public String note;
     }
 
     @Schema(description = "PostSavingsAccountTransactionsResponse")
@@ -282,5 +300,15 @@ final class SavingsAccountTransactionsApiResourceSwagger {
         public String externalId;
         @Schema(example = "true")
         public String isBulk;
+        @Schema(example = "en")
+        public String locale;
+        @Schema(example = "dd MMMM yyyy")
+        public String dateFormat;
+        @Schema(example = "01 March 2013")
+        public String transactionDate;
+        @Schema(example = "500")
+        public BigDecimal transactionAmount;
+        @Schema(example = "1")
+        public Long paymentTypeId;
     }
 }

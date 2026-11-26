@@ -21,7 +21,6 @@ package org.apache.fineract.portfolio.savings.service;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.RECURRING_DEPOSIT_ACCOUNT_RESOURCE_NAME;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.amountParamName;
-import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargeIdParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.dueAsOfDateParamName;
 
 import java.math.BigDecimal;
@@ -57,8 +56,6 @@ import org.apache.fineract.infrastructure.security.service.PlatformSecurityConte
 import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
-import org.apache.fineract.organisation.office.domain.Office;
-import org.apache.fineract.organisation.staff.domain.Staff;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
@@ -74,7 +71,6 @@ import org.apache.fineract.portfolio.calendar.domain.CalendarInstance;
 import org.apache.fineract.portfolio.calendar.domain.CalendarInstanceRepository;
 import org.apache.fineract.portfolio.calendar.domain.CalendarType;
 import org.apache.fineract.portfolio.calendar.service.CalendarUtils;
-import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.exception.ClientNotActiveException;
@@ -104,7 +100,6 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountCharge;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrapper;
-import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountingBridgeDataHelper;
@@ -114,7 +109,6 @@ import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
-@Transactional
 @RequiredArgsConstructor
 public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements DepositAccountWritePlatformService {
 
@@ -142,7 +136,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
     private final CacheableSavingsProductConfigService cacheableSavingsProductConfigService;
     private final FineractProperties fineractProperties;
 
-    @Transactional
     @Override
     public CommandProcessingResult activateFDAccount(final Long savingsId, final JsonCommand command) {
         final AppUser user = context.authenticatedUser();
@@ -248,7 +241,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         }
     }
 
-    @Transactional
     @Override
     public CommandProcessingResult activateRDAccount(final Long savingsId, final JsonCommand command) {
         boolean isRegularTransaction = false;
@@ -551,7 +543,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         }
     }
 
-    @Transactional
     private void postInterest(final SavingsAccount account) {
 
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
@@ -1078,221 +1069,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
     }
 
-    @Override
-    public SavingsAccountTransaction initiateSavingsTransfer(final Long accountId, final LocalDate transferDate,
-            final DepositAccountType depositAccountType) {
-        context.authenticatedUser();
-        final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
-                .isSavingsInterestPostingAtCurrentPeriodEnd();
-        final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
-
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
-        final LocalDate postInterestOnDate = null;
-        final SavingsAccountTransaction newTransferTransaction = SavingsAccountTransaction.initiateTransfer(savingsAccount,
-                savingsAccount.office(), transferDate);
-        savingsAccount.addTransaction(newTransferTransaction);
-        savingsAccount.setStatus(SavingsAccountStatusType.TRANSFER_IN_PROGRESS.getValue());
-        final MathContext mc = MathContext.DECIMAL64;
-        boolean isInterestTransfer = false;
-        final boolean postReversals = false;
-        savingsAccount.calculateInterestUsing(mc, transferDate, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
-                financialYearBeginningMonth, postInterestOnDate, false, postReversals);
-
-        this.savingsAccountTransactionRepository.save(newTransferTransaction);
-        this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
-
-        postJournalEntriesForTransaction(savingsAccount, newTransferTransaction);
-
-        return newTransferTransaction;
-    }
-
-    @Override
-    public SavingsAccountTransaction withdrawSavingsTransfer(final Long accountId, final LocalDate transferDate,
-            final DepositAccountType depositAccountType) {
-        context.authenticatedUser();
-
-        final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
-                .isSavingsInterestPostingAtCurrentPeriodEnd();
-        final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
-
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
-
-        final SavingsAccountTransaction withdrawtransferTransaction = SavingsAccountTransaction.withdrawTransfer(savingsAccount,
-                savingsAccount.office(), transferDate);
-        savingsAccount.addTransaction(withdrawtransferTransaction);
-        savingsAccount.setStatus(SavingsAccountStatusType.ACTIVE.getValue());
-        final boolean postReversals = false;
-        final MathContext mc = MathContext.DECIMAL64;
-        boolean isInterestTransfer = false;
-        LocalDate postInterestOnDate = null;
-        savingsAccount.calculateInterestUsing(mc, transferDate, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
-                financialYearBeginningMonth, postInterestOnDate, false, postReversals);
-
-        this.savingsAccountTransactionRepository.save(withdrawtransferTransaction);
-        this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
-
-        postJournalEntriesForTransaction(savingsAccount, withdrawtransferTransaction);
-
-        return withdrawtransferTransaction;
-    }
-
-    @Override
-    public void rejectSavingsTransfer(final Long accountId, final DepositAccountType depositAccountType) {
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
-        savingsAccount.setStatus(SavingsAccountStatusType.TRANSFER_ON_HOLD.getValue());
-        this.savingAccountRepositoryWrapper.save(savingsAccount);
-    }
-
-    @Override
-    public SavingsAccountTransaction acceptSavingsTransfer(final Long accountId, final LocalDate transferDate,
-            final Office acceptedInOffice, final Staff fieldOfficer, final DepositAccountType depositAccountType) {
-        context.authenticatedUser();
-
-        final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
-                .isSavingsInterestPostingAtCurrentPeriodEnd();
-        final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
-
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(accountId, depositAccountType);
-
-        final SavingsAccountTransaction acceptTransferTransaction = SavingsAccountTransaction.approveTransfer(savingsAccount,
-                acceptedInOffice, transferDate);
-        savingsAccount.addTransaction(acceptTransferTransaction);
-        savingsAccount.setStatus(SavingsAccountStatusType.ACTIVE.getValue());
-        if (fieldOfficer != null) {
-            savingsAccount.reassignSavingsOfficer(fieldOfficer, transferDate);
-        }
-        boolean isInterestTransfer = false;
-        final boolean postReversals = false;
-        LocalDate postInterestOnDate = null;
-        final MathContext mc = MathContext.DECIMAL64;
-        savingsAccount.calculateInterestUsing(mc, transferDate, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
-                financialYearBeginningMonth, postInterestOnDate, false, postReversals);
-
-        this.savingsAccountTransactionRepository.save(acceptTransferTransaction);
-        this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
-
-        postJournalEntriesForTransaction(savingsAccount, acceptTransferTransaction);
-
-        return acceptTransferTransaction;
-    }
-
-    @Transactional
-    @Override
-    public CommandProcessingResult addSavingsAccountCharge(final JsonCommand command, final DepositAccountType depositAccountType) {
-
-        this.context.authenticatedUser();
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
-                .resource(SAVINGS_ACCOUNT_RESOURCE_NAME);
-
-        final Long savingsAccountId = command.getSavingsId();
-        this.savingsAccountChargeDataValidator.validateAdd(command.json());
-
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(savingsAccountId, depositAccountType);
-        checkClientOrGroupActive(savingsAccount);
-
-        final Locale locale = command.extractLocale();
-        final String format = command.dateFormat();
-        final DateTimeFormatter fmt = StringUtils.isNotBlank(format) ? DateTimeFormatter.ofPattern(format).withLocale(locale)
-                : DateTimeFormatter.ofPattern("dd MM yyyy");
-
-        final Long chargeDefinitionId = command.longValueOfParameterNamed(chargeIdParamName);
-        final Charge chargeDefinition = this.chargeRepository.findOneWithNotFoundDetection(chargeDefinitionId);
-
-        final SavingsAccountCharge savingsAccountCharge = SavingsAccountCharge.createNewFromJson(savingsAccount, chargeDefinition, command);
-
-        if (savingsAccountCharge.getDueDate() != null) {
-            // transaction date should not be on a holiday or non working day
-            if (!this.configurationDomainService.allowTransactionsOnHolidayEnabled()
-                    && this.holidayRepository.isHoliday(savingsAccount.officeId(), savingsAccountCharge.getDueDate())) {
-                baseDataValidator.reset().parameter(dueAsOfDateParamName).value(savingsAccountCharge.getDueDate().format(fmt))
-                        .failWithCodeNoParameterAddedToErrorCode("charge.due.date.is.on.holiday");
-                if (!dataValidationErrors.isEmpty()) {
-                    throw new PlatformApiDataValidationException(dataValidationErrors);
-                }
-            }
-
-            if (!this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled()
-                    && !this.workingDaysRepository.isWorkingDay(savingsAccountCharge.getDueDate())) {
-                baseDataValidator.reset().parameter(dueAsOfDateParamName).value(savingsAccountCharge.getDueDate().format(fmt))
-                        .failWithCodeNoParameterAddedToErrorCode("charge.due.date.is.a.nonworking.day");
-                if (!dataValidationErrors.isEmpty()) {
-                    throw new PlatformApiDataValidationException(dataValidationErrors);
-                }
-            }
-        }
-
-        savingsAccount.addCharge(fmt, savingsAccountCharge, chargeDefinition);
-
-        this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
-
-        return new CommandProcessingResultBuilder() //
-                .withEntityId(savingsAccountCharge.getId()) //
-                .withOfficeId(savingsAccount.officeId()) //
-                .withClientId(savingsAccount.clientId()) //
-                .withGroupId(savingsAccount.groupId()) //
-                .withSavingsId(savingsAccountId) //
-                .build();
-    }
-
-    @Transactional
-    @Override
-    public CommandProcessingResult updateSavingsAccountCharge(final JsonCommand command, final DepositAccountType depositAccountType) {
-
-        this.context.authenticatedUser();
-        this.savingsAccountChargeDataValidator.validateUpdate(command.json());
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
-                .resource(SAVINGS_ACCOUNT_RESOURCE_NAME);
-
-        final Long savingsAccountId = command.getSavingsId();
-        // SavingsAccount Charge entity
-        final Long savingsChargeId = command.entityId();
-
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(savingsAccountId, depositAccountType);
-        checkClientOrGroupActive(savingsAccount);
-
-        final SavingsAccountCharge savingsAccountCharge = this.savingsAccountChargeRepository.findOneWithNotFoundDetection(savingsChargeId,
-                savingsAccountId);
-
-        final Map<String, Object> changes = savingsAccountCharge.update(command);
-
-        if (savingsAccountCharge.getDueDate() != null) {
-            final Locale locale = command.extractLocale();
-            final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
-
-            // transaction date should not be on a holiday or non working day
-            if (!this.configurationDomainService.allowTransactionsOnHolidayEnabled()
-                    && this.holidayRepository.isHoliday(savingsAccount.officeId(), savingsAccountCharge.getDueDate())) {
-                baseDataValidator.reset().parameter(dueAsOfDateParamName).value(savingsAccountCharge.getDueDate().format(fmt))
-                        .failWithCodeNoParameterAddedToErrorCode("charge.due.date.is.on.holiday");
-                if (!dataValidationErrors.isEmpty()) {
-                    throw new PlatformApiDataValidationException(dataValidationErrors);
-                }
-            }
-
-            if (!this.configurationDomainService.allowTransactionsOnNonWorkingDayEnabled()
-                    && !this.workingDaysRepository.isWorkingDay(savingsAccountCharge.getDueDate())) {
-                baseDataValidator.reset().parameter(dueAsOfDateParamName).value(savingsAccountCharge.getDueDate().format(fmt))
-                        .failWithCodeNoParameterAddedToErrorCode("charge.due.date.is.a.nonworking.day");
-                if (!dataValidationErrors.isEmpty()) {
-                    throw new PlatformApiDataValidationException(dataValidationErrors);
-                }
-            }
-        }
-
-        this.savingsAccountChargeRepository.saveAndFlush(savingsAccountCharge);
-
-        return new CommandProcessingResultBuilder() //
-                .withEntityId(savingsAccountCharge.getId()) //
-                .withOfficeId(savingsAccountCharge.savingsAccount().officeId()) //
-                .withClientId(savingsAccountCharge.savingsAccount().clientId()) //
-                .withGroupId(savingsAccountCharge.savingsAccount().groupId()) //
-                .withSavingsId(savingsAccountCharge.savingsAccount().getId()) //
-                .with(changes) //
-                .build();
-    }
-
     @Transactional
     @Override
     public CommandProcessingResult waiveCharge(final Long savingsAccountId, final Long savingsAccountChargeId,
@@ -1350,29 +1126,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
                 .build();
     }
 
-    @Transactional
-    @Override
-    public CommandProcessingResult deleteSavingsAccountCharge(final Long savingsAccountId, final Long savingsAccountChargeId,
-            @SuppressWarnings("unused") final JsonCommand command, final DepositAccountType depositAccountType) {
-        this.context.authenticatedUser();
-
-        final SavingsAccount savingsAccount = this.depositAccountAssembler.assembleFrom(savingsAccountId, depositAccountType);
-        checkClientOrGroupActive(savingsAccount);
-        final SavingsAccountCharge savingsAccountCharge = this.savingsAccountChargeRepository
-                .findOneWithNotFoundDetection(savingsAccountChargeId, savingsAccountId);
-
-        savingsAccount.removeCharge(savingsAccountCharge);
-        this.savingAccountRepositoryWrapper.saveAndFlush(savingsAccount);
-
-        return new CommandProcessingResultBuilder() //
-                .withEntityId(savingsAccountChargeId) //
-                .withOfficeId(savingsAccount.officeId()) //
-                .withClientId(savingsAccount.clientId()) //
-                .withGroupId(savingsAccount.groupId()) //
-                .withSavingsId(savingsAccountId) //
-                .build();
-    }
-
     @Override
     public CommandProcessingResult payCharge(final Long savingsAccountId, final Long savingsAccountChargeId, final JsonCommand command,
             @SuppressWarnings("unused") final DepositAccountType depositAccountType) {
@@ -1422,22 +1175,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
 
     }
 
-    @Transactional
-    @Override
-    public void applyChargeDue(final Long savingsAccountChargeId, final Long accountId,
-            @SuppressWarnings("unused") final DepositAccountType depositAccountType) {
-        final SavingsAccountCharge savingsAccountCharge = this.savingsAccountChargeRepository
-                .findOneWithNotFoundDetection(savingsAccountChargeId, accountId);
-        // always use current date as transaction date for batch job
-        final LocalDate transactionDate = DateUtils.getBusinessLocalDate();
-        final DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MM yyyy");
-
-        while (DateUtils.isBefore(savingsAccountCharge.getDueDate(), transactionDate)) {
-            payCharge(savingsAccountCharge, transactionDate, savingsAccountCharge.amoutOutstanding(), fmt);
-        }
-    }
-
-    @Transactional
     private void payCharge(final SavingsAccountCharge savingsAccountCharge, final LocalDate transactionDate, final BigDecimal amountPaid,
             final DateTimeFormatter formatter) {
         context.authenticatedUser();
@@ -1480,7 +1217,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds);
     }
 
-    @Transactional
     @Override
     public void updateMaturityDetails(Long depositAccountId, DepositAccountType depositAccountType) {
         final boolean isSavingsInterestPostingAtCurrentPeriodEnd = this.configurationDomainService
@@ -1527,12 +1263,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds);
     }
 
-    private void postJournalEntriesForTransaction(final SavingsAccount account, final SavingsAccountTransaction transaction) {
-        final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(account,
-                List.of(transaction), false);
-        this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
-    }
-
     private void updateExistingTransactionsDetails(SavingsAccount account, Set<Long> existingTransactionIds,
             Set<Long> existingReversedTransactionIds) {
         existingTransactionIds.addAll(account.findExistingTransactionIds());
@@ -1550,7 +1280,6 @@ public class DepositAccountWritePlatformServiceJpaRepositoryImpl implements Depo
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData);
     }
 
-    @Transactional
     @Override
     public SavingsAccountTransaction mandatorySavingsAccountDeposit(final SavingsAccountTransactionDTO accountTransactionDTO) {
         boolean isRegularTransaction = false;

@@ -21,33 +21,28 @@ package org.apache.fineract.infrastructure.jobs.service.aggregationjob;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseTypeResolver;
 import org.apache.fineract.infrastructure.core.service.migration.TenantDataSourceFactory;
 import org.apache.fineract.infrastructure.jobs.service.aggregationjob.data.JournalEntryAggregationSummaryData;
-import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.annotation.BeforeStep;
 import org.springframework.batch.core.configuration.annotation.StepScope;
-import org.springframework.batch.item.ExecutionContext;
-import org.springframework.batch.item.database.JdbcCursorItemReader;
+import org.springframework.batch.core.step.StepExecution;
+import org.springframework.batch.infrastructure.item.ExecutionContext;
+import org.springframework.batch.infrastructure.item.database.JdbcCursorItemReader;
 import org.springframework.stereotype.Component;
 
 @Component
 @StepScope
 public class JournalEntryAggregationJobReader extends JdbcCursorItemReader<JournalEntryAggregationSummaryData> {
 
-    private final DatabaseTypeResolver databaseTypeResolver;
     private LocalDate aggregatedOnDateFrom;
     private LocalDate aggregatedOnDateTo;
 
     public JournalEntryAggregationJobReader(TenantDataSourceFactory tenantDataSourceFactory, DatabaseTypeResolver databaseTypeResolver) {
-        this.databaseTypeResolver = databaseTypeResolver;
-        FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
-        setDataSource(tenantDataSourceFactory.create(tenant));
-        setSql(buildAggregationQuery());
-        setRowMapper(this::mapRow);
+        super(tenantDataSourceFactory.create(ThreadLocalContextUtil.getTenant()), buildAggregationQuery(databaseTypeResolver),
+                JournalEntryAggregationJobReader::mapRow);
     }
 
     @BeforeStep
@@ -64,7 +59,7 @@ public class JournalEntryAggregationJobReader extends JdbcCursorItemReader<Journ
 
     }
 
-    private JournalEntryAggregationSummaryData mapRow(ResultSet rs, int rowNum) throws SQLException {
+    private static JournalEntryAggregationSummaryData mapRow(ResultSet rs, int rowNum) throws SQLException {
         return JournalEntryAggregationSummaryData.builder() //
                 .glAccountId(rs.getLong("glAccountId")) //
                 .productId(rs.getLong("productId")) //
@@ -81,7 +76,7 @@ public class JournalEntryAggregationJobReader extends JdbcCursorItemReader<Journ
                 .build(); //
     }
 
-    private String buildAggregationQuery() {
+    private static String buildAggregationQuery(DatabaseTypeResolver databaseTypeResolver) {
         String aggregateFunction = databaseTypeResolver.isMySQL()
                 ? "GROUP_CONCAT(DISTINCT mlo.external_id ORDER BY mlo.external_id SEPARATOR ', ')"
                 : "STRING_AGG(DISTINCT mlo.external_id, ', ' ORDER BY mlo.external_id)";
@@ -103,16 +98,23 @@ public class JournalEntryAggregationJobReader extends JdbcCursorItemReader<Journ
                             loan_product.id,
                             savings_product.id,
                             prov_product.id,
-                            share_product.id
+                            share_product.id,
+                            wc_loan_product.id
                         ) AS productId,
                         acc_gl_account.id AS glAccountId,
                         acc_gl_journal_entry.entity_type_enum AS entityTypeEnum,
                         acc_gl_journal_entry.office_id AS officeId,
                         aw.owner_id AS externalOwner,
-                        COALESCE((SELECT \s""" + aggregateFunction + """
-                         FROM m_loan_originator_mapping mlom
-                         JOIN m_loan_originator mlo ON mlo.id = mlom.originator_id
-                         WHERE mlom.loan_id = loan.id), '') AS originatorExternalIds,
+                        CASE acc_gl_journal_entry.entity_type_enum
+                            WHEN 1 THEN (SELECT {aggregateFunction}
+                                         FROM m_loan_originator_mapping mlom
+                                         JOIN m_loan_originator mlo ON mlo.id = mlom.originator_id
+                                         WHERE mlom.loan_id = loan.id)
+                            WHEN 6 THEN (SELECT {aggregateFunction}
+                                         FROM m_wc_loan_originator_mapping mlom
+                                         JOIN m_loan_originator mlo ON mlo.id = mlom.originator_id
+                                         WHERE mlom.loan_id = wc_loan.id)
+                        END AS originatorExternalIds,
                         acc_gl_journal_entry.type_enum,
                         acc_gl_journal_entry.amount,
                         acc_gl_journal_entry.submitted_on_date AS aggregatedOnDate,
@@ -156,6 +158,14 @@ public class JournalEntryAggregationJobReader extends JdbcCursorItemReader<Journ
                         ON share_product.id = share.product_id
                         AND acc_gl_journal_entry.entity_type_enum = 4
 
+                    -- entity_type_enum = 6 → WORKING CAPITAL LOAN
+                    LEFT JOIN m_wc_loan wc_loan
+                        ON wc_loan.id = acc_gl_journal_entry.entity_id
+                        AND acc_gl_journal_entry.entity_type_enum = 6
+                    LEFT JOIN m_wc_loan_product wc_loan_product
+                        ON wc_loan_product.id = wc_loan.product_id
+                        AND acc_gl_journal_entry.entity_type_enum = 6
+
                     -- external owner
                     LEFT JOIN m_external_asset_owner_journal_entry_mapping aw
                         ON aw.journal_entry_id = acc_gl_journal_entry.id
@@ -172,6 +182,6 @@ public class JournalEntryAggregationJobReader extends JdbcCursorItemReader<Journ
                     je.currencyCode,
                     je.entityTypeEnum,
                     je.officeId
-                """;
+                """.replace("{aggregateFunction}", aggregateFunction);
     }
 }

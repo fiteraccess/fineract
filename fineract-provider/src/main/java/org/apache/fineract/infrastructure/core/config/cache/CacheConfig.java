@@ -22,6 +22,7 @@ package org.apache.fineract.infrastructure.core.config.cache;
 import static org.apache.fineract.infrastructure.event.external.repository.ExternalEventConfigurationRepository.EXTERNAL_EVENT_CONFIGURATION_CACHE_NAME;
 
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -29,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.cache.Caching;
@@ -38,7 +40,9 @@ import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.ehcache.config.builders.CacheConfigurationBuilder;
 import org.ehcache.config.builders.ExpiryPolicyBuilder;
 import org.ehcache.config.builders.ResourcePoolsBuilder;
+import org.ehcache.core.config.DefaultConfiguration;
 import org.ehcache.jsr107.Eh107Configuration;
+import org.ehcache.jsr107.EhcacheCachingProvider;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
 import org.reflections.util.ClasspathHelper;
@@ -95,8 +99,16 @@ public class CacheConfig {
         return new DynamicJCacheCacheManager(ehCacheNativeManager);
     }
 
+    // Each application context gets its own Ehcache manager. Caching.getCachingProvider().getCacheManager() is a
+    // single manager per JVM: anything else in the JVM that closes it (another context shutting down, or a test)
+    // closes this application's caches too, which showed up as "Cache[...] is closed". A dedicated manager can be
+    // closed with its context without affecting anyone else.
     private javax.cache.CacheManager createInternalEhCacheManager() {
         CachingProvider provider = Caching.getCachingProvider();
+        if (provider instanceof EhcacheCachingProvider ehcacheProvider) {
+            URI managerUri = URI.create("fineract-cache-" + UUID.randomUUID());
+            return ehcacheProvider.getCacheManager(managerUri, new DefaultConfiguration(provider.getDefaultClassLoader()));
+        }
         return provider.getCacheManager();
     }
 

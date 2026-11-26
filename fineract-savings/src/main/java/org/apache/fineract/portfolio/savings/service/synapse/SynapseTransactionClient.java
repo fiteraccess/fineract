@@ -259,7 +259,7 @@ public class SynapseTransactionClient {
     /**
      * Synapse rejects any request without a tenant indication, so dispatching without a tenant context would only
      * produce an opaque 400 downstream; fail here with the actual cause instead. The outbox executor propagates the
-     * scheduler's tenant context via {@code ContextAwareTaskDecorator}.
+     * scheduler's tenant context installed by {@code SynapseOutboxTasklet}.
      */
     private static String tenantIdentifier() {
         FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();

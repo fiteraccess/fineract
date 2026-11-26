@@ -1,5 +1,5 @@
 # Azure DevOps equivalent of .github/workflows/build-postgresql.yml
-# Fineract Cargo & Unit- & Integration tests - PostgreSQL
+# Fineract Unit- & Integration tests - PostgreSQL
 #
 # Runs the JUnit unit + integration test suite against PostgreSQL, sharded into
 # 5 parallel jobs (test-core-1 .. test-core-5) using scripts/split-tests.sh.
@@ -81,9 +81,9 @@ jobs:
         fetchTags: true
 
       - task: JavaToolInstaller@0
-        displayName: 'Set up JDK 21'
+        displayName: 'Set up JDK 25'
         inputs:
-          versionSpec: '21'
+          versionSpec: '25'
           jdkArchitectureOption: 'x64'
           jdkSourceOption: 'PreInstalled'
 
@@ -131,11 +131,33 @@ jobs:
             module_tests["$module"]+="$class "
           done < "shard-tests_${SHARD_INDEX}.txt"
 
+          # These modules need a live server. Up to 1.15 the Gradle Cargo plugin started one
+          # from the module's test task; upstream removed it in 1.16, so start it here.
+          server_mode_for() {
+            case "$1" in
+              :integration-tests) echo basic ;;
+              :twofactor-tests) echo twofactor ;;
+              :oauth2-tests) echo oauth2 ;;
+              *) echo "" ;;
+            esac
+          }
+
           for module in "${!module_tests[@]}"; do
             echo "##[group]Running tests in $module"
             for class in ${module_tests[$module]}; do
               echo "  - $class"
             done
+
+            server_mode=$(server_mode_for "$module")
+            if [ -z "$server_mode" ]; then
+              # Unit-test modules need no server; free its port and memory if one is still up.
+              ./scripts/ci-fineract-server.sh stop
+            elif ! ./scripts/ci-fineract-server.sh start "$server_mode"; then
+              echo "##[error]Fineract did not start in $server_mode mode for $module"
+              FAILED=1
+              echo "##[endgroup]"
+              continue
+            fi
 
             test_args=$(for class in ${module_tests[$module]}; do echo --tests "$class"; done | xargs)
 
@@ -145,6 +167,8 @@ jobs:
             fi
             echo "##[endgroup]"
           done
+
+          ./scripts/ci-fineract-server.sh stop
 
           if [ "$FAILED" -eq 1 ]; then
             echo "##[error]Some tests failed in this job"
@@ -183,12 +207,12 @@ jobs:
           targetPath: '$(Build.ArtifactStagingDirectory)/test-results'
           artifact: 'test-results-$(taskName)'
 
-      # GitHub upload-artifact path: '**/build/cargo/'
+      # GitHub upload-artifact path: 'build/fineract-server/'
       # CopyFiles@2 does not create targetFolder when the glob matches nothing,
       # and PublishPipelineArtifact then fails with "Path does not exist".
       # GitHub's upload-artifact only warns on no match, so create the folder
-      # up front to keep the same non-fatal behaviour (cargo logs are absent
-      # when the server is not started via cargo).
+      # up front to keep the same non-fatal behaviour (server logs are absent
+      # on shards that run no server-backed module).
       - bash: mkdir -p '$(Build.ArtifactStagingDirectory)/server-logs'
         displayName: 'Ensure server-logs dir exists'
         condition: always()
@@ -198,7 +222,7 @@ jobs:
         condition: always()
         inputs:
           sourceFolder: '$(System.DefaultWorkingDirectory)'
-          contents: '**/build/cargo/**'
+          contents: 'build/fineract-server/**'
           targetFolder: '$(Build.ArtifactStagingDirectory)/server-logs'
 
       - task: PublishPipelineArtifact@1

@@ -1,3 +1,4 @@
+@SerialChargeAccrualConfig
 @LoanFeature
 Feature: Loan - Part2
 
@@ -473,7 +474,7 @@ Feature: Loan - Part2
       | Transaction Type | Amount | Principal | Interest | Fees | Penalties | Loan Balance |
       | Repayment        | 9.0    | 0.0       | 0.0      | 0.0  | 9.0       | 1000.0       |
       | Repayment        | 8.0    | 0.0       | 0.0      | 0.0  | 8.0       | 1000.0       |
-      | Repayment        | 7.0    | 5.0       | 0.0      | 0.0  | 2.0       | 993.0        |
+      | Repayment        | 7.0    | 5.0       | 0.0      | 0.0  | 2.0       | 995.0        |
     When Customer undo "2"th repayment on "02 November 2022"
     Then Loan Transactions tab has a transaction with date: "02 November 2022", and with the following data:
       | Transaction Type | Amount | Principal | Interest | Fees | Penalties | Loan Balance |
@@ -2578,4 +2579,3 @@ Feature: Loan - Part2
       | NSF fee | true      | Specified due date | 17 October 2023   | Flat             | 20.0 | 20.0 | 0.0    | 0.0         |
       | NSF fee | true      | Specified due date | 16 October 2023   | Flat             | 20.0 | 20.0 | 0.0    | 0.0         |
       | NSF fee | true      | Specified due date | 17 September 2023 | Flat             | 20.0 | 20.0 | 0.0    | 0.0         |
-

@@ -20,6 +20,7 @@ package org.apache.fineract.portfolio.savings.domain;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountingBridgeCommissionAllocationDTO;
@@ -40,6 +41,20 @@ public final class SavingsAccountingBridgeDataHelper {
         return new SavingsAccountingBridgeDTO(account.getId(), account.productId(), account.officeId(), currencyCode,
                 account.savingsProduct().isCashBasedAccountingEnabled(), account.savingsProduct().isAccrualBasedAccountingEnabled(),
                 isAccountTransfer, newSavingsTransactions);
+    }
+
+    /**
+     * As above, also naming the new transactions that are account-transfer legs although the bridge as a whole is not
+     * flagged as a transfer (FINERACT-754: legs re-created during an overdraft recalculation).
+     */
+    public static SavingsAccountingBridgeDTO buildAccountingBridgeData(final SavingsAccount account,
+            final Collection<SavingsAccountTransaction> newTransactions, final boolean isAccountTransfer,
+            final Set<Long> accountTransferTransactionIds) {
+        final SavingsAccountingBridgeDTO accountingBridgeData = buildAccountingBridgeData(account, newTransactions, isAccountTransfer);
+        if (accountTransferTransactionIds != null) {
+            accountingBridgeData.setAccountTransferTransactionIds(new HashSet<>(accountTransferTransactionIds));
+        }
+        return accountingBridgeData;
     }
 
     public static SavingsAccountingBridgeDTO buildAccountingBridgeData(final SavingsAccount account,

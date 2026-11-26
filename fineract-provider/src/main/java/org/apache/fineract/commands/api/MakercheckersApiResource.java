@@ -92,7 +92,7 @@ public class MakercheckersApiResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Approve Maker Checker Entry | Reject Maker Checker Entry")
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = MakercheckersApiResourceSwagger.PostMakerCheckersResponse.class)))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public CommandProcessingResult approveMakerCheckerEntry(@PathParam("auditId") @Parameter(description = "auditId") final Long auditId,
             @QueryParam("command") @Parameter(description = "command") final String commandParam) {
 
@@ -131,8 +131,25 @@ public class MakercheckersApiResource {
         }
         extraCriteria.addNonNullCriteria("aud.resource_id = ", makerCheckerRequest.getResourceId());
         extraCriteria.addNonNullCriteria("aud.maker_id = ", makerCheckerRequest.getMakerId());
-        extraCriteria.addNonNullCriteria("aud.made_on_date >= ", makerCheckerRequest.getMakerDateTimeFrom());
-        extraCriteria.addNonNullCriteria("aud.made_on_date <= ", makerCheckerRequest.getMakerDateTimeTo());
+        if (StringUtils.isNotBlank(makerCheckerRequest.getUsername())) {
+            extraCriteria.addCriteria("mk.username like ", makerCheckerRequest.getUsername().trim() + "%");
+        }
+        if (makerCheckerRequest.getMakerDateTimeFrom() != null) {
+            extraCriteria.addSubOperation((SQLBuilder criteria) -> {
+                criteria.addNonNullCriteria("aud.made_on_date >= ", makerCheckerRequest.getMakerDateTimeFrom(),
+                        SQLBuilder.WhereLogicalOperator.NONE);
+                criteria.addNonNullCriteria("aud.made_on_date_utc >= ", makerCheckerRequest.getMakerDateTimeFrom(),
+                        SQLBuilder.WhereLogicalOperator.OR);
+            });
+        }
+        if (makerCheckerRequest.getMakerDateTimeTo() != null) {
+            extraCriteria.addSubOperation((SQLBuilder criteria) -> {
+                criteria.addNonNullCriteria("aud.made_on_date <= ", makerCheckerRequest.getMakerDateTimeTo(),
+                        SQLBuilder.WhereLogicalOperator.NONE);
+                criteria.addNonNullCriteria("aud.made_on_date_utc <= ", makerCheckerRequest.getMakerDateTimeTo(),
+                        SQLBuilder.WhereLogicalOperator.OR);
+            });
+        }
         extraCriteria.addNonNullCriteria("aud.office_id = ", makerCheckerRequest.getOfficeId());
         extraCriteria.addNonNullCriteria("aud.group_id = ", makerCheckerRequest.getGroupId());
         extraCriteria.addNonNullCriteria("aud.client_id = ", makerCheckerRequest.getClientId());

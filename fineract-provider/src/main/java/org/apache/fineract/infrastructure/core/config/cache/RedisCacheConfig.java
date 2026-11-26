@@ -1,3 +1,21 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -19,6 +37,7 @@
  */
 package org.apache.fineract.infrastructure.core.config.cache;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -124,6 +143,24 @@ public class RedisCacheConfig {
             LettuceConnectionFactory redisConnectionFactory) {
         long ttl = fineractProperties.getCache().getRedis().getDefaultTtlSeconds();
 
+        ObjectMapper redisObjectMapper = redisObjectMapper();
+
+        RedisCacheConfiguration redisCacheConfig = RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofSeconds(ttl))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new GenericJackson2JsonRedisSerializer(redisObjectMapper)));
+
+        TenantAwareRedisCacheManager redisCacheManager = new TenantAwareRedisCacheManager(
+                RedisCacheWriter.nonLockingRedisCacheWriter(redisConnectionFactory), redisCacheConfig);
+
+        return new FallbackToCacheManagerProxy(redisCacheManager);
+    }
+
+    /**
+     * The mapper used for values stored in Redis. Package-visible so tests can check that a cached type survives a
+     * write and a read with exactly this configuration.
+     */
+    static ObjectMapper redisObjectMapper() {
         // Restrict Jackson polymorphic deserialization to trusted packages only.
         // The default GenericJackson2JsonRedisSerializer uses LaissezFaireSubTypeValidator
         // which allows any class — a deserialization gadget risk if Redis is compromised.
@@ -148,6 +185,9 @@ public class RedisCacheConfig {
         // (which IS serialized), we tell Jackson to skip this property entirely for Redis caching.
         redisObjectMapper.addMixIn(org.apache.fineract.useradministration.domain.AppUser.class, AppUserCacheMixin.class);
         redisObjectMapper.addMixIn(org.apache.fineract.organisation.office.domain.Office.class, OfficeCacheMixin.class);
+        // SavingsProductData keeps most of its state in private fields with no getters, so a getter-based write
+        // dropped them and a product read served from Redis came back with those fields null.
+        redisObjectMapper.addMixIn(org.apache.fineract.portfolio.savings.data.SavingsProductData.class, SavingsProductDataCacheMixin.class);
 
         // Custom type resolver that includes final types like Long and String.
         // The default NON_FINAL skips final classes, causing Long to serialize as plain "42"
@@ -162,16 +202,7 @@ public class RedisCacheConfig {
                 return !t.isPrimitive();
             }
         }.init(JsonTypeInfo.Id.CLASS, null).inclusion(JsonTypeInfo.As.WRAPPER_ARRAY));
-
-        RedisCacheConfiguration redisCacheConfig = RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofSeconds(ttl))
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer(redisObjectMapper)));
-
-        TenantAwareRedisCacheManager redisCacheManager = new TenantAwareRedisCacheManager(
-                RedisCacheWriter.nonLockingRedisCacheWriter(redisConnectionFactory), redisCacheConfig);
-
-        return new FallbackToCacheManagerProxy(redisCacheManager);
+        return redisObjectMapper;
     }
 
     /**
@@ -197,4 +228,12 @@ public class RedisCacheConfig {
         @JsonIgnore
         abstract Office getParent();
     }
+
+    /**
+     * Jackson mixin for SavingsProductData Redis serialization: write and read the fields themselves. The class has
+     * getters for only part of its state, and its API responses are produced by Gson from the fields, so the cached
+     * copy has to carry the same fields to give the same response.
+     */
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY, getterVisibility = JsonAutoDetect.Visibility.NONE, isGetterVisibility = JsonAutoDetect.Visibility.NONE)
+    abstract static class SavingsProductDataCacheMixin {}
 }

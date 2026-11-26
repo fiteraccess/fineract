@@ -32,8 +32,6 @@ import org.apache.fineract.client.feign.services.BusinessDateManagementApi;
 import org.apache.fineract.client.feign.services.BusinessStepConfigurationApi;
 import org.apache.fineract.client.feign.services.CacheApi;
 import org.apache.fineract.client.feign.services.CalendarApi;
-import org.apache.fineract.client.feign.services.CashierJournalsApi;
-import org.apache.fineract.client.feign.services.CashiersApi;
 import org.apache.fineract.client.feign.services.CentersApi;
 import org.apache.fineract.client.feign.services.ChargesApi;
 import org.apache.fineract.client.feign.services.ClientApi;
@@ -83,6 +81,7 @@ import org.apache.fineract.client.feign.services.InterOperationApi;
 import org.apache.fineract.client.feign.services.InterestRateChartApi;
 import org.apache.fineract.client.feign.services.InterestRateSlabAKAInterestBandsApi;
 import org.apache.fineract.client.feign.services.InternalCobApi;
+import org.apache.fineract.client.feign.services.InternalExternalEventsApi;
 import org.apache.fineract.client.feign.services.InternalWorkingCapitalLoansApi;
 import org.apache.fineract.client.feign.services.JournalEntriesApi;
 import org.apache.fineract.client.feign.services.LikelihoodApi;
@@ -105,14 +104,12 @@ import org.apache.fineract.client.feign.services.LoansPointInTimeApi;
 import org.apache.fineract.client.feign.services.MakerCheckerOr4EyeFunctionalityApi;
 import org.apache.fineract.client.feign.services.MappingFinancialActivitiesToAccountsApi;
 import org.apache.fineract.client.feign.services.MeetingsApi;
-import org.apache.fineract.client.feign.services.MixMappingApi;
-import org.apache.fineract.client.feign.services.MixReportApi;
-import org.apache.fineract.client.feign.services.MixTaxonomyApi;
 import org.apache.fineract.client.feign.services.NotesApi;
 import org.apache.fineract.client.feign.services.NotificationApi;
 import org.apache.fineract.client.feign.services.OfficesApi;
 import org.apache.fineract.client.feign.services.PasswordPreferencesApi;
 import org.apache.fineract.client.feign.services.PaymentTypeApi;
+import org.apache.fineract.client.feign.services.PayoffSchedulePreviewApi;
 import org.apache.fineract.client.feign.services.PeriodicAccrualAccountingApi;
 import org.apache.fineract.client.feign.services.PermissionsApi;
 import org.apache.fineract.client.feign.services.PovertyLineApi;
@@ -272,14 +269,6 @@ public final class FineractFeignClient {
 
     public CalendarApi calendar() {
         return create(CalendarApi.class);
-    }
-
-    public CashierJournalsApi cashierJournals() {
-        return create(CashierJournalsApi.class);
-    }
-
-    public CashiersApi cashiers() {
-        return create(CashiersApi.class);
     }
 
     public CentersApi centers() {
@@ -478,6 +467,10 @@ public final class FineractFeignClient {
         return create(InternalCobApi.class);
     }
 
+    public InternalExternalEventsApi internalExternalEvents() {
+        return create(InternalExternalEventsApi.class);
+    }
+
     public JournalEntriesApi journalEntries() {
         return create(JournalEntriesApi.class);
     }
@@ -562,18 +555,6 @@ public final class FineractFeignClient {
         return create(MeetingsApi.class);
     }
 
-    public MixMappingApi mixMapping() {
-        return create(MixMappingApi.class);
-    }
-
-    public MixReportApi mixReport() {
-        return create(MixReportApi.class);
-    }
-
-    public MixTaxonomyApi mixTaxonomy() {
-        return create(MixTaxonomyApi.class);
-    }
-
     public NotesApi notes() {
         return create(NotesApi.class);
     }
@@ -592,6 +573,10 @@ public final class FineractFeignClient {
 
     public PaymentTypeApi paymentType() {
         return create(PaymentTypeApi.class);
+    }
+
+    public PayoffSchedulePreviewApi payoffSchedulePreview() {
+        return create(PayoffSchedulePreviewApi.class);
     }
 
     public PeriodicAccrualAccountingApi periodicAccrualAccounting() {

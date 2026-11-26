@@ -23,20 +23,27 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.apache.fineract.accounting.retainedearning.domain.AccountGLJournalEntryAnnualSummaryRepository;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.jobs.service.retainedearning.data.AccountGLJournalEntryAnnualSummaryData;
 import org.apache.fineract.infrastructure.jobs.service.retainedearning.helper.DataParser;
 import org.apache.fineract.infrastructure.jobs.service.retainedearning.services.RetainedEarningDataServiceImpl;
 import org.apache.fineract.infrastructure.report.service.ReportingProcessService;
+import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
+import org.apache.fineract.portfolio.PortfolioProductType;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.apache.fineract.portfolio.workingcapitalloanproduct.domain.WorkingCapitalLoanProduct;
+import org.apache.fineract.portfolio.workingcapitalloanproduct.repository.WorkingCapitalLoanProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -74,6 +81,9 @@ class RetainedEarningScenarioTest {
     private LoanProductRepository loanProductRepository;
 
     @Mock
+    private WorkingCapitalLoanProductRepository workingCapitalLoanProductRepository;
+
+    @Mock
     private RetainedEarningConfigurationService retainedEarningConfigurationService;
 
     @InjectMocks
@@ -82,16 +92,23 @@ class RetainedEarningScenarioTest {
     @Mock
     private LoanProduct loanProduct;
 
+    @Mock
+    private WorkingCapitalLoanProduct workingCapitalLoanProduct;
+
     private static final LocalDate FISCAL_YEAR_END = LocalDate.of(2023, 12, 31);
     private static final String RETAINED_EARNING_GL = "320000";
 
     private void setupConfigMocks() {
-        when(retainedEarningConfigurationService.getIncomeExpenseGlAccounts()).thenReturn("400000-899999");
-        when(retainedEarningConfigurationService.getRetainedEarningGlAccount()).thenReturn(RETAINED_EARNING_GL);
+        setupGlAccountConfigMocks();
         when(loanProductRepository.findAllByNameIgnoreCase(any())).thenReturn(List.of(loanProduct));
         when(loanProduct.getId()).thenReturn(1L);
         when(loanProduct.getName()).thenReturn("GPL_DE_PI30");
-        when(loanProduct.getCurrency()).thenReturn(new org.apache.fineract.organisation.monetary.domain.MonetaryCurrency("EUR", 2, null));
+        when(loanProduct.getCurrency()).thenReturn(new MonetaryCurrency("EUR", 2, null));
+    }
+
+    private void setupGlAccountConfigMocks() {
+        when(retainedEarningConfigurationService.getIncomeExpenseGlAccounts()).thenReturn("400000-899999");
+        when(retainedEarningConfigurationService.getRetainedEarningGlAccount()).thenReturn(RETAINED_EARNING_GL);
     }
 
     /**
@@ -105,7 +122,7 @@ class RetainedEarningScenarioTest {
         setupConfigMocks();
 
         List<AccountGLJournalEntryAnnualSummaryData> results = retainedEarningDataService.processTrialBalanceData(trialBalanceData,
-                FISCAL_YEAR_END);
+                FISCAL_YEAR_END, PortfolioProductType.LOAN);
 
         assertFalse(results.isEmpty(), "Should produce results");
 
@@ -145,7 +162,95 @@ class RetainedEarningScenarioTest {
         for (AccountGLJournalEntryAnnualSummaryData result : results) {
             assertEquals(1L, result.getProductId(), "All records should have product ID set");
             assertEquals("EUR", result.getCurrencyCode(), "All records should have currency code set");
+            assertEquals(PortfolioProductType.LOAN, result.getProductType(), "All records should be tagged as loan records");
         }
+        verifyNoInteractions(workingCapitalLoanProductRepository);
+    }
+
+    /**
+     * Working capital loan products live in their own table, so a working capital trial balance must resolve product
+     * names against working capital loan products only, even when a loan product with the same name exists.
+     */
+    @Test
+    void shouldResolveWorkingCapitalLoanProductsFromWorkingCapitalRepository() {
+        List<AccountGLJournalEntryAnnualSummaryData> trialBalanceData = buildSampleTrialBalanceData();
+        setupGlAccountConfigMocks();
+        when(workingCapitalLoanProductRepository.findAllByNameIgnoreCase(any())).thenReturn(List.of(workingCapitalLoanProduct));
+        when(workingCapitalLoanProduct.getId()).thenReturn(7L);
+        when(workingCapitalLoanProduct.getName()).thenReturn("GPL_DE_PI30");
+        when(workingCapitalLoanProduct.getCurrency()).thenReturn(new MonetaryCurrency("USD", 2, null));
+
+        List<AccountGLJournalEntryAnnualSummaryData> results = retainedEarningDataService.processTrialBalanceData(trialBalanceData,
+                FISCAL_YEAR_END, PortfolioProductType.WORKING_CAPITAL_LOAN);
+
+        assertEquals(6, results.size(), "Should have 4 income/expense records and 2 retained earning records");
+        for (AccountGLJournalEntryAnnualSummaryData result : results) {
+            assertEquals(7L, result.getProductId(), "All records should reference the working capital loan product");
+            assertEquals("USD", result.getCurrencyCode(), "All records should use the working capital loan product currency");
+            assertEquals(PortfolioProductType.WORKING_CAPITAL_LOAN, result.getProductType(),
+                    "All records should be tagged as working capital loan records");
+        }
+        verifyNoInteractions(loanProductRepository);
+    }
+
+    @Test
+    void shouldSplitRetainedEarningsByOriginatorWithinSameOwner() {
+        List<AccountGLJournalEntryAnnualSummaryData> trialBalanceData = new ArrayList<>();
+        trialBalanceData.add(buildRecordWithOriginator("401001", "self", new BigDecimal("-150000.00"), "ALPHA-01, ZETA-01"));
+        trialBalanceData.add(buildRecordWithOriginator("801001", "self", new BigDecimal("50000.00"), "ALPHA-01, ZETA-01"));
+        trialBalanceData.add(buildRecordWithOriginator("401002", "self", new BigDecimal("-200000.00"), "ALPHA-01"));
+        trialBalanceData.add(buildRecordWithOriginator("801002", "self", new BigDecimal("75000.00"), "ALPHA-01"));
+        setupConfigMocks();
+
+        List<AccountGLJournalEntryAnnualSummaryData> results = retainedEarningDataService.processTrialBalanceData(trialBalanceData,
+                FISCAL_YEAR_END, PortfolioProductType.LOAN);
+
+        List<AccountGLJournalEntryAnnualSummaryData> retainedEarningResults = results.stream()
+                .filter(r -> r.getGlAccountCode().equals(RETAINED_EARNING_GL)).toList();
+
+        assertEquals(2, retainedEarningResults.size(), "Should have 2 retained earning records, one per distinct originator");
+
+        AccountGLJournalEntryAnnualSummaryData multiOriginatorRE = retainedEarningResults.stream()
+                .filter(r -> "ALPHA-01, ZETA-01".equals(r.getOriginatorExternalIds())).findFirst().orElse(null);
+        assertNotNull(multiOriginatorRE, "Should have a retained earning record for the ALPHA-01, ZETA-01 originator bucket");
+        assertEquals(0, new BigDecimal("-100000.00").compareTo(multiOriginatorRE.getOpeningBalanceAmount()));
+
+        AccountGLJournalEntryAnnualSummaryData singleOriginatorRE = retainedEarningResults.stream()
+                .filter(r -> "ALPHA-01".equals(r.getOriginatorExternalIds())).findFirst().orElse(null);
+        assertNotNull(singleOriginatorRE, "Should have a separate retained earning record for the ALPHA-01 originator bucket");
+        assertEquals(0, new BigDecimal("-125000.00").compareTo(singleOriginatorRE.getOpeningBalanceAmount()));
+
+        Map<String, String> originatorByIncomeExpenseGl = results.stream().filter(r -> !r.getGlAccountCode().equals(RETAINED_EARNING_GL))
+                .collect(Collectors.toMap(AccountGLJournalEntryAnnualSummaryData::getGlAccountCode,
+                        AccountGLJournalEntryAnnualSummaryData::getOriginatorExternalIds));
+        assertEquals(Map.of("401001", "ALPHA-01, ZETA-01", "801001", "ALPHA-01, ZETA-01", "401002", "ALPHA-01", "801002", "ALPHA-01"),
+                originatorByIncomeExpenseGl);
+    }
+
+    @Test
+    void shouldKeepNullOriginatorBucketSeparateFromValuedBucket() {
+        List<AccountGLJournalEntryAnnualSummaryData> trialBalanceData = new ArrayList<>();
+        trialBalanceData.add(buildRecordWithOriginator("401001", "self", new BigDecimal("-150000.00"), null));
+        trialBalanceData.add(buildRecordWithOriginator("401002", "self", new BigDecimal("-200000.00"), "ALPHA-01"));
+        setupConfigMocks();
+
+        List<AccountGLJournalEntryAnnualSummaryData> results = retainedEarningDataService.processTrialBalanceData(trialBalanceData,
+                FISCAL_YEAR_END, PortfolioProductType.LOAN);
+
+        List<AccountGLJournalEntryAnnualSummaryData> retainedEarningResults = results.stream()
+                .filter(r -> r.getGlAccountCode().equals(RETAINED_EARNING_GL)).toList();
+
+        assertEquals(2, retainedEarningResults.size());
+
+        AccountGLJournalEntryAnnualSummaryData noOriginatorRE = retainedEarningResults.stream()
+                .filter(r -> r.getOriginatorExternalIds() == null).findFirst().orElse(null);
+        assertNotNull(noOriginatorRE);
+        assertEquals(0, new BigDecimal("-150000.00").compareTo(noOriginatorRE.getOpeningBalanceAmount()));
+
+        AccountGLJournalEntryAnnualSummaryData valuedOriginatorRE = retainedEarningResults.stream()
+                .filter(r -> "ALPHA-01".equals(r.getOriginatorExternalIds())).findFirst().orElse(null);
+        assertNotNull(valuedOriginatorRE);
+        assertEquals(0, new BigDecimal("-200000.00").compareTo(valuedOriginatorRE.getOpeningBalanceAmount()));
     }
 
     @Test
@@ -157,7 +262,7 @@ class RetainedEarningScenarioTest {
         setupConfigMocks();
 
         List<AccountGLJournalEntryAnnualSummaryData> results = retainedEarningDataService.processTrialBalanceData(trialBalanceData,
-                FISCAL_YEAR_END);
+                FISCAL_YEAR_END, PortfolioProductType.LOAN);
 
         assertEquals(2, results.size(), "Should only have income/expense records, no retained earnings");
         assertTrue(results.stream().noneMatch(rec -> rec.getGlAccountCode().equals(RETAINED_EARNING_GL)),
@@ -241,5 +346,10 @@ class RetainedEarningScenarioTest {
         return AccountGLJournalEntryAnnualSummaryData.builder().glAccountCode(glAccountId).productName("GPL_DE_PI30").officeId(1L)
                 .ownerExternalId(ExternalIdFactory.produce(ownerExternalId)).openingBalanceAmount(BigDecimal.ZERO)
                 .endingBalanceAmount(endingBalance).yearEndDate(FISCAL_YEAR_END).manualEntry(false).build();
+    }
+
+    private AccountGLJournalEntryAnnualSummaryData buildRecordWithOriginator(String glAccountId, String ownerExternalId,
+            BigDecimal endingBalance, String originatorExternalIds) {
+        return buildRecord(glAccountId, ownerExternalId, endingBalance).toBuilder().originatorExternalIds(originatorExternalIds).build();
     }
 }

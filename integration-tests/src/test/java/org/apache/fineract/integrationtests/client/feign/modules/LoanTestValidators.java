@@ -87,6 +87,7 @@ public final class LoanTestValidators {
                 return;
             }
 
+            // The API omits manuallyReversed for non-reversed transactions, so null and false are the same state.
             boolean found = transactionsByDate.stream()
                     .anyMatch(item -> Objects.equals(Utils.getDoubleValue(item.getAmount()), tr.amount)
                             && Objects.equals(item.getType().getValue(), tr.type)
@@ -97,7 +98,7 @@ public final class LoanTestValidators {
                             && Objects.equals(Utils.getDoubleValue(item.getPenaltyChargesPortion()), tr.penaltyPortion)
                             && Objects.equals(Utils.getDoubleValue(item.getOverpaymentPortion()), tr.overpaymentPortion)
                             && Objects.equals(Utils.getDoubleValue(item.getUnrecognizedIncomePortion()), tr.unrecognizedPortion)
-                            && (tr.reversed == null || Objects.equals(item.getManuallyReversed(), tr.reversed)));
+                            && Boolean.TRUE.equals(item.getManuallyReversed()) == Boolean.TRUE.equals(tr.reversed));
 
             if (!found) {
                 StringBuilder errorMessage = new StringBuilder();
@@ -305,6 +306,25 @@ public final class LoanTestValidators {
         assertEquals(interestOutstanding, Utils.getDoubleValue(period.getInterestOutstanding()));
         assertEquals(paidInAdvance, Utils.getDoubleValue(period.getTotalPaidInAdvanceForPeriod()));
         assertEquals(paidLate, Utils.getDoubleValue(period.getTotalPaidLateForPeriod()));
+    }
+
+    public static void verifyTransactionPortions(GetLoansLoanIdResponse loanDetails, String type, String date, double amount,
+            double principalPortion, double interestPortion, double feePortion, double penaltyPortion) {
+        assertNotNull(loanDetails.getTransactions(), "Loan has no transactions at all");
+        LocalDate expectedDate = LocalDate.parse(date, DATE_FORMATTER);
+        List<GetLoansLoanIdTransactions> matches = loanDetails.getTransactions().stream()
+                .filter(transaction -> Objects.equals(transaction.getType().getValue(), type))
+                .filter(transaction -> Objects.equals(transaction.getDate(), expectedDate)).toList();
+        assertEquals(1, matches.size(), () -> "Expected exactly one " + type + " transaction dated " + date + ", found " + matches.size()
+                + " of them. All " + type + " transactions: "
+                + loanDetails.getTransactions().stream().filter(transaction -> Objects.equals(transaction.getType().getValue(), type))
+                        .map(transaction -> transaction.getDate() + " amount=" + Utils.getDoubleValue(transaction.getAmount())).toList());
+        GetLoansLoanIdTransactions transaction = matches.get(0);
+        assertEquals(amount, Utils.getDoubleValue(transaction.getAmount()), type + " amount on " + date);
+        assertEquals(principalPortion, Utils.getDoubleValue(transaction.getPrincipalPortion()), type + " principal portion on " + date);
+        assertEquals(interestPortion, Utils.getDoubleValue(transaction.getInterestPortion()), type + " interest portion on " + date);
+        assertEquals(feePortion, Utils.getDoubleValue(transaction.getFeeChargesPortion()), type + " fee portion on " + date);
+        assertEquals(penaltyPortion, Utils.getDoubleValue(transaction.getPenaltyChargesPortion()), type + " penalty portion on " + date);
     }
 
     public static void verifyLoanStatus(GetLoansLoanIdResponse loanDetails, Function<GetLoansLoanIdStatus, Boolean> extractor) {

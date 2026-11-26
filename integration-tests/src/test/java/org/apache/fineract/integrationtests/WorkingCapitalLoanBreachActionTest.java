@@ -31,8 +31,11 @@ import java.util.List;
 import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.WorkingCapitalBreachRequest;
 import org.apache.fineract.client.models.WorkingCapitalLoanBreachActionData;
+import org.apache.fineract.infrastructure.event.external.data.ExternalEventResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignExternalEventHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.workingcapitalloan.WorkingCapitalLoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.workingcapitalloan.WorkingCapitalLoanDisbursementTestBuilder;
@@ -46,10 +49,14 @@ import org.junit.jupiter.api.Test;
 
 public class WorkingCapitalLoanBreachActionTest {
 
+    private static final String WC_BREACH_PAUSE_EVENT = "WorkingCapitalLoanBreachPauseBusinessEvent";
+
     private final WorkingCapitalLoanHelper loanHelper = new WorkingCapitalLoanHelper();
     private final WorkingCapitalLoanProductHelper productHelper = new WorkingCapitalLoanProductHelper();
     private final WorkingCapitalBreachHelper breachHelper = new WorkingCapitalBreachHelper();
     private final WorkingCapitalLoanBreachActionHelper breachActionHelper = new WorkingCapitalLoanBreachActionHelper();
+    private final FeignExternalEventHelper externalEventHelper = new FeignExternalEventHelper(
+            FineractFeignClientHelper.getFineractFeignClient());
 
     private final List<Long> createdLoanIds = new ArrayList<>();
     private final List<Long> createdProductIds = new ArrayList<>();
@@ -123,6 +130,28 @@ public class WorkingCapitalLoanBreachActionTest {
     }
 
     @Test
+    public void testPausePublishesExternalBusinessEvent() {
+        externalEventHelper.enableBusinessEvent(WC_BREACH_PAUSE_EVENT);
+        try {
+            BusinessDateHelper.runAt("01 July 2026", () -> {
+                final Long loanId = createActiveLoan(LocalDate.of(2026, Month.JULY, 1));
+
+                externalEventHelper.deleteAllExternalEvents();
+                breachActionHelper.pause(loanId, "2026-07-01", "2026-07-10");
+
+                final List<ExternalEventResponse> events = externalEventHelper.getExternalEventsByType(WC_BREACH_PAUSE_EVENT);
+                final ExternalEventResponse event = events.stream().filter(e -> loanId.equals(e.getAggregateRootId())).findFirst()
+                        .orElse(null);
+                assertNotNull(event, "Expected breach pause external event for loan");
+                assertEquals(WC_BREACH_PAUSE_EVENT, event.getType());
+                assertEquals(loanId, event.getAggregateRootId());
+            });
+        } finally {
+            externalEventHelper.disableBusinessEvent(WC_BREACH_PAUSE_EVENT);
+        }
+    }
+
+    @Test
     public void testResumeCreatesResumeActionAndSetsEffectiveEndDateOnPause() {
         final Long[] loanIdHolder = new Long[1];
         BusinessDateHelper.runAt("01 July 2026", () -> {
@@ -178,7 +207,7 @@ public class WorkingCapitalLoanBreachActionTest {
             CallFailedRuntimeException ex = breachActionHelper.resumeExpectingFailure(loanIdHolder[0], "2026-07-20");
             assertEquals(400, ex.getStatus());
             assertNotNull(ex.getDeveloperMessage());
-            assertTrue(ex.getDeveloperMessage().contains("resume.not.during.active.pause"));
+            assertTrue(ex.getDeveloperMessage().contains("Resume breach action can only be created during an active pause"));
 
             final List<WorkingCapitalLoanBreachActionData> actions = breachActionHelper.retrieveBreachActions(loanIdHolder[0]);
             final WorkingCapitalLoanBreachActionData pause = actions.stream()

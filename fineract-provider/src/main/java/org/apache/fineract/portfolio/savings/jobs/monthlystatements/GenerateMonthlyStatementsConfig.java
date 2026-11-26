@@ -21,11 +21,10 @@ package org.apache.fineract.portfolio.savings.jobs.monthlystatements;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.Step;
+import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -62,6 +61,6 @@ public class GenerateMonthlyStatementsConfig {
     @Bean
     public Job generateMonthlyStatementsJob(GenerateMonthlyStatementsTasklet generateMonthlyStatementsTasklet) {
         return new JobBuilder(JobName.GENERATE_MONTHLY_STATEMENTS.name(), jobRepository)
-                .start(generateMonthlyStatementsStep(generateMonthlyStatementsTasklet)).incrementer(new RunIdIncrementer()).build();
+                .start(generateMonthlyStatementsStep(generateMonthlyStatementsTasklet)).build();
     }
 }

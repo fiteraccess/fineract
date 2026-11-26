@@ -73,11 +73,12 @@ public class AdHoc extends AbstractAuditableCustom {
         final String email = command.stringValueOfParameterNamed(AdHocJsonInputParams.EMAIL.getValue());
         final Long reportRunFrequency = command.longValueOfParameterNamed(AdHocJsonInputParams.REPORT_RUN_FREQUENCY.getValue());
         final Long reportRunEvery = command.longValueOfParameterNamed(AdHocJsonInputParams.REPORT_RUN_EVERY.getValue());
+        final boolean active = command.booleanPrimitiveValueOfParameterNamed(AdHocJsonInputParams.ACTIVE.getValue());
 
         return new AdHoc().setName(StringUtils.defaultIfEmpty(name, null)).setQuery(StringUtils.defaultIfEmpty(query, null))
                 .setTableName(StringUtils.defaultIfEmpty(tableName, null)).setTableFields(StringUtils.defaultIfEmpty(tableFields, null))
                 .setEmail(StringUtils.defaultIfEmpty(email, null)).setReportRunFrequency(reportRunFrequency)
-                .setReportRunEvery(reportRunEvery).setActive(false);
+                .setReportRunEvery(reportRunEvery).setActive(active);
     }
 
     public Map<String, Object> update(final JsonCommand command) {
@@ -127,11 +128,11 @@ public class AdHoc extends AbstractAuditableCustom {
             actualChanges.put(reportRunEvery, newValue);
             this.reportRunEvery = newValue;
         }
-        final String paramisActive = "active";
+        final String paramisActive = AdHocJsonInputParams.ACTIVE.getValue();
         if (command.isChangeInBooleanParameterNamed(paramisActive, this.active)) {
             final Boolean newValue = command.booleanObjectValueOfParameterNamed(paramisActive);
             actualChanges.put(paramisActive, newValue);
-            this.active = newValue;
+            this.active = Boolean.TRUE.equals(newValue);
         }
         return actualChanges;
     }

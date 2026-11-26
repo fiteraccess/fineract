@@ -21,10 +21,10 @@ package org.apache.fineract.portfolio.savings.jobs.synapseoutbox;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
-import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.step.tasklet.Tasklet;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 
 /**
  * Purges old SENT entries from the {@code synapse_outbox} table based on the configured retention period.

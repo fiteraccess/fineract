@@ -71,11 +71,11 @@ import org.apache.fineract.portfolio.loanproduct.domain.LoanSupportedInterestRef
 import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundException;
 import org.apache.fineract.portfolio.rate.data.RateData;
 import org.apache.fineract.portfolio.rate.service.RateReadService;
+import org.jspecify.annotations.NonNull;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -103,7 +103,7 @@ public class LoanProductReadPlatformServiceImpl implements LoanProductReadPlatfo
             final Collection<AdvancedPaymentData> advancedPaymentData = retrieveAdvancedPaymentData(loanProductId);
             final Collection<CreditAllocationData> creditAllocationData = retrieveCreditAllocationData(loanProductId);
             final Collection<DelinquencyBucketData> delinquencyBucketOptions = this.delinquencyReadPlatformService
-                    .retrieveAllDelinquencyBuckets();
+                    .retrieveDelinquencyBucketsByType(DelinquencyBucketType.REGULAR);
             final LoanProductMapper rm = new LoanProductMapper(charges, borrowerCycleVariationDatas, rates, delinquencyBucketOptions,
                     advancedPaymentData, creditAllocationData);
             final String sql = "select " + rm.loanProductSchema() + " where lp.id = ?";

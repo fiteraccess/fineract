@@ -1790,6 +1790,7 @@ Feature: Credit Balance Refund
       | 01 April 2025    | Down Payment           | 61.0   | 61.0      | 0.0      | 0.0  | 0.0       | 182.79       | false    | false    |
     Then Loan status will be "ACTIVE"
 
+  @TestRailId:C98231
   Scenario Outline: Verify that Loan ends in correct state after CBR + backdated GoodwillCredit cocktail (<rule> future-installment rule)
     When Admin sets the business date to "02 September 2025"
     And Admin creates a client with random data
@@ -1869,7 +1870,7 @@ Feature: Credit Balance Refund
       | 1316.49       | 47.06    | 0.0  | 0.0       | 1363.55 | 1363.55 | 227.0      | 0.0  | 0.0         |
 
     @TestRailId:C78812
-    Examples: LAST_INSTALLMENT future-installment rule (the configuration that originally reproduced PS-3087)
+    Examples: LAST_INSTALLMENT future-installment rule (the configuration that originally created the issue)
       | rule             | loanProduct                                                                                        |
       | LAST_INSTALLMENT | LP2_ADV_PYMNT_INT_DAILY_EMI_ACTUAL_ACTUAL_INT_REFUND_FULL_ZERO_INT_CHARGE_OFF_ACC_LAST_INSTALLMENT |
 

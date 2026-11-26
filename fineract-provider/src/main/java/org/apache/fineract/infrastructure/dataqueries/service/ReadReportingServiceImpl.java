@@ -44,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
@@ -85,6 +86,9 @@ public class ReadReportingServiceImpl implements ReadReportingService {
 
     /** Matches any {@code ${placeholderName}} token in a report SQL template. */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
+
+    /** A plain integer with no leading zeros, so identifiers like {@code 000123} stay strings. */
+    private static final Pattern UNTYPED_INTEGER = Pattern.compile("-?(0|[1-9]\\d*)");
 
     private final JdbcTemplate jdbcTemplate;
     private final PlatformSecurityContext context;
@@ -161,6 +165,18 @@ public class ReadReportingServiceImpl implements ReadReportingService {
         if ("DATE".equalsIgnoreCase(formatType)) {
             return java.sql.Date.valueOf(value);
         }
+        // No declared format type — typically an office/product-cascaded lookup parameter
+        // substituted into another report's SQL (e.g. ${officeId} inside loanOfficerIdSelectAll).
+        // Bind a plain integer as a number so strict engines compare correctly; Postgres, unlike
+        // MySQL, rejects "bigint = varchar". Everything else (currency codes, ids with leading
+        // zeros, free text) stays a string.
+        if ((formatType == null || formatType.isBlank()) && UNTYPED_INTEGER.matcher(value).matches()) {
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException e) {
+                return value;
+            }
+        }
         return value;
     }
 
@@ -169,6 +185,7 @@ public class ReadReportingServiceImpl implements ReadReportingService {
         final List<Object> paramValues = new ArrayList<>();
         final Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
         final StringBuilder preparedSql = new StringBuilder();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
 
         while (matcher.find()) {
             final String paramName = matcher.group(1);
@@ -180,8 +197,15 @@ public class ReadReportingServiceImpl implements ReadReportingService {
             } else {
                 matcher.appendReplacement(preparedSql, Matcher.quoteReplacement(matcher.group(0)));
                 log.warn("Report '{}' contains placeholder '{}' with no matching parameter", name, paramName);
+                dataValidationErrors.add(ApiParameterError.parameterError("error.msg.report.missing.parameter",
+                        "The parameter '" + paramName + "' is required.", paramName));
             }
         }
+
+        if (!dataValidationErrors.isEmpty()) {
+            throw new org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException(dataValidationErrors);
+        }
+
         matcher.appendTail(preparedSql);
         return new PreparedQuery(this.genericDataService.wrapSQL(preparedSql.toString()), paramValues);
     }

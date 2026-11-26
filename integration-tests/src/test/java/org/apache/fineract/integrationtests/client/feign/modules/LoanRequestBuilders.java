@@ -24,16 +24,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.apache.fineract.client.models.AdvancedPaymentData;
+import org.apache.fineract.client.models.CreditAllocationData;
+import org.apache.fineract.client.models.CreditAllocationOrder;
 import org.apache.fineract.client.models.PaymentAllocationOrder;
 import org.apache.fineract.client.models.PostCreateRescheduleLoansRequest;
+import org.apache.fineract.client.models.PostLoansDisbursementData;
 import org.apache.fineract.client.models.PostLoansLoanIdChargesChargeIdRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdChargesRequest;
+import org.apache.fineract.client.models.PostLoansLoanIdDisbursementData;
 import org.apache.fineract.client.models.PostLoansLoanIdRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansRequest;
 import org.apache.fineract.client.models.PostUpdateRescheduleLoansRequest;
+import org.apache.fineract.portfolio.loanproduct.domain.PaymentAllocationType;
 
 public final class LoanRequestBuilders {
+
+    /** The JSON disburse builders this replaced always sent this note; keep the payload unchanged. */
+    private static final String DISBURSE_NOTE = "DISBURSE NOTE";
 
     private LoanRequestBuilders() {}
 
@@ -116,6 +124,101 @@ public final class LoanRequestBuilders {
                 .dateFormat(LoanTestData.DATETIME_PATTERN);
     }
 
+    /**
+     * The equal-installment declining-balance application that LoanApplicationTestBuilder produced, including the
+     * fields its build() always emitted but no call site named: maxOutstandingLoanBalance, an empty collateral list,
+     * the default strategy and the en_GB locale.
+     */
+    public static PostLoansRequest legacyIndividualApplication(Long clientId, Long productId, String principal, int repayments,
+            BigDecimal interestRatePerPeriod, String date) {
+        return new PostLoansRequest()//
+                .clientId(clientId)//
+                .productId(productId)//
+                // the JSON builder sent grouped amounts like "12,000.00" for the server to parse under en_GB
+                .principal(new BigDecimal(principal.replace(",", "")))//
+                .loanTermFrequency(repayments)//
+                .loanTermFrequencyType(LoanTestData.RepaymentFrequencyType.MONTHS)//
+                .numberOfRepayments(repayments)//
+                .repaymentEvery(1)//
+                .repaymentFrequencyType(LoanTestData.RepaymentFrequencyType.MONTHS)//
+                .interestRatePerPeriod(interestRatePerPeriod)//
+                .amortizationType(LoanTestData.AmortizationType.EQUAL_INSTALLMENTS)//
+                .interestType(LoanTestData.InterestType.DECLINING_BALANCE)//
+                .interestCalculationPeriodType(LoanTestData.InterestCalculationPeriodType.SAME_AS_REPAYMENT_PERIOD)//
+                .transactionProcessingStrategyCode(LoanTestData.TransactionProcessingStrategyCode.MIFOS_STANDARD_STRATEGY)//
+                .expectedDisbursementDate(date)//
+                .submittedOnDate(date)//
+                .loanType("individual")//
+                .maxOutstandingLoanBalance(new BigDecimal("36000"))//
+                .collateral(List.of())//
+                .locale("en_GB")//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    /**
+     * The days-based equal-principal application the JSON builder produced, with the same invisible build() defaults as
+     * {@link #legacyIndividualApplication}. Interest type defaults to flat; override it on the returned request.
+     */
+    public static PostLoansRequest legacyDaysBasedApplication(Long clientId, Long productId, String principal, int termDays, int repayments,
+            int repaymentEveryDays, String expectedDisbursementDate, String submittedOnDate) {
+        return new PostLoansRequest()//
+                .clientId(clientId)//
+                .productId(productId)//
+                .principal(new BigDecimal(principal.replace(",", "")))//
+                .loanTermFrequency(termDays)//
+                .loanTermFrequencyType(LoanTestData.RepaymentFrequencyType.DAYS)//
+                .numberOfRepayments(repayments)//
+                .repaymentEvery(repaymentEveryDays)//
+                .repaymentFrequencyType(LoanTestData.RepaymentFrequencyType.DAYS)//
+                .interestRatePerPeriod(BigDecimal.ZERO)//
+                .interestType(LoanTestData.InterestType.FLAT)//
+                .amortizationType(LoanTestData.AmortizationType.EQUAL_PRINCIPAL)//
+                .interestCalculationPeriodType(LoanTestData.InterestCalculationPeriodType.SAME_AS_REPAYMENT_PERIOD)//
+                .transactionProcessingStrategyCode(LoanTestData.TransactionProcessingStrategyCode.MIFOS_STANDARD_STRATEGY)//
+                .expectedDisbursementDate(expectedDisbursementDate)//
+                .submittedOnDate(submittedOnDate)//
+                .loanType("individual")//
+                .maxOutstandingLoanBalance(new BigDecimal("36000"))//
+                .collateral(List.of())//
+                .locale("en_GB")//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    public static PostLoansLoanIdRequest disburseLoanWithRepaymentReschedule(String disbursedOnDate, String adjustRepaymentDate) {
+        return new PostLoansLoanIdRequest()//
+                .actualDisbursementDate(disbursedOnDate)//
+                .adjustRepaymentDate(adjustRepaymentDate)//
+                .note(DISBURSE_NOTE)//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    public static PostLoansLoanIdRequest disburseLoanWithNetDisbursalAmount(String disbursedOnDate, BigDecimal netDisbursalAmount) {
+        return new PostLoansLoanIdRequest()//
+                .actualDisbursementDate(disbursedOnDate)//
+                .netDisbursalAmount(netDisbursalAmount)//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    public static PostLoansDisbursementData applyTrancheDetail(String expectedDisbursementDate, double principal) {
+        return new PostLoansDisbursementData()//
+                .expectedDisbursementDate(expectedDisbursementDate)//
+                .principal(BigDecimal.valueOf(principal));
+    }
+
+    public static PostLoansLoanIdDisbursementData approveTrancheDetail(String expectedDisbursementDate, double principal) {
+        return new PostLoansLoanIdDisbursementData()//
+                .expectedDisbursementDate(expectedDisbursementDate)//
+                .principal(BigDecimal.valueOf(principal));
+    }
+
+    public static PostLoansLoanIdRequest approveLoanWithTranches(Double approvedAmount, String approvedOnDate,
+            String expectedDisbursementDate, List<PostLoansLoanIdDisbursementData> tranches) {
+        return approveLoan(approvedAmount, approvedOnDate, expectedDisbursementDate)//
+                .disbursementData(tranches);
+    }
+
     public static PostLoansLoanIdTransactionsRequest repayLoan(Double amount, String transactionDate) {
         PostLoansLoanIdTransactionsRequest request = new PostLoansLoanIdTransactionsRequest();
         request.setTransactionDate(transactionDate);
@@ -182,6 +285,30 @@ public final class LoanRequestBuilders {
                 .dateFormat(LoanTestData.DATETIME_PATTERN);
     }
 
+    public static PostCreateRescheduleLoansRequest rescheduleWithExtraTerms(Long loanId, String submittedOnDate, String rescheduleFromDate,
+            Integer extraTerms) {
+        return new PostCreateRescheduleLoansRequest()//
+                .loanId(loanId)//
+                .submittedOnDate(submittedOnDate)//
+                .rescheduleFromDate(rescheduleFromDate)//
+                .extraTerms(extraTerms)//
+                .rescheduleReasonId(1L)//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    public static PostCreateRescheduleLoansRequest rescheduleWithRecalculateInterest(Long loanId, String submittedOnDate,
+            String rescheduleFromDate, String adjustedDueDate) {
+        return rescheduleRequest(loanId, submittedOnDate, rescheduleFromDate, adjustedDueDate).recalculateInterest(true);
+    }
+
+    public static PostCreateRescheduleLoansRequest rescheduleWithFixedEmiAndRecalculateInterest(Long loanId, String submittedOnDate,
+            String rescheduleFromDate, String adjustedDueDate, BigDecimal emi, String emiEndDate) {
+        return rescheduleWithRecalculateInterest(loanId, submittedOnDate, rescheduleFromDate, adjustedDueDate)//
+                .emi(emi)//
+                .endDate(emiEndDate);
+    }
+
     /**
      * Creates a reAge request for non-interest-bearing loans (no interest handling needed).
      */
@@ -199,6 +326,11 @@ public final class LoanRequestBuilders {
      */
     public static PostLoansLoanIdTransactionsRequest reAge(String startDate, String frequencyType, Integer frequencyNumber,
             Integer numberOfInstallments, String reAgeInterestHandling) {
+        return reAge(startDate, frequencyType, frequencyNumber, numberOfInstallments, reAgeInterestHandling, null);
+    }
+
+    public static PostLoansLoanIdTransactionsRequest reAge(String startDate, String frequencyType, Integer frequencyNumber,
+            Integer numberOfInstallments, String reAgeInterestHandling, Double transactionAmount) {
         PostLoansLoanIdTransactionsRequest request = new PostLoansLoanIdTransactionsRequest();
         request.setStartDate(startDate);
         request.setFrequencyType(frequencyType);
@@ -206,6 +338,9 @@ public final class LoanRequestBuilders {
         request.setNumberOfInstallments(numberOfInstallments);
         if (reAgeInterestHandling != null) {
             request.setReAgeInterestHandling(reAgeInterestHandling);
+        }
+        if (transactionAmount != null) {
+            request.transactionAmount(transactionAmount);
         }
         request.setLocale(LoanTestData.LOCALE);
         request.setDateFormat(LoanTestData.DATETIME_PATTERN);
@@ -232,14 +367,91 @@ public final class LoanRequestBuilders {
         AdvancedPaymentData data = new AdvancedPaymentData();
         data.setTransactionType(transactionType);
         data.setFutureInstallmentAllocationRule(futureInstallmentAllocationRule);
+        data.setPaymentAllocationOrder(defaultPaymentAllocationOrder());
+        return data;
+    }
+
+    public static AdvancedPaymentData paymentAllocation(String transactionType, String futureInstallmentAllocationRule,
+            String... paymentAllocationRules) {
+        AdvancedPaymentData data = new AdvancedPaymentData();
+        data.setTransactionType(transactionType);
+        data.setFutureInstallmentAllocationRule(futureInstallmentAllocationRule);
         AtomicInteger order = new AtomicInteger(1);
-        List<PaymentAllocationOrder> orders = Stream
-                .of("PAST_DUE_PENALTY", "PAST_DUE_FEE", "PAST_DUE_PRINCIPAL", "PAST_DUE_INTEREST", "DUE_PENALTY", "DUE_FEE",
-                        "DUE_PRINCIPAL", "DUE_INTEREST", "IN_ADVANCE_PENALTY", "IN_ADVANCE_FEE", "IN_ADVANCE_PRINCIPAL",
-                        "IN_ADVANCE_INTEREST")
+        List<PaymentAllocationOrder> orders = Stream.of(paymentAllocationRules)
                 .map(rule -> new PaymentAllocationOrder().paymentAllocationRule(rule).order(order.getAndIncrement())).toList();
         data.setPaymentAllocationOrder(orders);
         return data;
+    }
+
+    public static List<PaymentAllocationOrder> defaultPaymentAllocationOrder() {
+        return paymentAllocationOrder("PAST_DUE_PENALTY", "PAST_DUE_FEE", "PAST_DUE_PRINCIPAL", "PAST_DUE_INTEREST", "DUE_PENALTY",
+                "DUE_FEE", "DUE_PRINCIPAL", "DUE_INTEREST", "IN_ADVANCE_PENALTY", "IN_ADVANCE_FEE", "IN_ADVANCE_PRINCIPAL",
+                "IN_ADVANCE_INTEREST");
+    }
+
+    public static AdvancedPaymentData repaymentPaymentAllocation() {
+        AdvancedPaymentData data = new AdvancedPaymentData();
+        data.setTransactionType("REPAYMENT");
+        data.setFutureInstallmentAllocationRule("NEXT_INSTALLMENT");
+        data.setPaymentAllocationOrder(paymentAllocationOrder("PAST_DUE_PENALTY", "PAST_DUE_FEE", "PAST_DUE_INTEREST", "PAST_DUE_PRINCIPAL",
+                "DUE_PENALTY", "DUE_FEE", "DUE_INTEREST", "DUE_PRINCIPAL", "IN_ADVANCE_PENALTY", "IN_ADVANCE_FEE", "IN_ADVANCE_PRINCIPAL",
+                "IN_ADVANCE_INTEREST"));
+        return data;
+    }
+
+    public static AdvancedPaymentData interestPaymentWaiverAllocation() {
+        AdvancedPaymentData data = new AdvancedPaymentData();
+        data.setTransactionType("INTEREST_PAYMENT_WAIVER");
+        data.setFutureInstallmentAllocationRule("NEXT_INSTALLMENT");
+        data.setPaymentAllocationOrder(paymentAllocationOrder("PAST_DUE_FEE", "PAST_DUE_PENALTY", "PAST_DUE_INTEREST", "PAST_DUE_PRINCIPAL",
+                "DUE_PENALTY", "DUE_FEE", "DUE_INTEREST", "DUE_PRINCIPAL", "IN_ADVANCE_PENALTY", "IN_ADVANCE_FEE", "IN_ADVANCE_PRINCIPAL",
+                "IN_ADVANCE_INTEREST"));
+        return data;
+    }
+
+    public static List<PaymentAllocationOrder> paymentAllocationOrder(String... paymentAllocationRules) {
+        AtomicInteger order = new AtomicInteger(1);
+        return Stream.of(paymentAllocationRules)
+                .map(rule -> new PaymentAllocationOrder().paymentAllocationRule(rule).order(order.getAndIncrement())).toList();
+    }
+
+    /** Type-safe variant of {@link #paymentAllocationOrder(String...)}, ordered as given. */
+    public static List<PaymentAllocationOrder> paymentAllocationOrder(PaymentAllocationType... paymentAllocationTypes) {
+        return paymentAllocationOrder(Stream.of(paymentAllocationTypes).map(PaymentAllocationType::name).toArray(String[]::new));
+    }
+
+    public static CreditAllocationData creditAllocation(String transactionType, String... creditAllocationRules) {
+        CreditAllocationData data = new CreditAllocationData();
+        data.setTransactionType(transactionType);
+        AtomicInteger order = new AtomicInteger(1);
+        List<CreditAllocationOrder> orders = Stream.of(creditAllocationRules)
+                .map(rule -> new CreditAllocationOrder().creditAllocationRule(rule).order(order.getAndIncrement())).toList();
+        data.setCreditAllocationOrder(orders);
+        return data;
+    }
+
+    public static PostLoansLoanIdTransactionsRequest reAmortize(String reAmortizationInterestHandling) {
+        PostLoansLoanIdTransactionsRequest request = new PostLoansLoanIdTransactionsRequest();
+        request.setReAmortizationInterestHandling(reAmortizationInterestHandling);
+        request.setLocale(LoanTestData.LOCALE);
+        request.setDateFormat(LoanTestData.DATETIME_PATTERN);
+        return request;
+    }
+
+    public static PostLoansLoanIdTransactionsRequest writeOff(String transactionDate) {
+        return new PostLoansLoanIdTransactionsRequest()//
+                .transactionDate(transactionDate)//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    public static PostLoansRequest applyCumulativeLoanRequest(Long clientId, Long productId, String submittedOnDate, Double principal,
+            Double interestRate, int numberOfRepayments, Consumer<PostLoansRequest> customizer) {
+        PostLoansRequest request = applyCumulativeLoan(clientId, productId, submittedOnDate, principal, numberOfRepayments, interestRate);
+        if (customizer != null) {
+            customizer.accept(request);
+        }
+        return request;
     }
 
     public static PostLoansLoanIdRequest rejectLoan(String rejectedOnDate) {
@@ -300,6 +512,10 @@ public final class LoanRequestBuilders {
                 .amount(amount)//
                 .locale(LoanTestData.LOCALE)//
                 .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
+    public static PostLoansLoanIdChargesChargeIdRequest waiveLoanCharge() {
+        return new PostLoansLoanIdChargesChargeIdRequest();
     }
 
     public static PostLoansLoanIdChargesChargeIdRequest waiveLoanCharge(double amount) {
@@ -385,4 +601,5 @@ public final class LoanRequestBuilders {
         }
         return request;
     }
+
 }

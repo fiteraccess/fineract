@@ -63,6 +63,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.adjustment.LoanAdjustmentService;
+import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
 import org.apache.fineract.portfolio.savings.domain.GSIMRepositoy;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountAssembler;
@@ -108,6 +109,8 @@ class AccountTransfersWritePlatformServiceImplTest {
     private FineractProperties fineractProperties;
     @Mock
     private LoanAdjustmentService loanAdjustmentService;
+    @Mock
+    private PaymentDetailWritePlatformService paymentDetailWritePlatformService;
 
     private AccountTransfersWritePlatformServiceImpl underTest;
 
@@ -116,7 +119,8 @@ class AccountTransfersWritePlatformServiceImplTest {
         underTest = new AccountTransfersWritePlatformServiceImpl(validator, accountTransferAssembler, accountTransferRepository,
                 savingsAccountAssembler, savingsAccountDomainService, loanAssembler, loanAccountDomainService,
                 savingsAccountWritePlatformService, accountTransferDetailRepository, loanReadPlatformService, gsimRepository,
-                configurationDomainService, externalIdFactory, fineractProperties, loanAdjustmentService);
+                configurationDomainService, externalIdFactory, fineractProperties, loanAdjustmentService,
+                paymentDetailWritePlatformService);
     }
 
     @Test

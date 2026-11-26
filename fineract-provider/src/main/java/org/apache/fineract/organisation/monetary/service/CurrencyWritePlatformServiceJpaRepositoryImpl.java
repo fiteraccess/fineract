@@ -30,10 +30,8 @@ import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepos
 import org.apache.fineract.organisation.monetary.domain.OrganisationCurrency;
 import org.apache.fineract.organisation.monetary.domain.OrganisationCurrencyRepository;
 import org.apache.fineract.organisation.monetary.exception.CurrencyInUseException;
-import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
-import org.apache.fineract.portfolio.loanproduct.service.LoanProductReadPlatformService;
-import org.apache.fineract.portfolio.savings.service.SavingsProductReadPlatformService;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -41,9 +39,7 @@ public class CurrencyWritePlatformServiceJpaRepositoryImpl implements CurrencyWr
 
     private final ApplicationCurrencyRepositoryWrapper applicationCurrencyRepository;
     private final OrganisationCurrencyRepository organisationCurrencyRepository;
-    private final LoanProductReadPlatformService loanProductService;
-    private final SavingsProductReadPlatformService savingsProductService;
-    private final ChargeReadPlatformService chargeService;
+    private final JdbcTemplate jdbcTemplate;
 
     @Transactional
     @Override
@@ -66,9 +62,7 @@ public class CurrencyWritePlatformServiceJpaRepositoryImpl implements CurrencyWr
         for (OrganisationCurrency priorCurrency : organisationCurrencyRepository.findAll()) {
             if (!allowedCurrencyCodes.contains(priorCurrency.getCode())) {
                 // check if it's safe to remove this currency.
-                if (!loanProductService.retrieveAllLoanProductsForCurrency(priorCurrency.getCode()).isEmpty()
-                        || !savingsProductService.retrieveAllForCurrency(priorCurrency.getCode()).isEmpty()
-                        || !chargeService.retrieveAllChargesForCurrency(priorCurrency.getCode()).isEmpty()) {
+                if (isCurrencyUsedInExistingData(priorCurrency.getCode())) {
                     throw new CurrencyInUseException(priorCurrency.getCode());
                 }
             }
@@ -78,5 +72,20 @@ public class CurrencyWritePlatformServiceJpaRepositoryImpl implements CurrencyWr
         organisationCurrencyRepository.saveAll(allowedCurrencies);
 
         return CurrencyUpdateResponse.builder().currencies(allowedCurrencyCodes).build();
+    }
+
+    private boolean isCurrencyUsedInExistingData(final String currencyCode) {
+        return hasCurrencyUsage("m_product_loan", currencyCode) || hasCurrencyUsage("m_savings_product", currencyCode)
+                || hasCurrencyUsage("m_share_product", currencyCode) || hasCurrencyUsage("m_charge", currencyCode)
+                || hasCurrencyUsage("m_loan", currencyCode) || hasCurrencyUsage("m_savings_account", currencyCode)
+                || hasCurrencyUsage("m_share_account", currencyCode) || hasCurrencyUsage("m_client_transaction", currencyCode)
+                || hasCurrencyUsage("m_account_transfer_transaction", currencyCode)
+                || hasCurrencyUsage("m_cashier_transactions", currencyCode) || hasCurrencyUsage("acc_gl_journal_entry", currencyCode);
+    }
+
+    private boolean hasCurrencyUsage(final String tableName, final String currencyCode) {
+        final Integer usageCount = jdbcTemplate.queryForObject("select count(1) from " + tableName + " where currency_code = ?",
+                Integer.class, currencyCode);
+        return usageCount != null && usageCount > 0;
     }
 }

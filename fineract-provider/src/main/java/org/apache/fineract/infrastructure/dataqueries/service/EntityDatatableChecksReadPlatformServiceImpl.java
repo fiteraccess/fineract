@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
+import org.apache.fineract.infrastructure.core.data.StringEnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
@@ -44,9 +45,9 @@ import org.apache.fineract.portfolio.loanproduct.data.LoanProductData;
 import org.apache.fineract.portfolio.loanproduct.service.LoanProductReadPlatformService;
 import org.apache.fineract.portfolio.savings.data.SavingsProductData;
 import org.apache.fineract.portfolio.savings.service.SavingsProductReadPlatformService;
+import org.jspecify.annotations.NonNull;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -137,17 +138,18 @@ public class EntityDatatableChecksReadPlatformServiceImpl implements EntityDatat
     @Override
     public EntityDataTableChecksTemplateData retrieveTemplate() {
         List<DatatableChecksData> dataTables = getDataTables();
-        List<String> entities = EntityTables.getEntityNames();
+        List<String> entities = EntityTables.getCheckableEntityNames();
         List<DatatableCheckStatusData> clientStatuses = getStatusList(EntityTables.CLIENT.getCheckStatuses());
         List<DatatableCheckStatusData> loanStatuses = getStatusList(EntityTables.LOAN.getCheckStatuses());
         List<DatatableCheckStatusData> groupstatuses = getStatusList(EntityTables.GROUP.getCheckStatuses());
         List<DatatableCheckStatusData> savingsStatuses = getStatusList(EntityTables.SAVINGS.getCheckStatuses());
+        List<DatatableCheckStatusData> loanProductStatuses = getStatusList(EntityTables.LOAN_PRODUCT.getCheckStatuses());
 
         Collection<LoanProductData> loanProductDatas = this.loanProductReadPlatformService.retrieveAllLoanProductsForLookup(true);
         Collection<SavingsProductData> savingsProductDatas = this.savingsProductReadPlatformService.retrieveAllForLookup();
 
-        return new EntityDataTableChecksTemplateData(entities, clientStatuses, groupstatuses, savingsStatuses, loanStatuses, dataTables,
-                loanProductDatas, savingsProductDatas);
+        return new EntityDataTableChecksTemplateData(entities, clientStatuses, groupstatuses, loanProductStatuses, savingsStatuses,
+                loanStatuses, dataTables, loanProductDatas, savingsProductDatas);
     }
 
     private List<DatatableCheckStatusData> getStatusList(List<StatusEnum> statuses) {
@@ -197,7 +199,11 @@ public class EntityDatatableChecksReadPlatformServiceImpl implements EntityDatat
             final Long productId = JdbcSupport.getLong(rs, "productId");
             final String productName = rs.getString("productName");
 
-            return new EntityDataTableChecksData(id, entity, statusEnum, datatableName, systemDefined, productId, productName);
+            final EntityTables entityTables = EntityTables.fromEntityName(entity);
+            final StringEnumOptionData entityData = entityTables != null ? entityTables.toEnumOptionData()
+                    : new StringEnumOptionData(entity, entity, entity);
+
+            return new EntityDataTableChecksData(id, entity, entityData, statusEnum, datatableName, systemDefined, productId, productName);
         }
 
         public String schema() {
