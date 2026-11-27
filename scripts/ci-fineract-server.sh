@@ -77,9 +77,14 @@ stop_server() {
   rm -f "$PID_FILE" "$MODE_FILE"
 }
 
+# On a fresh runner build/libs does not exist yet. Under `set -o pipefail` a failing find would make
+# the caller's `jar="$(find_jar)"` abort the script silently, before the bootJar fallback runs, so a
+# missing directory has to return an empty result instead.
 find_jar() {
-  find "$ROOT_DIR/fineract-provider/build/libs" -maxdepth 1 -type f -name 'fineract-provider-*.jar' \
-    ! -name '*-plain.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' 2>/dev/null | sort | tail -n 1
+  local libs="$ROOT_DIR/fineract-provider/build/libs"
+  [ -d "$libs" ] || return 0
+  find "$libs" -maxdepth 1 -type f -name 'fineract-provider-*.jar' \
+    ! -name '*-plain.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | sort | tail -n 1
 }
 
 start_server() {
