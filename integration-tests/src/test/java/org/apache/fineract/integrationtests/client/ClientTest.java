@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
  *
  * @author Michael Vorburger.ch
  */
-public class ClientTest extends IntegrationTest {
+public class ClientTest extends FeignIntegrationTest {
 
     @Test
     @Order(1)
@@ -59,16 +59,17 @@ public class ClientTest extends IntegrationTest {
         // TODO activationDate() why String? https://issues.apache.org/jira/browse/FINERACT-1232
         // TODO why dateFormat and locale required even when no activationDate?!
         // https://issues.apache.org/jira/browse/FINERACT-1233
-        return ok(fineractClient().clients.createClient(
-                new PostClientsRequest().legalFormId(1L).officeId(1L).fullname("TestClient").dateFormat(Utils.DATE_FORMAT).locale("en_US")
-                        .mobileNo(Utils.randomStringGenerator("M", 10)).emailAddress(UUID.randomUUID().toString() + "@example.com")
-                        .dateOfBirth(LocalDate.of(1990, 1, 1)).genderId(ClientHelper.getMaleGenderId())))
+        return ok(() -> fineractClient().clients()
+                .createClient(new PostClientsRequest().legalFormId(1L).officeId(1L).fullname("TestClient").dateFormat(Utils.DATE_FORMAT)
+                        .locale("en_US").mobileNo(Utils.randomStringGenerator("M", 10))
+                        .emailAddress(UUID.randomUUID().toString() + "@example.com").dateOfBirth(LocalDate.of(1990, 1, 1))
+                        .genderId(ClientHelper.getMaleGenderId())))
                 .getClientId();
     }
 
     Optional<Long> retrieveFirst() {
-        GetClientsResponse clients = ok(
-                fineractClient().clients.retrieveAllClients(null, null, null, null, null, null, null, 0, 1, null, null, false, null, null));
+        GetClientsResponse clients = ok(() -> fineractClient().clients().retrieveAllClients(null, null, null, null, null, null, null, 0, 1,
+                null, null, false, null, null));
         if (clients.getTotalFilteredRecords() != null && clients.getTotalFilteredRecords() > 0) {
             return clients.getPageItems().stream().findFirst().map(item -> item.getId());
         }

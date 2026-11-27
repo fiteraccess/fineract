@@ -21,16 +21,14 @@ package org.apache.fineract.portfolio.savings.jobs.synapseoutbox;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.cob.loan.ContextAwareTaskDecorator;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseOutboxRepository;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTaskHandler;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.Step;
+import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -58,7 +56,6 @@ public class SynapseOutboxDispatchConfig {
         executor.setCorePoolSize(poolSize);
         executor.setMaxPoolSize(poolSize);
         executor.setThreadNamePrefix("SynapseOutbox-");
-        executor.setTaskDecorator(new ContextAwareTaskDecorator());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
         executor.initialize();
@@ -81,6 +78,6 @@ public class SynapseOutboxDispatchConfig {
     @Bean
     public Job dispatchSynapseOutboxJob(SynapseOutboxTasklet synapseOutboxTasklet) {
         return new JobBuilder(JobName.DISPATCH_SYNAPSE_OUTBOX.name(), jobRepository).start(dispatchSynapseOutboxStep(synapseOutboxTasklet))
-                .incrementer(new RunIdIncrementer()).build();
+                .build();
     }
 }

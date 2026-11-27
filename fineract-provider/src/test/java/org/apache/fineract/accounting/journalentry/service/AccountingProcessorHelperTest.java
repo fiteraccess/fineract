@@ -94,9 +94,9 @@ class AccountingProcessorHelperTest {
     @BeforeEach
     void setUp() {
         ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 1, 1))));
-        underTest = new AccountingProcessorHelper(glJournalEntryRepository, accountMappingRepository, financialActivityAccountRepository,
-                closureRepository, glAccountRepository, officeRepository, accountTransfersReadPlatformService, chargeRepositoryWrapper,
-                businessEventNotifierService);
+        underTest = new AccountingProcessorHelperImpl(glJournalEntryRepository, accountMappingRepository,
+                financialActivityAccountRepository, closureRepository, glAccountRepository, officeRepository,
+                accountTransfersReadPlatformService, chargeRepositoryWrapper, businessEventNotifierService);
     }
 
     @AfterEach

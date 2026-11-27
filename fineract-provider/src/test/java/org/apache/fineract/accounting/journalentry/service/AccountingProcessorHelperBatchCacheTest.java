@@ -72,9 +72,9 @@ class AccountingProcessorHelperBatchCacheTest {
 
     @BeforeEach
     void setUp() {
-        underTest = new AccountingProcessorHelper(glJournalEntryRepository, accountMappingRepository, financialActivityAccountRepository,
-                closureRepository, glAccountRepository, officeRepository, accountTransfersReadPlatformService, chargeRepositoryWrapper,
-                businessEventNotifierService);
+        underTest = new AccountingProcessorHelperImpl(glJournalEntryRepository, accountMappingRepository,
+                financialActivityAccountRepository, closureRepository, glAccountRepository, officeRepository,
+                accountTransfersReadPlatformService, chargeRepositoryWrapper, businessEventNotifierService);
     }
 
     @Test

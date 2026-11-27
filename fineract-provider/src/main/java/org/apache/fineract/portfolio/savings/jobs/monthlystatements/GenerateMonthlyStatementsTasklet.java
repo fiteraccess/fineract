@@ -22,10 +22,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseMonthlyStatementPlanResponse;
 import org.apache.fineract.portfolio.savings.service.synapse.SynapseTransactionClient;
-import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.step.tasklet.Tasklet;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 
 /**
  * AB-358 (R-D-24): asks Synapse to start the previous month's customer statement run.

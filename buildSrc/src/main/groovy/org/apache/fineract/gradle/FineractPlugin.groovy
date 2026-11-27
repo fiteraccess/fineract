@@ -69,6 +69,14 @@ class FineractPlugin implements Plugin<Project> {
             this.context = context(project)
         }
 
+        // Their actions close over this plugin and the services it creates in afterEvaluate, which the configuration
+        // cache cannot store; builds that include them run uncached instead.
+        project.tasks.configureEach { task ->
+            if (task.name == "fineractDocPublish" || task.name.startsWith("fineractRelease")) {
+                task.notCompatibleWithConfigurationCache("release tasks keep plugin services in their actions")
+            }
+        }
+
         project.tasks.register("fineractDocPublish") {
             dependsOn(":fineract-doc:doc")
 
@@ -191,9 +199,9 @@ class FineractPlugin implements Plugin<Project> {
             doFirst {
                 FineractPluginExtension.FineractPluginStep step = step(extension, "step1")
 
-                String version = project.properties?['fineract.release.version']
-                String issue = project.properties?['fineract.release.issue']
-                String date = project.properties?['fineract.releaseBranch.date']
+                String version = project.providers.gradleProperty('fineract.release.version').orNull
+                String issue = project.providers.gradleProperty('fineract.release.issue').orNull
+                String date = project.providers.gradleProperty('fineract.releaseBranch.date').orNull
 
                 if(!version || !issue || !date) {
                     TextIO textIO = TextIoFactory.getTextIO()
@@ -248,8 +256,8 @@ class FineractPlugin implements Plugin<Project> {
             doFirst {
                 FineractPluginExtension.FineractPluginStep step = step(extension, "step3")
 
-                String version = project.properties?['fineract.release.version']
-                String date = project.properties?['fineract.release.date']
+                String version = project.providers.gradleProperty('fineract.release.version').orNull
+                String date = project.providers.gradleProperty('fineract.release.date').orNull
 
                 if(!version || !date) {
                     TextIO textIO = TextIoFactory.getTextIO()
@@ -298,7 +306,7 @@ class FineractPlugin implements Plugin<Project> {
             doFirst {
                 FineractPluginExtension.FineractPluginStep step = step(extension, "step5")
 
-                String version = project.properties?['fineract.release.version']
+                String version = project.providers.gradleProperty('fineract.release.version').orNull
 
                 if(!version) {
                     TextIO textIO = TextIoFactory.getTextIO()
@@ -343,7 +351,7 @@ class FineractPlugin implements Plugin<Project> {
             doFirst {
                 FineractPluginExtension.FineractPluginStep step = step(extension, "step8")
 
-                String version = project.properties?['fineract.release.version']
+                String version = project.providers.gradleProperty('fineract.release.version').orNull
 
                 if(!version) {
                     TextIO textIO = TextIoFactory.getTextIO()
@@ -475,11 +483,12 @@ class FineractPlugin implements Plugin<Project> {
     }
 
     private Map<String, ?> context(Project project) {
-        return Map.of("project", project.getProperties().findAll { it.key != "password"})
+        return Map.of("project", project.providers.gradlePropertiesPrefixedBy("fineract.").get()
+                .findAll { !it.key.toLowerCase(Locale.ROOT).contains("password") })
     }
 
     private void printInstructions(Project project, String step) {
-        String version = project.properties?['fineract.release.version']?:"0.0.0"
+        String version = project.providers.gradleProperty('fineract.release.version').getOrElse("0.0.0")
 
         this.context?.project?['fineract.release.version'] = version
 

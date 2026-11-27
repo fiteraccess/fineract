@@ -37,11 +37,11 @@ import org.apache.fineract.accounting.journalentry.data.ChargeTaxPaymentDTO;
 import org.apache.fineract.accounting.journalentry.data.GLAccountBalanceHolder;
 import org.apache.fineract.accounting.journalentry.data.LoanDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanTransactionDTO;
+import org.apache.fineract.accounting.journalentry.data.LoanTransactionTypeDTO;
 import org.apache.fineract.accounting.producttoaccountmapping.domain.ProductToGLAccountMapping;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.PortfolioProductType;
-import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionEnumData;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -61,7 +61,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
                 final Office office = officeById.computeIfAbsent(officeId, this.helper::getOfficeById);
                 final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
                 this.helper.checkForBranchClosures(officeId, transactionDate);
-                final LoanTransactionEnumData transactionType = loanTransactionDTO.getTransactionType();
+                final LoanTransactionTypeDTO transactionType = loanTransactionDTO.getTransactionType();
 
                 if (loanTransactionDTO.isReversed()) {
                     journalEntryWritePlatformService.createJournalEntryForReversedLoanTransaction(transactionDate,
@@ -565,7 +565,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
         final AccrualAccountsForLoan debitAccountType = loanDTO.isMerchantBuyDownFee() ? AccrualAccountsForLoan.BUY_DOWN_EXPENSE
                 : AccrualAccountsForLoan.FUND_SOURCE;
         if (MathUtil.isGreaterThanZero(amount)) {
-            // Mirror of Buy Down Fee entries (as per PS-2574 requirements)
+            // Mirror of Buy Down Fee entries
             // Debit: Deferred Income Liability, Credit: Buy Down Expense (merchant)
             // Debit: Deferred Income Liability, Credit: Fund Source (non merchant)
             this.helper.createJournalEntriesForLoan(office, currencyCode, AccrualAccountsForLoan.DEFERRED_INCOME_LIABILITY.getValue(),
@@ -1093,9 +1093,9 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
         }
 
         if (MathUtil.isGreaterThanZero(totalDebitAmount)) {
-            Long chargeId = loanTransactionDTO.getLoanChargeData().getChargeId();
+            Long chargeId = loanTransactionDTO.getLoanChargeDTO().getChargeId();
             Integer accountMappingTypeId;
-            if (loanTransactionDTO.getLoanChargeData().isPenalty()) {
+            if (loanTransactionDTO.getLoanChargeDTO().isPenalty()) {
                 accountMappingTypeId = AccrualAccountsForLoan.INCOME_FROM_PENALTIES.getValue();
             } else {
                 accountMappingTypeId = AccrualAccountsForLoan.INCOME_FROM_FEES.getValue();
@@ -1193,9 +1193,9 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
         }
 
         if (MathUtil.isGreaterThanZero(totalDebitAmount)) {
-            Long chargeId = loanTransactionDTO.getLoanChargeData().getChargeId();
+            Long chargeId = loanTransactionDTO.getLoanChargeDTO().getChargeId();
             Integer accountMappingTypeId;
-            if (loanTransactionDTO.getLoanChargeData().isPenalty()) {
+            if (loanTransactionDTO.getLoanChargeDTO().isPenalty()) {
                 accountMappingTypeId = AccrualAccountsForLoan.INCOME_FROM_PENALTIES.getValue();
             } else {
                 accountMappingTypeId = AccrualAccountsForLoan.INCOME_FROM_FEES.getValue();
@@ -2021,7 +2021,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
         // transaction properties
         final String transactionId = loanTransactionDTO.getTransactionId();
         final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
-        final LoanTransactionEnumData transactionType = loanTransactionDTO.getTransactionType();
+        final LoanTransactionTypeDTO transactionType = loanTransactionDTO.getTransactionType();
         final BigDecimal interestAmount = loanTransactionDTO.getInterest();
         final BigDecimal feesAmount = loanTransactionDTO.getFees();
         final BigDecimal penaltiesAmount = loanTransactionDTO.getPenalties();
@@ -2169,7 +2169,6 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
     }
 
     private void createJournalEntriesForRefundForActiveLoan(LoanDTO loanDTO, LoanTransactionDTO loanTransactionDTO, Office office) {
-        // TODO Auto-generated method stub
         // loan properties
         final Long loanProductId = loanDTO.getLoanProductId();
         final Long loanId = loanDTO.getLoanId();
@@ -2195,7 +2194,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
 
         if (MathUtil.isGreaterThanZero(interestAmount)) {
             totalDebitAmount = totalDebitAmount.add(interestAmount);
-            this.helper.createDebitJournalEntryForLoan(office, currencyCode, AccrualAccountsForLoan.INTEREST_ON_LOANS.getValue(),
+            this.helper.createDebitJournalEntryForLoan(office, currencyCode, AccrualAccountsForLoan.INTEREST_RECEIVABLE.getValue(),
                     loanProductId, paymentTypeId, loanId, transactionId, transactionDate, interestAmount);
         }
 
@@ -2210,7 +2209,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
                                 : chargePaymentDTO.getAmount(),
                         chargePaymentDTO.getLoanChargeId()));
             }
-            this.helper.createDebitJournalEntryForLoanCharges(office, currencyCode, AccrualAccountsForLoan.INCOME_FROM_FEES.getValue(),
+            this.helper.createDebitJournalEntryForLoanCharges(office, currencyCode, AccrualAccountsForLoan.FEES_RECEIVABLE.getValue(),
                     loanProductId, loanId, transactionId, transactionDate, feesAmount, chargePaymentDTOs);
         }
 
@@ -2224,7 +2223,7 @@ public class AccrualBasedAccountingProcessorForLoan implements AccountingProcess
                                 : chargePaymentDTO.getAmount(),
                         chargePaymentDTO.getLoanChargeId()));
             }
-            this.helper.createDebitJournalEntryForLoanCharges(office, currencyCode, AccrualAccountsForLoan.INCOME_FROM_PENALTIES.getValue(),
+            this.helper.createDebitJournalEntryForLoanCharges(office, currencyCode, AccrualAccountsForLoan.PENALTIES_RECEIVABLE.getValue(),
                     loanProductId, loanId, transactionId, transactionDate, penaltiesAmount, chargePaymentDTOs);
         }
 

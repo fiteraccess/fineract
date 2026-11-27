@@ -1,4 +1,4 @@
-name: Fineract Cargo & Unit- & Integration tests - MariaDB
+name: Fineract Unit tests - MariaDB
 
 on: pull_request
 
@@ -49,10 +49,10 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
         with:
-          java-version: '21'
+          java-version: '25'
           distribution: 'zulu'
 
       - name: Cache Gradle dependencies
@@ -114,6 +114,18 @@ jobs:
                   echo "  - $class"
                 done
 
+                # These modules need a live server. Up to 1.15 the Gradle Cargo plugin started one
+                # from the module's test task; upstream removed it in 1.16. The fork starts the
+                # server from the boot jar (scripts/ci-fineract-server.sh), which bundles the
+                # PostgreSQL driver only, so on MariaDB these modules run in the PostgreSQL workflow.
+                case "$module" in
+                  :integration-tests|:twofactor-tests|:oauth2-tests)
+                    echo "::notice::Skipping $module on MariaDB: it needs a live server, which this workflow no longer starts"
+                    echo "::endgroup::"
+                    continue
+                    ;;
+                esac
+
                 # Build test args
                 test_args=$(for class in ${module_tests[$module]}; do echo --tests "$class"; done | xargs)
 
@@ -139,12 +151,4 @@ jobs:
         with:
           name: test-results-${{ matrix.task }}
           path: '**/build/reports/'
-          retention-days: 5
-
-      - name: Archive server logs
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
-        with:
-          name: server-logs-${{ matrix.task }}
-          path: '**/build/cargo/'
           retention-days: 5

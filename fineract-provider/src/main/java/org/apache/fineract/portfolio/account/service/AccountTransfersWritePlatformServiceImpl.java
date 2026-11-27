@@ -70,6 +70,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService
 import org.apache.fineract.portfolio.loanaccount.service.adjustment.LoanAdjustmentParameter;
 import org.apache.fineract.portfolio.loanaccount.service.adjustment.LoanAdjustmentService;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
+import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
 import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
 import org.apache.fineract.portfolio.savings.domain.GSIMRepositoy;
 import org.apache.fineract.portfolio.savings.domain.GroupSavingsIndividualMonitoring;
@@ -99,6 +100,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
     private final ExternalIdFactory externalIdFactory;
     private final FineractProperties fineractProperties;
     private final LoanAdjustmentService loanAdjustmentService;
+    private final PaymentDetailWritePlatformService paymentDetailWritePlatformService;
 
     @Transactional
     @Override
@@ -120,7 +122,8 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
         final Integer toAccountTypeId = command.integerValueSansLocaleOfParameterNamed(toAccountTypeParamName);
         final PortfolioAccountType toAccountType = PortfolioAccountType.fromInt(toAccountTypeId);
 
-        final PaymentDetail paymentDetail = null;
+        final Map<String, Object> changes = new HashMap<>();
+        final PaymentDetail paymentDetail = this.paymentDetailWritePlatformService.createAndPersistPaymentDetail(command, changes);
         Long fromSavingsAccountId = null;
         Long fromSavingsTransactionId = null;
         Long toSavingsTransactionId = null;
@@ -239,9 +242,12 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
                 .withEntityId(transferDetailId) //
                 .withSubEntityId(transferTransactionId);
 
+        // Same map upstream fills with the payment detail changes (FINERACT-2733): the builder keeps only the last map
+        // it is given, so the two savings leg ids callers rely on have to go into it rather than into a map of their
+        // own.
         if (fromSavingsTransactionId != null && toSavingsTransactionId != null) {
-            builder.with(Map.of(fromSavingsTransactionIdResultName, fromSavingsTransactionId, toSavingsTransactionIdResultName,
-                    toSavingsTransactionId));
+            changes.put(fromSavingsTransactionIdResultName, fromSavingsTransactionId);
+            changes.put(toSavingsTransactionIdResultName, toSavingsTransactionId);
         }
 
         if (PortfolioAccountType.SAVINGS.equals(fromAccountType)) {
@@ -251,7 +257,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
             builder.withLoanId(fromLoanAccountId);
         }
 
-        return builder.build();
+        return builder.with(changes).build();
     }
 
     @Override
@@ -660,7 +666,6 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
     @Override
     @Transactional
     public CommandProcessingResult refundByTransfer(JsonCommand command) {
-        // TODO Auto-generated method stub
         this.accountTransfersDataValidator.validate(command);
         rejectNipReferenceTransactions(command);
 
@@ -670,7 +675,8 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
         final Locale locale = command.extractLocale();
         final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(command.dateFormat()).withLocale(locale);
 
-        final PaymentDetail paymentDetail = null;
+        final Map<String, Object> changes = new HashMap<>();
+        final PaymentDetail paymentDetail = this.paymentDetailWritePlatformService.createAndPersistPaymentDetail(command, changes);
         Long transferTransactionId = null;
 
         final Long fromLoanAccountId = command.longValueOfParameterNamed(fromAccountIdParamName);
@@ -710,7 +716,7 @@ public class AccountTransfersWritePlatformServiceImpl implements AccountTransfer
         builder.withSavingsId(toSavingsAccountId);
         // }
 
-        return builder.build();
+        return builder.with(changes).build();
     }
 
     private void rejectNipReferenceTransactions(final JsonCommand command) {

@@ -65,6 +65,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
 import org.apache.fineract.portfolio.loanaccount.service.LoanBuyDownFeeAmortizationProcessingService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanCapitalizedIncomeAmortizationProcessingService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanJournalEntryPoster;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -79,9 +80,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.lang.NonNull;
 
 @ExtendWith(MockitoExtension.class)
 public class LoanAccountOwnerTransferBusinessStepTest {
@@ -156,7 +155,9 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         // when
         final Loan processedLoan = underTest.execute(loanForProcessing);
         // then
-        verify(externalAssetOwnerTransferRepository, times(1)).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository, times(1))
+                .findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L), eq(actualDate), any(),
+                        eq(FUTURE_DATE_9999_12_31));
         verifyNoInteractions(businessEventNotifierService, loanTransferabilityService, loanJournalEntryPoster);
         assertEquals(processedLoan, loanForProcessing);
     }
@@ -174,13 +175,15 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         when(firstResponseItem.getStatus()).thenReturn(ExternalTransferStatus.PENDING);
         when(secondResponseItem.getStatus()).thenReturn(ExternalTransferStatus.ACTIVE);
         List<ExternalAssetOwnerTransfer> response = List.of(firstResponseItem, secondResponseItem);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
         // when
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> underTest.execute(loanForProcessing));
         // then
         assertEquals("Illegal transfer found. Expected PENDING and BUYBACK, found: PENDING and ACTIVE", exception.getMessage());
-        verify(externalAssetOwnerTransferRepository, times(1)).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository, times(1))
+                .findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L), eq(actualDate), any(),
+                        eq(FUTURE_DATE_9999_12_31));
         verifyNoInteractions(businessEventNotifierService, loanTransferabilityService, loanJournalEntryPoster);
     }
 
@@ -197,13 +200,15 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         when(firstResponseItem.getStatus()).thenReturn(ExternalTransferStatus.PENDING);
         when(secondResponseItem.getStatus()).thenReturn(ExternalTransferStatus.BUYBACK);
         List<ExternalAssetOwnerTransfer> response = List.of(firstResponseItem, secondResponseItem);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
         // when
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> underTest.execute(loanForProcessing));
         // then
         assertEquals("Delayed Settlement enabled, but found 2 transfers of statuses: PENDING and BUYBACK", exception.getMessage());
-        verify(externalAssetOwnerTransferRepository, times(1)).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository, times(1))
+                .findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L), eq(actualDate), any(),
+                        eq(FUTURE_DATE_9999_12_31));
         verifyNoInteractions(businessEventNotifierService, loanTransferabilityService, loanJournalEntryPoster);
     }
 
@@ -229,14 +234,16 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         when(firstResponseItem.getStatus()).thenReturn(ExternalTransferStatus.PENDING);
         when(secondResponseItem.getStatus()).thenReturn(ExternalTransferStatus.BUYBACK);
         List<ExternalAssetOwnerTransfer> response = List.of(firstResponseItem, secondResponseItem);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
         ArgumentCaptor<ExternalAssetOwnerTransfer> externalAssetOwnerTransferArgumentCaptor = ArgumentCaptor
                 .forClass(ExternalAssetOwnerTransfer.class);
         // when
         final Loan processedLoan = underTest.execute(loanForProcessing);
         // then
-        verify(externalAssetOwnerTransferRepository, times(1)).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository, times(1))
+                .findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L), eq(actualDate), any(),
+                        eq(FUTURE_DATE_9999_12_31));
         verify(firstResponseItem).setEffectiveDateTo(actualDate);
         verify(externalAssetOwnerTransferRepository, times(4)).save(externalAssetOwnerTransferArgumentCaptor.capture());
 
@@ -295,8 +302,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         ExternalAssetOwnerTransfer secondResponseItem = Mockito.mock(ExternalAssetOwnerTransfer.class);
         when(firstResponseItem.getStatus()).thenReturn(buybackStatus);
         List<ExternalAssetOwnerTransfer> response = List.of(firstResponseItem);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
         when(externalAssetOwnerTransferRepository.findOne(any(Specification.class))).thenReturn(Optional.of(secondResponseItem));
         ArgumentCaptor<ExternalAssetOwnerTransfer> externalAssetOwnerTransferArgumentCaptor = ArgumentCaptor
                 .forClass(ExternalAssetOwnerTransfer.class);
@@ -307,7 +314,9 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         // then
         verifyNoInteractions(loanTransferabilityService);
 
-        verify(externalAssetOwnerTransferRepository, times(1)).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository, times(1))
+                .findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L), eq(actualDate), any(),
+                        eq(FUTURE_DATE_9999_12_31));
         verify(firstResponseItem).setEffectiveDateTo(actualDate);
         verify(externalAssetOwnerTransferRepository, times(2)).save(externalAssetOwnerTransferArgumentCaptor.capture());
         verify(secondResponseItem).setEffectiveDateTo(actualDate);
@@ -344,8 +353,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         ExternalAssetOwnerTransfer pendingTransfer = new ExternalAssetOwnerTransfer();
         pendingTransfer.setStatus(pendingStatus);
         List<ExternalAssetOwnerTransfer> response = List.of(pendingTransfer);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
 
         when(loanTransferabilityService.isTransferable(loanForProcessing, pendingTransfer)).thenReturn(true);
 
@@ -358,7 +367,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         // then
         verify(loanTransferabilityService).isTransferable(loanForProcessing, pendingTransfer);
         verifyNoMoreInteractions(loanTransferabilityService);
-        verify(externalAssetOwnerTransferRepository).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository).findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31));
 
         ArgumentCaptor<ExternalAssetOwnerTransfer> externalAssetOwnerTransferArgumentCaptor = ArgumentCaptor
                 .forClass(ExternalAssetOwnerTransfer.class);
@@ -409,8 +419,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         ExternalAssetOwnerTransfer pendingTransfer = new ExternalAssetOwnerTransfer();
         pendingTransfer.setStatus(pendingStatus);
         List<ExternalAssetOwnerTransfer> response = List.of(pendingTransfer);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
 
         when(loanTransferabilityService.isTransferable(loanForProcessing, pendingTransfer)).thenReturn(false);
         when(loanTransferabilityService.getDeclinedSubStatus(loanForProcessing)).thenReturn(expectedSubStatus);
@@ -423,7 +433,9 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         final Loan processedLoan = underTest.execute(loanForProcessing);
         // then
         verify(loanTransferabilityService).isTransferable(loanForProcessing, pendingTransfer);
-        verify(externalAssetOwnerTransferRepository, times(1)).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository, times(1))
+                .findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L), eq(actualDate), any(),
+                        eq(FUTURE_DATE_9999_12_31));
 
         ArgumentCaptor<ExternalAssetOwnerTransfer> externalAssetOwnerTransferArgumentCaptor = ArgumentCaptor
                 .forClass(ExternalAssetOwnerTransfer.class);
@@ -467,8 +479,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         ExternalAssetOwnerTransfer pendingTransfer = new ExternalAssetOwnerTransfer();
         pendingTransfer.setStatus(ExternalTransferStatus.PENDING);
         List<ExternalAssetOwnerTransfer> response = List.of(pendingTransfer);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
 
         when(loanTransferabilityService.isTransferable(loanForProcessing, pendingTransfer)).thenReturn(true);
 
@@ -482,7 +494,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         // then
         verify(loanTransferabilityService).isTransferable(loanForProcessing, pendingTransfer);
         verifyNoMoreInteractions(loanTransferabilityService);
-        verify(externalAssetOwnerTransferRepository).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository).findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31));
         verify(externalAssetOwnerTransferRepository).findOne(any(Specification.class));
 
         ArgumentCaptor<ExternalAssetOwnerTransfer> externalAssetOwnerTransferArgumentCaptor = ArgumentCaptor
@@ -532,8 +545,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         ExternalAssetOwnerTransfer pendingTransfer = new ExternalAssetOwnerTransfer();
         pendingTransfer.setStatus(ExternalTransferStatus.PENDING);
         List<ExternalAssetOwnerTransfer> response = List.of(pendingTransfer);
-        when(externalAssetOwnerTransferRepository.findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id"))))
-                .thenReturn(response);
+        when(externalAssetOwnerTransferRepository.findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31))).thenReturn(response);
         when(loanTransferabilityService.isTransferable(loanForProcessing, pendingTransfer)).thenReturn(true);
 
         // when
@@ -545,7 +558,8 @@ public class LoanAccountOwnerTransferBusinessStepTest {
         verify(loanTransferabilityService).isTransferable(loanForProcessing, pendingTransfer);
         verifyNoMoreInteractions(loanTransferabilityService);
         verifyNoInteractions(loanJournalEntryPoster);
-        verify(externalAssetOwnerTransferRepository).findAll(any(Specification.class), eq(Sort.by(Sort.Direction.ASC, "id")));
+        verify(externalAssetOwnerTransferRepository).findAllByLoanIdAndSettlementDateAndStatusInAndEffectiveDateToGreaterThanEqual(eq(1L),
+                eq(actualDate), any(), eq(FUTURE_DATE_9999_12_31));
         verify(externalAssetOwnerTransferRepository).findOne(any(Specification.class));
         verify(externalAssetOwnerTransferRepository, never()).save(any(ExternalAssetOwnerTransfer.class));
         verifyNoInteractions(externalAssetOwnerTransferLoanMappingRepository);

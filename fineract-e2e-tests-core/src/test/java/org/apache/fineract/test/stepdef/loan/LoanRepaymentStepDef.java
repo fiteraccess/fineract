@@ -29,6 +29,7 @@ import io.cucumber.java.en.When;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +64,7 @@ import org.apache.fineract.test.messaging.event.loan.transaction.LoanAdjustTrans
 import org.apache.fineract.test.messaging.store.EventStore;
 import org.apache.fineract.test.stepdef.AbstractStepDef;
 import org.apache.fineract.test.support.TestContextKey;
+import org.springframework.util.Assert;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -153,30 +155,6 @@ public class LoanRepaymentStepDef extends AbstractStepDef {
         eventCheckHelper.loanBalanceChangedEventCheck(loanId);
     }
 
-    @And("Customer makes externalID controlled {string} repayment on {string} with {double} EUR transaction amount")
-    public void makeRepaymentByExternalId(String repaymentType, String transactionDate, double transactionAmount) throws IOException {
-        eventStore.reset();
-        PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
-        long loanId = loanResponse.getLoanId();
-        String resourceExternalId = loanResponse.getResourceExternalId();
-
-        DefaultPaymentType paymentType = DefaultPaymentType.valueOf(repaymentType);
-        Long paymentTypeValue = paymentTypeResolver.resolve(paymentType);
-
-        PostLoansLoanIdTransactionsRequest repaymentRequest = loanRequestFactory.defaultRepaymentRequest().transactionDate(transactionDate)
-                .transactionAmount(transactionAmount).paymentTypeId(paymentTypeValue).dateFormat(DATE_FORMAT).locale(DEFAULT_LOCALE);
-
-        String idempotencyKey = UUID.randomUUID().toString();
-        testContext().set(TestContextKey.TRANSACTION_IDEMPOTENCY_KEY, idempotencyKey);
-
-        PostLoansLoanIdTransactionsResponse repaymentResponse = ok(
-                () -> fineractClient.loanTransactions().handleCommandsLoanTransactionByLoanExternalId(resourceExternalId, repaymentRequest,
-                        Map.<String, Object>of("command", "repayment")));
-
-        testContext().set(TestContextKey.LOAN_REPAYMENT_RESPONSE, repaymentResponse);
-        eventCheckHelper.loanBalanceChangedEventCheck(loanId);
-    }
-
     @And("Created user makes externalID controlled {string} repayment on {string} with {double} EUR transaction amount")
     public void makeRepaymentWithGivenUserByExternalId(String repaymentType, String transactionDate, double transactionAmount)
             throws IOException {
@@ -205,53 +183,6 @@ public class LoanRepaymentStepDef extends AbstractStepDef {
                         Map.<String, Object>of("command", "repayment")));
         testContext().set(TestContextKey.LOAN_REPAYMENT_RESPONSE, repaymentResponse);
         eventCheckHelper.loanBalanceChangedEventCheck(loanId);
-    }
-
-    @And("Customer not able to make {string} repayment on {string} with {double} EUR transaction amount")
-    public void makeLoanRepaymentFails(String repaymentType, String transactionDate, double transactionAmount) throws IOException {
-        PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
-        long loanId = loanResponse.getLoanId();
-
-        DefaultPaymentType paymentType = DefaultPaymentType.valueOf(repaymentType);
-        Long paymentTypeValue = paymentTypeResolver.resolve(paymentType);
-
-        PostLoansLoanIdTransactionsRequest repaymentRequest = loanRequestFactory.defaultRepaymentRequest().transactionDate(transactionDate)
-                .transactionAmount(transactionAmount).paymentTypeId(paymentTypeValue).dateFormat(DATE_FORMAT).locale(DEFAULT_LOCALE);
-
-        try {
-            ok(() -> fineractClient.loanTransactions().handleCommandsLoanTransaction(loanId, repaymentRequest,
-                    Map.<String, Object>of("command", "repayment")));
-            throw new IllegalStateException("Expected FeignException but call succeeded");
-        } catch (feign.FeignException e) {
-            ErrorResponse errorDetails = ErrorResponse.fromFeignException(e);
-            assertThat(errorDetails.getHttpStatusCode()).as(ErrorMessageHelper.dateFailureErrorCodeMsg()).isEqualTo(400);
-            assertThat(errorDetails.getSingleError().getDeveloperMessage())
-                    .isEqualTo(ErrorMessageHelper.loanRepaymentOnClosedLoanFailureMsg());
-        }
-    }
-
-    @Then("Customer not able to make a repayment undo on {string} due to charge off")
-    public void makeLoanRepaymentUndoAfterChargeOff(String transactionDate) throws IOException {
-        PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
-        PostLoansLoanIdTransactionsResponse transactionResponse = testContext().get(TestContextKey.LOAN_REPAYMENT_RESPONSE);
-        Long loanId = loanResponse.getLoanId();
-        Long transactionId = transactionResponse.getResourceId();
-
-        PostLoansLoanIdTransactionsResponse repaymentResponse = testContext().get(TestContextKey.LOAN_REPAYMENT_RESPONSE);
-
-        PostLoansLoanIdTransactionsTransactionIdRequest repaymentUndoRequest = loanRequestFactory.defaultRepaymentUndoRequest()
-                .transactionDate(transactionDate).dateFormat(DATE_FORMAT).locale(DEFAULT_LOCALE);
-
-        try {
-            ok(() -> fineractClient.loanTransactions().adjustLoanTransaction(loanId, repaymentResponse.getResourceId(),
-                    repaymentUndoRequest, Map.<String, Object>of()));
-            throw new IllegalStateException("Expected FeignException but call succeeded");
-        } catch (feign.FeignException e) {
-            ErrorResponse errorDetails = ErrorResponse.fromFeignException(e);
-            assertThat(errorDetails.getHttpStatusCode()).as(ErrorMessageHelper.repaymentUndoFailureDueToChargeOffCodeMsg()).isEqualTo(403);
-            assertThat(errorDetails.getSingleError().getDeveloperMessage())
-                    .isEqualTo(ErrorMessageHelper.repaymentUndoFailureDueToChargeOff(transactionId));
-        }
     }
 
     @And("Customer makes {string} repayment on {string} with {double} EUR transaction amount \\(and transaction fails because of wrong date)")
@@ -697,6 +628,55 @@ public class LoanRepaymentStepDef extends AbstractStepDef {
                     loanTransactionAdjustmentDataV1 -> loanTransactionAdjustmentDataV1.getNewTransactionDetail().getExternalOwnerId())
                     .isEqualTo(externalOwnerId);
         }
+    }
+
+    @When("Customer adjust {int}th {string} transaction made on {string} with {string} payment type on {string} with {double} EUR transaction amount")
+    public void adjustTransactionWithAutoIdempotencyKey(Integer transactionNumber, String transactionTypeInput,
+            String transactionOriginalDateStr, String paymentTypeString, String transactionDate, double transactionAmount)
+            throws IOException {
+        eventStore.reset();
+        PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
+        Assert.notNull(loanResponse, "There is no stored Loan response.");
+        Assert.notNull(loanResponse.getLoanId(), "Stored Loan Response's Loan ID should be NOT null.");
+        long loanId = loanResponse.getLoanId();
+
+        TransactionType transactionType = TransactionType.valueOf(transactionTypeInput);
+        DefaultPaymentType paymentType = DefaultPaymentType.valueOf(paymentTypeString);
+        Long paymentTypeId = paymentTypeResolver.resolve(paymentType);
+        LocalDate originalDate = LocalDate.parse(transactionOriginalDateStr, DateTimeFormatter.ofPattern(DATE_FORMAT));
+
+        List<GetLoansLoanIdTransactions> transactions = ok(
+                () -> fineractClient.loans().retrieveOneLoan(loanId, Map.of("associations", "transactions"))).getTransactions();
+
+        int nthItem = transactionNumber - 1;
+        Assert.notNull(transactions, "Transactions list should be NOT null.");
+        GetLoansLoanIdTransactions targetTransaction = transactions.stream()
+                .filter(t -> t.getType() != null && transactionType.getValue().equalsIgnoreCase(t.getType().getValue()))
+                .filter(t -> originalDate.equals(t.getDate())).toList().get(nthItem);
+
+        PostLoansLoanIdTransactionsTransactionIdRequest repaymentUndoRequest = loanRequestFactory
+                .defaultRepaymentAdjustRequest(transactionAmount).paymentTypeId(paymentTypeId).transactionDate(transactionDate)
+                .dateFormat(DATE_FORMAT).locale(DEFAULT_LOCALE);
+
+        PostLoansLoanIdTransactionsResponse result = ok(() -> fineractClient.loanTransactions().adjustLoanTransaction(loanId,
+                targetTransaction.getId(), repaymentUndoRequest, Map.of("command", "adjust")));
+        Assert.notNull(result, "Result of adjust loan transaction should be NOT null.");
+        testContext().set(TestContextKey.LOAN_ADJUST_TRANSACTION_RESPONSE, result);
+    }
+
+    @Then("Adjusted transaction is created with {double} amount and {string} payment type")
+    public void adjustedTransactionHasPaymentType(double transactionAmount, String paymentTypeString) {
+        PostLoansLoanIdTransactionsResponse adjustResponse = testContext().get(TestContextKey.LOAN_ADJUST_TRANSACTION_RESPONSE);
+        PostLoansResponse loanResponse = testContext().get(TestContextKey.LOAN_CREATE_RESPONSE);
+        long loanId = loanResponse.getLoanId();
+        long expectedPaymentTypeId = paymentTypeResolver.resolve(DefaultPaymentType.valueOf(paymentTypeString));
+
+        GetLoansLoanIdTransactionsTransactionIdResponse transactionResponse = ok(() -> fineractClient.loanTransactions()
+                .retrieveOneLoanTransaction(loanId, adjustResponse.getResourceId(), Map.<String, Object>of()));
+        assertThat(transactionResponse.getManuallyReversed()).as("Adjusted transaction should not be reversed").isFalse();
+        assertThat(transactionResponse.getAmount()).isEqualTo(transactionAmount);
+        assertThat(transactionResponse.getPaymentDetailData()).as("Payment details of the adjusted transaction").isNotNull();
+        assertThat(transactionResponse.getPaymentDetailData().getPaymentType().getId()).isEqualTo(expectedPaymentTypeId);
     }
 
     @Then("Customer undo {string}th transaction made on {string} results a {int} error and {string} error message")

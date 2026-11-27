@@ -45,11 +45,11 @@ import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformS
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
-import org.apache.fineract.infrastructure.core.service.CommandParameterUtil;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
+import org.apache.fineract.portfolio.workingcapitalloan.WorkingCapitalLoanCommandParameterUtil;
 import org.apache.fineract.portfolio.workingcapitalloan.WorkingCapitalLoanConstants;
 import org.apache.fineract.portfolio.workingcapitalloan.data.WorkingCapitalLoanChargeData;
 import org.apache.fineract.portfolio.workingcapitalloan.repository.WorkingCapitalLoanChargeRepository;
@@ -124,7 +124,7 @@ public class WorkingCapitalLoanChargesApiResource {
     @Path("{loanId}/charges/{loanChargeId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Adjust a Working Capital Loan Charge", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction. Pass command=adjustment.")
+    @Operation(summary = "Adjust or Waive a Working Capital Loan Charge", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction (command=adjustment), or waives its full outstanding amount by creating a WAIVE_CHARGES transaction (command=waive).")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = WorkingCapitalLoanChargesApiResourceSwagger.PostWorkingCapitalLoansLoanIdChargesChargeIdResponse.class)))
     public CommandProcessingResult adjustLoanCharge(@PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
             @PathParam("loanChargeId") @Parameter(description = "loanChargeId") final Long loanChargeId,
@@ -137,7 +137,7 @@ public class WorkingCapitalLoanChargesApiResource {
     @Path("{loanId}/charges/external-id/{loanChargeExternalId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Adjust a Working Capital Loan Charge by Charge External Id", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction. Pass command=adjustment.")
+    @Operation(summary = "Adjust or Waive a Working Capital Loan Charge by Charge External Id", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction (command=adjustment), or waives its full outstanding amount by creating a WAIVE_CHARGES transaction (command=waive).")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = WorkingCapitalLoanChargesApiResourceSwagger.PostWorkingCapitalLoansLoanIdChargesChargeIdResponse.class)))
     public CommandProcessingResult adjustLoanChargeByChargeExternalId(
             @PathParam("loanId") @Parameter(description = "loanId") final Long loanId,
@@ -151,7 +151,7 @@ public class WorkingCapitalLoanChargesApiResource {
     @Path("external-id/{loanExternalId}/charges/{loanChargeId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Adjust a Working Capital Loan Charge by Loan External Id", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction. Pass command=adjustment.")
+    @Operation(summary = "Adjust or Waive a Working Capital Loan Charge by Loan External Id", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction (command=adjustment), or waives its full outstanding amount by creating a WAIVE_CHARGES transaction (command=waive).")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = WorkingCapitalLoanChargesApiResourceSwagger.PostWorkingCapitalLoansLoanIdChargesChargeIdResponse.class)))
     public CommandProcessingResult adjustLoanChargeByLoanExternalId(
             @PathParam("loanExternalId") @Parameter(description = "loanExternalId") final String loanExternalId,
@@ -165,7 +165,7 @@ public class WorkingCapitalLoanChargesApiResource {
     @Path("external-id/{loanExternalId}/charges/external-id/{loanChargeExternalId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    @Operation(summary = "Adjust a Working Capital Loan Charge by Loan and Charge External Ids", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction. Pass command=adjustment.")
+    @Operation(summary = "Adjust or Waive a Working Capital Loan Charge by Loan and Charge External Ids", description = "Adjusts a working capital loan charge by creating a CHARGE_ADJUSTMENT transaction (command=adjustment), or waives its full outstanding amount by creating a WAIVE_CHARGES transaction (command=waive).")
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = WorkingCapitalLoanChargesApiResourceSwagger.PostWorkingCapitalLoansLoanIdChargesChargeIdResponse.class)))
     public CommandProcessingResult adjustLoanChargeByLoanAndChargeExternalId(
             @PathParam("loanExternalId") @Parameter(description = "loanExternalId") final String loanExternalId,
@@ -309,12 +309,16 @@ public class WorkingCapitalLoanChargesApiResource {
         final Long resolvedLoanChargeId = loanChargeId == null ? loanChargeRepository.findIdByExternalId(loanChargeExternalId)
                 : loanChargeId;
 
-        if (!CommandParameterUtil.is(commandParam, WorkingCapitalLoanChargeConstants.ADJUSTMENT_LOAN_CHARGE_COMMAND)) {
+        final CommandWrapperBuilder builder;
+        if (WorkingCapitalLoanCommandParameterUtil.is(commandParam, WorkingCapitalLoanChargeConstants.ADJUSTMENT_LOAN_CHARGE_COMMAND)) {
+            builder = new CommandWrapperBuilder().adjustmentForWorkingCapitalLoanCharge(resolvedLoanId, resolvedLoanChargeId);
+        } else if (WorkingCapitalLoanCommandParameterUtil.is(commandParam, WorkingCapitalLoanChargeConstants.WAIVE_LOAN_CHARGE_COMMAND)) {
+            builder = new CommandWrapperBuilder().waiveWorkingCapitalLoanCharge(resolvedLoanId, resolvedLoanChargeId);
+        } else {
             throw new UnrecognizedQueryParamException("command", commandParam);
         }
 
-        final CommandWrapper commandRequest = new CommandWrapperBuilder()
-                .adjustmentForWorkingCapitalLoanCharge(resolvedLoanId, resolvedLoanChargeId).withJson(apiRequestBodyAsJson).build();
+        final CommandWrapper commandRequest = builder.withJson(apiRequestBodyAsJson).build();
         return commandsSourceWritePlatformService.logCommandSource(commandRequest);
     }
 }

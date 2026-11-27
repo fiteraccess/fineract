@@ -83,7 +83,7 @@ import org.apache.fineract.portfolio.loanproduct.domain.RepaymentStartDateType;
 import org.apache.fineract.portfolio.rate.domain.Rate;
 import org.apache.fineract.portfolio.repaymentwithpostdatedchecks.domain.PostDatedChecks;
 import org.apache.fineract.useradministration.domain.AppUser;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 @Entity
 @Table(name = "m_loan", uniqueConstraints = { @UniqueConstraint(columnNames = { "account_no" }, name = "loan_account_no_UNIQUE"),
@@ -109,8 +109,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
     public static final String WRITTEN_OFF_ON_DATE = "writtenOffOnDate";
     public static final String FEE = "fee";
     public static final String PENALTIES = "penalties";
-    public static final String EARLIEST_UNPAID_DATE = "earliest-unpaid-date";
-    public static final String NEXT_UNPAID_DUE_DATE = "next-unpaid-due-date";
 
     @Version
     int version;
@@ -729,6 +727,11 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.loanProduct = loanProduct;
     }
 
+    // The name upstream code uses for the same accessor; kept so upstream callers compile without edits.
+    public Long productId() {
+        return getProductId();
+    }
+
     public Long getProductId() {
         if (this.productId != null) {
             return this.productId;
@@ -1309,6 +1312,12 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return !(transaction.isReversed() || transaction.isAccrualRelated() || transaction.isIncomePosting());
     }
 
+    public LocalDate getLastUserTransactionDateExcludingAmortization() {
+        return this.loanTransactions.stream().filter(this::isUserTransaction).filter(t -> !t.isAmortizationRelated())
+                .map(LoanTransaction::getTransactionDate).filter(date -> DateUtils.isBefore(getDisbursementDate(), date))
+                .max(LocalDate::compareTo).orElse(getDisbursementDate());
+    }
+
     public LocalDate getLastRepaymentDate() {
         LocalDate currentTransactionDate = getDisbursementDate();
         for (final LoanTransaction previousTransaction : this.loanTransactions) {
@@ -1707,8 +1716,16 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return false;
     }
 
-    public void liftContractTerminationSubStatus() {
-        if (this.loanSubStatus.isContractTermination()) {
+    public boolean isLoanWithdrawal() {
+        return this.loanSubStatus != null && this.loanSubStatus.isLoanWithdrawal();
+    }
+
+    public boolean isTerminatedEarly() {
+        return isContractTermination() || isLoanWithdrawal();
+    }
+
+    public void liftEarlyTerminationSubStatus() {
+        if (isTerminatedEarly()) {
             this.loanSubStatus = null;
         }
     }
@@ -1849,6 +1866,14 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return getLoanTransaction(e -> e.isNotReversed() && e.isContractTermination());
     }
 
+    public LoanTransaction findLoanWithdrawalTransaction() {
+        return getLoanTransaction(e -> e.isNotReversed() && e.isLoanWithdrawal());
+    }
+
+    public LoanTransaction findEarlyTerminationTransaction() {
+        return getLoanTransaction(e -> e.isNotReversed() && e.isEarlyTermination());
+    }
+
     public LoanTransaction findReAgeTransaction() {
         return getLoanTransaction(LoanTransaction::isReAge);
     }
@@ -1866,9 +1891,8 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
     public LoanTransaction getLastUserTransaction() {
         return getLoanTransactions().stream() //
-                .filter(t -> t.isNotReversed() && !(t.isAccrual() || t.isAccrualAdjustment() || t.isIncomePosting()
-                        || t.isCapitalizedIncomeAmortization() || t.isCapitalizedIncomeAmortizationAdjustment()
-                        || t.isBuyDownFeeAmortization() || t.isBuyDownFeeAmortizationAdjustment())) //
+                .filter(t -> t.isNotReversed()
+                        && !(t.isAccrual() || t.isAccrualAdjustment() || t.isIncomePosting() || t.isAmortizationRelated())) //
                 .reduce((first, second) -> second) //
                 .orElse(null);
     }
@@ -1902,6 +1926,11 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return chargeOffTransaction != null && chargeOffTransaction.getDateOf().compareTo(onDate) <= 0;
     }
 
+    public boolean isTerminatedEarlyOnDate(final LocalDate onDate) {
+        final LoanTransaction earlyTerminationTransaction = isTerminatedEarly() ? findEarlyTerminationTransaction() : null;
+        return earlyTerminationTransaction != null && earlyTerminationTransaction.getDateOf().compareTo(onDate) <= 0;
+    }
+
     public boolean hasMonetaryActivityAfter(final LocalDate transactionDate) {
         for (LoanTransaction transaction : this.getLoanTransactions()) {
             if (transaction.getTransactionDate().isAfter(transactionDate) && transaction.isNotReversed()
@@ -1917,8 +1946,8 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return false;
     }
 
-    public boolean hasContractTerminationTransaction() {
-        return getLoanTransactions().stream().anyMatch(t -> t.isContractTermination() && t.isNotReversed());
+    public boolean hasEarlyTerminationTransaction() {
+        return getLoanTransactions().stream().anyMatch(t -> t.isEarlyTermination() && t.isNotReversed());
     }
 
     public long getTermsCount() {

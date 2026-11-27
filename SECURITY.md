@@ -1,6 +1,6 @@
 # Apache Fineract Threat Model
 
-This document is for human security researchers finding and [submitting security reports](https://fineract.apache.org/#contribute), AI-assisted human security researchers doing same, and Fineract PMC members handling these reports.
+This document is for security researchers [privately submitting](https://fineract.apache.org/#contribute) security reports and for Fineract PMC members handling these reports.
 
 ## §1 Header
 
@@ -10,9 +10,7 @@ See [our top-level readme](https://github.com/apache/fineract) for an introducti
 
 ## §2 Scope and intended use
 
-Source code repository: <https://github.com/apache/fineract>.
-
-Signed releases: <https://fineract.apache.org/#downloads>.
+Source code repository: <https://github.com/apache/fineract>
 
 ### Primary intended use cases
 
@@ -54,6 +52,10 @@ All scripts/configs used in build/dev/test, GitHub actions, and the project webs
 
 - **Physical access to the database server:** If an attacker has OS-level access to the PostgreSQL/MariaDB host, the project assumes the game is already lost.
 - **Network-level DDoS:** The embedded Tomcat has configurable connection limits, but volumetric DDoS mitigation is explicitly left to the reverse proxy / cloud provider.
+
+### Improper security report
+
+Follow our [guidance for submitting security reports](https://github.com/apache/fineract/blob/develop/CONTRIBUTING.md#security-reports) to avoid delays, confusion, and rejection.
 
 ## §4 Trust boundaries and data flow
 
@@ -111,7 +113,7 @@ Multi-tenancy is implemented via schema-per-tenant or database-per-tenant; tenan
 ## §5a Build-time and configuration variants
 
 Fineract can be deployed in many ways.
-It configured at runtime via environment variables and Java properties.
+It may be configured at runtime via environment variables and Java properties.
 
 See [Deployment](https://fineract.apache.org/docs/current/#_deployment) and [Security](https://fineract.apache.org/docs/current/#_security) sections in the official documentation for steps operators must follow as they work towards deploying to production.
 

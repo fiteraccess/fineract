@@ -48,7 +48,7 @@ import org.apache.fineract.portfolio.floatingrates.data.FloatingRateDTO;
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRateData;
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRatePeriodData;
 import org.apache.fineract.portfolio.floatingrates.exception.FloatingRateNotFoundException;
-import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadPlatformService;
+import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadService;
 import org.apache.fineract.portfolio.group.domain.Group;
 import org.apache.fineract.portfolio.group.exception.GroupNotActiveException;
 import org.apache.fineract.portfolio.loanaccount.data.HolidayDetailDTO;
@@ -70,7 +70,7 @@ public class LoanUtilService implements ILoanUtilService {
     private final HolidayRepositoryWrapper holidayRepository;
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final LoanScheduleGeneratorFactory loanScheduleFactory;
-    private final FloatingRatesReadPlatformService floatingRatesReadPlatformService;
+    private final FloatingRatesReadService floatingRatesReadPlatformService;
     private final CalendarReadPlatformService calendarReadPlatformService;
     private final CacheableLoanProductConfigService cacheableLoanProductConfigService;
     private final NoteRepository noteRepository;

@@ -21,7 +21,6 @@ package org.apache.fineract.portfolio.savings.api;
 import com.google.gson.JsonObject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -127,6 +126,7 @@ public class SavingsAccountTransactionsApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a savings account transaction", operationId = "retrieveOneSavingsAccountTransaction")
     @AlternativeOperationId("retrieveOne_24")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SavingsAccountTransactionData.class)))
     public String retrieveOne(@PathParam("savingsId") final Long savingsId, @PathParam("transactionId") final Long transactionId,
             @Context final UriInfo uriInfo) {
         return retrieveOne(savingsId, null, transactionId, null, uriInfo);
@@ -136,6 +136,7 @@ public class SavingsAccountTransactionsApiResource {
     @Path("external-id/{savingsExternalId}/transactions/{transactionId}")
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a savings account transaction", operationId = "retrieveOneSavingsAccountTransactionBySavingsExternalId")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SavingsAccountTransactionData.class)))
     public String retrieveOne(@PathParam("savingsExternalId") final String savingsExternalId,
             @PathParam("transactionId") final Long transactionId, @Context final UriInfo uriInfo) {
         return retrieveOne(null, savingsExternalId, transactionId, null, uriInfo);
@@ -164,6 +165,7 @@ public class SavingsAccountTransactionsApiResource {
     @Path("{savingsId}/transactions/external-id/{transactionExternalId}")
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a savings account transaction by external ID", operationId = "retrieveOneSavingsAccountTransactionByExternalId")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SavingsAccountTransactionData.class)))
     public String retrieveOne(@PathParam("savingsId") final Long savingsId,
             @PathParam("transactionExternalId") final String transactionExternalId, @Context final UriInfo uriInfo) {
         return retrieveOne(savingsId, null, null, transactionExternalId, uriInfo);
@@ -173,6 +175,7 @@ public class SavingsAccountTransactionsApiResource {
     @Path("external-id/{savingsExternalId}/transactions/external-id/{transactionExternalId}")
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieve a savings account transaction by external ID", operationId = "retrieveOneSavingsAccountTransactionBySavingsAndTransactionExternalId")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = SavingsAccountTransactionData.class)))
     public String retrieveOne(@PathParam("savingsExternalId") final String savingsExternalId,
             @PathParam("transactionExternalId") final String transactionExternalId, @Context final UriInfo uriInfo) {
         return retrieveOne(null, savingsExternalId, null, transactionExternalId, uriInfo);
@@ -365,7 +368,7 @@ public class SavingsAccountTransactionsApiResource {
             + "Accepted command = undo, reverse, modify, releaseAmount")
     @AlternativeOperationId("adjustTransaction_1")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class)))
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class))))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public String adjustTransaction(@PathParam("savingsId") final Long savingsId, @PathParam("transactionId") final Long transactionId,
             @QueryParam("command") final String commandParam, final String apiRequestBodyAsJson) {
         return adjustTransaction(savingsId, null, transactionId, null, commandParam, apiRequestBodyAsJson);
@@ -380,7 +383,7 @@ public class SavingsAccountTransactionsApiResource {
             + "savingsaccounts/external-id/{savingsExternalId}/transactions/{transactionId}?command=reverse\n" + "\n"
             + "Accepted command = undo, reverse, modify, releaseAmount")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class)))
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class))))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public String adjustTransaction(@PathParam("savingsExternalId") final String savingsExternalId,
             @PathParam("transactionId") final Long transactionId, @QueryParam("command") final String commandParam,
             final String apiRequestBodyAsJson) {
@@ -427,7 +430,7 @@ public class SavingsAccountTransactionsApiResource {
             + "savingsaccounts/{savingsId}/transactions/external-id/{transactionExternalId}?command=reverse\n" + "\n"
             + "Accepted command = undo, reverse, modify, releaseAmount")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class)))
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class))))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public String adjustTransaction(@PathParam("savingsId") final Long savingsId,
             @PathParam("transactionExternalId") final String transactionExternalId, @QueryParam("command") final String commandParam,
             final String apiRequestBodyAsJson) {
@@ -443,7 +446,7 @@ public class SavingsAccountTransactionsApiResource {
             + "savingsaccounts/external-id/{savingsExternalId}/transactions/external-id/{transactionExternalId}?command=reverse\n" + "\n"
             + "Accepted command = undo, reverse, modify, releaseAmount")
     @RequestBody(required = true, content = @Content(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class)))
-    @ApiResponse(responseCode = "200", description = "OK", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SavingsAccountTransactionsApiResourceSwagger.PostSavingsAccountBulkReversalTransactionsRequest.class))))
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = CommandProcessingResult.class)))
     public String adjustTransaction(@PathParam("savingsExternalId") final String savingsExternalId,
             @PathParam("transactionExternalId") final String transactionExternalId, @QueryParam("command") final String commandParam,
             final String apiRequestBodyAsJson) {

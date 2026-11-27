@@ -581,11 +581,11 @@ public final class SavingsProductData implements Serializable {
     }
 
     public boolean hasAccountingEnabled() {
-        return this.accountingRule.getId() > AccountingRuleType.NONE.getValue();
+        return this.accountingRule != null && this.accountingRule.getId() > AccountingRuleType.NONE.getValue();
     }
 
     public int accountingRuleTypeId() {
-        return this.accountingRule.getId().intValue();
+        return this.accountingRule == null ? AccountingRuleType.NONE.getValue() : this.accountingRule.getId().intValue();
     }
 
     @Override
@@ -601,6 +601,8 @@ public final class SavingsProductData implements Serializable {
         return this.id.hashCode();
     }
 
+    // accountingRule is null on a lookup instance (see lookup(id, name)), which is still serialized as part of
+    // a savings account's productOptions, so these bean getters must treat a missing rule as "no accounting".
     public boolean isCashBasedAccountingEnabled() {
         return this.accountingRule != null && AccountingRuleType.CASH_BASED.getValue().toString().equals(this.accountingRule.getValue());
     }

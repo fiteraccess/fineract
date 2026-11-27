@@ -18,9 +18,29 @@
  */
 package org.apache.fineract.cob.service;
 
+import java.util.Locale;
 import org.apache.fineract.cob.COBBusinessStep;
 
-public interface BusinessStepCategoryService {
+public interface BusinessStepCategoryService extends BusinessStepCategoryResolver {
 
-    Class<? extends COBBusinessStep> getBusinessStepByCategory(String category);
+    BusinessStepCategory getCategory();
+
+    String getCobJobName();
+
+    Class<? extends COBBusinessStep<?>> getBusinessStepClass();
+
+    /**
+     * A category answers to its own name (in any case), to its COB job name, and to any job name that starts with the
+     * category name followed by an underscore.
+     */
+    @Override
+    default Class<? extends COBBusinessStep<?>> getBusinessStepByCategory(final String name) {
+        if (name == null) {
+            return null;
+        }
+        final String categoryName = getCategory().name();
+        final String upperName = name.toUpperCase(Locale.ROOT);
+        final boolean claimed = upperName.equals(categoryName) || upperName.startsWith(categoryName + "_") || name.equals(getCobJobName());
+        return claimed ? getBusinessStepClass() : null;
+    }
 }

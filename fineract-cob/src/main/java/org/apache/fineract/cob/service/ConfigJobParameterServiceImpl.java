@@ -18,7 +18,6 @@
  */
 package org.apache.fineract.cob.service;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -34,27 +33,22 @@ import org.apache.fineract.cob.exceptions.BusinessStepNotBelongsToJobException;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuilder;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class ConfigJobParameterServiceImpl implements ConfigJobParameterService, InitializingBean {
+public class ConfigJobParameterServiceImpl implements ConfigJobParameterService {
 
     private final BatchBusinessStepRepository batchBusinessStepRepository;
     private final BusinessStepConfigDataParser dataParser;
-    private final BusinessStepCategoryService businessStepCategoryService;
+    // Access: one resolver across all categories (loan, working capital loan, EOD) instead of upstream's list of
+    // per-category services, so a job is matched by category name, by COB job name, or by its category prefix.
+    private final BusinessStepCategoryResolver businessStepCategoryService;
     private final ApplicationContext applicationContext;
     private final BusinessStepMapper mapper;
     private final ObjectProvider<BusinessStepConfigValidator> configValidators;
-    private JobBusinessStepDetail availableBusinessStepsForLoan;
-
-    @Override
-    public void afterPropertiesSet() throws Exception {
-        availableBusinessStepsForLoan = getAvailableBusinessStepsByJobName(BusinessStepCategory.LOAN.name());
-    }
 
     @Override
     public JobBusinessStepConfigData getBusinessStepConfigByJobName(String jobName) {
@@ -66,63 +60,65 @@ public class ConfigJobParameterServiceImpl implements ConfigJobParameterService,
     }
 
     @Override
-    public CommandProcessingResult updateStepConfigByJobName(JsonCommand command, String jobName)
+    public CommandProcessingResult updateStepConfigByJobName(final JsonCommand command, final String jobName)
             throws BusinessStepNotBelongsToJobException {
-        List<BusinessStep> businessSteps = dataParser.parseUpdate(command);
+        final List<BusinessStep> businessSteps = dataParser.parseUpdate(command);
         if (businessSteps.isEmpty()) {
             throw new BusinessStepException("A job needs to have 1 business step at least.");
         }
-        // The job's own category decides which steps are valid; a job name no category claims keeps the loan list.
-        JobBusinessStepDetail available = getAvailableBusinessStepsByJobName(jobName);
-        if (available == null) {
-            available = availableBusinessStepsForLoan;
+        final Class<? extends COBBusinessStep<?>> businessStepClass = businessStepCategoryService.getBusinessStepByCategory(jobName);
+        if (businessStepClass == null) {
+            throw new BusinessStepException(jobName + " is not a configurable business step job.");
         }
-        List<String> availableBusinessStepNames = available.getAvailableBusinessSteps().stream().map(BusinessStepDetail::getStepName)
-                .toList();
-        List<String> notValidBusinessStepNames = businessSteps.stream().map(BusinessStep::getStepName)
+        final List<String> availableBusinessStepNames = availableBusinessSteps(businessStepClass).stream()
+                .map(BusinessStepDetail::getStepName).toList();
+        final List<String> notValidBusinessStepNames = businessSteps.stream().map(BusinessStep::getStepName)
                 .filter(businessStepName -> !availableBusinessStepNames.contains(businessStepName)).toList();
-        if (notValidBusinessStepNames.isEmpty()) {
-            configValidators.orderedStream().filter(validator -> validator.appliesTo(jobName))
-                    .forEach(validator -> validator.validate(businessSteps));
-            batchBusinessStepRepository.deleteAllByJobName(jobName);
-            businessSteps.forEach(newBusinessStepConfig -> {
-                BatchBusinessStep batchBusinessStep = new BatchBusinessStep();
-                batchBusinessStep.setJobName(jobName);
-                batchBusinessStep.setStepName(newBusinessStepConfig.getStepName());
-                batchBusinessStep.setStepOrder(newBusinessStepConfig.getOrder());
-                batchBusinessStepRepository.save(batchBusinessStep);
-            });
-        } else {
+        if (!notValidBusinessStepNames.isEmpty()) {
             throw new BusinessStepException(notValidBusinessStepNames + " Business steps are not configurable for this job.");
         }
+        // Access: a job's own rule (the EOD chain's required steps) is checked before the stored steps are replaced.
+        configValidators.orderedStream().filter(validator -> validator.appliesTo(jobName))
+                .forEach(validator -> validator.validate(businessSteps));
+        batchBusinessStepRepository.deleteAllByJobName(jobName);
+        businessSteps.forEach(newBusinessStepConfig -> {
+            final BatchBusinessStep batchBusinessStep = new BatchBusinessStep();
+            batchBusinessStep.setJobName(jobName);
+            batchBusinessStep.setStepName(newBusinessStepConfig.getStepName());
+            batchBusinessStep.setStepOrder(newBusinessStepConfig.getOrder());
+            batchBusinessStepRepository.save(batchBusinessStep);
+        });
         return new CommandProcessingResultBuilder() //
                 .withCommandId(command.commandId()) //
                 .build();
     }
 
     @Override
-    public JobBusinessStepDetail getAvailableBusinessStepsByJobName(String jobName) {
-        Class<? extends COBBusinessStep> businessStepClass = businessStepCategoryService.getBusinessStepByCategory(jobName);
+    public JobBusinessStepDetail getAvailableBusinessStepsByJobName(final String jobName) {
+        final Class<? extends COBBusinessStep<?>> businessStepClass = businessStepCategoryService.getBusinessStepByCategory(jobName);
         if (businessStepClass == null) {
             return null;
         }
-        List<String> businessStepBeanNames = Arrays.stream(applicationContext.getBeanNamesForType(businessStepClass)).toList();
-        JobBusinessStepDetail jobBusinessStepDetail = new JobBusinessStepDetail();
-        List<BusinessStepDetail> availableBusinessSteps = new ArrayList<>();
-        for (String businessStepBean : businessStepBeanNames) {
-            COBBusinessStep businessStep = (COBBusinessStep) applicationContext.getBean(businessStepBean);
-            BusinessStepDetail businessStepDetail = new BusinessStepDetail();
-            businessStepDetail.setStepName(businessStep.getEnumStyledName());
-            businessStepDetail.setStepDescription(businessStep.getHumanReadableName());
-            availableBusinessSteps.add(businessStepDetail);
-        }
+        final JobBusinessStepDetail jobBusinessStepDetail = new JobBusinessStepDetail();
         jobBusinessStepDetail.setJobName(jobName);
-        jobBusinessStepDetail.setAvailableBusinessSteps(availableBusinessSteps);
+        jobBusinessStepDetail.setAvailableBusinessSteps(availableBusinessSteps(businessStepClass));
         return jobBusinessStepDetail;
     }
 
     @Override
     public List<String> getAllConfiguredJobNames() {
         return batchBusinessStepRepository.findConfiguredJobNames();
+    }
+
+    private List<BusinessStepDetail> availableBusinessSteps(final Class<? extends COBBusinessStep<?>> businessStepClass) {
+        return Arrays.stream(applicationContext.getBeanNamesForType(businessStepClass)) //
+                .map(beanName -> (COBBusinessStep<?>) applicationContext.getBean(beanName)) //
+                .map(businessStep -> {
+                    final BusinessStepDetail businessStepDetail = new BusinessStepDetail();
+                    businessStepDetail.setStepName(businessStep.getEnumStyledName());
+                    businessStepDetail.setStepDescription(businessStep.getHumanReadableName());
+                    return businessStepDetail;
+                }) //
+                .toList();
     }
 }

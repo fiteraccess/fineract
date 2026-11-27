@@ -52,15 +52,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        | 270.0               | 0.0                      | 0.0                        | 8730.00       | 0.00                     |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        | 270.0               | 0.0                      | 0.0                        | 8730.00       | 0.00                     |
+      | 10        | 2026-01-11 | 50.00                 | 8680.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
     And Working Capital loan balance payload contains the following fields:
       | field                | value   |
       | principalOutstanding | 8730.00 |
@@ -83,15 +83,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 10        | 2026-01-11 | 50.00                 | 8900.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
     And Working Capital loan balance payload contains the following fields:
       | field                | value   |
       | principalOutstanding | 9000.00 |
@@ -126,15 +126,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        | 270.0               | 0.0                      | 0.0                        | 8730.00       | 0.00                     |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        | 270.0               | 0.0                      | 0.0                        | 8730.00       | 0.00                     |
+      | 10        | 2026-01-11 | 50.00                 | 8680.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
     And Working Capital loan balance payload contains the following fields:
       | field                | value   |
       | principalOutstanding | 8730.00 |
@@ -153,15 +153,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 10        | 2026-01-11 | 50.00                 | 8900.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
     And Working Capital loan balance payload contains the following fields:
       | field                | value   |
       | principalOutstanding | 9000.00 |
@@ -215,15 +215,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        | 270.0               | 0.0                      | 0.0                        | 8730.00       | 0.00                     |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        | 270.0               | 0.0                      | 0.0                        | 8730.00       | 0.00                     |
+      | 10        | 2026-01-11 | 50.00                 | 8680.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
     And Working Capital loan balance payload contains the following fields:
       | field                | value   |
       | principalOutstanding | 8730.00 |
@@ -234,7 +234,8 @@ Feature: Working Capital Loan Undo Transaction
       | 1            | 2026-01-01 | 2026-01-30 | 270.0          | 270.0      | 0.0               | true                  | 0.0              | 0              |
     # Undo the goodwill credit: transaction is reversed, mirror GL entries created
     When Customer undo "1"th "GOODWILL_CREDIT" transaction made on "10 January 2026" on Working Capital loan
-    Then Working Capital Loan Transactions tab has a reversed "GOODWILL_CREDIT" transaction with date "10 January 2026" which has the following Journal entries:
+    Then a Working Capital Loan Adjust Transaction business event is raised for the reversed "goodwillCredit" transaction
+    And Working Capital Loan Transactions tab has a reversed "GOODWILL_CREDIT" transaction with date "10 January 2026" which has the following Journal entries:
       | Type    | Account code | Account name             | Debit | Credit |
       | EXPENSE | 744003       | Goodwill Expense Account | 270.0 |        |
       | ASSET   | 112601       | Loans Receivable         |       | 270.0  |
@@ -245,15 +246,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 10        | 2026-01-11 | 50.00                 | 8900.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
     And Working Capital loan balance payload contains the following fields:
       | field                | value   |
       | principalOutstanding | 9000.00 |
@@ -347,12 +348,14 @@ Feature: Working Capital Loan Undo Transaction
     # 9000 + overpayment 200; the 100 already refunded must stay subtracted: overpayment = 100, not 200.
     When Admin sets the business date to "09 January 2026"
     And Customer undo "1"th "REPAYMENT" transaction made on "06 January 2026" on Working Capital loan
-    Then Working Capital Loan has transactions:
+    Then a Working Capital Loan Adjust Transaction business event is raised for the "repayment" transaction on "07 January 2026" with principal portion changed from "9000.0" to "9000.0" and fee portion changed from "0.0" to "100.0"
+    And a Working Capital Loan Adjust Transaction business event is raised for the reversed "repayment" transaction
+    And Working Capital Loan has transactions:
       | transactionDate | type                  | transactionAmount | principalPortion | feeChargesPortion | penaltyChargesPortion | reversed |
       | 01 January 2026 | Disbursement          | 9000.0            | 9000.0           | 0.0               | 0.0                   | false    |
       | 06 January 2026 | Repayment             | 100.0             | 0.0              | 100.0             | 0.0                   | true     |
       | 07 January 2026 | Repayment             | 9300.0            | 9000.0           | 100.0             | 0.0                   | false    |
-      | 08 January 2026 | Credit Balance Refund | 100.0             | 100.0            | 0.0               | 0.0                   | false    |
+      | 08 January 2026 | Credit Balance Refund | 100.0             | 0.0              | 0.0               | 0.0                   | false    |
     And Working Capital loan balance payload contains the following fields:
       | field                | value  |
       | principalOutstanding | 0.0    |
@@ -381,7 +384,10 @@ Feature: Working Capital Loan Undo Transaction
     # Undo the day-5 repayment: the remaining day-10 repayment alone covers 6500 principal (no overpayment)
     When Admin sets the business date to "12 January 2026"
     And Customer undo "1"th "REPAYMENT" transaction made on "05 January 2026" on Working Capital loan
-    Then Working Capital loan status will be "ACTIVE"
+    Then a Working Capital Loan Adjust Transaction business event is raised for the "repayment" transaction on "10 January 2026" with principal portion changed from "6000.0" to "6500.0" and fee portion changed from "0.0" to "0.0"
+    And a Working Capital Loan Adjust Transaction business event is raised for the reversed "repayment" transaction
+    And BulkBusinessEvent is not raised on "12 January 2026"
+    And Working Capital loan status will be "ACTIVE"
     And Working Capital loan balance payload contains the following fields:
       | field                | value  |
       | principalOutstanding | 2500.0 |
@@ -399,15 +405,15 @@ Feature: Working Capital Loan Undo Transaction
       | paymentNo | date       | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | actualPaymentAmount | actualAmortizationAmount | expectedDiscountFeeBalance | actualBalance | actualDiscountFeeBalance |
       | 0         | 2026-01-01 | -9000.00              | 9000.00         |                            |                     |                          | 0.0                        | 9000.00       | 0.00                     |
       | 1         | 2026-01-02 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 2         | 2026-01-03 | 50.00                 | 8900.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 3         | 2026-01-04 | 50.00                 | 8850.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 4         | 2026-01-05 | 50.00                 | 8800.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 5         | 2026-01-06 | 50.00                 | 8750.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 6         | 2026-01-07 | 50.00                 | 8700.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 7         | 2026-01-08 | 50.00                 | 8650.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 8         | 2026-01-09 | 50.00                 | 8600.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
-      | 9         | 2026-01-10 | 50.00                 | 8550.00         | 0.0                        | 6500.0              | 0.0                      | 0.0                        | 2500.00       | 0.00                     |
-      | 10        | 2026-01-11 | 50.00                 | 8500.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
+      | 2         | 2026-01-03 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 3         | 2026-01-04 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 4         | 2026-01-05 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 5         | 2026-01-06 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 6         | 2026-01-07 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 7         | 2026-01-08 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 8         | 2026-01-09 | 50.00                 | 8950.00         | 0.0                        | 0.0                 | 0.0                      | 0.0                        | 9000.00       | 0.00                     |
+      | 9         | 2026-01-10 | 50.00                 | 8950.00         | 0.0                        | 6500.0              | 0.0                      | 0.0                        | 2500.00       | 0.00                     |
+      | 10        | 2026-01-11 | 50.00                 | 2450.00         | 0.0                        |                     |                          | 0.0                        |               |                          |
 
   @TestRailId:C85457
   Scenario: Verify a new repayment on a closed working capital loan is accepted and moves the loan to overpaid
@@ -451,7 +457,7 @@ Feature: Working Capital Loan Undo Transaction
       | 01 January 2026 | Disbursement              | 9000.0            | false    |
       | 01 January 2026 | Discount Fee              | 1000.0            | false    |
       | 02 January 2026 | Repayment                 | 3000.0            | false    |
-      | 02 January 2026 | Discount Fee Amortization | 498.67            | false    |
+      | 02 January 2026 | Discount Fee Amortization | 498.68            | false    |
     # Undo the repayment; the next COB re-evaluates and posts an amortization adjustment returning income to zero
     When Customer undo "1"th "REPAYMENT" transaction made on "02 January 2026" on Working Capital loan
     When Admin sets the business date to "04 January 2026"
@@ -461,8 +467,8 @@ Feature: Working Capital Loan Undo Transaction
       | 01 January 2026 | Disbursement                         | 9000.0            | false    |
       | 01 January 2026 | Discount Fee                         | 1000.0            | false    |
       | 02 January 2026 | Repayment                            | 3000.0            | true     |
-      | 02 January 2026 | Discount Fee Amortization            | 498.67            | false    |
-      | 03 January 2026 | Discount Fee Amortization Adjustment | 498.67            | false    |
+      | 02 January 2026 | Discount Fee Amortization            | 498.68            | false    |
+      | 03 January 2026 | Discount Fee Amortization Adjustment | 498.68            | false    |
     And Working Capital loan balance payload contains the following fields:
       | field          | value |
       | realizedIncome | 0.0   |
@@ -512,10 +518,206 @@ Feature: Working Capital Loan Undo Transaction
     Then WC loan delinquency range schedule periods have specific data:
       | periodNumber | fromDate        | toDate          | expectedAmount | paidAmount | outstandingAmount | minPaymentCriteriaMet |
       | 1            | 01 January 2026 | 30 January 2026 | 200            | 700        | 0                 | true                  |
-      | 2            | 31 January 2026 | 01 March 2026   | 200            | 200        | 0                 | true                  |
+      | 2            | 31 January 2026 | 01 March 2026   | 100            | 200        | 0                 | true                  |
     When Customer undo "1"th working capital transaction made on "30 January 2026"
     Then WC loan delinquency range schedule periods have specific data:
       | periodNumber | fromDate        | toDate          | expectedAmount | paidAmount | outstandingAmount | minPaymentCriteriaMet |
       | 1            | 01 January 2026 | 30 January 2026 | 200            | 200        | 0                 | true                  |
       | 2            | 31 January 2026 | 01 March 2026   | 200            | 0          | 200               |                       |
     Then Admin closes the Working Capital loan with a full repayment on "28 February 2026"
+
+  @TestRailId:C98266
+  Scenario: Verify working capital discount fee stays in amortization schedule - UC1: undo discount fee adjustment on repaid loan
+    # --- Setup ---
+    When Admin sets the business date to "01 January 2026"
+    And Admin creates a client with random data
+    And Admin creates a working capital loan with the following data:
+      | LoanProduct              | submittedOnDate | expectedDisbursementDate | principalAmount | totalPaymentVolume | periodPaymentRate | discount |
+      | WCLP_ADVANCED_ACCOUNTING | 01 January 2026 | 01 January 2026          | 9000            | 100000             | 18                |          |
+    And Admin successfully approves the working capital loan on "01 January 2026" with "9000" amount and expected disbursement date on "01 January 2026"
+    And Admin successfully disburse the Working Capital loan on "01 January 2026" with "9000" EUR transaction amount
+    # --- Discount fee ---
+    And Admin successfully add discount with "1000" amount on Working Capital loan account
+    And Admin loads discount fee transaction from Working Capital loan for adjustment
+    When Admin retrieves the projected amortization schedule
+    Then The retrieved amortization schedule has the following summary fields:
+      | discountFeeAmount | netDisbursementAmount | totalPaymentVolume | periodPaymentRate | npvDayCount | expectedPaymentAmount | originalPaymentNumber |
+      | 1000.00           | 9000.00               | 100000.00          | 18                | 360         | 50.00                 | 200                   |
+    And The retrieved amortization schedule has payments with the following details for the listed payment numbers:
+      | paymentNo | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | expectedDiscountFeeBalance |
+      | 0         | -9000.00              | 9000.00         |                            | 1000.00                    |
+      | 1         | 50.00                 | 8959.61         | 9.61                       | 990.39                     |
+    # --- Repayment ---
+    When Admin sets the business date to "02 January 2026"
+    When Admin runs inline COB job for Working Capital Loan
+    And Customer makes repayment on "02 January 2026" with 9000 transaction amount on Working Capital loan
+    # --- Discount fee adjustment and undo ---
+    When Admin sets the business date to "03 January 2026"
+    When Admin runs inline COB job for Working Capital Loan
+    And Admin adds Discount fee adjustment with "1000" amount on transaction date "03 January 2026" on Working Capital loan account for last discount
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+    When Admin sets the business date to "04 January 2026"
+    When Admin runs inline COB job for Working Capital Loan
+    And Admin undo the last Discount fee adjustment on Working Capital loan account
+    Then Working Capital loan status will be "ACTIVE"
+    And Working capital loan account has the correct data:
+      | discount | principal | totalPaidPrincipal | totalDiscountFee |
+      | 1000.0   | 10000.0   | 9000.0             | 1000.0           |
+    When Admin retrieves the projected amortization schedule
+    Then The retrieved amortization schedule has the following summary fields:
+      | discountFeeAmount | netDisbursementAmount | totalPaymentVolume | periodPaymentRate | npvDayCount | expectedPaymentAmount | originalPaymentNumber |
+      | 1000.00           | 9000.00               | 100000.00          | 18                | 360         | 50.00                 | 200                   |
+    And The retrieved amortization schedule has payments with the following details for the listed payment numbers:
+      | paymentNo | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | expectedDiscountFeeBalance |
+      | 0         | -9000.00              | 9000.00         |                            | 1000.00                    |
+      | 1         | 50.00                 | 8959.61         | 9.61                       | 990.39                     |
+    # --- Close loan ---
+    When Admin closes the Working Capital loan with a full repayment on "04 January 2026"
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+
+  @TestRailId:C98267
+  Scenario: Verify working capital discount fee stays in amortization schedule - UC2: undo repayment on repaid loan with active charge
+    # --- Setup ---
+    When Admin sets the business date to "01 January 2026"
+    And Admin creates a client with random data
+    And Admin creates a working capital loan with the following data:
+      | LoanProduct              | submittedOnDate | expectedDisbursementDate | principalAmount | totalPaymentVolume | periodPaymentRate | discount |
+      | WCLP_ADVANCED_ACCOUNTING | 01 January 2026 | 01 January 2026          | 9000            | 100000             | 18                |          |
+    And Admin successfully approves the working capital loan on "01 January 2026" with "9000" amount and expected disbursement date on "01 January 2026"
+    And Admin successfully disburse the Working Capital loan on "01 January 2026" with "9000" EUR transaction amount
+    # --- Discount fee ---
+    And Admin successfully add discount with "1000" amount on Working Capital loan account
+    When Admin retrieves the projected amortization schedule
+    Then The retrieved amortization schedule has the following summary fields:
+      | discountFeeAmount | netDisbursementAmount | totalPaymentVolume | periodPaymentRate | npvDayCount | expectedPaymentAmount | originalPaymentNumber |
+      | 1000.00           | 9000.00               | 100000.00          | 18                | 360         | 50.00                 | 200                   |
+    And The retrieved amortization schedule has payments with the following details for the listed payment numbers:
+      | paymentNo | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | expectedDiscountFeeBalance |
+      | 0         | -9000.00              | 9000.00         |                            | 1000.00                    |
+      | 1         | 50.00                 | 8959.61         | 9.61                       | 990.39                     |
+      | 2         | 50.00                 | 8919.18         | 9.57                       | 980.82                     |
+      | 3         | 50.00                 | 8878.70         | 9.52                       | 971.30                     |
+      | 4         | 50.00                 | 8838.18         | 9.48                       | 961.82                     |
+    # --- Charge and repayment ---
+    When Admin sets the business date to "05 January 2026"
+    When Admin runs inline COB job for Working Capital Loan
+    And Admin adds "WORKING_CAPITAL_SPECIFIED_DUE_DATE_FEE" specified due date charge to working capital loan with "05 January 2026" due date and 100.0 transaction amount
+    When Admin sets the business date to "06 January 2026"
+    When Admin runs inline COB job for Working Capital Loan
+    And Customer makes repayment on "06 January 2026" with 10100 transaction amount on Working Capital loan
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+    # --- Undo repayment ---
+    When Admin sets the business date to "07 January 2026"
+    When Admin runs inline COB job for Working Capital Loan
+    And Customer undo "1"th "REPAYMENT" transaction made on "06 January 2026" on Working Capital loan
+    Then Working Capital loan status will be "ACTIVE"
+    And Working capital loan account has the correct data:
+      | discount | principal | totalPaidPrincipal | totalDiscountFee |
+      | 1000.0   | 10000.0   | 0.0                | 1000.0           |
+    When Admin retrieves the projected amortization schedule
+    Then The retrieved amortization schedule has the following summary fields:
+      | discountFeeAmount | netDisbursementAmount | totalPaymentVolume | periodPaymentRate | npvDayCount | expectedPaymentAmount | originalPaymentNumber |
+      | 1000.00           | 9000.00               | 100000.00          | 18                | 360         | 50.00                 | 200                   |
+    And The retrieved amortization schedule has payments with the following details for the listed payment numbers:
+      | paymentNo | expectedPaymentAmount | expectedBalance | expectedAmortizationAmount | expectedDiscountFeeBalance |
+      | 0         | -9000.00              | 9000.00         |                            | 1000.00                    |
+      | 1         | 50.00                 | 8959.61         | 9.61                       | 990.39                     |
+      | 2         | 50.00                 | 8919.18         | 9.57                       | 980.82                     |
+      | 3         | 50.00                 | 8878.70         | 9.52                       | 971.30                     |
+      | 4         | 50.00                 | 8838.18         | 9.48                       | 961.82                     |
+    # --- Close loan ---
+    When Admin closes the Working Capital loan with a full repayment on "07 January 2026"
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+
+  @TestRailId:C106716
+  Scenario: Verify working capital loan undo transaction - user with UNDO_WORKINGCAPITALLOANTRANSACTION permission can undo a repayment
+    Then Permission "UNDO_WORKINGCAPITALLOANTRANSACTION" is returned with grouping "transaction_loan", entity "WORKINGCAPITALLOANTRANSACTION" and action "UNDO"
+    When Admin sets the business date to "01 January 2026"
+    And Admin creates a client with random data
+    And Admin creates a working capital loan with the following data:
+      | LoanProduct         | submittedOnDate | expectedDisbursementDate | principalAmount | totalPaymentVolume | periodPaymentRate | discount |
+      | WCLP_ACC_DEF_REV_AM | 01 January 2026 | 01 January 2026          | 9000            | 100000             | 18                | 0        |
+    And Admin successfully approves the working capital loan on "01 January 2026" with "9000" amount and expected disbursement date on "01 January 2026"
+    And Admin successfully disburse the Working Capital loan on "01 January 2026" with "9000" EUR transaction amount
+    And Admin creates new user with "WC_UNDO_TXN_USER" username, "WC_UNDO_TXN_ROLE" role name and given permissions:
+      | REPAYMENT_WORKINGCAPITALLOAN       |
+      | UNDO_WORKINGCAPITALLOANTRANSACTION |
+    When Admin sets the business date to "10 January 2026"
+    And Admin runs inline COB job for Working Capital Loan by loanId
+    And Created user makes repayment on "10 January 2026" with 270.0 transaction amount on Working Capital loan
+    And Created user undoes "1"th "REPAYMENT" transaction made on "10 January 2026" on Working Capital loan
+    Then Working Capital loan balance payload contains the following fields:
+      | field                | value   |
+      | principalOutstanding | 9000.00 |
+    When Admin closes the Working Capital loan with a full repayment on "10 January 2026"
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+
+  @TestRailId:C106717
+  Scenario: Verify working capital loan undo transaction - user without UNDO_WORKINGCAPITALLOANTRANSACTION permission is rejected
+    When Admin sets the business date to "01 January 2026"
+    And Admin creates a client with random data
+    And Admin creates a working capital loan with the following data:
+      | LoanProduct         | submittedOnDate | expectedDisbursementDate | principalAmount | totalPaymentVolume | periodPaymentRate | discount |
+      | WCLP_ACC_DEF_REV_AM | 01 January 2026 | 01 January 2026          | 9000            | 100000             | 18                | 0        |
+    And Admin successfully approves the working capital loan on "01 January 2026" with "9000" amount and expected disbursement date on "01 January 2026"
+    And Admin successfully disburse the Working Capital loan on "01 January 2026" with "9000" EUR transaction amount
+    And Admin creates new user with "WC_NO_UNDO_TXN_USER" username, "WC_NO_UNDO_TXN_ROLE" role name and given permissions:
+      | REPAYMENT_WORKINGCAPITALLOAN |
+    When Admin sets the business date to "10 January 2026"
+    And Admin runs inline COB job for Working Capital Loan by loanId
+    And Created user makes repayment on "10 January 2026" with 270.0 transaction amount on Working Capital loan
+    Then Created user without UNDO_WORKINGCAPITALLOANTRANSACTION permission fails to undo "1"th "REPAYMENT" transaction made on "10 January 2026" on Working Capital loan
+    When Admin closes the Working Capital loan with a full repayment on "10 January 2026"
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+
+  @TestRailId:C106784
+  Scenario: Verify working capital loan undo transaction - UNDO_WORKINGCAPITALLOANTRANSACTION alone lets a user undo a charge adjustment
+    When Admin sets the business date to "01 January 2026"
+    And Admin creates a client with random data
+    And Admin creates a working capital loan with the following data:
+      | LoanProduct | submittedOnDate | expectedDisbursementDate | principalAmount | totalPaymentVolume | periodPaymentRate | discount |
+      | WCLP        | 01 January 2026 | 01 January 2026          | 9000            | 100000             | 18                | 0        |
+    And Admin successfully approves the working capital loan on "01 January 2026" with "9000" amount and expected disbursement date on "01 January 2026"
+    And Admin successfully disburse the Working Capital loan on "01 January 2026" with "9000" EUR transaction amount
+    And Admin creates new user with "WC_UNDO_ADJ_USER" username, "WC_UNDO_ADJ_ROLE" role name and given permissions:
+      | UNDO_WORKINGCAPITALLOANTRANSACTION |
+    When Admin sets the business date to "05 January 2026"
+    And Admin adds "WORKING_CAPITAL_SPECIFIED_DUE_DATE_FEE" specified due date charge to working capital loan with "05 January 2026" due date and 100.0 transaction amount
+    And Admin makes a charge adjustment for the last added charge with 40.0 amount on working capital loan
+    And Created user undoes "1"th "CHARGE_ADJUSTMENT" transaction made on "05 January 2026" on Working Capital loan
+    Then a Working Capital Loan Adjust Transaction business event is raised for the reversed "chargeAdjustment" transaction
+    And Working Capital Loan has transactions:
+      | transactionDate | type              | transactionAmount | principalPortion | feeChargesPortion | penaltyChargesPortion | reversed |
+      | 01 January 2026 | Disbursement      | 9000.0            | 9000.0           | 0.0               | 0.0                   | false    |
+      | 05 January 2026 | Charge Adjustment | 40.0              | 0.0              | 40.0              | 0.0                   | true     |
+    When Admin closes the Working Capital loan with a full repayment on "05 January 2026"
+    Then Working Capital loan status will be "CLOSED_OBLIGATIONS_MET"
+
+  @TestRailId:C115406
+  Scenario: Verify undo of an earlier repayment on an active charge-free loan whose later repayment keeps its principal split raises only the reversal event
+    When Admin sets the business date to "01 January 2026"
+    And Admin creates a client with random data and creates-approves-disburses a working capital loan with the following data:
+      | LoanProduct | submittedOnDate | expectedDisbursementDate | principalAmount | totalPaymentVolume | periodPaymentRate | discount |
+      | WCLP        | 01 January 2026 | 01 January 2026          | 1000            | 100000             | 18                | 0        |
+    When Admin sets the business date to "05 January 2026"
+    And Customer makes repayment on "05 January 2026" with 200.0 transaction amount on Working Capital loan
+    When Admin sets the business date to "10 January 2026"
+    And Customer makes repayment on "10 January 2026" with 300.0 transaction amount on Working Capital loan
+    Then Working Capital loan status will be "ACTIVE"
+    When Admin sets the business date to "12 January 2026"
+    # The later repayment is replayed but stays 300 principal, so the replay has nothing to report
+    And Customer undo "1"th "REPAYMENT" transaction made on "05 January 2026" on Working Capital loan
+    Then a Working Capital Loan Adjust Transaction business event is raised for the reversed "repayment" transaction
+    And a Working Capital Loan Adjust Transaction business event is not raised for the "repayment" transaction on "10 January 2026"
+    And BulkBusinessEvent is not raised on "12 January 2026"
+    And Working Capital loan status will be "ACTIVE"
+    And Working Capital loan balance payload contains the following fields:
+      | field                | value |
+      | principalOutstanding | 700.0 |
+      | totalPaidPrincipal   | 300.0 |
+      | overpaymentAmount    | 0.0   |
+    And Working Capital Loan has transactions:
+      | transactionDate | type         | transactionAmount | principalPortion | feeChargesPortion | penaltyChargesPortion | reversed |
+      | 01 January 2026 | Disbursement | 1000.0            | 1000.0           | 0.0               | 0.0                   | false    |
+      | 05 January 2026 | Repayment    | 200.0             | 200.0            | 0.0               | 0.0                   | true     |
+      | 10 January 2026 | Repayment    | 300.0             | 300.0            | 0.0               | 0.0                   | false    |

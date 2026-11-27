@@ -18,9 +18,6 @@
  */
 package org.apache.fineract.portfolio.delinquency.service;
 
-import static org.apache.fineract.portfolio.loanaccount.domain.Loan.EARLIEST_UNPAID_DATE;
-import static org.apache.fineract.portfolio.loanaccount.domain.Loan.NEXT_UNPAID_DUE_DATE;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -29,6 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.configuration.domain.NextPaymentDueDateConfig;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
@@ -67,8 +65,8 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.exception.LoanProductGeneralRuleException;
+import org.jspecify.annotations.NonNull;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -107,8 +105,16 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
     @Override
     @Cacheable(value = "delinquencyBuckets", key = "'delinquency_buckets'")
     public List<DelinquencyBucketData> retrieveAllDelinquencyBuckets() {
-        final List<DelinquencyBucket> delinquencyRangeList = repositoryBucket.findAll();
-        final List<DelinquencyBucketData> result = mapperBucket.map(delinquencyRangeList);
+        return mapAndEnrich(repositoryBucket.findAllBuckets());
+    }
+
+    @Override
+    public List<DelinquencyBucketData> retrieveDelinquencyBucketsByType(final DelinquencyBucketType bucketType) {
+        return mapAndEnrich(repositoryBucket.findByBucketType(bucketType));
+    }
+
+    private List<DelinquencyBucketData> mapAndEnrich(final List<DelinquencyBucket> delinquencyBuckets) {
+        final List<DelinquencyBucketData> result = mapperBucket.map(delinquencyBuckets);
         result.forEach(this::enrichWorkingCapitalConfiguration);
         return result;
     }
@@ -135,8 +141,8 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
     @Override
     public DelinquencyRangeData retrieveCurrentDelinquencyTag(Long loanId) {
         final Loan loan = this.loanRepository.getReferenceById(loanId);
-        Optional<LoanDelinquencyTagHistory> optLoanDelinquencyTag = this.repositoryLoanDelinquencyTagHistory.findByLoanAndLiftedOnDate(loan,
-                null);
+        Optional<LoanDelinquencyTagHistory> optLoanDelinquencyTag = this.repositoryLoanDelinquencyTagHistory
+                .findByLoanAndLiftedOnDateIsNull(loan);
         return optLoanDelinquencyTag.map(loanDelinquencyTagHistory -> mapperRange.map(loanDelinquencyTagHistory.getDelinquencyRange()))
                 .orElse(null);
     }
@@ -159,7 +165,7 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
 
             // If the Loan is not Active yet or is cancelled (rejected or withdrawn), return template data
             if (loan.isSubmittedAndPendingApproval() || loan.isApproved() || loan.isCancelled()) {
-                if (loan.getLoanProduct() == null || loan.getLoanProduct().isAllowApprovedDisbursedAmountsOverApplied()) {
+                if (loan.getLoanProduct() != null && loan.getLoanProduct().isAllowApprovedDisbursedAmountsOverApplied()) {
                     collectionData.setAvailableDisbursementAmountWithOverApplied(calculateAvailableDisbursementAmountWithOverApplied(loan));
                 }
                 return collectionData;
@@ -169,7 +175,7 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
             List<LoanDelinquencyActionData> effectiveDelinquencyList = delinquencyEffectivePauseHelper
                     .calculateEffectiveDelinquencyList(savedDelinquencyList);
 
-            final String nextPaymentDueDateConfig = configurationDomainService.getNextPaymentDateConfigForLoan();
+            final NextPaymentDueDateConfig nextPaymentDueDateConfig = configurationDomainService.getNextPaymentDateConfigForLoan();
 
             // Below method calculates delinquency for active loans only and returns template data for Closed or
             // Overpaid
@@ -215,7 +221,7 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
         BigDecimal approvedWithOverApplied = loan.getApprovedPrincipal();
 
         // If over applied amount is enabled, calculate the maximum allowed amount
-        if (loanProduct.isAllowApprovedDisbursedAmountsOverApplied()) {
+        if (loanProduct != null && loanProduct.isAllowApprovedDisbursedAmountsOverApplied()) {
             if (loanProduct.getOverAppliedCalculationType() != null) {
                 if ("percentage".equalsIgnoreCase(loanProduct.getOverAppliedCalculationType())) {
                     final BigDecimal overAppliedNumber = BigDecimal.valueOf(loanProduct.getOverAppliedNumber());
@@ -309,14 +315,10 @@ public class DelinquencyReadPlatformServiceImpl implements DelinquencyReadPlatfo
         return List.of();
     }
 
-    private LocalDate possibleNextRepaymentDate(final String nextPaymentDueDateConfig, final Loan loan) {
-        if (nextPaymentDueDateConfig == null) {
-            return null;
-        }
-        return switch (nextPaymentDueDateConfig.toLowerCase()) {
+    private LocalDate possibleNextRepaymentDate(final NextPaymentDueDateConfig nextPaymentDueDateConfig, final Loan loan) {
+        return switch (nextPaymentDueDateConfig) {
             case EARLIEST_UNPAID_DATE -> getEarliestUnpaidInstallmentDate(loan);
             case NEXT_UNPAID_DUE_DATE -> getNextUnpaidInstallmentDueDate(loan);
-            default -> null;
         };
     }
 

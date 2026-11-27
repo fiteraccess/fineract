@@ -58,6 +58,7 @@ import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountDomainService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountPostInterestService;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountTransfersService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +80,7 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private final SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository;
     private final NoteRepository noteRepository;
     private final SavingsAccountPostInterestService savingsAccountPostInterestService;
+    private final SavingsAccountTransfersService savingsAccountTransfersService;
 
     @Autowired
     public SavingsAccountDomainServiceJpa(final SavingsAccountRepositoryWrapper savingsAccountRepository,
@@ -89,9 +91,11 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
             final BusinessEventNotifierService businessEventNotifierService, final BalanceValidationService balanceValidationService,
             final EntityManager entityManager, CacheableSavingsProductConfigService cacheableSavingsProductConfigService,
             SavingsDailyBalanceSyncRepository savingsDailyBalanceSyncRepository, NoteRepository noteRepository,
-            FineractProperties fineractProperties, final SavingsAccountPostInterestService savingsAccountPostInterestService) {
+            FineractProperties fineractProperties, final SavingsAccountPostInterestService savingsAccountPostInterestService,
+            final SavingsAccountTransfersService savingsAccountTransfersService) {
         this.fineractProperties = fineractProperties;
         this.savingsAccountPostInterestService = savingsAccountPostInterestService;
+        this.savingsAccountTransfersService = savingsAccountTransfersService;
         this.savingsAccountRepository = savingsAccountRepository;
         this.savingsAccountTransactionRepository = savingsAccountTransactionRepository;
         this.journalEntryWritePlatformService = journalEntryWritePlatformService;
@@ -1037,11 +1041,17 @@ public class SavingsAccountDomainServiceJpa implements SavingsAccountDomainServi
     private void postJournalEntries(final SavingsAccount savingsAccount, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, boolean isAccountTransfer, final boolean backdatedTxnsAllowedTill) {
 
+        // FINERACT-754: a recalculation that re-books a transfer leg replaces its transaction. The replacement is still
+        // a transfer leg for accounting, and the transfer row has to follow it.
+        final var transactionReplacements = savingsAccount.getTransactionReplacements();
+        final var accountTransferTransactionIds = this.savingsAccountTransfersService.findTransferTransactionIds(transactionReplacements);
         final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(savingsAccount,
                 SavingsAccountingBridgeDataHelper.findNewTransactions(savingsAccount, existingTransactionIds,
                         existingReversedTransactionIds, backdatedTxnsAllowedTill),
                 isAccountTransfer);
+        accountingBridgeData.setAccountTransferTransactionIds(accountTransferTransactionIds);
         this.journalEntryWritePlatformService.createJournalEntriesForSavings(accountingBridgeData, savingsAccount.office());
+        this.savingsAccountTransfersService.updateSavingsTransactionReferences(transactionReplacements);
     }
 
     /**

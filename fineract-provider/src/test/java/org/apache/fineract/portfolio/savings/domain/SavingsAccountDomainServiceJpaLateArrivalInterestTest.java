@@ -52,6 +52,7 @@ import org.apache.fineract.portfolio.savings.SavingsTransactionBooleanValues;
 import org.apache.fineract.portfolio.savings.service.BalanceValidationService;
 import org.apache.fineract.portfolio.savings.service.CacheableSavingsProductConfigService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountPostInterestService;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountTransfersService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -96,6 +97,8 @@ class SavingsAccountDomainServiceJpaLateArrivalInterestTest {
     private NoteRepository noteRepository;
     @Mock
     private SavingsAccountPostInterestService savingsAccountPostInterestService;
+    @Mock
+    private SavingsAccountTransfersService savingsAccountTransfersService;
 
     private SavingsAccount account;
 
@@ -152,7 +155,8 @@ class SavingsAccountDomainServiceJpaLateArrivalInterestTest {
         return new SavingsAccountDomainServiceJpa(savingsAccountRepository, savingsAccountTransactionRepository,
                 journalEntryWritePlatformService, configurationDomainService, context, depositAccountOnHoldTransactionRepository,
                 businessEventNotifierService, balanceValidationService, entityManager, cacheableSavingsProductConfigService,
-                savingsDailyBalanceSyncRepository, noteRepository, properties, savingsAccountPostInterestService);
+                savingsDailyBalanceSyncRepository, noteRepository, properties, savingsAccountPostInterestService,
+                savingsAccountTransfersService);
     }
 
     private void verifyInterest(final boolean expectLocalRepost) {

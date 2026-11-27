@@ -38,10 +38,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.data.AuditData;
 import org.apache.fineract.commands.data.AuditSearchData;
 import org.apache.fineract.commands.data.ProcessingResultLookup;
+import org.apache.fineract.commands.data.request.AuditRequest;
 import org.apache.fineract.commands.exception.CommandNotFoundException;
 import org.apache.fineract.infrastructure.core.data.PaginationParameters;
 import org.apache.fineract.infrastructure.core.data.PaginationParametersDataValidator;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.Page;
@@ -452,6 +454,70 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
         }
 
         return new AuditSearchData(appUsers, actionNames, entityNames, processingResults);
+    }
+
+    @Override
+    public SQLBuilder getExtraCriteria(final AuditRequest auditRequest) {
+        final SQLBuilder extraCriteria = new SQLBuilder();
+        extraCriteria.addNonNullCriteria("aud.action_name = ", auditRequest.getActionName());
+        if (auditRequest.getEntityName() != null) {
+            extraCriteria.addCriteria("aud.entity_name like", auditRequest.getEntityName() + "%");
+        }
+        extraCriteria.addNonNullCriteria("aud.resource_id = ", auditRequest.getResourceId());
+        extraCriteria.addNonNullCriteria("aud.maker_id = ", auditRequest.getMakerId());
+        extraCriteria.addNonNullCriteria("aud.checker_id = ", auditRequest.getCheckerId());
+        if (auditRequest.getMakerDateTimeFrom() != null) {
+            extraCriteria.addSubOperation((SQLBuilder criteria) -> {
+                criteria.addNonNullCriteria("aud.made_on_date >= ", auditRequest.getMakerDateTimeFrom(),
+                        SQLBuilder.WhereLogicalOperator.NONE);
+                criteria.addNonNullCriteria("aud.made_on_date_utc >= ", auditRequest.getMakerDateTimeFrom(),
+                        SQLBuilder.WhereLogicalOperator.OR);
+            });
+        }
+        if (auditRequest.getMakerDateTimeTo() != null) {
+            extraCriteria.addSubOperation((SQLBuilder criteria) -> {
+                criteria.addNonNullCriteria("aud.made_on_date <= ", auditRequest.getMakerDateTimeTo(),
+                        SQLBuilder.WhereLogicalOperator.NONE);
+                criteria.addNonNullCriteria("aud.made_on_date_utc <= ", auditRequest.getMakerDateTimeTo(),
+                        SQLBuilder.WhereLogicalOperator.OR);
+            });
+        }
+        if (auditRequest.getCheckerDateTimeFrom() != null) {
+            extraCriteria.addSubOperation((SQLBuilder criteria) -> {
+                criteria.addNonNullCriteria("aud.checked_on_date >= ", auditRequest.getCheckerDateTimeFrom(),
+                        SQLBuilder.WhereLogicalOperator.NONE);
+                criteria.addNonNullCriteria("aud.checked_on_date_utc >= ", auditRequest.getCheckerDateTimeFrom(),
+                        SQLBuilder.WhereLogicalOperator.OR);
+            });
+        }
+        if (auditRequest.getCheckerDateTimeTo() != null) {
+            extraCriteria.addSubOperation((SQLBuilder criteria) -> {
+                criteria.addNonNullCriteria("aud.checked_on_date <= ", auditRequest.getCheckerDateTimeTo(),
+                        SQLBuilder.WhereLogicalOperator.NONE);
+                criteria.addNonNullCriteria("aud.checked_on_date_utc <= ", auditRequest.getCheckerDateTimeTo(),
+                        SQLBuilder.WhereLogicalOperator.OR);
+            });
+        }
+        extraCriteria.addNonNullCriteria("aud.status = ", parseStatus(auditRequest.getStatus()));
+        extraCriteria.addNonNullCriteria("aud.office_id = ", auditRequest.getOfficeId());
+        extraCriteria.addNonNullCriteria("aud.group_id = ", auditRequest.getGroupId());
+        extraCriteria.addNonNullCriteria("aud.client_id = ", auditRequest.getClientId());
+        extraCriteria.addNonNullCriteria("aud.loan_id = ", auditRequest.getLoanId());
+        extraCriteria.addNonNullCriteria("aud.savings_account_id = ", auditRequest.getSavingsAccountId());
+
+        return extraCriteria;
+    }
+
+    private static Integer parseStatus(final String status) {
+        if (StringUtils.isBlank(status)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(status.trim());
+        } catch (NumberFormatException e) {
+            throw new PlatformApiDataValidationException("validation.msg.audit.status.not.integer",
+                    "The parameter `status` must be an integer.", "status", e, status);
+        }
     }
 
     private String makercheckerCapabilityOnly(final String useType, final AppUser currentUser) {

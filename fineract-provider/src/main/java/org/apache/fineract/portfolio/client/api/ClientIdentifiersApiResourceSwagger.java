@@ -19,7 +19,7 @@
 package org.apache.fineract.portfolio.client.api;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.apache.fineract.portfolio.client.data.ClientIdentifierRequest;
+import java.time.LocalDate;
 
 /**
  * Created by Chirag Gupta on 01/13/18.
@@ -52,6 +52,10 @@ final class ClientIdentifiersApiResourceSwagger {
         public String documentKey;
         @Schema(example = "Issued in the year 2--7")
         public String description;
+        @Schema(example = "01 January 2024")
+        public LocalDate issuanceDate;
+        @Schema(example = "01 January 2034")
+        public LocalDate expiryDate;
     }
 
     @Schema(description = "PostClientsClientIdIdentifiersRequest")
@@ -67,6 +71,14 @@ final class ClientIdentifiersApiResourceSwagger {
         public String description;
         @Schema(example = "Active")
         public String status;
+        @Schema(example = "01 January 2024")
+        public String issuanceDate;
+        @Schema(example = "01 January 2034")
+        public String expiryDate;
+        @Schema(example = "dd MMMM yyyy")
+        public String dateFormat;
+        @Schema(example = "en")
+        public String locale;
     }
 
     @Schema(description = "PutClientsClientIdIdentifiersIdentifierIdResponse")
@@ -80,7 +92,26 @@ final class ClientIdentifiersApiResourceSwagger {
         public Long clientId;
         @Schema(example = "3")
         public Long resourceId;
-        public ClientIdentifierRequest changes;
+        public PutClientsClientIdIdentifiersIdentifierIdChanges changes;
+    }
+
+    @Schema(description = "PutClientsClientIdIdentifiersIdentifierIdChanges")
+    public static final class PutClientsClientIdIdentifiersIdentifierIdChanges {
+
+        private PutClientsClientIdIdentifiersIdentifierIdChanges() {}
+
+        @Schema(example = "1")
+        public Long documentTypeId;
+        @Schema(example = "KA-54677")
+        public String documentKey;
+        @Schema(example = "Document has been verified")
+        public String description;
+        @Schema(example = "ACTIVE")
+        public String status;
+        @Schema(example = "[2024, 1, 1]")
+        public LocalDate issuanceDate;
+        @Schema(example = "[2034, 1, 1]")
+        public LocalDate expiryDate;
     }
 
     @Schema(description = "PostClientsClientIdIdentifiersResponse")

@@ -53,9 +53,9 @@ jobs:
         fetchDepth: 0
 
       - task: JavaToolInstaller@0
-        displayName: 'Set up JDK 21'
+        displayName: 'Set up JDK 25'
         inputs:
-          versionSpec: '21'
+          versionSpec: '25'
           jdkArchitectureOption: 'x64'
           jdkSourceOption: 'PreInstalled'
 

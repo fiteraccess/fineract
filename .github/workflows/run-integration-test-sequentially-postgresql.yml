@@ -1,4 +1,4 @@
-name: Fineract Cargo & Unit- & Integration tests - Sequential Execution - PostgreSQL
+name: Fineract Unit- & Integration tests - Sequential Execution - PostgreSQL
 
 on:
   workflow_dispatch:
@@ -46,10 +46,10 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
         with:
-          java-version: '21'
+          java-version: '25'
           distribution: 'zulu'
       - name: Setup Gradle and Validate Wrapper
         uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884 # v5.0.1
@@ -87,8 +87,14 @@ jobs:
         run: |
           ./gradlew --no-daemon --console=plain build -x cucumber -x test -x doc
           ./gradlew --no-daemon --console=plain cucumber -x :fineract-e2e-tests-runner:cucumber
-          ./gradlew --no-daemon --console=plain test -x :twofactor-tests:test -x :oauth2-test:test -x :fineract-e2e-tests-runner:test -PdbType=postgresql
+          # Up to 1.15 the Gradle Cargo plugin started a server from each of these test tasks;
+          # upstream removed it in 1.16, so the server is started here, once per auth mode.
+          trap './scripts/ci-fineract-server.sh stop' EXIT
+          ./scripts/ci-fineract-server.sh start basic
+          ./gradlew --no-daemon --console=plain test -x :twofactor-tests:test -x :oauth2-tests:test -x :fineract-e2e-tests-runner:test -PdbType=postgresql
+          ./scripts/ci-fineract-server.sh start twofactor
           ./gradlew --no-daemon --console=plain :twofactor-tests:test -PdbType=postgresql
+          ./scripts/ci-fineract-server.sh start oauth2
           ./gradlew --no-daemon --console=plain :oauth2-tests:test -PdbType=postgresql
       - name: Archive test results
         if: always()
@@ -107,7 +113,4 @@ jobs:
         with:
           name: server-logs
           retention-days: 5
-          path: |
-            integration-tests/build/cargo/
-            twofactor-tests/build/cargo/
-            oauth2-tests/build/cargo/
+          path: build/fineract-server/

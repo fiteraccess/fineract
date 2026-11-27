@@ -22,11 +22,10 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountWritePlatformService;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.Step;
+import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -66,6 +65,6 @@ public class ExpireDormancyGraceWindowsConfig {
     @Bean
     public Job expireDormancyGraceWindowsJob(ExpireDormancyGraceWindowsTasklet expireDormancyGraceWindowsTasklet) {
         return new JobBuilder(JobName.EXPIRE_DORMANCY_GRACE_WINDOWS.name(), jobRepository)
-                .start(expireDormancyGraceWindowsStep(expireDormancyGraceWindowsTasklet)).incrementer(new RunIdIncrementer()).build();
+                .start(expireDormancyGraceWindowsStep(expireDormancyGraceWindowsTasklet)).build();
     }
 }

@@ -159,6 +159,18 @@ public class WorkingCapitalBreachActionStepDef extends AbstractStepDef {
         log.info("Verified breach resume initiation failed with expected error for loan {}", loanId);
     }
 
+    @Then("Initiating a Working Capital loan breach undo reset results an error with the following data:")
+    public void initiateBreachUndoResetResultsAnError(final DataTable table) {
+        final Long loanId = extractLoanId();
+
+        final CallFailedRuntimeException exception = fail(() -> fineractClient.workingCapitalLoanBreachActions().createBreachAction(loanId,
+                workingCapitalLoanRequestFactory.defaultWorkingCapitalLoansBreachActionRequest("undo_reset")));
+
+        verifyBreachActionErrorWithTable(exception, table);
+
+        log.info("Verified breach resume initiation failed with expected error for loan {}", loanId);
+    }
+
     @Then("Initiating a Working Capital loan breach pause with startDate {string} and endDate {string} results an error with the following data:")
     public void initiateBreachPauseResultsAnError(final String startDate, final String endDate, final DataTable table) {
         initiateBreachActionResultsAnError("pause", startDate, endDate, table);
@@ -233,6 +245,14 @@ public class WorkingCapitalBreachActionStepDef extends AbstractStepDef {
     @When("Admin creates WC breach reset action")
     public void createBreachResetAction() {
         executeBreachAction(workingCapitalLoanRequestFactory.defaultWorkingCapitalLoansBreachActionRequest("reset"));
+    }
+
+    @When("Admin creates WC breach reset action with restart period from reset date")
+    public void createBreachResetActionWithRestartPeriodFromResetDate() {
+        final PostWorkingCapitalLoansBreachActionRequest request = workingCapitalLoanRequestFactory
+                .defaultWorkingCapitalLoansBreachActionRequest("reset");
+        request.setRestartPeriodFromResetDate(true);
+        executeBreachAction(request);
     }
 
     @When("Admin creates WC breach undo reset action")
@@ -339,11 +359,15 @@ public class WorkingCapitalBreachActionStepDef extends AbstractStepDef {
                 assertThat(actual.getAction().name()).as(label).isEqualTo(expected);
             }
             case "startDate" -> assertThat(actual.getStartDate()).as(label).isEqualTo(LocalDate.parse(expected, DATE_FORMAT));
-            case "minimumPayment" -> assertThat(actual.getMinimumPayment()).as(label).isEqualByComparingTo(new BigDecimal(expected));
+            case "minimumPayment" ->
+                verifyOptionalField(expected, v -> assertThat(actual.getMinimumPayment()).as(label).isEqualByComparingTo(new BigDecimal(v)),
+                        () -> assertThat(actual.getMinimumPayment()).as(label).isNull());
             case "minimumPaymentType" ->
                 verifyOptionalField(expected, v -> assertThat(String.valueOf(actual.getMinimumPaymentType())).as(label).isEqualTo(v),
                         () -> assertThat(actual.getMinimumPaymentType()).as(label).isNull());
-            case "frequency" -> assertThat(actual.getFrequency()).as(label).isEqualTo(Integer.parseInt(expected));
+            case "frequency" ->
+                verifyOptionalField(expected, v -> assertThat(actual.getFrequency()).as(label).isEqualTo(Integer.parseInt(v)),
+                        () -> assertThat(actual.getFrequency()).as(label).isNull());
             case "frequencyType" ->
                 verifyOptionalField(expected, v -> assertThat(String.valueOf(actual.getFrequencyType())).as(label).isEqualTo(v),
                         () -> assertThat(actual.getFrequencyType()).as(label).isNull());

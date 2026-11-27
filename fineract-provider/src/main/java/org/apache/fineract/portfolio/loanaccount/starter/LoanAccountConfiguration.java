@@ -58,7 +58,7 @@ import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.collateralmanagement.service.LoanCollateralAssembler;
 import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
 import org.apache.fineract.portfolio.delinquency.service.DelinquencyReadPlatformService;
-import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadPlatformService;
+import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadService;
 import org.apache.fineract.portfolio.fund.domain.FundRepository;
 import org.apache.fineract.portfolio.fund.service.FundReadPlatformService;
 import org.apache.fineract.portfolio.group.domain.GroupRepositoryWrapper;
@@ -82,7 +82,6 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepositor
 import org.apache.fineract.portfolio.loanaccount.guarantor.service.GuarantorDomainService;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleAssembler;
-import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleHistoryWritePlatformService;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanChargeMapper;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanCollateralManagementMapper;
@@ -104,10 +103,12 @@ import org.apache.fineract.portfolio.loanaccount.serialization.LoanTransactionVa
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanUpdateCommandFromApiJsonDeserializer;
 import org.apache.fineract.portfolio.loanaccount.service.BulkLoansReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.BulkLoansReadPlatformServiceImpl;
+import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeAmortizationStrategyService;
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeePlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeWritePlatformServiceImpl;
+import org.apache.fineract.portfolio.loanaccount.service.CapitalizedIncomeAmortizationStrategyService;
 import org.apache.fineract.portfolio.loanaccount.service.GLIMAccountInfoReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.GLIMAccountInfoReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.service.GLIMAccountInfoWritePlatformService;
@@ -263,18 +264,19 @@ public class LoanAccountConfiguration {
             WorkingDaysRepositoryWrapper workingDaysRepository, RateAssembler rateAssembler, ExternalIdFactory externalIdFactory,
             AccountNumberFormatRepositoryWrapper accountNumberFormatRepository, GLIMAccountInfoRepository glimRepository,
             AccountNumberGenerator accountNumberGenerator, GLIMAccountInfoWritePlatformService glimAccountInfoWritePlatformService,
-            LoanCollateralAssembler loanCollateralAssembler, LoanScheduleCalculationPlatformService calculationPlatformService,
-            LoanDisbursementDetailsAssembler loanDisbursementDetailsAssembler, LoanChargeMapper loanChargeMapper,
-            LoanCollateralManagementMapper loanCollateralManagementMapper, LoanAccrualsProcessingService loanAccrualsProcessingService,
-            LoanDisbursementService loanDisbursementService, LoanChargeService loanChargeService, LoanOfficerService loanOfficerService,
-            CacheableLoanProductConfigService cacheableLoanProductConfigService, LoanScheduleComponent loanSchedule) {
+            LoanCollateralAssembler loanCollateralAssembler, LoanDisbursementDetailsAssembler loanDisbursementDetailsAssembler,
+            LoanChargeMapper loanChargeMapper, LoanCollateralManagementMapper loanCollateralManagementMapper,
+            LoanAccrualsProcessingService loanAccrualsProcessingService, LoanDisbursementService loanDisbursementService,
+            LoanChargeService loanChargeService, LoanOfficerService loanOfficerService,
+            CacheableLoanProductConfigService cacheableLoanProductConfigService, LoanScheduleComponent loanSchedule,
+            LoanScheduleService loanScheduleService, LoanUtilService loanUtilService) {
         return new LoanAssemblerImpl(fromApiJsonHelper, loanRepository, loanProductRepository, clientRepository, groupRepository,
                 fundRepository, staffRepository, codeValueRepository, loanScheduleAssembler, loanChargeAssembler, collateralAssembler,
                 loanRepaymentScheduleTransactionProcessorFactory, holidayRepository, configurationDomainService, workingDaysRepository,
                 rateAssembler, externalIdFactory, accountNumberFormatRepository, glimRepository, accountNumberGenerator,
-                glimAccountInfoWritePlatformService, loanCollateralAssembler, calculationPlatformService, loanDisbursementDetailsAssembler,
-                loanChargeMapper, loanCollateralManagementMapper, loanAccrualsProcessingService, loanDisbursementService, loanChargeService,
-                loanOfficerService, cacheableLoanProductConfigService, loanSchedule);
+                glimAccountInfoWritePlatformService, loanCollateralAssembler, loanDisbursementDetailsAssembler, loanChargeMapper,
+                loanCollateralManagementMapper, loanAccrualsProcessingService, loanDisbursementService, loanChargeService,
+                loanOfficerService, cacheableLoanProductConfigService, loanSchedule, loanScheduleService, loanUtilService);
     }
 
     @Bean
@@ -347,7 +349,7 @@ public class LoanAccountConfiguration {
             FundReadPlatformService fundReadPlatformService, ChargeReadPlatformService chargeReadPlatformService,
             CodeValueReadPlatformService codeValueReadPlatformService, CalendarReadPlatformService calendarReadPlatformService,
             StaffReadService staffReadPlatformService, PaginationHelper paginationHelper,
-            PaymentTypeReadService paymentTypeReadPlatformService, FloatingRatesReadPlatformService floatingRatesReadPlatformService,
+            PaymentTypeReadService paymentTypeReadPlatformService, FloatingRatesReadService floatingRatesReadPlatformService,
             LoanUtilService loanUtilService, ConfigurationDomainService configurationDomainService,
             AccountDetailsReadPlatformService accountDetailsReadPlatformService, ColumnValidator columnValidator,
             DatabaseSpecificSQLGenerator sqlGenerator, DelinquencyReadPlatformService delinquencyReadPlatformService,
@@ -391,7 +393,7 @@ public class LoanAccountConfiguration {
     public LoanUtilService loanUtilService(ApplicationCurrencyRepositoryWrapper applicationCurrencyRepository,
             CalendarInstanceRepository calendarInstanceRepository, ConfigurationDomainService configurationDomainService,
             HolidayRepositoryWrapper holidayRepository, WorkingDaysRepositoryWrapper workingDaysRepository,
-            LoanScheduleGeneratorFactory loanScheduleFactory, FloatingRatesReadPlatformService floatingRatesReadPlatformService,
+            LoanScheduleGeneratorFactory loanScheduleFactory, FloatingRatesReadService floatingRatesReadPlatformService,
             CalendarReadPlatformService calendarReadPlatformService, CacheableLoanProductConfigService cacheableLoanProductConfigService,
             NoteRepository noteRepository) {
         return new LoanUtilService(applicationCurrencyRepository, calendarInstanceRepository, configurationDomainService, holidayRepository,
@@ -453,7 +455,8 @@ public class LoanAccountConfiguration {
             ReprocessLoanTransactionsService reprocessLoanTransactionsService, LoanAccountService loanAccountService,
             LoanJournalEntryPoster journalEntryPoster, LoanAdjustmentService loanAdjustmentService, LoanMapper loanMapper,
             LoanTransactionProcessingService loanTransactionProcessingService, final LoanBalanceService loanBalanceService,
-            LoanTransactionService loanTransactionService, CacheableLoanProductConfigService cacheableLoanProductConfigService) {
+            LoanTransactionService loanTransactionService, CacheableLoanProductConfigService cacheableLoanProductConfigService,
+            LoanOriginatorLinkingService loanOriginatorLinkingService) {
         return new LoanWritePlatformServiceJpaRepositoryImpl(context, loanTransactionValidator, loanUpdateCommandFromApiJsonDeserializer,
                 loanRepositoryWrapper, loanAccountDomainService, noteRepository, loanTransactionRepository,
                 loanTransactionRelationRepository, loanAssembler, calendarInstanceRepository, paymentDetailWritePlatformService,
@@ -468,7 +471,7 @@ public class LoanAccountConfiguration {
                 loanAccrualsProcessingService, loanOfficerValidator, loanDownPaymentTransactionValidator, loanDisbursementService,
                 loanScheduleService, loanChargeValidator, loanOfficerService, reprocessLoanTransactionsService, loanAccountService,
                 journalEntryPoster, loanAdjustmentService, loanMapper, loanTransactionProcessingService, loanBalanceService,
-                loanTransactionService, cacheableLoanProductConfigService);
+                loanTransactionService, cacheableLoanProductConfigService, loanOriginatorLinkingService);
     }
 
     @Bean
@@ -572,21 +575,21 @@ public class LoanAccountConfiguration {
     @ConditionalOnMissingBean(LoanCapitalizedIncomeAmortizationEventService.class)
     public LoanCapitalizedIncomeAmortizationEventService loanCapitalizedIncomeAmortizationEventService(
             BusinessEventNotifierService businessEventNotifierService,
-            LoanCapitalizedIncomeAmortizationProcessingService loanCapitalizedIncomeAmortizationProcessingService) {
+            LoanCapitalizedIncomeAmortizationProcessingService loanCapitalizedIncomeAmortizationProcessingService,
+            CapitalizedIncomeAmortizationStrategyService capitalizedIncomeAmortizationStrategyService) {
         return new LoanCapitalizedIncomeAmortizationEventService(businessEventNotifierService,
-                loanCapitalizedIncomeAmortizationProcessingService);
+                loanCapitalizedIncomeAmortizationProcessingService, capitalizedIncomeAmortizationStrategyService);
     }
 
     @Bean
     @ConditionalOnMissingBean(LoanCapitalizedIncomeAmortizationProcessingService.class)
     public LoanCapitalizedIncomeAmortizationProcessingService loanCapitalizedIncomeAmortizationProcessingService(
-            final ConfigurationDomainService configurationDomainService, final LoanTransactionRepository loanTransactionRepository,
+            final LoanTransactionRepository loanTransactionRepository,
             final LoanCapitalizedIncomeBalanceRepository loanCapitalizedIncomeBalanceRepository,
             final BusinessEventNotifierService businessEventNotifierService, final LoanJournalEntryPoster journalEntryPoster,
             final ExternalIdFactory externalIdFactory, final LoanAmortizationAllocationService loanAmortizationAllocationService) {
-        return new LoanCapitalizedIncomeAmortizationProcessingServiceImpl(configurationDomainService, loanTransactionRepository,
-                loanCapitalizedIncomeBalanceRepository, businessEventNotifierService, journalEntryPoster, externalIdFactory,
-                loanAmortizationAllocationService);
+        return new LoanCapitalizedIncomeAmortizationProcessingServiceImpl(loanTransactionRepository, loanCapitalizedIncomeBalanceRepository,
+                businessEventNotifierService, journalEntryPoster, externalIdFactory, loanAmortizationAllocationService);
     }
 
     @Bean
@@ -604,8 +607,10 @@ public class LoanAccountConfiguration {
     @ConditionalOnMissingBean(LoanBuyDownFeeAmortizationEventService.class)
     public LoanBuyDownFeeAmortizationEventService loanBuyDownFeeAmortizationEventService(
             BusinessEventNotifierService businessEventNotifierService,
-            LoanBuyDownFeeAmortizationProcessingService loanBuyDownFeeAmortizationProcessingService) {
-        return new LoanBuyDownFeeAmortizationEventService(businessEventNotifierService, loanBuyDownFeeAmortizationProcessingService);
+            LoanBuyDownFeeAmortizationProcessingService loanBuyDownFeeAmortizationProcessingService,
+            BuyDownFeeAmortizationStrategyService buyDownFeeAmortizationStrategyService) {
+        return new LoanBuyDownFeeAmortizationEventService(businessEventNotifierService, loanBuyDownFeeAmortizationProcessingService,
+                buyDownFeeAmortizationStrategyService);
     }
 
     @Bean

@@ -20,6 +20,8 @@ package org.apache.fineract.portfolio.workingcapitalloan.mapper;
 
 import java.time.LocalDate;
 import java.util.List;
+import org.apache.fineract.infrastructure.codes.data.CodeValueData;
+import org.apache.fineract.infrastructure.codes.domain.CodeValue;
 import org.apache.fineract.infrastructure.core.config.MapstructMapperConfig;
 import org.apache.fineract.infrastructure.core.data.StringEnumOptionData;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -76,15 +78,22 @@ public interface WorkingCapitalLoanMapper {
     @Mapping(target = "delinquencyGraceDays", source = "loanProductRelatedDetails.delinquencyGraceDays")
     @Mapping(target = "delinquencyStartType", source = "loanProductRelatedDetails", qualifiedByName = "delinquencyStartTypeData")
     @Mapping(target = "breachGraceDays", source = "loanProductRelatedDetails.breachGraceDays")
+    @Mapping(target = "breachStartType", source = "loanProductRelatedDetails", qualifiedByName = "breachStartTypeData")
     @Mapping(target = "breachStartDate", ignore = true)
+    @Mapping(target = "breachEffectiveStartDate", ignore = true)
     @Mapping(target = "delinquencyStartDate", ignore = true)
+    @Mapping(target = "delinquencyEffectiveStartDate", ignore = true)
     @Mapping(target = "delinquent", ignore = true)
     @Mapping(target = "numberOfRepayments", ignore = true)
     @Mapping(target = "periodPaymentAmount", ignore = true)
-    @Mapping(target = "dailyEir", ignore = true)
     @Mapping(target = "calculatedAnnualEir", ignore = true)
+    @Mapping(target = "periodPaymentRateHistory", ignore = true)
+    @Mapping(target = "effectivePaymentRate", ignore = true)
     @Mapping(target = "summary", source = ".", qualifiedByName = "toSummaryData")
     @Mapping(target = "totalPaymentVolume", source = "totalPaymentVolume")
+    @Mapping(target = "annualEir", source = "loanProductRelatedDetails.annualEir")
+    @Mapping(target = "paymentAmount", source = "loanProductRelatedDetails.paymentAmount")
+    @Mapping(target = "paymentAmountCalculationStrategy", source = "loanProductRelatedDetails", qualifiedByName = "paymentAmountCalculationStrategyData")
     @Mapping(target = "principal", source = "loanProductRelatedDetails.principal")
     @Mapping(target = "amortizationType", source = "loanProductRelatedDetails", qualifiedByName = "amortizationTypeData")
     @Mapping(target = "npvDayCount", source = "loanProductRelatedDetails.npvDayCount")
@@ -93,8 +102,9 @@ public interface WorkingCapitalLoanMapper {
     @Mapping(target = "netDisbursalAmount", ignore = true)
     @Mapping(target = "charges", ignore = true)
     @Mapping(target = "originators", ignore = true)
-    @Mapping(target = "fraud", ignore = true)
-    @Mapping(target = "chargedOff", ignore = true)
+    @Mapping(target = "fraud", source = "fraud")
+    @Mapping(target = "chargeOffReason", source = "chargeOffReason", qualifiedByName = "chargeOffReasonData")
+    @Mapping(target = "writeOffReason", source = "writeOffReason", qualifiedByName = "writeOffReasonData")
     WorkingCapitalLoanData toData(WorkingCapitalLoan loan);
 
     List<WorkingCapitalLoanData> toDataList(List<WorkingCapitalLoan> loans);
@@ -102,6 +112,16 @@ public interface WorkingCapitalLoanMapper {
     @Named("loanStatusData")
     default LoanStatusEnumData loanStatusData(final LoanStatus loanStatus) {
         return LoanEnumerations.status(loanStatus);
+    }
+
+    @Named("chargeOffReasonData")
+    default CodeValueData chargeOffReasonData(final CodeValue chargeOffReason) {
+        return chargeOffReason != null ? chargeOffReason.toData() : null;
+    }
+
+    @Named("writeOffReasonData")
+    default CodeValueData writeOffReasonData(final CodeValue writeOffReason) {
+        return writeOffReason != null ? writeOffReason.toData() : null;
     }
 
     @Named("monetaryCurrencyToCurrencyData")
@@ -121,9 +141,21 @@ public interface WorkingCapitalLoanMapper {
                 : null;
     }
 
+    @Named("breachStartTypeData")
+    default StringEnumOptionData breachStartTypeData(final WorkingCapitalLoanProductRelatedDetails detail) {
+        return (detail != null && detail.getBreachStartType() != null) ? detail.getBreachStartType().toStringEnumOptionData() : null;
+    }
+
     @Named("amortizationTypeData")
     default StringEnumOptionData amortizationTypeData(final WorkingCapitalLoanProductRelatedDetails detail) {
         return (detail != null && detail.getAmortizationType() != null) ? detail.getAmortizationType().getValueAsStringEnumOptionData()
+                : null;
+    }
+
+    @Named("paymentAmountCalculationStrategyData")
+    default StringEnumOptionData paymentAmountCalculationStrategyData(final WorkingCapitalLoanProductRelatedDetails detail) {
+        return (detail != null && detail.getPaymentAmountCalculationStrategy() != null)
+                ? detail.getPaymentAmountCalculationStrategy().getValueAsStringEnumOptionData()
                 : null;
     }
 
@@ -147,19 +179,20 @@ public interface WorkingCapitalLoanMapper {
             timelineData.setApprovedByLastname(loan.getApprovedBy().getLastname());
             timelineData.setApprovedOnDate(loan.getApprovedOnDate());
         }
-        final WorkingCapitalLoanDisbursementDetails firstDisbursement = loan.getDisbursementDetails().stream()
-                .filter(d -> d.getActualDisbursementDate() != null).findFirst().orElse(null);
-        if (firstDisbursement != null && firstDisbursement.getDisbursedBy() != null) {
-            timelineData.setDisbursedByUsername(firstDisbursement.getDisbursedBy().getUsername());
-            timelineData.setDisbursedByFirstname(firstDisbursement.getDisbursedBy().getFirstname());
-            timelineData.setDisbursedByLastname(firstDisbursement.getDisbursedBy().getLastname());
+        final WorkingCapitalLoanDisbursementDetails firstDisbursement = loan.getFirstActualDisbursement();
+        if (firstDisbursement != null) {
             timelineData.setActualDisbursementDate(firstDisbursement.getActualDisbursementDate());
+            if (firstDisbursement.getDisbursedBy() != null) {
+                timelineData.setDisbursedByUsername(firstDisbursement.getDisbursedBy().getUsername());
+                timelineData.setDisbursedByFirstname(firstDisbursement.getDisbursedBy().getFirstname());
+                timelineData.setDisbursedByLastname(firstDisbursement.getDisbursedBy().getLastname());
+            }
         }
+        timelineData.setClosedOnDate(loan.getClosedOnDate());
         if (loan.getClosedBy() != null) {
             timelineData.setClosedByUsername(loan.getClosedBy().getUsername());
             timelineData.setClosedByFirstname(loan.getClosedBy().getFirstname());
             timelineData.setClosedByLastname(loan.getClosedBy().getLastname());
-            timelineData.setClosedOnDate(loan.getClosedOnDate());
         }
         if (loan.getRejectedBy() != null) {
             timelineData.setRejectedByUsername(loan.getRejectedBy().getUsername());
@@ -167,6 +200,13 @@ public interface WorkingCapitalLoanMapper {
             timelineData.setRejectedByLastname(loan.getRejectedBy().getLastname());
             timelineData.setRejectedOnDate(loan.getRejectedOnDate());
         }
+        if (loan.getChargedOffBy() != null) {
+            timelineData.setChargedOffByUsername(loan.getChargedOffBy().getUsername());
+            timelineData.setChargedOffByFirstname(loan.getChargedOffBy().getFirstname());
+            timelineData.setChargedOffByLastname(loan.getChargedOffBy().getLastname());
+            timelineData.setChargedOffOnDate(loan.getChargedOffOnDate());
+        }
+        timelineData.setOverpaidOnDate(loan.getOverpaidOnDate());
         return timelineData;
     }
 }

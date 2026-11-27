@@ -18,19 +18,12 @@
  */
 package org.apache.fineract.portfolio.workingcapitalloan.service;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoan;
 import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanBreachAction;
-import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanBreachResetHistory;
-import org.apache.fineract.portfolio.workingcapitalloan.domain.WorkingCapitalLoanBreachSchedule;
-import org.apache.fineract.portfolio.workingcapitalloan.repository.WorkingCapitalLoanBreachResetHistoryRepository;
-import org.apache.fineract.portfolio.workingcapitalloan.repository.WorkingCapitalLoanBreachScheduleRepository;
 import org.springframework.stereotype.Service;
 
 @RequiredArgsConstructor
@@ -38,52 +31,38 @@ import org.springframework.stereotype.Service;
 @Service
 public class WorkingCapitalLoanBreachResetServiceImpl implements WorkingCapitalLoanBreachResetService {
 
-    private final WorkingCapitalLoanBreachScheduleRepository breachScheduleRepository;
-    private final WorkingCapitalLoanBreachResetHistoryRepository breachResetHistoryRepository;
     private final WorkingCapitalLoanBreachScheduleService breachScheduleService;
     private final WorkingCapitalLoanActiveBreachResetResolver activeBreachResetResolver;
 
     @Override
     public void resetBreach(final WorkingCapitalLoan loan, final WorkingCapitalLoanBreachAction resetAction) {
-        final LocalDate actionDate = resetAction.getStartDate();
-        if (actionDate == null) {
+        if (resetAction.getStartDate() == null) {
             return;
         }
-        final List<WorkingCapitalLoanBreachSchedule> periods = breachScheduleRepository.findByLoanIdOrderByPeriodNumberAsc(loan.getId());
-        final List<WorkingCapitalLoanBreachSchedule> pastPeriods = periods.stream()
-                .filter(period -> DateUtils.isBefore(period.getToDate(), resetAction.getStartDate())).filter(period -> !period.isReset())
-                .toList();
-        final List<WorkingCapitalLoanBreachResetHistory> resetHistory = new ArrayList<>();
-
-        for (final WorkingCapitalLoanBreachSchedule period : pastPeriods) {
-            resetHistory.add(createResetHistory(resetAction, period));
-            period.reset();
+        if (Boolean.TRUE.equals(resetAction.getRestartPeriodFromResetDate())) {
+            breachScheduleService.splitPeriodAtResetAndReprocess(loan, resetAction.getStartDate());
+        } else {
+            breachScheduleService.applyActiveResetFlags(loan);
+            breachScheduleService.recalculatePastDueAmount(loan);
         }
-
-        breachScheduleRepository.saveAllAndFlush(periods);
-        breachResetHistoryRepository.saveAllAndFlush(resetHistory);
     }
 
     @Override
-    public void undoResetBreach(final WorkingCapitalLoan loan, final WorkingCapitalLoanBreachAction undoResetAction) {
-        final Optional<WorkingCapitalLoanBreachAction> latestActiveReset = activeBreachResetResolver.findLatestActiveReset(loan.getId());
-        final List<WorkingCapitalLoanBreachSchedule> periods = breachScheduleRepository.findByLoanIdOrderByPeriodNumberAsc(loan.getId());
-        if (latestActiveReset.isPresent()) {
-            periods.stream().filter(period -> DateUtils.isAfterInclusive(period.getToDate(), latestActiveReset.get().getStartDate()))
-                    .forEach(period -> {
-                        period.setReset(false);
-                    });
-        } else {
-            periods.forEach(period -> {
-                period.setReset(false);
-            });
+    public void undoResetBreach(final WorkingCapitalLoan loan, final WorkingCapitalLoanBreachAction undoResetAction,
+            final List<WorkingCapitalLoanBreachAction> priorActions) {
+        if (undoResetAction.getStartDate() == null) {
+            return;
         }
-
-        breachScheduleService.reprocessBreachSchedule(loan);
-    }
-
-    private WorkingCapitalLoanBreachResetHistory createResetHistory(final WorkingCapitalLoanBreachAction resetAction,
-            final WorkingCapitalLoanBreachSchedule period) {
-        return new WorkingCapitalLoanBreachResetHistory(resetAction, period);
+        final Deque<WorkingCapitalLoanBreachAction> activeResets = activeBreachResetResolver.activeResets(priorActions);
+        final WorkingCapitalLoanBreachAction undoneReset = activeResets.poll();
+        if (undoneReset == null) {
+            log.warn("No active breach reset found to undo on working capital loan {}", loan.getId());
+        }
+        if (undoneReset != null && Boolean.TRUE.equals(undoneReset.getRestartPeriodFromResetDate())) {
+            breachScheduleService.restoreSplitPeriodAndReprocess(loan, undoneReset);
+        } else {
+            breachScheduleService.applyActiveResetFlags(loan);
+            breachScheduleService.recalculatePastDueAmount(loan);
+        }
     }
 }

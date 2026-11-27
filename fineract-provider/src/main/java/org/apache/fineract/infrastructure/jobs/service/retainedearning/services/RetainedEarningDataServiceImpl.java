@@ -46,8 +46,9 @@ import org.apache.fineract.infrastructure.jobs.service.retainedearning.RetainedE
 import org.apache.fineract.infrastructure.jobs.service.retainedearning.data.AccountGLJournalEntryAnnualSummaryData;
 import org.apache.fineract.infrastructure.jobs.service.retainedearning.helper.DataParser;
 import org.apache.fineract.infrastructure.report.service.ReportingProcessService;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.PortfolioProductType;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.apache.fineract.portfolio.workingcapitalloanproduct.repository.WorkingCapitalLoanProductRepository;
 import org.glassfish.jersey.internal.util.collection.MultivaluedStringMap;
 import org.springframework.stereotype.Component;
 
@@ -67,9 +68,14 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
 
     private final LoanProductRepository loanProductRepository;
 
+    private final WorkingCapitalLoanProductRepository workingCapitalLoanProductRepository;
+
     private final RetainedEarningConfigurationService retainedEarningConfigurationService;
 
-    private record ProductOwnerKey(String productName, ExternalId ownerExternalId) {
+    private record ProductOwnerKey(String productName, ExternalId ownerExternalId, String originatorExternalIds) {
+    }
+
+    private record ProductReference(Long id, String name, String currencyCode) {
     }
 
     @Override
@@ -86,9 +92,11 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
     private AccountGLJournalEntryAnnualSummary convertToRetainedEarningSummary(final AccountGLJournalEntryAnnualSummaryData summaryDTO) {
         AccountGLJournalEntryAnnualSummary entrySummary = new AccountGLJournalEntryAnnualSummary();
         entrySummary.setProductId(summaryDTO.getProductId());
+        entrySummary.setProductType(summaryDTO.getProductType().getValue());
         entrySummary.setGlCode(String.valueOf(summaryDTO.getGlAccountCode()));
         entrySummary.setOfficeId(summaryDTO.getOfficeId());
         entrySummary.setOwnerExternalId(summaryDTO.getOwnerExternalId());
+        entrySummary.setOriginatorExternalIds(summaryDTO.getOriginatorExternalIds());
         entrySummary.setOpeningBalanceAmount(summaryDTO.getOpeningBalanceAmount());
         entrySummary.setYearEndDate(summaryDTO.getYearEndDate());
         entrySummary.setCurrencyCode(summaryDTO.getCurrencyCode());
@@ -116,10 +124,10 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
 
     @Override
     public List<AccountGLJournalEntryAnnualSummaryData> processTrialBalanceData(List<AccountGLJournalEntryAnnualSummaryData> rawData,
-            LocalDate lastDayOfPreviousFiscalYear) {
+            LocalDate lastDayOfPreviousFiscalYear, PortfolioProductType productType) {
 
         if (rawData == null || rawData.isEmpty()) {
-            log.warn("No data to process");
+            log.warn("No {} data to process", productType);
             return Collections.emptyList();
         }
 
@@ -136,22 +144,22 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
                 .collect(Collectors.toSet());
 
         log.info(
-                "Retained earning validation: totalTrialBalanceRecords={}, matchedIncomeExpenseRecords={}, distinctGlAccounts={}, distinctAssetOwners={}, fiscalYearEnd={}",
-                rawData.size(), incomeExpenseRecords.size(), distinctGlCodes.size(), distinctOwners.size(), lastDayOfPreviousFiscalYear);
+                "Retained earning validation: productType={}, totalTrialBalanceRecords={}, matchedIncomeExpenseRecords={}, distinctGlAccounts={}, distinctAssetOwners={}, fiscalYearEnd={}",
+                productType, rawData.size(), incomeExpenseRecords.size(), distinctGlCodes.size(), distinctOwners.size(),
+                lastDayOfPreviousFiscalYear);
 
         if (incomeExpenseRecords.isEmpty()) {
-            log.info("No income/expense account records found hence skipping retained earning creation");
+            log.info("No {} income/expense account records found hence skipping retained earning creation", productType);
             return Collections.emptyList();
         }
 
         final Set<String> distinctProductNamesLower = incomeExpenseRecords.stream()
                 .map(AccountGLJournalEntryAnnualSummaryData::getProductName).filter(name -> name != null && !name.isBlank())
                 .map(String::toLowerCase).collect(Collectors.toSet());
-        final Map<String, LoanProduct> productByName = loanProductRepository.findAllByNameIgnoreCase(distinctProductNamesLower).stream()
-                .collect(Collectors.toMap(p -> p.getName().toLowerCase(), p -> p, (a, b) -> a));
+        final Map<String, ProductReference> productByName = findProductsByName(productType, distinctProductNamesLower);
 
-        final Map<ProductOwnerKey, BigDecimal> retainedByProductAndOwner = incomeExpenseRecords.stream()
-                .collect(Collectors.toMap(r -> new ProductOwnerKey(r.getProductName(), r.getOwnerExternalId()),
+        final Map<ProductOwnerKey, BigDecimal> retainedByProductAndOwner = incomeExpenseRecords.stream().collect(
+                Collectors.toMap(r -> new ProductOwnerKey(r.getProductName(), r.getOwnerExternalId(), r.getOriginatorExternalIds()),
                         r -> Optional.ofNullable(r.getEndingBalanceAmount()).orElse(BigDecimal.ZERO), BigDecimal::add));
 
         final List<AccountGLJournalEntryAnnualSummaryData> retainedEarningRecords = createRetainedEarningRecords(retainedByProductAndOwner,
@@ -159,18 +167,31 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
 
         final List<AccountGLJournalEntryAnnualSummaryData> allRecords = Stream
                 .concat(incomeExpenseRecords.stream(), retainedEarningRecords.stream()).map(data -> {
-                    LoanProduct loanProduct = data.getProductName() != null ? productByName.get(data.getProductName().toLowerCase()) : null;
-                    if (loanProduct == null) {
-                        return data;
+                    final AccountGLJournalEntryAnnualSummaryData typedData = data.toBuilder().productType(productType).build();
+                    ProductReference product = data.getProductName() != null ? productByName.get(data.getProductName().toLowerCase())
+                            : null;
+                    if (product == null) {
+                        return typedData;
                     }
-                    return data.toBuilder().productId(loanProduct.getId()).currencyCode(loanProduct.getCurrency().getCode()).build();
+                    return typedData.toBuilder().productId(product.id()).currencyCode(product.currencyCode()).build();
                 }).collect(Collectors.toList());
 
         log.info(
-                "Retained earning processing complete: incomeExpenseOffsetRecords={}, retainedEarningRecords={}, totalRecordsToWrite={}, assetOwners={}",
-                incomeExpenseRecords.size(), retainedEarningRecords.size(), allRecords.size(), distinctOwners);
+                "Retained earning processing complete: productType={}, incomeExpenseOffsetRecords={}, retainedEarningRecords={}, totalRecordsToWrite={}, assetOwners={}",
+                productType, incomeExpenseRecords.size(), retainedEarningRecords.size(), allRecords.size(), distinctOwners);
 
         return allRecords;
+    }
+
+    private Map<String, ProductReference> findProductsByName(final PortfolioProductType productType, final Set<String> productNamesLower) {
+        final Stream<ProductReference> products = switch (productType) {
+            case LOAN -> loanProductRepository.findAllByNameIgnoreCase(productNamesLower).stream()
+                    .map(p -> new ProductReference(p.getId(), p.getName(), p.getCurrency().getCode()));
+            case WORKING_CAPITAL_LOAN -> workingCapitalLoanProductRepository.findAllByNameIgnoreCase(productNamesLower).stream()
+                    .map(p -> new ProductReference(p.getId(), p.getName(), p.getCurrency().getCode()));
+            default -> throw new IllegalArgumentException("Retained earning is not supported for product type " + productType);
+        };
+        return products.collect(Collectors.toMap(p -> p.name().toLowerCase(), p -> p, (a, b) -> a));
     }
 
     private Predicate<String> buildGlAccountMatcher(String incomeAndExpenseGlAccounts) {
@@ -210,9 +231,9 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
         final String retainedEarningGlAccountCode = retainedEarningConfigurationService.getRetainedEarningGlAccount();
 
         final Map<ProductOwnerKey, AccountGLJournalEntryAnnualSummaryData> firstRecordByProductAndOwner = originalData.stream()
-                .filter(r -> r.getOwnerExternalId() != null && !r.getOwnerExternalId().isEmpty() && r.getProductName() != null)
-                .collect(Collectors.toMap(r -> new ProductOwnerKey(r.getProductName(), r.getOwnerExternalId()), r -> r,
-                        (first, second) -> first));
+                .filter(r -> r.getOwnerExternalId() != null && !r.getOwnerExternalId().isEmpty() && r.getProductName() != null).collect(
+                        Collectors.toMap(r -> new ProductOwnerKey(r.getProductName(), r.getOwnerExternalId(), r.getOriginatorExternalIds()),
+                                r -> r, (first, second) -> first));
 
         Long defaultOfficeId = retainedEarningConfigurationService.getOfficeId();
         return retainedByProductAndOwner.entrySet().stream().filter(e -> e.getValue().compareTo(BigDecimal.ZERO) != 0).map(e -> {
@@ -220,8 +241,9 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
             AccountGLJournalEntryAnnualSummaryData template = firstRecordByProductAndOwner.get(key);
             return AccountGLJournalEntryAnnualSummaryData.builder().productName(key.productName())
                     .glAccountCode(retainedEarningGlAccountCode).officeId(template != null ? template.getOfficeId() : defaultOfficeId)
-                    .ownerExternalId(key.ownerExternalId()).openingBalanceAmount(e.getValue()).endingBalanceAmount(e.getValue())
-                    .yearEndDate(lastDayOfPreviousFiscalYear).manualEntry(false).build();
+                    .ownerExternalId(key.ownerExternalId()).originatorExternalIds(key.originatorExternalIds())
+                    .openingBalanceAmount(e.getValue()).endingBalanceAmount(e.getValue()).yearEndDate(lastDayOfPreviousFiscalYear)
+                    .manualEntry(false).build();
         }).collect(Collectors.toList());
     }
 
@@ -230,9 +252,9 @@ public class RetainedEarningDataServiceImpl implements RetainedEarningDataServic
             return dataParser.parse(jsonResponse).stream()
                     .map(record -> AccountGLJournalEntryAnnualSummaryData.builder().glAccountCode(record.getGlAcct())
                             .productName(record.getProduct()).officeId(retainedEarningConfigurationService.getOfficeId())
-                            .ownerExternalId(record.getAssetOwner()).openingBalanceAmount(record.getEndingBalance().negate())
-                            .endingBalanceAmount(record.getEndingBalance()).yearEndDate(LocalDate.parse(record.getPostingDate()))
-                            .manualEntry(false).build())
+                            .ownerExternalId(record.getAssetOwner()).originatorExternalIds(record.getOriginatorExternalIds())
+                            .openingBalanceAmount(record.getEndingBalance().negate()).endingBalanceAmount(record.getEndingBalance())
+                            .yearEndDate(LocalDate.parse(record.getPostingDate())).manualEntry(false).build())
                     .collect(Collectors.toList());
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to parse trial balance data: " + e.getMessage(), e);

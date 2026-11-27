@@ -4,7 +4,7 @@
 
 Working Capital Loans amortize discount fee income across the loan term using an Effective Interest Rate (EIR) schedule. When the COB business step `WC_DISCOUNT_FEE_AMORTIZATION` advances the realized income figure, the accounting processor posts a balanced pair of journal entries that move the newly recognized amount out of the *Deferred Income Liability* placeholder and into income (or, when the loan is charged off, into the charge-off expense placeholder).
 
-The EIR calculation itself — solver, schedule shape, rate segments — is documented in `working-capital-eir-calculation.adoc`. This document focuses on the journal entries derived from the schedule.
+The EIR calculation itself — solver, schedule shape, rate changes — is documented in `working-capital-eir-calculation.adoc`. This document focuses on the journal entries derived from the schedule.
 
 === Purpose
 
@@ -73,7 +73,7 @@ The COB step that drives EIR income recognition is registered as:
 | Column Name | Type | Constraints | Description
 | job_name | VARCHAR | not null | `WORKING_CAPITAL_LOAN_CLOSE_OF_BUSINESS`
 | step_name | VARCHAR | not null | `WC_DISCOUNT_FEE_AMORTIZATION`
-| step_order | INT | not null | `6`
+| step_order | INT | not null | `7`
 |===
 
 == Configuration
@@ -120,7 +120,7 @@ GET /v1/working-capital-loans/external-id/{loanExternalId}/transactions/external
 
 === Discount Fee Amortization Business Step
 
-The `DiscountFeeAmortizationBusinessStep` (COB step `WC_DISCOUNT_FEE_AMORTIZATION`, order 6) runs at end of day. It skips the loan when both of the following are true:
+The `DiscountFeeAmortizationBusinessStep` (COB step `WC_DISCOUNT_FEE_AMORTIZATION`, order 7) runs at end of day. It skips the loan when both of the following are true:
 
 * `loanProductRelatedDetails.discount` is zero or null, AND
 * `loanBalance.realizedIncomeFromDiscountFee` is zero or null

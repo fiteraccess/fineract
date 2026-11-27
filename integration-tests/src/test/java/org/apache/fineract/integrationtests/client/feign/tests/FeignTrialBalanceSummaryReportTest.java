@@ -18,6 +18,14 @@
  */
 package org.apache.fineract.integrationtests.client.feign.tests;
 
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper.LOAN_REPORT_NAME;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper.RETAINED_EARNING_JOB_NAME;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper.findColumnIndex;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper.parseBigDecimal;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper.reportRow;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper.reportRows;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -54,8 +61,10 @@ import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelp
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignGlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanOriginatorHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignOfficeHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSchedulerHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignTransactionHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignTrialBalanceReportHelper;
 import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
@@ -69,9 +78,9 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 @Slf4j
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@Order(1)
 public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
 
-    private static final String REPORT_NAME = "Trial Balance Summary Report with Asset Owner";
     private static final BigDecimal LOAN_PRINCIPAL = BigDecimal.valueOf(15000.0);
 
     private FeignAccountHelper accountHelper;
@@ -82,7 +91,9 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
     private FeignClientHelper clientHelper;
     private FeignSchedulerHelper schedulerHelper;
     private FeignChargesHelper chargesHelper;
+    private FeignOfficeHelper officeHelper;
     private static FeignLoanOriginatorHelper originatorHelper;
+    private FeignTrialBalanceReportHelper trialBalanceHelper;
 
     private Account assetAccount;
     private Account feePenaltyAccount;
@@ -105,6 +116,8 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         schedulerHelper = new FeignSchedulerHelper(fineractClient());
         originatorHelper = new FeignLoanOriginatorHelper(fineractClient());
         chargesHelper = new FeignChargesHelper(fineractClient());
+        officeHelper = new FeignOfficeHelper(fineractClient());
+        trialBalanceHelper = new FeignTrialBalanceReportHelper(fineractClient());
 
         todaysDate = Utils.getLocalDateOfTenant().toString();
 
@@ -147,7 +160,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
     @Test
     @Order(1)
     public void testReportReturnsExpectedColumns() {
-        RunReportsResponse response = runReport("2020-01-01");
+        RunReportsResponse response = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2020-01-01", FeignOfficeHelper.HEAD_OFFICE_ID);
 
         assertNotNull(response);
         assertNotNull(response.getColumnHeaders());
@@ -175,7 +188,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
 
             advanceBusinessDateAndRunCob("2020-03-03");
 
-            RunReportsResponse report = runReport("2020-03-02");
+            RunReportsResponse report = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2020-03-02", FeignOfficeHelper.HEAD_OFFICE_ID);
             assertNotNull(report.getData());
 
             int assetOwnerColIdx = findColumnIndex(report, "assetowner");
@@ -200,7 +213,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
             transactionHelper.addRepayment(loanId, new PostLoansLoanIdTransactionsRequest().transactionDate("01 June 2020")
                     .transactionAmount(1500.0).locale(LoanTestData.LOCALE).dateFormat(LoanTestData.DATETIME_PATTERN));
 
-            RunReportsResponse report = runReport("2020-06-01");
+            RunReportsResponse report = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2020-06-01", FeignOfficeHelper.HEAD_OFFICE_ID);
             assertNotNull(report.getData());
 
             int productIdx = findColumnIndex(report, "product");
@@ -247,7 +260,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
     @Test
     @Order(4)
     public void testNoRetainedEarningsWithoutAnnualSummary() {
-        RunReportsResponse report = runReport("2020-06-01");
+        RunReportsResponse report = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2020-06-01", FeignOfficeHelper.HEAD_OFFICE_ID);
         assertNotNull(report);
         assertNotNull(report.getData());
 
@@ -267,7 +280,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
 
             advanceBusinessDateAndRunCob("2020-03-03");
 
-            RunReportsResponse report = runReport("2020-03-02");
+            RunReportsResponse report = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2020-03-02", FeignOfficeHelper.HEAD_OFFICE_ID);
             assertNotNull(report.getData());
 
             int originatorIdColIdx = findColumnIndex(report, "originator_external_ids");
@@ -277,6 +290,53 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
             assertTrue(hasOriginatorIdEntry, "Report must contain entries for originator external ids '" + originatorExternalId
                     + "'. Actual rows: " + report.getData());
         });
+    }
+
+    /**
+     * Needs a database where FY2022 has not been closed: the job persists only when no
+     * acc_gl_journal_entry_annual_summary rows exist for year_end_date 2022-12-31 in any office.
+     */
+    @Test
+    @Order(6)
+    public void testRetainedEarningJobClosesIncomePerOriginator() {
+        String retainedEarningsGlCode = trialBalanceHelper.findOrCreateRetainedEarningsAccount();
+        Long officeId = officeHelper.createOffice(LocalDate.of(2022, 1, 1)).getOfficeId();
+        Account feeIncomeAccount = accountHelper.createIncomeAccount("TrialBalREFEE");
+        String feeIncomeGlCode = accountHelper.getGlCode(feeIncomeAccount);
+
+        String originatorX = UUID.randomUUID().toString();
+
+        trialBalanceHelper.runWithRetainedEarningConfiguration(feeIncomeGlCode, retainedEarningsGlCode, officeId,
+                () -> runWithBusinessDate("2022-11-01", () -> {
+                    Long clientId = createClient("01 November 2022", officeId);
+                    Long productId = createCashBasedZeroInterestLoanProduct(feeIncomeAccount);
+                    String productName = loanHelper.retrieveLoanProduct(productId).getName();
+
+                    Long loanA = createAndDisburseLoanWithFee(clientId, productId, "01 November 2022", 500.0, originatorX);
+                    Long loanB = createAndDisburseLoanWithFee(clientId, productId, "01 November 2022", 300.0, null);
+                    repay(loanA, 500.0, "01 November 2022");
+                    repay(loanB, 300.0, "01 November 2022");
+
+                    RunReportsResponse preClose = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2022-12-31", officeId);
+                    assertEquals(
+                            List.of(reportRow("", "-300.00", "0.00", "0.00", "-300.00"),
+                                    reportRow(originatorX, "-500.00", "0.00", "0.00", "-500.00")).stream().sorted().toList(),
+                            reportRows(preClose, feeIncomeGlCode, productName),
+                            "Pre-close fee income rows per originator bucket for office " + officeId);
+
+                    businessDateHelper.updateBusinessDate("BUSINESS_DATE", "2023-01-02");
+                    schedulerHelper.executeAndAwaitJob(RETAINED_EARNING_JOB_NAME);
+
+                    RunReportsResponse postClose = trialBalanceHelper.runReport(LOAN_REPORT_NAME, "2023-01-01", officeId);
+                    assertAll(
+                            () -> assertEquals(List.of(), reportRows(postClose, feeIncomeGlCode, productName),
+                                    "Post-close fee income must be fully closed out in every originator bucket"),
+                            () -> assertEquals(
+                                    List.of(reportRow("", "-300.00", "0.00", "0.00", "-300.00"),
+                                            reportRow(originatorX, "-500.00", "0.00", "0.00", "-500.00")).stream().sorted().toList(),
+                                    reportRows(postClose, retainedEarningsGlCode, productName),
+                                    "Post-close retained earnings must be carried per originator bucket"));
+                }));
     }
 
     private void configureBusinessSteps() {
@@ -318,35 +378,95 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
         schedulerHelper.executeAndAwaitJob("Loan COB");
     }
 
-    private RunReportsResponse runReport(String endDate) {
-        return ok(() -> fineractClient().runReports().runReportGetData(REPORT_NAME, Map.of("R_endDate", endDate, "R_officeId", "1")));
+    private void repay(Long loanId, double amount, String date) {
+        transactionHelper.addRepayment(loanId, new PostLoansLoanIdTransactionsRequest().transactionDate(date).transactionAmount(amount)
+                .locale(LoanTestData.LOCALE).dateFormat(LoanTestData.DATETIME_PATTERN));
     }
 
-    private int findColumnIndex(RunReportsResponse report, String columnName) {
-        List<ResultsetColumnHeaderData> headers = report.getColumnHeaders();
-        for (int i = 0; i < headers.size(); i++) {
-            if (columnName.equals(headers.get(i).getColumnName())) {
-                return i;
-            }
+    private Long createAndDisburseLoanWithFee(Long clientId, Long productId, String date, double feeAmount, String originatorExternalId) {
+        BigDecimal principal = BigDecimal.valueOf(1000.0);
+        Long loanId = loanHelper.applyForLoan(new PostLoansRequest()//
+                .clientId(clientId)//
+                .productId(productId)//
+                .loanType("individual")//
+                .submittedOnDate(date)//
+                .expectedDisbursementDate(date)//
+                .principal(principal)//
+                .loanTermFrequency(1)//
+                .loanTermFrequencyType(2)//
+                .numberOfRepayments(1)//
+                .repaymentEvery(1)//
+                .repaymentFrequencyType(2)//
+                .interestRatePerPeriod(BigDecimal.ZERO)//
+                .amortizationType(1)//
+                .interestType(0)//
+                .interestCalculationPeriodType(1)//
+                .transactionProcessingStrategyCode("mifos-standard-strategy")//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN)).getLoanId();
+
+        Long chargeId = createFlatFeeCharge(feeAmount);
+        ok(() -> fineractClient().loanCharges().createOrPayLoanCharge(loanId, new PostLoansLoanIdChargesRequest().chargeId(chargeId)
+                .amount(feeAmount).dueDate(date).dateFormat(LoanTestData.DATETIME_PATTERN).locale(LoanTestData.LOCALE), (String) null));
+
+        if (originatorExternalId != null) {
+            createAndAttachOriginator(loanId, originatorExternalId);
         }
-        throw new IllegalArgumentException("Column '" + columnName + "' not found. Available: "
-                + headers.stream().map(ResultsetColumnHeaderData::getColumnName).toList());
+
+        loanHelper.approveLoan(loanId, new PostLoansLoanIdRequest()//
+                .approvedLoanAmount(principal)//
+                .approvedOnDate(date)//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN));
+        loanHelper.disburseLoan(loanId, new PostLoansLoanIdRequest()//
+                .actualDisbursementDate(date)//
+                .transactionAmount(principal)//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN));
+        return loanId;
     }
 
-    private BigDecimal parseBigDecimal(Object value) {
-        if (value == null) {
-            return BigDecimal.ZERO;
-        }
-        String str = String.valueOf(value);
-        if (str.isEmpty() || "null".equalsIgnoreCase(str)) {
-            return BigDecimal.ZERO;
-        }
-        return new BigDecimal(str);
+    private Long createCashBasedZeroInterestLoanProduct(Account feeIncomeAccount) {
+        return loanHelper.createLoanProduct(new PostLoanProductsRequest()//
+                .name("TrialBal RE Product " + System.currentTimeMillis())//
+                .shortName(Utils.uniqueRandomStringGenerator("", 4))//
+                .currencyCode("USD")//
+                .digitsAfterDecimal(2)//
+                .inMultiplesOf(1)//
+                .principal(1000.0)//
+                .numberOfRepayments(1)//
+                .repaymentEvery(1)//
+                .repaymentFrequencyType(2L)//
+                .interestRatePerPeriod(0.0)//
+                .interestRateFrequencyType(2)//
+                .amortizationType(1)//
+                .interestType(0)//
+                .interestCalculationPeriodType(1)//
+                .transactionProcessingStrategyCode("mifos-standard-strategy")//
+                .daysInYearType(365)//
+                .daysInMonthType(30)//
+                .isInterestRecalculationEnabled(false)//
+                .accountingRule(2)//
+                .fundSourceAccountId((long) assetAccount.getAccountID())//
+                .loanPortfolioAccountId((long) assetAccount.getAccountID())//
+                .transfersInSuspenseAccountId((long) assetAccount.getAccountID())//
+                .interestOnLoanAccountId((long) incomeAccount.getAccountID())//
+                .incomeFromFeeAccountId((long) feeIncomeAccount.getAccountID())//
+                .incomeFromPenaltyAccountId((long) incomeAccount.getAccountID())//
+                .incomeFromRecoveryAccountId((long) incomeAccount.getAccountID())//
+                .writeOffAccountId((long) expenseAccount.getAccountID())//
+                .overpaymentLiabilityAccountId((long) overpaymentAccount.getAccountID())//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN)).getResourceId();
     }
 
     private Long createClient(String activationDate) {
+        return createClient(activationDate, 1L);
+    }
+
+    private Long createClient(String activationDate, Long officeId) {
         return clientHelper.createClient(new PostClientsRequest()//
-                .officeId(1L)//
+                .officeId(officeId)//
                 .legalFormId(1L)//
                 .firstname(Utils.randomFirstNameGenerator())//
                 .lastname(Utils.randomLastNameGenerator())//
@@ -385,7 +505,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
                 .locale(LoanTestData.LOCALE)//
                 .dateFormat(LoanTestData.DATETIME_PATTERN);
 
-        Long loanId = loanHelper.applyForLoan(loanRequest);
+        Long loanId = loanHelper.applyForLoan(loanRequest).getLoanId();
         assertNotNull(loanId);
 
         if (chargeId != null) {
@@ -421,7 +541,7 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
     }
 
     private Long createFlatFeeCharge(double amount) {
-        return chargesHelper.createLoanSpecifiedDueDateCharge(amount);
+        return chargesHelper.createLoanSpecifiedDueDateCharge(amount).getResourceId();
     }
 
     private Long createLoanProduct() {
@@ -458,6 +578,6 @@ public class FeignTrialBalanceSummaryReportTest extends FeignIntegrationTest {
                 .fundSourceAccountId((long) assetAccount.getAccountID())//
                 .incomeFromRecoveryAccountId((long) incomeAccount.getAccountID())//
                 .locale(LoanTestData.LOCALE)//
-                .dateFormat(LoanTestData.DATETIME_PATTERN));
+                .dateFormat(LoanTestData.DATETIME_PATTERN)).getResourceId();
     }
 }

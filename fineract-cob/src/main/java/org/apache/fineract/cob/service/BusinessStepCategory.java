@@ -24,6 +24,7 @@ import java.util.Optional;
 public enum BusinessStepCategory {
 
     LOAN("LOAN"), //
+    WORKING_CAPITAL_LOAN("WORKING_CAPITAL_LOAN"), //
     EOD("EOD"); //
 
     private final String name;

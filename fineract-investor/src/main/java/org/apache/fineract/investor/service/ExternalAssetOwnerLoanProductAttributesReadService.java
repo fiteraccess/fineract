@@ -18,12 +18,22 @@
  */
 package org.apache.fineract.investor.service;
 
+import java.util.List;
+import java.util.Optional;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.investor.data.ExternalTransferLoanProductAttributesData;
+import org.apache.fineract.investor.data.ExternalTransferLoanProductAttributesTemplateData;
 
 public interface ExternalAssetOwnerLoanProductAttributesReadService {
 
+    List<ExternalTransferLoanProductAttributesTemplateData> retrieveExternalAssetOwnerLoanProductAttributesTemplate();
+
     Page<ExternalTransferLoanProductAttributesData> retrieveAllLoanProductAttributesByLoanProductId(Long loanProductId,
             String attributeKey);
+
+    /**
+     * Returns the first attribute value for the loan product and key, if any.
+     */
+    Optional<String> getAttributeValue(Long loanProductId, String attributeKey);
 
 }

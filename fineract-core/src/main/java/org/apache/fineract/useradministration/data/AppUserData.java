@@ -36,7 +36,11 @@ import org.apache.fineract.portfolio.client.data.ClientData;
 @Getter
 public final class AppUserData {
 
+    // Getters so Jackson can write the "appUsers" of the audit and maker-checker search templates, which return
+    // AuditSearchData directly instead of going through the Gson based serializer.
+    @Getter
     private final Long id;
+    @Getter
     private final String username;
     private final Long officeId;
     private final String officeName;

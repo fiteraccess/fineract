@@ -64,6 +64,19 @@ public interface EMICalculator {
             LocalDate dueDate);
 
     /**
+     * Corrects the repayment periods which an EMI recalculation left with a smaller amount than what has already been
+     * paid on the repayment schedule installment they belong to. Such a period would end up with a negative outstanding
+     * amount, therefore its amount is raised back to the paid amount and the difference is moved onto a period which
+     * still has room for it.
+     * <p>
+     * Loans whose payments are not reported to the interest model need the paid amounts of the installments to be able
+     * to do this. They are taken over only when there is a period to correct, hence a model which is in line with its
+     * installments is left untouched.
+     */
+    void alignPeriodsWithPaidAmounts(ProgressiveLoanInterestScheduleModel scheduleModel,
+            List<RepaymentScheduleInstallmentData> installments, LocalDate tillDate);
+
+    /**
      * Applies the disbursement on the interest model. This method recalculates the EMI amounts from the action date.
      */
     void addDisbursement(ProgressiveLoanInterestScheduleModel scheduleModel, LocalDate disbursementDueDate, Money disbursedAmount);
@@ -139,6 +152,18 @@ public interface EMICalculator {
     Money getOutstandingLoanBalanceOfPeriod(ProgressiveLoanInterestScheduleModel interestScheduleModel, LocalDate targetDate);
 
     OutstandingDetails getOutstandingAmountsTillDate(ProgressiveLoanInterestScheduleModel model, LocalDate targetDate);
+
+    /**
+     * Gives back the outstanding principal and interest of the whole model on the given date. Fixed interest till date
+     * calculation flag indicates that the fixed interest should be counted only till date or not. This flag should be
+     * true for accrued interest calculation. It should be false for repayment or repayment schedule related
+     * calculation, which needs the whole fixed interest that is ultimately payable.
+     *
+     * @param fixedInterestTillDate
+     *            indicates that fixed interest should be counted till the date.
+     */
+    OutstandingDetails getOutstandingAmountsTillDate(ProgressiveLoanInterestScheduleModel model, LocalDate targetDate,
+            boolean fixedInterestTillDate);
 
     void calculateRateFactorForRepaymentPeriod(RepaymentPeriod repaymentPeriod, ProgressiveLoanInterestScheduleModel scheduleModel);
 

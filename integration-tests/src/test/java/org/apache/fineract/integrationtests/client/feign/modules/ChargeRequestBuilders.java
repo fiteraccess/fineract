@@ -18,26 +18,21 @@
  */
 package org.apache.fineract.integrationtests.client.feign.modules;
 
+import java.math.BigDecimal;
 import org.apache.fineract.client.models.ChargeRequest;
+import org.apache.fineract.client.models.PostClientsClientIdChargesChargeIdRequest;
+import org.apache.fineract.client.models.PostClientsClientIdChargesRequest;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.portfolio.charge.domain.ChargeAppliesTo;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
+import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
+import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 
 public final class ChargeRequestBuilders {
 
-    private static final int CHARGE_APPLIES_TO_LOAN = 1;
-    private static final int CHARGE_APPLIES_TO_CLIENT = 3;
-
-    private static final int CHARGE_TIME_TYPE_DISBURSEMENT = 1;
-    private static final int CHARGE_TIME_TYPE_SPECIFIED_DUE_DATE = 2;
-    private static final int CHARGE_TIME_TYPE_INSTALLMENT_FEE = 8;
-    private static final int CHARGE_TIME_TYPE_OVERDUE_INSTALLMENT_FEE = 9;
-
-    private static final int CHARGE_CALCULATION_TYPE_FLAT = 1;
-    private static final int CHARGE_CALCULATION_TYPE_PERCENTAGE_AMOUNT = 2;
-
-    private static final int CHARGE_PAYMENT_MODE_REGULAR = 0;
-
     private static final String DEFAULT_CURRENCY = "USD";
     private static final String DEFAULT_LOCALE = "en";
+    private static final String CLIENT_CHARGE_LOCALE = "en_GB";
 
     private ChargeRequestBuilders() {}
 
@@ -47,7 +42,7 @@ public final class ChargeRequestBuilders {
 
     public static ChargeRequest loanDisbursementFee(double amount, String currencyCode) {
         return baseLoanCharge(amount, currencyCode)//
-                .chargeTimeType(CHARGE_TIME_TYPE_DISBURSEMENT);
+                .chargeTimeType(ChargeTimeType.DISBURSEMENT.getValue());
     }
 
     public static ChargeRequest loanDisbursementPercentageFee(double percentage) {
@@ -56,8 +51,8 @@ public final class ChargeRequestBuilders {
 
     public static ChargeRequest loanDisbursementPercentageFee(double percentage, String currencyCode) {
         return baseLoanCharge(percentage, currencyCode)//
-                .chargeTimeType(CHARGE_TIME_TYPE_DISBURSEMENT)//
-                .chargeCalculationType(CHARGE_CALCULATION_TYPE_PERCENTAGE_AMOUNT);
+                .chargeTimeType(ChargeTimeType.DISBURSEMENT.getValue())//
+                .chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT.getValue());
     }
 
     public static ChargeRequest loanSpecifiedDueDateFee(double amount) {
@@ -66,39 +61,127 @@ public final class ChargeRequestBuilders {
 
     public static ChargeRequest loanSpecifiedDueDateFee(double amount, String currencyCode) {
         return baseLoanCharge(amount, currencyCode)//
-                .chargeTimeType(CHARGE_TIME_TYPE_SPECIFIED_DUE_DATE);
+                .chargeTimeType(ChargeTimeType.SPECIFIED_DUE_DATE.getValue());
+    }
+
+    public static ChargeRequest loanSpecifiedDueDatePenalty(double amount) {
+        return loanSpecifiedDueDatePenalty(amount, DEFAULT_CURRENCY);
+    }
+
+    public static ChargeRequest loanSpecifiedDueDatePenalty(double amount, String currencyCode) {
+        return baseLoanCharge(amount, currencyCode)//
+                .chargeTimeType(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())//
+                .penalty(true);
+    }
+
+    public static ChargeRequest loanSpecifiedDueDatePercentageOfInterestFee(double percentage) {
+        return baseLoanCharge(percentage, DEFAULT_CURRENCY)//
+                .chargeTimeType(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())//
+                .chargeCalculationType(ChargeCalculationType.PERCENT_OF_INTEREST.getValue());
+    }
+
+    public static ChargeRequest loanSpecifiedDueDateAccountTransferFee(double amount, boolean penalty) {
+        return loanSpecifiedDueDateAccountTransferCharge(ChargeCalculationType.FLAT, amount, penalty);
     }
 
     public static ChargeRequest loanInstallmentFee(double amount) {
         return baseLoanCharge(amount, DEFAULT_CURRENCY)//
-                .chargeTimeType(CHARGE_TIME_TYPE_INSTALLMENT_FEE);
+                .chargeTimeType(ChargeTimeType.INSTALMENT_FEE.getValue());
+    }
+
+    public static ChargeRequest loanOverdueFeePercentageOfAmountAndInterest(double percentage) {
+        return loanOverdueFee(percentage).chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST.getValue());
     }
 
     public static ChargeRequest loanOverdueFee(double amount) {
         return baseLoanCharge(amount, DEFAULT_CURRENCY)//
-                .chargeTimeType(CHARGE_TIME_TYPE_OVERDUE_INSTALLMENT_FEE)//
+                .chargeTimeType(ChargeTimeType.OVERDUE_INSTALLMENT.getValue())//
                 .penalty(true);
+    }
+
+    /** A disbursement-time loan charge with an explicit calculation type. */
+    public static ChargeRequest loanDisbursementCharge(ChargeCalculationType chargeCalculationType, double amount) {
+        return baseLoanCharge(amount, DEFAULT_CURRENCY)//
+                .chargeTimeType(ChargeTimeType.DISBURSEMENT.getValue())//
+                .chargeCalculationType(chargeCalculationType.getValue());
+    }
+
+    /** A specified-due-date loan charge with an explicit calculation type. */
+    public static ChargeRequest loanSpecifiedDueDateCharge(ChargeCalculationType chargeCalculationType, double amount, boolean penalty) {
+        return baseLoanCharge(amount, DEFAULT_CURRENCY)//
+                .chargeTimeType(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())//
+                .chargeCalculationType(chargeCalculationType.getValue())//
+                .penalty(penalty);
+    }
+
+    /** An installment-fee loan charge with an explicit calculation type. */
+    public static ChargeRequest loanInstallmentCharge(ChargeCalculationType chargeCalculationType, double amount, boolean penalty) {
+        return baseLoanCharge(amount, DEFAULT_CURRENCY)//
+                .chargeTimeType(ChargeTimeType.INSTALMENT_FEE.getValue())//
+                .chargeCalculationType(chargeCalculationType.getValue())//
+                .penalty(penalty);
+    }
+
+    /** Same as {@link #loanSpecifiedDueDateCharge}, but paid by transfer from a linked savings account. */
+    public static ChargeRequest loanSpecifiedDueDateAccountTransferCharge(ChargeCalculationType chargeCalculationType, double amount,
+            boolean penalty) {
+        return loanSpecifiedDueDateCharge(chargeCalculationType, amount, penalty)//
+                .chargePaymentMode(ChargePaymentMode.ACCOUNT_TRANSFER.getValue());
+    }
+
+    /** Same as {@link #loanInstallmentCharge}, but paid by transfer from a linked savings account. */
+    public static ChargeRequest loanInstallmentAccountTransferCharge(ChargeCalculationType chargeCalculationType, double amount,
+            boolean penalty) {
+        return loanInstallmentCharge(chargeCalculationType, amount, penalty)//
+                .chargePaymentMode(ChargePaymentMode.ACCOUNT_TRANSFER.getValue());
     }
 
     public static ChargeRequest clientSpecifiedDueDateFee(double amount) {
         return new ChargeRequest()//
                 .name(Utils.uniqueRandomStringGenerator("Charge_Client_", 6))//
-                .chargeAppliesTo(CHARGE_APPLIES_TO_CLIENT)//
-                .chargeTimeType(CHARGE_TIME_TYPE_SPECIFIED_DUE_DATE)//
-                .chargeCalculationType(CHARGE_CALCULATION_TYPE_FLAT)//
-                .chargePaymentMode(CHARGE_PAYMENT_MODE_REGULAR)//
+                .chargeAppliesTo(ChargeAppliesTo.CLIENT.getValue())//
+                .chargeTimeType(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())//
+                .chargeCalculationType(ChargeCalculationType.FLAT.getValue())//
+                .chargePaymentMode(ChargePaymentMode.REGULAR.getValue())//
                 .currencyCode(DEFAULT_CURRENCY)//
                 .amount(amount)//
                 .active(true)//
                 .locale(DEFAULT_LOCALE);
     }
 
+    public static PostClientsClientIdChargesRequest clientCharge(Long chargeId, String dueDate, BigDecimal amount) {
+        return new PostClientsClientIdChargesRequest()//
+                .chargeId(chargeId)//
+                .dueDate(dueDate)//
+                .amount(amount)//
+                .dateFormat(FeignTestConstants.DATETIME_PATTERN)//
+                .locale(CLIENT_CHARGE_LOCALE);
+    }
+
+    public static PostClientsClientIdChargesChargeIdRequest payClientCharge(String transactionDate, Integer amount) {
+        return new PostClientsClientIdChargesChargeIdRequest()//
+                .transactionDate(transactionDate)//
+                .amount(amount)//
+                .dateFormat(FeignTestConstants.DATETIME_PATTERN)//
+                .locale(CLIENT_CHARGE_LOCALE);
+    }
+
+    /**
+     * The waive command ignores the body and waives whatever is outstanding; the amount mirrors what the legacy test
+     * sent.
+     */
+    public static PostClientsClientIdChargesChargeIdRequest waiveClientCharge(Integer amount) {
+        return new PostClientsClientIdChargesChargeIdRequest()//
+                .amount(amount)//
+                .locale(CLIENT_CHARGE_LOCALE);
+    }
+
     private static ChargeRequest baseLoanCharge(double amount, String currencyCode) {
         return new ChargeRequest()//
                 .name(Utils.uniqueRandomStringGenerator("Charge_Loan_", 6))//
-                .chargeAppliesTo(CHARGE_APPLIES_TO_LOAN)//
-                .chargeCalculationType(CHARGE_CALCULATION_TYPE_FLAT)//
-                .chargePaymentMode(CHARGE_PAYMENT_MODE_REGULAR)//
+                .chargeAppliesTo(ChargeAppliesTo.LOAN.getValue())//
+                .chargeCalculationType(ChargeCalculationType.FLAT.getValue())//
+                .chargePaymentMode(ChargePaymentMode.REGULAR.getValue())//
                 .currencyCode(currencyCode)//
                 .amount(amount)//
                 .active(true)//

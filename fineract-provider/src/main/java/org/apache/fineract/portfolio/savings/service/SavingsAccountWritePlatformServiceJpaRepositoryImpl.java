@@ -93,6 +93,7 @@ import org.apache.fineract.portfolio.account.domain.StandingInstructionStatus;
 import org.apache.fineract.portfolio.account.service.AccountAssociationsReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.charge.domain.Charge;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 import org.apache.fineract.portfolio.client.domain.Client;
@@ -172,6 +173,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsAccountTransactionDataValidator savingsAccountTransactionDataValidator;
     private final SavingsAccountChargeDataValidator savingsAccountChargeDataValidator;
     private final PaymentDetailWritePlatformService paymentDetailWritePlatformService;
+    // Upstream dropped this dependency (FINERACT-754 routes posting through the domain service); the fork still needs
+    // it for single-transaction posting and for linking reversal journal entries.
     private final JournalEntryWritePlatformService journalEntryWritePlatformService;
     private final SavingsAccountDomainService savingsAccountDomainService;
     private final NoteRepository noteRepository;
@@ -716,6 +719,13 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         final boolean backdatedTxnsAllowedTill = this.savingAccountAssembler.getPivotConfigStatus();
         final SavingsAccount account = this.savingAccountAssembler.assembleFrom(savingsId, backdatedTxnsAllowedTill);
         checkClientOrGroupActive(account);
+        final Set<Long> existingTransactionIds = new HashSet<>();
+        final Set<Long> existingReversedTransactionIds = new HashSet<>();
+        if (backdatedTxnsAllowedTill) {
+            updateSavingsTransactionsDetails(account, existingTransactionIds, existingReversedTransactionIds);
+        } else {
+            updateExistingTransactionsDetails(account, existingTransactionIds, existingReversedTransactionIds);
+        }
 
         final LocalDate today = DateUtils.getBusinessLocalDate();
         final MathContext mc = new MathContext(15, MoneyHelper.getRoundingMode());
@@ -740,6 +750,12 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             org.apache.fineract.portfolio.savings.domain.GoalSavingsAccrual.accrue(account, today.minusDays(1));
             this.savingAccountRepositoryWrapper.saveAndFlush(account);
             this.savingsAccountDomainService.postJournalEntries(account, existing, reversed, false);
+            // The goal accruals are journaled above. Upstream (FINERACT-754) now also posts at the end of this method
+            // for whatever the calculation booked, so mark these as already posted or they would be journaled twice.
+            updateExistingTransactionsDetails(account, existingTransactionIds, existingReversedTransactionIds);
+            if (backdatedTxnsAllowedTill) {
+                updateSavingsTransactionsDetails(account, existingTransactionIds, existingReversedTransactionIds);
+            }
         } else {
             account.calculateInterestUsing(mc, today, isInterestTransfer, isSavingsInterestPostingAtCurrentPeriodEnd,
                     financialYearBeginningMonth, postInterestOnDate, backdatedTxnsAllowedTill, postReversals);
@@ -749,7 +765,11 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
             this.savingsAccountTransactionRepository.saveAll(account.getSavingsAccountTransactionsWithPivotConfig());
         }
 
-        this.savingAccountRepositoryWrapper.save(account);
+        this.savingAccountRepositoryWrapper.saveAndFlush(account);
+        // Upstream (FINERACT-754): whatever the calculation re-booked is journaled through the domain service, which
+        // keeps account-transfer links pointing at the replacement rows.
+        this.savingsAccountDomainService.postJournalEntries(account, existingTransactionIds, existingReversedTransactionIds,
+                backdatedTxnsAllowedTill);
 
         return new CommandProcessingResultBuilder() //
                 .withEntityId(savingsId) //
@@ -1082,12 +1102,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         // undoing transaction is withdrawal then undo withdrawal fee
         // transaction if any
         if (savingsAccountTransaction.isWithdrawal()) {
-            final SavingsAccountTransaction nextSavingsAccountTransaction = this.savingsAccountTransactionRepository
-                    .findOneByIdAndSavingsAccountId(transactionId + 1, savingsId);
-            if (nextSavingsAccountTransaction != null && nextSavingsAccountTransaction.isWithdrawalFeeAndNotReversed()) {
-                account.undoTransaction(transactionId + 1);
-                undoneTransactionIds.add(transactionId + 1);
-            }
+            // FINERACT-2952: the fee is found by the withdrawal's refNo (it is not always at transactionId + 1). This
+            // is the only place the withdrawal fee is undone, and its ids join the contra-journal linking below.
+            undoneTransactionIds.addAll(undoWithdrawalFee(account, savingsAccountTransaction));
         }
         // Reference rows (EMT levy, commission, VAT) share the parent transaction's ref_no and cannot stand
         // without it — an undo says the parent was posted in error, so its fee children were too. The web-app
@@ -1202,11 +1219,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
         this.savingsDailyBalanceSyncRepository.enqueueDirty(account.getId(), savingsAccountTransaction.getTransactionDate());
 
         // for undo withdrawal fee
-        final SavingsAccountTransaction nextSavingsAccountTransaction = this.savingsAccountTransactionRepository
-                .findOneByIdAndSavingsAccountId(transactionId + 1, savingsId);
-        if (nextSavingsAccountTransaction != null && nextSavingsAccountTransaction.isWithdrawalFeeAndNotReversed()) {
-            account.undoTransaction(transactionId + 1);
-        }
+        undoWithdrawalFee(account, savingsAccountTransaction);
 
         SavingsAccountTransaction transaction = null;
         boolean isInterestTransfer = false;
@@ -1251,6 +1264,32 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .withSavingsId(savingsId) //
                 .with(changes) //
                 .build();
+    }
+
+    /**
+     * Undoes the withdrawal fee charged for the given withdrawal. The fee shares the withdrawal's refNo; the order in
+     * which the two get their ids is not guaranteed, so the fee is not always at transactionId + 1. Transactions saved
+     * before refNo existed have no refNo and keep the old lookup.
+     */
+    private List<Long> undoWithdrawalFee(final SavingsAccount account, final SavingsAccountTransaction withdrawal) {
+        // Access: returns the ids it undid so the caller can link their contra journal entries.
+        final List<Long> undoneFeeIds = new ArrayList<>();
+        if (withdrawal.getRefNo() == null) {
+            final SavingsAccountTransaction nextSavingsAccountTransaction = this.savingsAccountTransactionRepository
+                    .findOneByIdAndSavingsAccountId(withdrawal.getId() + 1, account.getId());
+            if (nextSavingsAccountTransaction != null && nextSavingsAccountTransaction.isWithdrawalFeeAndNotReversed()) {
+                account.undoTransaction(nextSavingsAccountTransaction.getId());
+                undoneFeeIds.add(nextSavingsAccountTransaction.getId());
+            }
+            return undoneFeeIds;
+        }
+        for (final SavingsAccountTransaction transaction : this.savingsAccountTransactionRepository.findByRefNo(withdrawal.getRefNo())) {
+            if (account.getId().equals(transaction.getSavingsAccount().getId()) && transaction.isWithdrawalFeeAndNotReversed()) {
+                account.undoTransaction(transaction.getId());
+                undoneFeeIds.add(transaction.getId());
+            }
+        }
+        return undoneFeeIds;
     }
 
     /**
@@ -1553,6 +1592,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                             "charge.due.date.is.invalid.for." + ChargeTimeType.fromInt(chargeTimeType).getCode());
         }
         final SavingsAccountCharge savingsAccountCharge = SavingsAccountCharge.createNewFromJson(savingsAccount, chargeDefinition, command);
+
+        validateChargeAmountNotZero(savingsAccountCharge, dataValidationErrors);
 
         if (chargeDefinition.isEnableFreeWithdrawal()) {
             savingsAccountCharge.setFreeWithdrawalCount(0);
@@ -1922,6 +1963,8 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
     private void postJournalEntries(final SavingsAccount savingsAccount, final Set<Long> existingTransactionIds,
             final Set<Long> existingReversedTransactionIds, final boolean backdatedTxnsAllowedTill) {
 
+        // Access: posted here, not through SavingsAccountDomainService as upstream does. The fork's bridge is built
+        // from the transactions directly and the Access tests pin the journal call on this service.
         boolean isAccountTransfer = false;
         final SavingsAccountingBridgeDTO accountingBridgeData = SavingsAccountingBridgeDataHelper.buildAccountingBridgeData(savingsAccount,
                 SavingsAccountingBridgeDataHelper.findNewTransactions(savingsAccount, existingTransactionIds,
@@ -2755,5 +2798,19 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                     cursor.getAccountId() });
         }
         jdbcTemplate.batchUpdate(sql, params);
+    }
+
+    private void validateChargeAmountNotZero(final SavingsAccountCharge savingsAccountCharge,
+            final List<ApiParameterError> dataValidationErrors) {
+        if (!ChargeCalculationType.fromInt(savingsAccountCharge.getCharge().getChargeCalculation()).isFlat()) {
+            return;
+        }
+
+        if (savingsAccountCharge.getAmount(savingsAccountCharge.savingsAccount().getCurrency()).isZero()) {
+            final String defaultUserMessage = "This charge cannot be added because the calculated amount becomes zero after rounding.";
+
+            dataValidationErrors
+                    .add(ApiParameterError.parameterError("error.msg.savings.charge.amount.rounded.to.zero", defaultUserMessage, "amount"));
+        }
     }
 }
